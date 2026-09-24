@@ -51,7 +51,7 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
                 (select count(*) from warehouses where business_id = $1 and is_default)::int as warehouses`,
         [biz],
       );
-      expect(seeded.rows[0]).toEqual({ roles: 6, series: 10, settings: 14, warehouses: 1 });
+      expect(seeded.rows[0]).toEqual({ roles: 6, series: 11, settings: 14, warehouses: 1 });
 
       const me = await call(t.app, "GET", "/me", { token: res.body.accessToken });
       expect(me.status).toBe(200);

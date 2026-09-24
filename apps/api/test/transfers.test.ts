@@ -8,7 +8,7 @@ describe.skipIf(!hasDatabase)("godowns and stock transfers", () => {
   const ids: Record<string, string> = {};
   const post = (url: string, body: unknown, token = owner.token) => call(t.app, "POST", url, { token, body });
   const get = (url: string, token = owner.token) => call(t.app, "GET", url, { token });
-  const stockIn = async (warehouseId: string) => (await get(`/stock?warehouseId=${warehouseId}`)).body.data.find((r: { productId: string }) => r.productId === ids.soap)?.qty;
+  const stockIn = async (warehouseId: string | undefined) => (await get(`/stock?warehouseId=${warehouseId}`)).body.data.find((r: { productId: string }) => r.productId === ids.soap)?.qty;
 
   beforeAll(async () => {
     t = await createTestApp();
