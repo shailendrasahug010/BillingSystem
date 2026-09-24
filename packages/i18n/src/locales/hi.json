@@ -122,7 +122,8 @@
     "home": "होम",
     "sales": "बिक्री",
     "more": "और",
-    "create": "बनाएँ"
+    "create": "बनाएँ",
+    "auditLog": "ऑडिट लॉग"
   },
   "auth": {
     "welcome": "फिर से स्वागत है",
@@ -672,7 +673,8 @@
     "financialYear": "वित्त वर्ष",
     "pattern": "पैटर्न",
     "nextNumber": "अगला नंबर",
-    "patternHint": "चालू नंबर के लिए {SEQ:4} और वर्ष के लिए {FY} लिखें, जैसे INV/{FY}/{SEQ:4}। GST में 16 अक्षर तक।"
+    "patternHint": "चालू नंबर के लिए {SEQ:4} और वर्ष के लिए {FY} लिखें, जैसे INV/{FY}/{SEQ:4}। GST में 16 अक्षर तक।",
+    "termsHint": "हर बिल के नीचे छपता है, जैसे वापसी नीति, देर से भुगतान पर ब्याज, न्याय क्षेत्र। बॉक्स से बाहर जाते ही सेव होता है।"
   },
   "gst": {
     "b2b": "B2B",
@@ -800,7 +802,13 @@
     "NO_OPEN_DOCUMENTS": "इस राशि को लगाने के लिए कोई बकाया बिल नहीं है।",
     "PARTY_REQUIRED": "ग्राहक या सप्लायर चुनें।",
     "PAYMENT_NOT_POSTED": "यह भुगतान पहले से {{status}} है।",
-    "PERIOD_TOO_LONG": "अधिकतम {{maxDays}} दिनों की अवधि चुनें।"
+    "PERIOD_TOO_LONG": "अधिकतम {{maxDays}} दिनों की अवधि चुनें।",
+    "DOCUMENT_HAS_RETURNS": "इस बिल पर वापसी दर्ज है ({{notes}})। पहले वह वापसी रद्द करें।",
+    "RETURN_LINE_NOT_ON_DOCUMENT": "यह आइटम इस बिल में नहीं है।",
+    "RETURN_QTY_EXCEEDS": "{{product}} की अधिकतम {{max}} मात्रा ही वापस हो सकती है।",
+    "RETURN_NOT_SUPPORTED_RCM": "रिवर्स-चार्ज बिल पर वापसी अभी संभव नहीं है। अपने CA के साथ सप्लायर का क्रेडिट नोट दर्ज करें।",
+    "NOTE_NOT_POSTED": "यह नोट पहले से रद्द है।",
+    "NOTE_BEFORE_DOCUMENT": "वापसी की तारीख बिल की तारीख ({{date}}) से पहले नहीं हो सकती।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -841,7 +849,11 @@
     "payment_out": "भुगतान किया",
     "payment_in_cancel": "रसीद रद्द",
     "payment_out_cancel": "भुगतान रद्द",
-    "cheque_bounce": "चेक बाउंस"
+    "cheque_bounce": "चेक बाउंस",
+    "credit_note": "क्रेडिट नोट (वापसी)",
+    "credit_note_cancel": "क्रेडिट नोट रद्द",
+    "debit_note": "डेबिट नोट (वापसी)",
+    "debit_note_cancel": "डेबिट नोट रद्द"
   },
   "payment": {
     "title": "भुगतान",
@@ -1023,7 +1035,10 @@
     "section": "सेक्शन",
     "noOutward": "इस महीने कोई बिक्री नहीं",
     "noInward": "इस महीने कोई खरीद नहीं",
-    "disclaimer": "व्यापार के बिलों से तैयार। फ़ाइल करने से पहले अपने CA से जाँच कराएँ; ई-इनवॉइस और सीधी फ़ाइलिंग बाद में आएगी।"
+    "disclaimer": "व्यापार के बिलों से तैयार। फ़ाइल करने से पहले अपने CA से जाँच कराएँ; ई-इनवॉइस और सीधी फ़ाइलिंग बाद में आएगी।",
+    "notes": "वापसी (क्रेडिट और डेबिट नोट)",
+    "notesHint": "बिक्री वापसी से आउटपुट टैक्स और खरीद वापसी से ITC घटता है। ऊपर के आँकड़ों में यह पहले से घटाया गया है।",
+    "hsnNet": "बिक्री वापसी घटाकर"
   },
   "users": {
     "title": "यूज़र और भूमिकाएँ",
@@ -1129,5 +1144,84 @@
       "download": "डाउनलोड",
       "restore": "रिस्टोर"
     }
+  },
+  "receipt": {
+    "title": "रसीद",
+    "voucher": "भुगतान वाउचर",
+    "receivedFrom": "प्राप्त किया",
+    "paidTo": "भुगतान किया",
+    "amount": "राशि",
+    "mode": "माध्यम",
+    "against": "बिलों के लिए",
+    "onAccount": "खाते में अग्रिम",
+    "chequeNote": "चेक भुगतान क्लियर होने पर ही मान्य है।",
+    "computerGenerated": "यह कंप्यूटर से बनी रसीद है।",
+    "print": "रसीद प्रिंट करें",
+    "printVoucher": "वाउचर प्रिंट करें"
+  },
+  "share": {
+    "printPdf": "प्रिंट / PDF",
+    "pdfHint": "फ़ाइल के लिए प्रिंट विंडो में “Save as PDF” चुनें",
+    "invoice": "नमस्ते {{party}}, बिल {{number}} दिनांक {{date}}, राशि {{amount}}। धन्यवाद। – {{business}}",
+    "invoiceDue": "नमस्ते {{party}}, बिल {{number}} दिनांक {{date}}, राशि {{amount}}। बकाया {{balance}}, देय तिथि {{due}}। – {{business}}",
+    "receipt": "{{party}} से {{date}} को {{method}} द्वारा {{amount}} धन्यवाद सहित प्राप्त। रसीद {{number}}, बिल {{bills}}। – {{business}}",
+    "payment": "{{party}} को {{date}} को {{method}} द्वारा {{amount}} का भुगतान, बिल {{bills}}। रेफ़ {{number}}। – {{business}}"
+  },
+  "audit": {
+    "title": "ऑडिट लॉग",
+    "subtitle": "हर एंट्री, रद्द और बदलाव — किसने और कब किया",
+    "entity": "रिकॉर्ड",
+    "user": "यूज़र",
+    "system": "सिस्टम",
+    "empty": "इन फ़िल्टर के लिए कुछ दर्ज नहीं",
+    "entities": {
+      "invoice": "बिल",
+      "payment": "भुगतान",
+      "purchase": "खरीद",
+      "stock_adjustment": "स्टॉक समायोजन",
+      "product": "प्रोडक्ट",
+      "customer": "ग्राहक",
+      "supplier": "सप्लायर",
+      "member": "सदस्य",
+      "role": "भूमिका",
+      "setting": "सेटिंग",
+      "business": "व्यापार प्रोफ़ाइल",
+      "document_series": "नंबर सीरीज़"
+    }
+  },
+  "notes": {
+    "creditNote": "क्रेडिट नोट",
+    "debitNote": "डेबिट नोट",
+    "number": "नोट नं.",
+    "against": "के विरुद्ध",
+    "returns": "वापसी",
+    "none": "कोई वापसी दर्ज नहीं।",
+    "salesReturn": "वापसी दर्ज करें",
+    "purchaseReturn": "सप्लायर को वापसी",
+    "creditSaved": "क्रेडिट नोट सेव हुआ",
+    "debitSaved": "डेबिट नोट सेव हुआ",
+    "billed": "बिल में",
+    "canReturn": "वापसी योग्य",
+    "returnQty": "वापसी",
+    "returned": "वापस",
+    "supplierNoteNumber": "सप्लायर का क्रेडिट नोट नं.",
+    "restockSale": "माल वापस स्टॉक में जोड़ें (खराब या एक्सपायर माल के लिए हटाएँ)",
+    "restockPurchase": "माल स्टॉक से घटाएँ",
+    "noStock": "स्टॉक नहीं बदला",
+    "cancel": "नोट रद्द करें",
+    "confirmCancel": "हाँ, नोट रद्द करें",
+    "cancelHint": "स्टॉक, बकाया और GST पहले जैसे हो जाएँगे। कम से कम 3 अक्षर।",
+    "cancelled": "नोट रद्द हुआ",
+    "reasons": {
+      "sales_return": "माल वापसी",
+      "purchase_return": "माल वापसी",
+      "damage": "खराब / एक्सपायर",
+      "rate_difference": "रेट अंतर",
+      "discount": "बिल के बाद छूट",
+      "other": "अन्य"
+    },
+    "date": "नोट की तारीख",
+    "computerGenerated": "यह कंप्यूटर से बना दस्तावेज़ है।",
+    "lessReturns": "घटाएँ: वापसी"
   }
 }

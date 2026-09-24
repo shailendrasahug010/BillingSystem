@@ -24,6 +24,7 @@ const PLAN: Record<PlannedModule, { tables: string[]; endpoints: string[] }> = {
   expenses: { tables: ["expenses", "expense_categories", "files"], endpoints: ["GET/POST /expenses", "POST /files (receipt upload)", "GET /reports/expenses"] },
   notifications: { tables: ["notifications", "reminder_rules", "outbox_events"], endpoints: ["GET /notifications", "POST /notifications/:id/read", "GET /events (SSE)"] },
   users: { tables: ["users", "business_members", "roles", "role_permissions", "permissions", "audit_logs"], endpoints: ["POST /members/invite", "PATCH /roles/:id/permissions", "GET /audit-logs"] },
+  audit: { tables: ["audit_logs"], endpoints: ["GET /audit-logs?entityType=&userId=&from=&to="] },
   backup: { tables: ["backups", "files"], endpoints: ["POST /backups", "GET /backups/:id/download", "POST /backups/:id/restore (typed confirmation)"] },
 };
 

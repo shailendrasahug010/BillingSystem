@@ -100,6 +100,40 @@ export const PurchaseListQuery = PageQuery.extend({
   status: z.enum(["posted", "cancelled", "all"]).default("all"),
 });
 
+/** Goods coming back against an invoice (credit note) or going back against a purchase bill (debit note). */
+export const ReturnBody = z.strictObject({
+  noteDate: IsoDate.optional(),
+  reason: z.enum(["sales_return", "purchase_return", "damage", "rate_difference", "discount", "other"]).optional(),
+  /** Sales return: put the goods back into sellable stock. Purchase return: take them out of stock. */
+  restock: z.boolean().default(true),
+  lines: z
+    .array(
+      z.strictObject({
+        /** The invoice / purchase line being returned. */
+        lineId: Id,
+        /** In the line's own unit (e.g. boxes if it was billed in boxes). */
+        qty: Qty,
+      }),
+    )
+    .min(1)
+    .max(300),
+  /** The supplier's own credit note number, when they issue one. */
+  partyNoteNumber: z.string().trim().max(30).optional(),
+  notes: z.string().trim().max(500).optional(),
+  clientTotals: ClientTotals.optional(),
+});
+
+export const NoteListQuery = PageQuery.extend({
+  party: z.enum(["customer", "supplier", "all"]).default("all"),
+  customerId: z.uuid().optional(),
+  supplierId: z.uuid().optional(),
+  invoiceId: z.uuid().optional(),
+  purchaseId: z.uuid().optional(),
+  from: IsoDate.optional(),
+  to: IsoDate.optional(),
+  status: z.enum(["posted", "cancelled", "all"]).default("all"),
+});
+
 export const AllocationInput = z.strictObject({
   documentId: Id,
   amount: Money,

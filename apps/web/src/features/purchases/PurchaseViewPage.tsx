@@ -14,6 +14,7 @@ import { allowed, WORKSPACE } from "../../data/db";
 import { refreshCatalog, refreshSupplier } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { invalidateMoney, PaymentDialog } from "../payments/PaymentDialog";
+import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { PurchaseStatusBadge } from "./PurchasesPage";
 
 interface PurchaseDetail {
@@ -59,9 +60,11 @@ interface PurchaseDetail {
     taxableValue: string;
     gstRate: string;
     lineTotal: string;
+    returnedQty: string;
     batchNumber: string | null;
     expiryDate: string | null;
   }>;
+  returns: ReturnRow[];
   payments: Array<{ paymentId: string; paymentNumber: string; paymentDate: string; method: PaymentMethod; amount: string; reversedAt: string | null }>;
 }
 
@@ -99,6 +102,7 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
   };
 
   const posted = p.status === "posted";
+  const returned = (p.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + Number(r.amountSettled), 0);
   const tax = (v: string) => (Number(v) ? money(v) : null);
 
   return (
@@ -149,12 +153,13 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
         </p>
       )}
 
-      <Card className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-6">
+      <Card className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-7">
         <Stat label={t("purchase.billDate")} value={dateMedium(p.supplierInvoiceDate)} />
         <Stat label={t("purchase.receivedDate")} value={dateMedium(p.receivedDate)} />
         <Stat label={t("invoice.dueDate")} value={p.dueDate ? dateMedium(p.dueDate) : "—"} />
         <Stat label={t("common.total")} value={money(p.grandTotal)} />
-        <Stat label={t("purchase.paid")} value={money(p.amountPaid)} tone={Number(p.amountPaid) > 0 ? "good" : undefined} />
+        <Stat label={t("purchase.paid")} value={money(Number(p.amountPaid) - returned)} tone={Number(p.amountPaid) - returned > 0 ? "good" : undefined} />
+        {returned > 0 && <Stat label={t("notes.lessReturns")} value={money(returned)} />}
         <Stat label={t("common.balance")} value={money(p.balanceDue)} tone={posted && Number(p.balanceDue) > 0 ? "danger" : undefined} />
       </Card>
 
@@ -185,6 +190,11 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
               <span>
                 {number(i.qty)} {WORKSPACE.units.get(i.unitId) ?? ""}
                 {Number(i.freeQty) > 0 && <span className="block text-[12px] text-good">+{number(i.freeQty)} {t("invoice.free")}</span>}
+                {Number(i.returnedQty) > 0 && (
+                  <span className="block text-[12px] text-warn">
+                    −{number(i.returnedQty)} {t("notes.returned")}
+                  </span>
+                )}
               </span>
             ),
           },
@@ -248,6 +258,7 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
           </dl>
         </Card>
       </div>
+      <ReturnsCard kind="purchase" documentId={p.id} returns={p.returns ?? []} canReturn={posted && !p.isReverseCharge} />
       <PaymentDialog direction="out" partyId={p.supplierId} open={paying} onOpenChange={setPaying} />
     </div>
   );

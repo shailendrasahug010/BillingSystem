@@ -193,6 +193,7 @@ export function applyMe(me: MeResponse): void {
     chargeTax: b.gstRegistration === "regular",
     permissions: new Set(me.permissions),
     printLocale: (me.settings["invoice.default_print_locale"] as string | undefined) ?? "en",
+    invoiceTerms: (me.settings["invoice.terms"] as string | undefined) ?? "",
     role: b.role,
     ...(roundOff ? { roundOff } : {}),
     ...(creditPolicy ? { creditPolicy } : {}),

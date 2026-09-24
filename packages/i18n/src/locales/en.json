@@ -122,7 +122,8 @@
     "home": "Home",
     "sales": "Sales",
     "more": "More",
-    "create": "Create"
+    "create": "Create",
+    "auditLog": "Audit Log"
   },
   "auth": {
     "welcome": "Welcome back",
@@ -672,7 +673,8 @@
     "financialYear": "Financial year",
     "pattern": "Pattern",
     "nextNumber": "Next number",
-    "patternHint": "Use {SEQ:4} for the running number and {FY} for the year, e.g. INV/{FY}/{SEQ:4}. GST allows up to 16 characters."
+    "patternHint": "Use {SEQ:4} for the running number and {FY} for the year, e.g. INV/{FY}/{SEQ:4}. GST allows up to 16 characters.",
+    "termsHint": "Printed at the foot of every invoice, e.g. return policy, interest on late payment, jurisdiction. Saved when you leave the box."
   },
   "gst": {
     "b2b": "B2B",
@@ -800,7 +802,13 @@
     "NO_OPEN_DOCUMENTS": "There are no unpaid bills to apply this amount to.",
     "PARTY_REQUIRED": "Select the customer or supplier.",
     "PAYMENT_NOT_POSTED": "This payment is already {{status}}.",
-    "PERIOD_TOO_LONG": "Choose a period of at most {{maxDays}} days."
+    "PERIOD_TOO_LONG": "Choose a period of at most {{maxDays}} days.",
+    "DOCUMENT_HAS_RETURNS": "This bill has returns ({{notes}}). Cancel those returns first.",
+    "RETURN_LINE_NOT_ON_DOCUMENT": "This item is not on the bill.",
+    "RETURN_QTY_EXCEEDS": "You can return at most {{max}} of {{product}}.",
+    "RETURN_NOT_SUPPORTED_RCM": "Returns against reverse-charge bills are not supported yet. Record a credit note from the supplier with your CA.",
+    "NOTE_NOT_POSTED": "This note is already cancelled.",
+    "NOTE_BEFORE_DOCUMENT": "The return date cannot be before the bill date ({{date}})."
   },
   "validation": {
     "required": "This field is required",
@@ -841,7 +849,11 @@
     "payment_out": "Payment made",
     "payment_in_cancel": "Receipt cancelled",
     "payment_out_cancel": "Payment cancelled",
-    "cheque_bounce": "Cheque bounced"
+    "cheque_bounce": "Cheque bounced",
+    "credit_note": "Credit note (return)",
+    "credit_note_cancel": "Credit note cancelled",
+    "debit_note": "Debit note (return)",
+    "debit_note_cancel": "Debit note cancelled"
   },
   "payment": {
     "title": "Payments",
@@ -1023,7 +1035,10 @@
     "section": "Section",
     "noOutward": "No sales in this month",
     "noInward": "No purchases in this month",
-    "disclaimer": "Prepared from the bills in Vyapaar. Check it with your CA before filing; e-invoicing and direct filing come later."
+    "disclaimer": "Prepared from the bills in Vyapaar. Check it with your CA before filing; e-invoicing and direct filing come later.",
+    "notes": "Returns (credit and debit notes)",
+    "notesHint": "Sales returns reduce output tax; purchase returns reduce ITC. Both are already netted in the figures above.",
+    "hsnNet": "Net of sales returns"
   },
   "users": {
     "title": "Users and roles",
@@ -1129,5 +1144,84 @@
       "download": "Download",
       "restore": "Restore"
     }
+  },
+  "receipt": {
+    "title": "Receipt",
+    "voucher": "Payment voucher",
+    "receivedFrom": "Received from",
+    "paidTo": "Paid to",
+    "amount": "Amount",
+    "mode": "Mode",
+    "against": "Against bills",
+    "onAccount": "Kept on account (advance)",
+    "chequeNote": "Cheque payments are subject to realisation.",
+    "computerGenerated": "This is a computer-generated receipt.",
+    "print": "Print receipt",
+    "printVoucher": "Print voucher"
+  },
+  "share": {
+    "printPdf": "Print / PDF",
+    "pdfHint": "Choose “Save as PDF” in the print dialog to get a file",
+    "invoice": "Namaste {{party}}, invoice {{number}} dated {{date}} for {{amount}}. Thank you. – {{business}}",
+    "invoiceDue": "Namaste {{party}}, invoice {{number}} dated {{date}} for {{amount}}. Balance due {{balance}} by {{due}}. – {{business}}",
+    "receipt": "Received with thanks {{amount}} from {{party}} by {{method}} on {{date}}. Receipt {{number}}, against bills {{bills}}. – {{business}}",
+    "payment": "Paid {{amount}} to {{party}} by {{method}} on {{date}} against bills {{bills}}. Ref {{number}}. – {{business}}"
+  },
+  "audit": {
+    "title": "Audit log",
+    "subtitle": "Every posting, cancellation and change, with who did it and when",
+    "entity": "Record",
+    "user": "User",
+    "system": "System",
+    "empty": "Nothing recorded for these filters",
+    "entities": {
+      "invoice": "Invoice",
+      "payment": "Payment",
+      "purchase": "Purchase",
+      "stock_adjustment": "Stock adjustment",
+      "product": "Product",
+      "customer": "Customer",
+      "supplier": "Supplier",
+      "member": "Member",
+      "role": "Role",
+      "setting": "Setting",
+      "business": "Business profile",
+      "document_series": "Number series"
+    }
+  },
+  "notes": {
+    "creditNote": "Credit note",
+    "debitNote": "Debit note",
+    "number": "Note no.",
+    "against": "Against",
+    "returns": "Returns",
+    "none": "No returns recorded.",
+    "salesReturn": "Record return",
+    "purchaseReturn": "Return to supplier",
+    "creditSaved": "Credit note saved",
+    "debitSaved": "Debit note saved",
+    "billed": "Billed",
+    "canReturn": "Can return",
+    "returnQty": "Return",
+    "returned": "returned",
+    "supplierNoteNumber": "Supplier's credit note no.",
+    "restockSale": "Put the goods back into stock (uncheck for damaged or expired goods)",
+    "restockPurchase": "Take the goods out of stock",
+    "noStock": "Stock not changed",
+    "cancel": "Cancel note",
+    "confirmCancel": "Yes, cancel note",
+    "cancelHint": "Stock, balances and GST go back to how they were. At least 3 characters.",
+    "cancelled": "Note cancelled",
+    "reasons": {
+      "sales_return": "Goods returned",
+      "purchase_return": "Goods returned",
+      "damage": "Damaged / expired",
+      "rate_difference": "Rate difference",
+      "discount": "Discount after billing",
+      "other": "Other"
+    },
+    "date": "Note date",
+    "computerGenerated": "This is a computer-generated document.",
+    "lessReturns": "Less: returns"
   }
 }

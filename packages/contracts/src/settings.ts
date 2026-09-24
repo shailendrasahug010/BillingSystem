@@ -18,6 +18,8 @@ export const SETTING_SCHEMAS = {
   "invoice.edit_window_hours": z.number().int().min(0).max(720),
   "invoice.default_print_locale": z.enum(["en", "hi"]),
   "invoice.offline_mode": z.enum(["device_series", "server_only"]),
+  /** Printed at the foot of every invoice (return policy, interest, jurisdiction). */
+  "invoice.terms": z.string().trim().max(1000),
   "credit.policy": z.strictObject({
     onLimitExceeded: policy,
     onOverdue: policy,

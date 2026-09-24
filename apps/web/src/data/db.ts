@@ -49,6 +49,8 @@ export const WORKSPACE = {
   /** null = everything allowed (demo). */
   permissions: null as Set<string> | null,
   printLocale: "en",
+  /** Terms printed on invoices ("" = none). */
+  invoiceTerms: LIVE ? "" : "1. Goods once sold will be taken back only as per company return policy. 2. Interest @18% p.a. on payments beyond the due date. 3. Subject to Indore jurisdiction.",
   role: "admin",
   /** Unit id -> symbol (live catalogue). */
   units: new Map<string, string>(),

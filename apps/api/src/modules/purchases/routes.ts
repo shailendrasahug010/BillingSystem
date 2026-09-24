@@ -34,6 +34,7 @@ import { recordPayment, releaseAllocations } from "../../services/payments.js";
 import { getSettings } from "../../services/settings.js";
 import { postStockMovement } from "../../services/stock.js";
 import { likeContains } from "../catalog/products.js";
+import { assertNoPostedReturns, documentReturns } from "../notes/routes.js";
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
@@ -59,8 +60,9 @@ async function purchaseDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .from(schema.paymentAllocations)
     .innerJoin(schema.payments, eq(schema.payments.id, schema.paymentAllocations.paymentId))
     .where(eq(schema.paymentAllocations.purchaseId, id));
+  const returns = await documentReturns(tx, { purchaseId: id });
   const { businessId: _b, ...rest } = p;
-  return { ...rest, items: items.map(({ businessId: _ib, ...i }) => i), payments };
+  return { ...rest, items: items.map(({ businessId: _ib, ...i }) => i), payments, returns };
 }
 
 export const purchasesModule: ApiModule = async (app, deps) => {
@@ -485,6 +487,7 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           .for("update");
         if (!p) throw notFound("purchase");
         if (p.status !== "posted") throw conflict("INVOICE_NOT_POSTED", { status: p.status });
+        await assertNoPostedReturns(tx, { purchaseId: p.id });
         const [locked] = await tx
           .select({ id: schema.gstReturnPeriods.id })
           .from(schema.gstReturnPeriods)

@@ -272,11 +272,26 @@ h3 {
   border-radius: 6px;
 }
 
+/* A document rendered into <PrintPortal> is the only thing printed. */
+.print-root {
+  display: none;
+}
+
 @media print {
   body {
     background: #fff;
   }
   .no-print {
     display: none !important;
+  }
+  body:has(> .print-root) > :not(.print-root) {
+    display: none !important;
+  }
+  .print-root {
+    display: block;
+  }
+  .print-root article {
+    box-shadow: none !important;
+    max-width: none !important;
   }
 }

@@ -1,6 +1,6 @@
 import { amountInWords, findState } from "@vyapaar/core";
 import { createTranslator, formatAmount, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
-import { BUSINESS } from "../../data/db";
+import { BUSINESS, WORKSPACE } from "../../data/db";
 import type { PrintableInvoice } from "./printable";
 
 /**
@@ -23,6 +23,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
   const n = (v: number) => formatAmount(v, locale);
   const balance = invoice.balance;
   const stateLabel = pos?.component === "UTGST" ? "UTGST" : "SGST";
+  const isNote = invoice.kind === "credit_note" || invoice.kind === "debit_note";
 
   const th = "border border-[#c9d2d3] bg-[#eef3f3] px-2 py-1.5 text-left font-semibold";
   const td = "border border-[#c9d2d3] px-2 py-1.5 align-top";
@@ -44,22 +45,35 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
           {BUSINESS.gstin && <p className="mt-1 font-mono font-medium">GSTIN: {BUSINESS.gstin}</p>}
         </div>
         <div className="text-right">
-          <p className="text-[18px] font-bold tracking-wide text-[#0b6e82]">{(invoice.billOfSupply ? t("invoice.billOfSupply") : t("invoice.taxInvoice")).toUpperCase()}</p>
+          <p className="text-[18px] font-bold tracking-wide text-[#0b6e82]">
+            {(isNote ? t(invoice.kind === "credit_note" ? "notes.creditNote" : "notes.debitNote") : invoice.billOfSupply ? t("invoice.billOfSupply") : t("invoice.taxInvoice")).toUpperCase()}
+          </p>
           <p className="text-[11px] text-[#4a5f62]">{t("invoice.print.original")}</p>
           <table className="mt-2 ml-auto text-left text-[12px]">
             <tbody>
               <tr>
-                <td className="pr-3 text-[#4a5f62]">{t("invoice.number")}</td>
+                <td className="pr-3 text-[#4a5f62]">{isNote ? t("notes.number") : t("invoice.number")}</td>
                 <td className="font-mono font-semibold">{invoice.number}</td>
               </tr>
               <tr>
-                <td className="pr-3 text-[#4a5f62]">{t("invoice.date")}</td>
+                <td className="pr-3 text-[#4a5f62]">{isNote ? t("notes.date") : t("invoice.date")}</td>
                 <td>{formatDate(invoice.date)}</td>
               </tr>
-              <tr>
-                <td className="pr-3 text-[#4a5f62]">{t("invoice.dueDate")}</td>
-                <td>{formatDate(invoice.dueDate)}</td>
-              </tr>
+              {isNote ? (
+                invoice.against && (
+                  <tr>
+                    <td className="pr-3 text-[#4a5f62]">{t("notes.against")}</td>
+                    <td>
+                      <span className="font-mono">{invoice.against.number}</span> · {formatDate(invoice.against.date)}
+                    </td>
+                  </tr>
+                )
+              ) : (
+                <tr>
+                  <td className="pr-3 text-[#4a5f62]">{t("invoice.dueDate")}</td>
+                  <td>{formatDate(invoice.dueDate)}</td>
+                </tr>
+              )}
               <tr>
                 <td className="pr-3 text-[#4a5f62]">{t("invoice.placeOfSupply")}</td>
                 <td>{stateName(invoice.placeOfSupply)}</td>
@@ -232,22 +246,36 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
             <dt>{t("invoice.grandTotal")}</dt>
             <dd className="num">{m(totals.grandTotal)}</dd>
           </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-[#4a5f62]">{t("invoice.print.paid")}</dt>
-            <dd className="num">{m(invoice.paid)}</dd>
-          </div>
-          <div className="flex justify-between gap-3 font-semibold">
-            <dt>{t("invoice.balance")}</dt>
-            <dd className="num">{m(Math.max(0, balance))}</dd>
-          </div>
+          {!isNote && (
+            <>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#4a5f62]">{t("invoice.print.paid")}</dt>
+                <dd className="num">{m(invoice.paid)}</dd>
+              </div>
+              {(invoice.credited ?? 0) > 0 && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[#4a5f62]">{t("notes.lessReturns")}</dt>
+                  <dd className="num">{m(invoice.credited ?? 0)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-3 font-semibold">
+                <dt>{t("invoice.balance")}</dt>
+                <dd className="num">{m(Math.max(0, balance))}</dd>
+              </div>
+            </>
+          )}
         </dl>
       </div>
 
       <footer className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-[#c9d2d3] pt-3">
         <div className="max-w-md text-[10.5px] text-[#4a5f62]">
-          <p className="font-semibold text-[#10201f]">{t("invoice.print.terms")}</p>
-          <p>1. Goods once sold will be taken back only as per company return policy. 2. Interest @18% p.a. on payments beyond the due date. 3. Subject to {BUSINESS.city.split(/[ ,]/)[0] || "local"} jurisdiction.</p>
-          <p className="mt-2">{t("invoice.print.computerGenerated")}</p>
+          {WORKSPACE.invoiceTerms && !isNote && (
+            <>
+              <p className="font-semibold text-[#10201f]">{t("invoice.print.terms")}</p>
+              <p className="whitespace-pre-line">{WORKSPACE.invoiceTerms}</p>
+            </>
+          )}
+          <p className="mt-2">{isNote ? t("notes.computerGenerated") : t("invoice.print.computerGenerated")}</p>
         </div>
         <div className="text-right">
           <p className="font-semibold">{t("invoice.print.for", { business: BUSINESS.name })}</p>

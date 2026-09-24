@@ -4,6 +4,10 @@ import type { Invoice } from "../../data/types";
 
 /** Everything the printed invoice shows, independent of where it came from. */
 export interface PrintableInvoice {
+  /** Credit / debit notes print on the same template. */
+  kind?: "invoice" | "credit_note" | "debit_note";
+  /** The invoice or bill a note is issued against. */
+  against?: { number: string; date: string } | null;
   id: string;
   number: string;
   date: string;
@@ -40,6 +44,8 @@ export interface PrintableInvoice {
   roundOff: number;
   grandTotal: number;
   paid: number;
+  /** Credited by returns (credit notes) against this invoice. */
+  credited?: number;
   balance: number;
 }
 
@@ -134,6 +140,7 @@ export interface ApiInvoice {
   grandTotal: string;
   amountPaid: string;
   balanceDue: string;
+  returns?: Array<{ status: string; amountSettled: string }>;
   items: Array<{
     productId: string;
     productName: string;
@@ -153,6 +160,7 @@ export interface ApiInvoice {
 
 export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
   const num = (v: string | null | undefined) => dec(v ?? 0).toNumber();
+  const credited = (inv.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + num(r.amountSettled), 0);
   const lines = inv.items.map((i) => {
     const product = productById.get(i.productId);
     return {
@@ -201,7 +209,72 @@ export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
     cessTotal: num(inv.cessTotal),
     roundOff: num(inv.roundOff),
     grandTotal: num(inv.grandTotal),
-    paid: num(inv.amountPaid),
+    // The API's amount paid includes what returns settled; show them apart.
+    paid: num(inv.amountPaid) - credited,
+    credited,
     balance: num(inv.balanceDue),
   };
+}
+
+export interface ApiNote {
+  id: string;
+  noteNumber: string;
+  noteType: "credit" | "debit";
+  noteDate: string;
+  partyType: "customer" | "supplier";
+  customerId: string | null;
+  supplierId: string | null;
+  partyNoteNumber: string | null;
+  reason: string;
+  affectsStock: boolean;
+  partyName: string;
+  partyGstin: string | null;
+  partyStateCode: string | null;
+  billingAddress: ApiInvoice["billingAddress"];
+  placeOfSupply: string;
+  supplyType: "intra_state" | "inter_state";
+  status: "posted" | "cancelled";
+  taxableTotal: string;
+  cgstTotal: string;
+  sgstTotal: string;
+  igstTotal: string;
+  cessTotal: string;
+  roundOff: string;
+  grandTotal: string;
+  amountSettled: string;
+  notes: string | null;
+  cancelReason: string | null;
+  original: { id: string; number: string; date: string } | null;
+  items: ApiInvoice["items"];
+}
+
+/** A credit note (sales return) or debit note (purchase return) in the invoice layout. */
+export function printableFromNote(note: ApiNote): PrintableInvoice {
+  const base = printableFromApi({
+    id: note.id,
+    invoiceNumber: note.noteNumber,
+    invoiceDate: note.noteDate,
+    dueDate: null,
+    customerId: note.customerId ?? "",
+    partyName: note.partyName,
+    partyGstin: note.partyGstin,
+    partyStateCode: note.partyStateCode,
+    billingAddress: note.billingAddress,
+    placeOfSupply: note.placeOfSupply,
+    supplyType: note.supplyType,
+    isReverseCharge: false,
+    status: note.status,
+    paymentStatus: "unpaid",
+    taxableTotal: note.taxableTotal,
+    cgstTotal: note.cgstTotal,
+    sgstTotal: note.sgstTotal,
+    igstTotal: note.igstTotal,
+    cessTotal: note.cessTotal,
+    roundOff: note.roundOff,
+    grandTotal: note.grandTotal,
+    amountPaid: "0",
+    balanceDue: "0",
+    items: note.items,
+  } as ApiInvoice);
+  return { ...base, kind: note.noteType === "credit" ? "credit_note" : "debit_note", against: note.original ? { number: note.original.number, date: note.original.date } : null };
 }

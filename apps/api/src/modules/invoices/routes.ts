@@ -18,6 +18,7 @@ import { prepareSale, type PreparedSale } from "../../services/sales-document.js
 import { getSetting } from "../../services/settings.js";
 import { postStockMovement } from "../../services/stock.js";
 import { likeContains } from "../catalog/products.js";
+import { assertNoPostedReturns, documentReturns } from "../notes/routes.js";
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
@@ -124,11 +125,13 @@ export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .innerJoin(schema.payments, eq(schema.payments.id, schema.paymentAllocations.paymentId))
     .where(eq(schema.paymentAllocations.invoiceId, id));
   const [biz] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
+  const returns = await documentReturns(tx, { invoiceId: id });
   const showCost = can(ctx, "product.view_cost");
   const { businessId: _b, costTotal, ...rest } = inv;
   return {
     ...rest,
     ...(showCost ? { costTotal } : {}),
+    returns,
     seller: {
       legalName: biz!.legalName,
       tradeName: biz!.tradeName,
@@ -533,6 +536,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
           .for("update");
         if (!inv) throw notFound("invoice");
         if (inv.status !== "posted") throw conflict("INVOICE_NOT_POSTED", { status: inv.status });
+        await assertNoPostedReturns(tx, { invoiceId: inv.id });
         const windowHours = await getSetting(tx, ctx.businessId, "invoice.edit_window_hours");
         const ageHours = (deps.clock.now().getTime() - Date.parse(inv.postedAt ?? inv.createdAt)) / 3_600_000;
         if (windowHours > 0 && ageHours > windowHours && !ctx.isOwner) throw conflict("EDIT_WINDOW_CLOSED", { hours: windowHours });

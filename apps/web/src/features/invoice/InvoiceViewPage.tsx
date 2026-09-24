@@ -1,5 +1,5 @@
-import type { LocaleCode } from "@vyapaar/i18n";
-import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { ArrowLeft, MessageCircle, Printer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -7,31 +7,46 @@ import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState, Segmented } from "../../components/ui/misc";
-import { useToast } from "../../components/ui/Toast";
-import { INVOICES } from "../../data/db";
+import { PrintPortal } from "../../components/ui/PrintPortal";
+import { BUSINESS, customerById, INVOICES, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { api } from "../../lib/api";
+import { shareOnWhatsApp } from "../../lib/share";
 import { printableFromApi, printableFromDemo, type ApiInvoice, type PrintableInvoice } from "./printable";
 import { EMBEDDED } from "../../lib/embedded";
+import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { InvoiceDocument } from "./InvoiceDocument";
 
 export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const { t, locale, money } = useI18n();
   const { navigate } = useRouter();
-  const toast = useToast();
   useStoreVersion();
-  const [printLocale, setPrintLocale] = useState<LocaleCode>(locale);
+  const [printLocale, setPrintLocale] = useState<LocaleCode>(LIVE ? (WORKSPACE.printLocale as LocaleCode) || locale : locale);
   const live = useQuery({
-    queryKey: ["invoice", invoiceId],
-    queryFn: () => api.get<ApiInvoice>(`/invoices/${invoiceId}`).then(printableFromApi),
+    queryKey: ["invoice-raw", invoiceId],
+    queryFn: () => api.get<ApiInvoice & { returns: ReturnRow[] }>(`/invoices/${invoiceId}`),
     enabled: LIVE,
   });
   const demo = LIVE ? undefined : INVOICES.find((i) => i.id === invoiceId);
-  const invoice: PrintableInvoice | undefined = LIVE ? live.data : demo && printableFromDemo(demo);
+  const invoice: PrintableInvoice | undefined = LIVE ? live.data && printableFromApi(live.data) : demo && printableFromDemo(demo);
   if (LIVE && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
   if (!invoice) return <EmptyState title={t("empty.generic")} />;
   const status = invoice.status;
+  const share = () => {
+    const tr = createTranslator(printLocale).t;
+    const m = (v: number) => formatCurrency(v, printLocale);
+    const text = tr(invoice.balance > 0 && status !== "cancelled" ? "share.invoiceDue" : "share.invoice", {
+      party: invoice.buyer.businessName,
+      number: invoice.number,
+      date: formatDate(invoice.date),
+      amount: m(invoice.grandTotal),
+      balance: m(invoice.balance),
+      due: formatDate(invoice.dueDate),
+      business: BUSINESS.name,
+    });
+    shareOnWhatsApp(text, customerById.get(invoice.customerId)?.mobile);
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -63,23 +78,26 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
           />
           {/* Embedded previews cannot print or download; the installed app and the web app can. */}
           {!EMBEDDED && (
-            <Button icon={<Printer size={16} />} onClick={() => window.print()}>
-              {t("common.print")}
+            <Button icon={<Printer size={16} />} title={t("share.pdfHint")} onClick={() => window.print()}>
+              {t("share.printPdf")}
             </Button>
           )}
-          {!EMBEDDED && (
-            <Button icon={<Download size={16} />} onClick={() => toast({ tone: "info", title: "PDF", body: "The API renders this template to PDF (GET /invoices/:id/pdf)." })}>
-              PDF
-            </Button>
-          )}
-          <Button variant="primary" icon={<MessageCircle size={16} />} onClick={() => toast({ tone: "info", title: t("common.whatsapp"), body: "Sends the PDF link via the WhatsApp Business API adapter." })}>
-            {t("common.share")}
+          <Button variant="primary" icon={<MessageCircle size={16} />} onClick={share}>
+            {t("common.whatsapp")}
           </Button>
         </div>
       </div>
       <div className="-mx-4 overflow-x-auto bg-surface-2 px-4 py-6 sm:mx-0 sm:rounded-[var(--radius-card)] sm:px-6">
         <InvoiceDocument invoice={invoice} locale={printLocale} />
       </div>
+      {LIVE && live.data && (
+        <div className="no-print">
+          <ReturnsCard kind="sale" documentId={invoice.id} returns={live.data.returns ?? []} canReturn={status !== "cancelled"} />
+        </div>
+      )}
+      <PrintPortal>
+        <InvoiceDocument invoice={invoice} locale={printLocale} />
+      </PrintPortal>
     </div>
   );
 }

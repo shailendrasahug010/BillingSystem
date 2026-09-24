@@ -288,6 +288,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
             order by business_id nulls last, effective_from desc limit 1`)
         ).rows;
         const limit = threshold?.amount ?? "100000";
+        const signedHeads = sql`sum(taxable_value * sign)::text as taxable, sum(cgst_amount * sign)::text as cgst, sum(sgst_amount * sign)::text as sgst, sum(igst_amount * sign)::text as igst, sum(cess_amount * sign)::text as cess`;
         const heads = sql`sum(taxable_value)::text as taxable, sum(cgst_amount)::text as cgst, sum(sgst_amount)::text as sgst, sum(igst_amount)::text as igst, sum(cess_amount)::text as cess`;
         const outward = (
           await tx.execute<{ section: string; gst_rate: string; taxable: string; cgst: string; sgst: string; igst: string; cess: string; documents: number }>(sql`
@@ -297,7 +298,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
                      else 'B2CS' end as section,
                    gst_rate, count(distinct doc_id)::int as documents, ${heads}
             from gst_transactions
-            where business_id = ${b} and direction = 'outward' and return_period = ${period} and not is_cancelled
+            where business_id = ${b} and direction = 'outward' and doc_type <> 'credit_note' and return_period = ${period} and not is_cancelled
             group by 1, 2 order by 1, 2`)
         ).rows;
         const inward = (
@@ -305,13 +306,22 @@ export const reportsModule: ApiModule = async (app, deps) => {
             select coalesce(itc_eligibility::text, 'eligible') as itc, is_reverse_charge as reverse_charge, gst_rate,
                    count(distinct doc_id)::int as documents, ${heads}
             from gst_transactions
-            where business_id = ${b} and direction = 'inward' and return_period = ${period} and not is_cancelled
+            where business_id = ${b} and direction = 'inward' and doc_type <> 'debit_note' and return_period = ${period} and not is_cancelled
             group by 1, 2, 3 order by 1, 2, 3`)
+        ).rows;
+        // Sales returns (credit notes, CDNR / CDNUR) and purchase returns (our debit notes to suppliers).
+        const notes = (
+          await tx.execute<{ direction: string; registered: boolean; itc: string | null; gst_rate: string; taxable: string; cgst: string; sgst: string; igst: string; cess: string; documents: number }>(sql`
+            select direction::text, party_gstin is not null as registered, itc_eligibility::text as itc, gst_rate,
+                   count(distinct doc_id)::int as documents, ${heads}
+            from gst_transactions
+            where business_id = ${b} and doc_type in ('credit_note', 'debit_note') and return_period = ${period} and not is_cancelled
+            group by 1, 2, 3, 4 order by 1, 2, 4`)
         ).rows;
         const hsn = (
           await tx.execute<{ hsn_code: string | null; uqc: string | null; gst_rate: string; qty: string; taxable: string; cgst: string; sgst: string; igst: string; cess: string }>(sql`
-            select hsn_code, uqc, gst_rate, sum(qty)::text as qty, ${heads}
-            from gst_transactions
+            select hsn_code, uqc, gst_rate, sum(qty * sign)::text as qty, ${signedHeads}
+            from (select *, case when doc_type = 'credit_note' then -1 else 1 end as sign from gst_transactions) g
             where business_id = ${b} and direction = 'outward' and return_period = ${period} and not is_cancelled
             group by 1, 2, 3 order by 1, 3`)
         ).rows;
@@ -329,14 +339,26 @@ export const reportsModule: ApiModule = async (app, deps) => {
             igst: dec(0),
             cess: dec(0),
           });
-        const outTax = tax(outward);
-        const itc = tax(inward.filter((x) => x.itc !== "ineligible"));
+        const minus = (a: ReturnType<typeof tax>, b: ReturnType<typeof tax>) => ({ cgst: a.cgst.minus(b.cgst), sgst: a.sgst.minus(b.sgst), igst: a.igst.minus(b.igst), cess: a.cess.minus(b.cess) });
+        const outTax = minus(tax(outward), tax(notes.filter((x) => x.direction === "outward")));
+        const itc = minus(tax(inward.filter((x) => x.itc !== "ineligible")), tax(notes.filter((x) => x.direction === "inward" && x.itc !== "ineligible")));
         return {
           period,
           status: lock?.status ?? "open",
           b2clThreshold: m(limit),
           outward: outward.map((x) => ({ section: x.section, gstRate: x.gst_rate, documents: x.documents, taxable: m(x.taxable), cgst: m(x.cgst), sgst: m(x.sgst), igst: m(x.igst), cess: m(x.cess) })),
           inward: inward.map((x) => ({ itcEligibility: x.itc, reverseCharge: x.reverse_charge, gstRate: x.gst_rate, documents: x.documents, taxable: m(x.taxable), cgst: m(x.cgst), sgst: m(x.sgst), igst: m(x.igst), cess: m(x.cess) })),
+          notes: notes.map((x) => ({
+            kind: x.direction === "outward" ? "credit_note" : "debit_note",
+            registered: x.registered,
+            gstRate: x.gst_rate,
+            documents: x.documents,
+            taxable: m(x.taxable),
+            cgst: m(x.cgst),
+            sgst: m(x.sgst),
+            igst: m(x.igst),
+            cess: m(x.cess),
+          })),
           hsnSummary: hsn.map((x) => ({ hsnCode: x.hsn_code, uqc: x.uqc, gstRate: x.gst_rate, qty: dec(x.qty).toFixed(3), taxable: m(x.taxable), cgst: m(x.cgst), sgst: m(x.sgst), igst: m(x.igst), cess: m(x.cess) })),
           cancelledDocuments: cancelled!.n,
           /** Indicative only: output tax less eligible ITC, per head, before cross-utilisation rules. */

@@ -26,6 +26,7 @@ interface GstSummary {
   b2clThreshold: string;
   outward: Array<Heads & { section: "B2B" | "B2CL" | "B2CS"; gstRate: string; documents: number }>;
   inward: Array<Heads & { itcEligibility: string; reverseCharge: boolean; gstRate: string; documents: number }>;
+  notes: Array<Heads & { kind: "credit_note" | "debit_note"; registered: boolean; gstRate: string; documents: number }>;
   hsnSummary: Array<Heads & { hsnCode: string | null; uqc: string | null; gstRate: string; qty: string }>;
   cancelledDocuments: number;
   estimate: { outputTax: Omit<Heads, "taxable">; eligibleItc: Omit<Heads, "taxable"> };
@@ -154,8 +155,35 @@ export function GstPage() {
         </div>
       </Card>
 
+      {d && d.notes.length > 0 && (
+        <Card>
+          <CardHeader title={t("gstPage.notes")} subtitle={t("gstPage.notesHint")} />
+          <div className="p-3 sm:p-4">
+            <DataTable
+              rows={d.notes}
+              rowKey={(r) => `${r.kind}-${r.registered}-${r.gstRate}`}
+              minWidth={760}
+              columns={[
+                {
+                  key: "kind",
+                  header: t("gstPage.section"),
+                  render: (r) => (
+                    <Badge tone={r.kind === "credit_note" ? "warn" : "accent"}>
+                      {r.kind === "credit_note" ? (r.registered ? "CDNR" : "CDNUR") : t("notes.debitNote")}
+                    </Badge>
+                  ),
+                },
+                { key: "rate", header: t("invoice.gstRate"), align: "right", render: (r) => `${number(r.gstRate, 2)}%` },
+                { key: "docs", header: t("reports.bills"), align: "right", render: (r) => r.documents },
+                ...heads<GstSummary["notes"][number]>(),
+              ]}
+            />
+          </div>
+        </Card>
+      )}
+
       <Card>
-        <CardHeader title={t("gst.hsnSummary")} />
+        <CardHeader title={t("gst.hsnSummary")} subtitle={t("gstPage.hsnNet")} />
         <div className="p-3 sm:p-4">
           <DataTable
             rows={d?.hsnSummary ?? []}

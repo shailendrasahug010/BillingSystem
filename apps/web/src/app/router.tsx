@@ -39,6 +39,7 @@ export type PlannedModule =
   | "expenses"
   | "notifications"
   | "users"
+  | "audit"
   | "backup";
 
 interface RouterValue {

@@ -24,6 +24,7 @@ import {
   Landmark,
   ChartPie,
   Factory,
+  History,
 } from "lucide-react";
 import type { Permission } from "@vyapaar/core";
 import type { TranslationKey } from "@vyapaar/i18n";
@@ -51,7 +52,7 @@ const planned = (module: PlannedModule): Route => ({ name: "planned", module });
 
 /** Modules whose screens exist in live mode (the demo preview keeps showing their plan). */
 export const LIVE_MODULES: ReadonlySet<PlannedModule> = new Set<PlannedModule>(
-  LIVE ? ["payments", "purchases", "suppliers", "inventory", "reports", "gst", "users"] : [],
+  LIVE ? ["payments", "purchases", "suppliers", "inventory", "reports", "gst", "users", "audit"] : [],
 );
 
 /** Roadmap badge for the menu: hidden once the screen exists. */
@@ -88,6 +89,7 @@ export const MODULES: ModuleDef[] = [
 
   { key: "settings", label: "nav.settings", icon: Settings, group: "admin", route: { name: "settings" }, permission: "settings.view" },
   { key: "users", label: "nav.users", icon: ShieldCheck, group: "admin", route: planned("users"), permission: "user.view", phase: 3 },
+  { key: "audit", label: "nav.auditLog", icon: History, group: "admin", route: planned("audit"), permission: "audit.view", phase: 3 },
   { key: "backup", label: "nav.backup", icon: DatabaseBackup, group: "admin", route: planned("backup"), permission: "backup.create", phase: 6 },
   { key: "design", label: "nav.designSystem", icon: Palette, group: "admin", route: { name: "design-system" }, permission: "settings.view" },
 ];

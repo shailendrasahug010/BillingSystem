@@ -35,6 +35,7 @@ const PurchaseViewPage = lazy(() => import("../features/purchases/PurchaseViewPa
 const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
 const SupplierProfilePage = lazy(() => import("../features/suppliers/SupplierProfilePage").then((m) => ({ default: m.SupplierProfilePage })));
 const SuppliersPage = lazy(() => import("../features/suppliers/SuppliersPage").then((m) => ({ default: m.SuppliersPage })));
+const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 const DesignSystemPage = lazy(() => import("../features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
 
@@ -90,6 +91,8 @@ function Screen({ route }: { route: Route }) {
             return <GstPage />;
           case "users":
             return <UsersPage />;
+          case "audit":
+            return <AuditLogPage />;
         }
       }
       return <PlannedPage module={route.module} />;

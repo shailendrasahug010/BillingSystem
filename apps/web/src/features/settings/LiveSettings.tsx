@@ -38,6 +38,7 @@ interface Settings {
   "invoice.default_print_locale": "en" | "hi";
   "credit.policy": { onLimitExceeded: Policy; onOverdue: Policy; overdueGraceDays: number };
   "payments.allocation": "oldest_first" | "manual";
+  "invoice.terms": string;
   "reports.aging_buckets": number[];
 }
 
@@ -312,6 +313,21 @@ function RulesCard() {
             ]}
           />,
         )}
+        <div className="flex flex-col gap-2 border-b border-line py-3">
+          <div>
+            <p className="text-[14px] font-medium text-ink">{t("invoice.print.terms")}</p>
+            <p className="text-[12.5px] text-ink-3">{t("settings.termsHint")}</p>
+          </div>
+          <textarea
+            aria-label={t("invoice.print.terms")}
+            disabled={!canEdit}
+            rows={3}
+            maxLength={1000}
+            defaultValue={s["invoice.terms"]}
+            onBlur={(e) => e.target.value.trim() !== s["invoice.terms"] && void put("invoice.terms", e.target.value.trim())}
+            className="w-full rounded-[var(--radius-control)] border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:bg-surface-2"
+          />
+        </div>
         {row(
           t("settings.expiryWarning"),
           t("settings.expiryWarningHint"),

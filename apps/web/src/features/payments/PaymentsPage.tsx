@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@vyapaar/core";
-import { ArrowDownLeft, ArrowUpRight, Download, Search } from "lucide-react";
+import type { LocaleCode } from "@vyapaar/i18n";
+import { ArrowDownLeft, ArrowUpRight, Download, MessageCircle, Printer, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -9,14 +10,18 @@ import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
+import { createTranslator, formatCurrency, formatDate } from "@vyapaar/i18n";
 import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, Stat, type Column } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
-import { allowed } from "../../data/db";
+import { PrintPortal } from "../../components/ui/PrintPortal";
+import { allowed, BUSINESS, customerById, supplierById, WORKSPACE } from "../../data/db";
 import { refreshCustomer, refreshSupplier } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
+import { shareOnWhatsApp } from "../../lib/share";
 import { usePaged } from "../../lib/usePaged";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
+import { ReceiptDocument, type PrintablePayment } from "./ReceiptDocument";
 
 interface PaymentRow {
   id: string;
@@ -207,9 +212,10 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
 }
 
 function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null; onClose(): void }) {
-  const { t, money, dateMedium } = useI18n();
+  const { t, money, dateMedium, locale } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
+  const [printLocale, setPrintLocale] = useState<LocaleCode>((WORKSPACE.printLocale as LocaleCode) || locale);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -242,6 +248,24 @@ function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null;
     } finally {
       setBusy(false);
     }
+  };
+
+  const printable: PrintablePayment | null = p ? { ...p, partyName: p.party?.name ?? p.partyName ?? "" } : null;
+  const share = () => {
+    if (!p || !printable) return;
+    const tr = createTranslator(printLocale).t;
+    const bills = p.allocations.filter((a) => !a.reversedAt).map((a) => a.documentNumber).filter(Boolean).join(", ");
+    const params = {
+      party: printable.partyName,
+      amount: formatCurrency(p.amount, printLocale),
+      method: tr(`paymentMethod.${p.method}`) + (p.referenceNumber ? ` (${p.referenceNumber})` : ""),
+      date: formatDate(p.paymentDate),
+      number: p.paymentNumber,
+      bills: bills || "—",
+      business: BUSINESS.name,
+    };
+    const mobile = p.customerId ? customerById.get(p.customerId)?.mobile : p.supplierId ? supplierById.get(p.supplierId)?.mobile : null;
+    shareOnWhatsApp(tr(p.direction === "in" ? "share.receipt" : "share.payment", params), mobile);
   };
 
   const posted = p?.status === "posted";
@@ -310,6 +334,29 @@ function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null;
             {p.chequeBank && <Stat label={t("payment.chequeBank")} value={p.chequeBank} />}
             {Number(p.unallocatedAmount) > 0 && <Stat label={t("payment.advanceShort")} value={money(p.unallocatedAmount)} tone="warn" />}
           </div>
+          <div className="flex flex-wrap items-center gap-2 border-y border-line py-3">
+            <Segmented
+              size="sm"
+              label={t("settings.printLanguage")}
+              value={printLocale}
+              onChange={setPrintLocale}
+              options={[
+                { value: "en", label: "English" },
+                { value: "hi", label: "हिन्दी" },
+              ]}
+            />
+            <Button size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
+              {p.direction === "in" ? t("receipt.print") : t("receipt.printVoucher")}
+            </Button>
+            <Button size="sm" icon={<MessageCircle size={14} />} onClick={share}>
+              {t("common.whatsapp")}
+            </Button>
+          </div>
+          {printable && (
+            <PrintPortal>
+              <ReceiptDocument payment={printable} locale={printLocale} />
+            </PrintPortal>
+          )}
           {p.cancelReason && (
             <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger">
               {t("common.reason")}: {p.cancelReason}

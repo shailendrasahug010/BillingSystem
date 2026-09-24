@@ -100,6 +100,8 @@ export function useCustomerHistory(customerId: string) {
       const docLabel = (docType: string, number: string | null, narration: string | null) => {
         if (docType === "invoice") return `${t("nav.invoices")} ${number ?? ""}`;
         if (docType === "opening") return narration ?? "Opening balance";
+        if (docType === "credit_note") return `${t("notes.creditNote")} ${number ?? ""}`;
+        if (docType === "credit_note_cancel") return `${t("ledger.credit_note_cancel")} ${number ?? ""}`;
         return [number, narration].filter(Boolean).join(" · ") || docType;
       };
       return {

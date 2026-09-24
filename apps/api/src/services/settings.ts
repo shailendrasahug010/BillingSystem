@@ -11,6 +11,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "invoice.edit_window_hours": 24,
   "invoice.default_print_locale": "en",
   "invoice.offline_mode": "device_series",
+  "invoice.terms": "",
   "credit.policy": { onLimitExceeded: "warn", onOverdue: "warn", overdueGraceDays: 0 },
   "orders.workflow": { requireConfirmation: true, usePacking: true, useDispatch: true },
   "payments.allocation": "oldest_first",
