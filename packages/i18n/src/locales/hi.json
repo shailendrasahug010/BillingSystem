@@ -648,7 +648,17 @@
     "INVOICE_NOT_POSTED": "केवल पोस्ट किया गया इनवॉइस कैंसल हो सकता है (यह {{status}} है)।",
     "PRODUCT_INACTIVE": "{{product}} निष्क्रिय है, इसका बिल नहीं बन सकता।",
     "TOTALS_MISMATCH": "सर्वर पर कुल राशि बदल गई ({{received}} की जगह {{expected}})। कृपया बिल जाँचें।",
-    "UNIT_NOT_ON_PRODUCT": "{{product}} इस इकाई में नहीं बिकता।"
+    "UNIT_NOT_ON_PRODUCT": "{{product}} इस इकाई में नहीं बिकता।",
+    "ADJUSTMENT_DIRECTION_INVALID": "“{{reason}}” से केवल स्टॉक घटता है। ऋणात्मक मात्रा डालें।",
+    "BATCH_REQUIRED": "{{product}} का बैच नंबर डालें।",
+    "BILL_AFTER_RECEIPT": "बिल की तारीख माल मिलने की तारीख के बाद की नहीं हो सकती।",
+    "CHEQUE_NUMBER_REQUIRED": "चेक नंबर डालें।",
+    "EXPIRY_REQUIRED": "{{product}} की एक्सपायरी तारीख डालें।",
+    "NOTHING_TO_ALLOCATE": "इस भुगतान में कोई बची हुई राशि नहीं है।",
+    "NOT_A_CHEQUE": "यह भुगतान चेक से नहीं हुआ था।",
+    "NO_OPEN_DOCUMENTS": "इस राशि को लगाने के लिए कोई बकाया बिल नहीं है।",
+    "PARTY_REQUIRED": "ग्राहक या सप्लायर चुनें।",
+    "PAYMENT_NOT_POSTED": "यह भुगतान पहले से {{status}} है।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",

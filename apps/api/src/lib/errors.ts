@@ -80,7 +80,7 @@ function pgError(err: unknown): PgLikeError | null {
 
 function toApiError(err: unknown): ApiError | null {
   if (err instanceof ApiError) return err;
-  if (err instanceof ValidationError) return new ApiError(400, err.code, err.params);
+  if (err instanceof ValidationError) return new ApiError(DOMAIN_STATUS[err.code] ?? 400, err.code, err.params);
   if (err instanceof DomainError) return new ApiError(DOMAIN_STATUS[err.code] ?? 409, err.code, err.params);
   const pg = pgError(err);
   if (!pg) return null;

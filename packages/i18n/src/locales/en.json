@@ -648,7 +648,17 @@
     "INVOICE_NOT_POSTED": "Only a posted invoice can be cancelled (this one is {{status}}).",
     "PRODUCT_INACTIVE": "{{product}} is inactive and cannot be billed.",
     "TOTALS_MISMATCH": "The total changed on the server ({{expected}} instead of {{received}}). Please review the bill.",
-    "UNIT_NOT_ON_PRODUCT": "{{product}} is not sold in this unit."
+    "UNIT_NOT_ON_PRODUCT": "{{product}} is not sold in this unit.",
+    "ADJUSTMENT_DIRECTION_INVALID": "“{{reason}}” can only reduce stock. Enter a negative quantity.",
+    "BATCH_REQUIRED": "Enter the batch number for {{product}}.",
+    "BILL_AFTER_RECEIPT": "The bill date cannot be after the date the goods were received.",
+    "CHEQUE_NUMBER_REQUIRED": "Enter the cheque number.",
+    "EXPIRY_REQUIRED": "Enter the expiry date for {{product}}.",
+    "NOTHING_TO_ALLOCATE": "This payment has no unused amount left.",
+    "NOT_A_CHEQUE": "This payment was not made by cheque.",
+    "NO_OPEN_DOCUMENTS": "There are no unpaid bills to apply this amount to.",
+    "PARTY_REQUIRED": "Select the customer or supplier.",
+    "PAYMENT_NOT_POSTED": "This payment is already {{status}}."
   },
   "validation": {
     "required": "This field is required",
