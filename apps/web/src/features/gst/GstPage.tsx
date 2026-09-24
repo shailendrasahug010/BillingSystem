@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Download, Info } from "lucide-react";
+import { Tabs } from "radix-ui";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
@@ -7,10 +8,13 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Field";
 import { EmptyState } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, PageHeader, Tile, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, PageHeader, TAB_TRIGGER, Tile, type Column } from "../../components/ui/Page";
 import { allowed, TODAY } from "../../data/db";
 import { api } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
+import { Gstr1Tab } from "./Gstr1Tab";
+import { Gstr3bTab } from "./Gstr3bTab";
+import { PeriodActions } from "./PeriodActions";
 
 interface Heads {
   taxable: string;
@@ -40,8 +44,47 @@ const sumTax = (h: Omit<Heads, "taxable">) => Number(h.cgst) + Number(h.sgst) + 
  * an indicative net tax. It prepares the return; filing stays with the CA.
  */
 export function GstPage() {
-  const { t, money, number } = useI18n();
+  const { t } = useI18n();
   const [period, setPeriod] = useState(TODAY.slice(0, 7));
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader title={t("gstPage.title")} subtitle={t("gstPage.subtitle")} />
+      <FilterBar>
+        <Input type="month" aria-label={t("common.period")} value={period} max={TODAY.slice(0, 7)} onChange={(e) => setPeriod(e.target.value)} className="md:w-48" />
+        <PeriodActions period={period} />
+      </FilterBar>
+      <Tabs.Root defaultValue="summary" className="flex flex-col gap-4">
+        <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={t("gstPage.title")}>
+          <Tabs.Trigger value="summary" className={TAB_TRIGGER}>
+            {t("gstPage.tabs.summary")}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="gstr1" className={TAB_TRIGGER}>
+            GSTR-1
+          </Tabs.Trigger>
+          <Tabs.Trigger value="gstr3b" className={TAB_TRIGGER}>
+            GSTR-3B
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="summary">
+          <SummaryTab period={period} />
+        </Tabs.Content>
+        <Tabs.Content value="gstr1">
+          <Gstr1Tab period={period} />
+        </Tabs.Content>
+        <Tabs.Content value="gstr3b">
+          <Gstr3bTab period={period} />
+        </Tabs.Content>
+      </Tabs.Root>
+      <p className="flex items-start gap-2 text-[12.5px] text-ink-3">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        {t("gstPage.disclaimer")}
+      </p>
+    </div>
+  );
+}
+
+function SummaryTab({ period }: { period: string }) {
+  const { t, money, number } = useI18n();
   const q = useQuery({
     queryKey: ["reports", "gst", period],
     queryFn: () => api.get<GstSummary>("/reports/gst", { period }),
@@ -61,45 +104,35 @@ export function GstPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title={t("gstPage.title")}
-        subtitle={t("gstPage.subtitle")}
-        actions={
-          d && allowed("gst.export") ? (
-            <Button
-              icon={<Download size={16} />}
-              onClick={() =>
-                downloadCsv(
-                  `hsn-summary-${period}.csv`,
-                  [
-                    { label: "HSN", value: (r) => r.hsnCode },
-                    { label: "UQC", value: (r) => r.uqc },
-                    { label: "Rate", value: (r) => r.gstRate },
-                    { label: "Qty", value: (r) => r.qty },
-                    { label: "Taxable", value: (r) => r.taxable },
-                    { label: "CGST", value: (r) => r.cgst },
-                    { label: "SGST", value: (r) => r.sgst },
-                    { label: "IGST", value: (r) => r.igst },
-                    { label: "Cess", value: (r) => r.cess },
-                  ],
-                  d.hsnSummary,
-                )
-              }
-            >
-              {t("gstPage.exportHsn")}
-            </Button>
-          ) : undefined
-        }
-      />
-      <FilterBar>
-        <Input type="month" aria-label={t("common.period")} value={period} max={TODAY.slice(0, 7)} onChange={(e) => setPeriod(e.target.value)} className="md:w-48" />
-        {d && (
-          <Badge tone={d.status === "open" ? "neutral" : d.status === "filed" ? "good" : "warn"}>
-            {t(`gstPage.status.${d.status === "filed" || d.status === "locked" ? d.status : "open"}`)}
-          </Badge>
-        )}
+      <div className="flex flex-wrap items-center gap-3">
         {d && d.cancelledDocuments > 0 && <span className="text-[13px] text-ink-3">{t("gstPage.cancelled", { count: d.cancelledDocuments })}</span>}
-      </FilterBar>
+        {d && allowed("gst.export") && (
+          <Button
+            className="ml-auto"
+            size="sm"
+            icon={<Download size={14} />}
+            onClick={() =>
+              downloadCsv(
+                `hsn-summary-${period}.csv`,
+                [
+                  { label: "HSN", value: (r) => r.hsnCode },
+                  { label: "UQC", value: (r) => r.uqc },
+                  { label: "Rate", value: (r) => r.gstRate },
+                  { label: "Qty", value: (r) => r.qty },
+                  { label: "Taxable", value: (r) => r.taxable },
+                  { label: "CGST", value: (r) => r.cgst },
+                  { label: "SGST", value: (r) => r.sgst },
+                  { label: "IGST", value: (r) => r.igst },
+                  { label: "Cess", value: (r) => r.cess },
+                ],
+                d.hsnSummary,
+              )
+            }
+          >
+            {t("gstPage.exportHsn")}
+          </Button>
+        )}
+      </div>
       {q.error ? <ErrorNote error={q.error} /> : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -200,11 +233,6 @@ export function GstPage() {
           />
         </div>
       </Card>
-
-      <p className="flex items-start gap-2 text-[12.5px] text-ink-3">
-        <Info size={14} className="mt-0.5 shrink-0" />
-        {t("gstPage.disclaimer")}
-      </p>
     </div>
   );
 }

@@ -19,6 +19,8 @@ interface I18nValue extends Translator {
   number(value: number | string, decimals?: number): string;
   date(iso: string): string;
   dateMedium(iso: string): string;
+  /** A timestamp in the business time zone: "24 Sept, 10:42 am". */
+  dateTime(iso: string): string;
 }
 
 const I18nContext = createContext<I18nValue | null>(null);
@@ -57,6 +59,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       number: (v, decimals = 3) => formatNumber(v, locale, decimals),
       date: (iso) => formatDate(iso),
       dateMedium: (iso) => formatDateMedium(iso, locale),
+      dateTime: (iso) =>
+        new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }).format(new Date(iso)),
     };
   }, [locale]);
 

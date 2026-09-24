@@ -6,6 +6,7 @@ export * from "./gst/states.js";
 export * from "./gst/rates.js";
 export * from "./gst/supply.js";
 export * from "./gst/line.js";
+export * from "./gst/returns.js";
 
 export * from "./invoice/calculate.js";
 export * from "./numbering/series.js";
