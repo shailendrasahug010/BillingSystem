@@ -44,7 +44,7 @@ async function paymentDetail(tx: Tx, ctx: RequestCtx, id: string) {
     order by a.allocated_at`);
   const party =
     p.partyType === "customer"
-      ? (await tx.select({ id: schema.customers.id, name: schema.customers.name }).from(schema.customers).where(eq(schema.customers.id, p.customerId!)))[0]
+      ? (await tx.select({ id: schema.customers.id, name: sql<string>`coalesce(${schema.customers.businessName}, ${schema.customers.name})` }).from(schema.customers).where(eq(schema.customers.id, p.customerId!)))[0]
       : (await tx.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId!)))[0];
   const { businessId: _b, ...rest } = p;
   return {
@@ -196,7 +196,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
           partyType: p.partyType,
           customerId: p.customerId,
           supplierId: p.supplierId,
-          partyName: sql<string>`coalesce((select name from customers c where c.id = ${p.customerId}), (select name from suppliers s where s.id = ${p.supplierId}))`,
+          partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = ${p.customerId}), (select name from suppliers s where s.id = ${p.supplierId}))`,
           amount: p.amount,
           method: p.method,
           referenceNumber: p.referenceNumber,

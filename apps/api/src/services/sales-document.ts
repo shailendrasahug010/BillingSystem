@@ -21,6 +21,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { z } from "zod";
 import { can } from "../lib/access.js";
 import type { RequestCtx } from "../lib/context.js";
+import { inSequence } from "../lib/db.js";
 import { ApiError, badRequest, forbidden } from "../lib/errors.js";
 import { getSettings } from "./settings.js";
 
@@ -122,17 +123,17 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     .from(schema.products)
     .where(and(eq(schema.products.businessId, businessId), inArray(schema.products.id, productIds), isNull(schema.products.deletedAt)));
   const productById = new Map(products.map((p) => [p.id, p]));
-  const [altUnits, prices, unitRows, categories, rules] = await Promise.all([
-    tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, productIds)),
-    priceLevelId
+  const [altUnits, prices, unitRows, categories, rules] = await inSequence([
+    () => tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, productIds)),
+    () => priceLevelId
       ? tx
           .select()
           .from(schema.productPrices)
           .where(and(inArray(schema.productPrices.productId, productIds), eq(schema.productPrices.priceLevelId, priceLevelId)))
       : Promise.resolve([]),
-    tx.select().from(schema.units).where(eq(schema.units.businessId, businessId)),
-    tx.select().from(schema.taxCategories).where(eq(schema.taxCategories.businessId, businessId)),
-    tx.select().from(schema.taxRates).where(eq(schema.taxRates.businessId, businessId)),
+    () => tx.select().from(schema.units).where(eq(schema.units.businessId, businessId)),
+    () => tx.select().from(schema.taxCategories).where(eq(schema.taxCategories.businessId, businessId)),
+    () => tx.select().from(schema.taxRates).where(eq(schema.taxRates.businessId, businessId)),
   ]);
   const unitById = new Map(unitRows.map((u) => [u.id, u]));
   const categoryById = new Map<string, TaxCategory>(

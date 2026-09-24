@@ -180,4 +180,15 @@ describe.skipIf(!hasDatabase)("dashboard, reports and search", () => {
     expect(sales.body.suppliers).toBeUndefined();
     expect(sales.body.payments).toBeDefined();
   });
+
+  it("names customers by their business (shop) name in payments and dues", async () => {
+    const shop = (await post("/customers", { name: "Kailash", businessName: "Kailash Kirana Bhandar", stateCode: "23", creditDays: 0 })).body.id;
+    await post("/invoices", { customerId: shop, lines: [{ productId: ids.biscuit, qty: "10" }] });
+    const pay = await post("/payments", { direction: "in", customerId: shop, amount: "50", method: "cash" });
+    expect(pay.body.party).toMatchObject({ id: shop, name: "Kailash Kirana Bhandar" });
+    const list = await get(`/payments?customerId=${shop}`);
+    expect(list.body.data[0]).toMatchObject({ partyName: "Kailash Kirana Bhandar" });
+    const dues = await get("/reports/outstanding?party=customer");
+    expect(dues.body.rows.find((r: { partyId: string }) => r.partyId === shop)).toMatchObject({ name: "Kailash Kirana Bhandar", total: "55.00" });
+  });
 });

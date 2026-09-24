@@ -122,10 +122,10 @@ export const dashboardModule: ApiModule = async (app, deps) => {
 
       const topCustomers = (
         await tx.execute<{ id: string; name: string; sales: string; invoices: number }>(sql`
-          select c.id, c.name, sum(i.grand_total)::text as sales, count(*)::int as invoices
+          select c.id, coalesce(c.business_name, c.name) as name, sum(i.grand_total)::text as sales, count(*)::int as invoices
           from invoices i join customers c on c.id = i.customer_id
           where i.business_id = ${b} and i.status = 'posted' and i.invoice_date between ${period.from} and ${period.to}
-          group by c.id, c.name order by sum(i.grand_total) desc limit 5`)
+          group by c.id, c.name, c.business_name order by sum(i.grand_total) desc limit 5`)
       ).rows;
       const topBrands = (
         await tx.execute<{ id: string; name: string; taxable: string }>(sql`

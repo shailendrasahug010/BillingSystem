@@ -132,7 +132,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
         q.groupBy === "method"
           ? { key: sql`p.method::text`, label: sql`p.method::text` }
           : q.groupBy === "customer"
-            ? { key: sql`p.customer_id::text`, label: sql`max(c.name)` }
+            ? { key: sql`p.customer_id::text`, label: sql`max(coalesce(c.business_name, c.name))` }
             : { key: sql`date_trunc(${TRUNC[q.groupBy]!}, p.payment_date)::date::text`, label: sql`date_trunc(${TRUNC[q.groupBy]!}, p.payment_date)::date::text` };
       const rows = await tenant(ctx, async (tx) =>
         (
@@ -217,7 +217,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
         q.party === "customer"
           ? (
               await tx.execute<{ party_id: string; name: string; mobile: string | null; id: string; number: string; date: string; due_date: string; balance: string }>(sql`
-                select c.id as party_id, c.name, c.mobile, i.id, i.invoice_number as number, i.invoice_date::text as date,
+                select c.id as party_id, coalesce(c.business_name, c.name) as name, c.mobile, i.id, i.invoice_number as number, i.invoice_date::text as date,
                        coalesce(i.due_date, i.invoice_date)::text as due_date, i.balance_due::text as balance
                 from invoices i join customers c on c.id = i.customer_id
                 where i.business_id = ${ctx.businessId} and i.status = 'posted' and i.balance_due > 0 and i.invoice_date <= ${asOf}`)

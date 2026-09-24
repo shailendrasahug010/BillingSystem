@@ -27,3 +27,15 @@ export async function withUser<T>(db: Database, userId: string, fn: (tx: Tx) => 
     return fn(tx);
   });
 }
+
+/**
+ * Runs a transaction's reads one after another. A transaction is a single
+ * connection, so Promise.all gains nothing there (node-postgres only queues
+ * the queries, and pg 9 rejects overlapping ones). Tasks are thunks so each
+ * query starts only when the previous one has finished.
+ */
+export async function inSequence<const T extends readonly (() => unknown)[]>(tasks: T): Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> }> {
+  const out: unknown[] = [];
+  for (const task of tasks) out.push(await task());
+  return out as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> };
+}

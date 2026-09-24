@@ -451,6 +451,8 @@ export const partiesModule: ApiModule = async (app, deps) => {
           mobile: s.mobile,
           city: s.city,
           gstin: s.gstin,
+          stateCode: s.stateCode,
+          gstRegistration: s.gstRegistration,
           balance: s.balance,
           creditDays: s.creditDays,
           isActive: s.isActive,

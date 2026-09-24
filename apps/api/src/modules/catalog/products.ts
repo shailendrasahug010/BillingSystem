@@ -8,7 +8,7 @@ import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit, diff } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { inSequence, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextMasterCode } from "../../services/numbering.js";
@@ -82,8 +82,8 @@ export async function productDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .from(schema.products)
     .where(and(eq(schema.products.id, id), eq(schema.products.businessId, ctx.businessId), isNull(schema.products.deletedAt)));
   if (!p) throw notFound("product");
-  const [units, barcodes, prices, stock] = await Promise.all([
-    tx
+  const [units, barcodes, prices, stock] = await inSequence([
+    () => tx
       .select({
         unitId: schema.productUnits.unitId,
         symbol: schema.units.symbol,
@@ -94,8 +94,8 @@ export async function productDetail(tx: Tx, ctx: RequestCtx, id: string) {
       .from(schema.productUnits)
       .innerJoin(schema.units, eq(schema.units.id, schema.productUnits.unitId))
       .where(eq(schema.productUnits.productId, id)),
-    tx.select({ barcode: schema.productBarcodes.barcode, unitId: schema.productBarcodes.unitId }).from(schema.productBarcodes).where(eq(schema.productBarcodes.productId, id)),
-    tx
+    () => tx.select({ barcode: schema.productBarcodes.barcode, unitId: schema.productBarcodes.unitId }).from(schema.productBarcodes).where(eq(schema.productBarcodes.productId, id)),
+    () => tx
       .select({
         priceLevelId: schema.productPrices.priceLevelId,
         unitId: schema.productPrices.unitId,
@@ -104,7 +104,7 @@ export async function productDetail(tx: Tx, ctx: RequestCtx, id: string) {
       })
       .from(schema.productPrices)
       .where(eq(schema.productPrices.productId, id)),
-    tx
+    () => tx
       .select({ warehouseId: schema.stockBalances.warehouseId, warehouse: schema.warehouses.name, qty: sql<string>`sum(${schema.stockBalances.qty})::text` })
       .from(schema.stockBalances)
       .innerJoin(schema.warehouses, eq(schema.warehouses.id, schema.stockBalances.warehouseId))
@@ -371,20 +371,20 @@ export const productsModule: ApiModule = async (app, deps) => {
         .where(and(eq(schema.products.businessId, ctx.businessId), isNull(schema.products.deletedAt)))
         .orderBy(asc(schema.products.name));
       const ids = products.map((p) => p.id);
-      const [barcodes, units, prices, stock, taxCategories, priceLevels, unitList, brands, categories] = await Promise.all([
-        ids.length ? tx.select().from(schema.productBarcodes).where(inArray(schema.productBarcodes.productId, ids)) : [],
-        ids.length ? tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, ids)) : [],
-        ids.length ? tx.select().from(schema.productPrices).where(inArray(schema.productPrices.productId, ids)) : [],
-        tx
+      const [barcodes, units, prices, stock, taxCategories, priceLevels, unitList, brands, categories] = await inSequence([
+        () => ids.length ? tx.select().from(schema.productBarcodes).where(inArray(schema.productBarcodes.productId, ids)) : [],
+        () => ids.length ? tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, ids)) : [],
+        () => ids.length ? tx.select().from(schema.productPrices).where(inArray(schema.productPrices.productId, ids)) : [],
+        () => tx
           .select({ productId: schema.stockBalances.productId, qty: sql<string>`sum(${schema.stockBalances.qty})::text` })
           .from(schema.stockBalances)
           .where(eq(schema.stockBalances.businessId, ctx.businessId))
           .groupBy(schema.stockBalances.productId),
-        listTaxCategories(tx, ctx.businessId),
-        tx.select().from(schema.priceLevels).where(eq(schema.priceLevels.businessId, ctx.businessId)),
-        tx.select().from(schema.units).where(eq(schema.units.businessId, ctx.businessId)),
-        tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands).where(and(eq(schema.brands.businessId, ctx.businessId), isNull(schema.brands.deletedAt))),
-        tx
+        () => listTaxCategories(tx, ctx.businessId),
+        () => tx.select().from(schema.priceLevels).where(eq(schema.priceLevels.businessId, ctx.businessId)),
+        () => tx.select().from(schema.units).where(eq(schema.units.businessId, ctx.businessId)),
+        () => tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands).where(and(eq(schema.brands.businessId, ctx.businessId), isNull(schema.brands.deletedAt))),
+        () => tx
           .select({ id: schema.productCategories.id, name: schema.productCategories.name, parentId: schema.productCategories.parentId })
           .from(schema.productCategories)
           .where(and(eq(schema.productCategories.businessId, ctx.businessId), isNull(schema.productCategories.deletedAt))),

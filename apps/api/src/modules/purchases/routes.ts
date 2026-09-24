@@ -25,7 +25,7 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { inSequence, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
@@ -116,11 +116,11 @@ export const purchasesModule: ApiModule = async (app, deps) => {
         .from(schema.products)
         .where(and(eq(schema.products.businessId, ctx.businessId), inArray(schema.products.id, productIds), isNull(schema.products.deletedAt)));
       const byId = new Map(products.map((p) => [p.id, p]));
-      const [altUnits, unitRows, categories, rules] = await Promise.all([
-        tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, productIds)),
-        tx.select().from(schema.units).where(eq(schema.units.businessId, ctx.businessId)),
-        tx.select().from(schema.taxCategories).where(eq(schema.taxCategories.businessId, ctx.businessId)),
-        tx.select().from(schema.taxRates).where(eq(schema.taxRates.businessId, ctx.businessId)),
+      const [altUnits, unitRows, categories, rules] = await inSequence([
+        () => tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, productIds)),
+        () => tx.select().from(schema.units).where(eq(schema.units.businessId, ctx.businessId)),
+        () => tx.select().from(schema.taxCategories).where(eq(schema.taxCategories.businessId, ctx.businessId)),
+        () => tx.select().from(schema.taxRates).where(eq(schema.taxRates.businessId, ctx.businessId)),
       ]);
       const categoryOf = (id: string): TaxCategory => {
         const c = categories.find((x) => x.id === id)!;
