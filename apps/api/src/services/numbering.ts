@@ -76,6 +76,8 @@ export async function nextDocumentNumber(
   docType: string,
   date: string,
   financialYearStartMonth: number,
+  /** Name and pattern for a document type the business has never numbered before. */
+  fallback?: { name: string; pattern: string },
 ): Promise<{ number: string; seriesId: string; financialYear: string }> {
   const fy = financialYearOf(date, financialYearStartMonth).label;
   const [previous] = await tx
@@ -91,9 +93,31 @@ export async function nextDocumentNumber(
     )
     .orderBy(desc(schema.documentSeries.financialYear))
     .limit(1);
-  const series = await ensureSeries(tx, businessId, docType, fy, previous ?? { name: docType, pattern: `${docType.slice(0, 3).toUpperCase()}/{FYS}/{SEQ:5}` });
+  const series = await ensureSeries(tx, businessId, docType, fy, previous ?? fallback ?? { name: docType, pattern: `${docType.slice(0, 3).toUpperCase()}/{FYS}/{SEQ:5}` });
   const number = formatDocumentNumber(series.pattern, { seq: await take(tx, series.id), date, financialYearStartMonth });
   const issues = validateDocumentNumber(number);
   if (issues.length) throw new ApiError(409, "INVALID_DOCUMENT_NUMBER", { number, issue: issues[0]! });
   return { number, seriesId: series.id, financialYear: fy };
+}
+
+/**
+ * A block of master codes for a bulk import: numbers are reserved in one
+ * update (then more if some codes are already taken by hand-typed ones).
+ */
+export async function nextMasterCodes(tx: Tx, businessId: string, kind: MasterKind, today: string, count: number, taken: ReadonlySet<string>): Promise<string[]> {
+  const series = await ensureSeries(tx, businessId, kind, ALL_YEARS, { name: `${kind} code`, pattern: MASTER_PATTERNS[kind] });
+  const out: string[] = [];
+  while (out.length < count) {
+    const want = count - out.length;
+    const [row] = await tx
+      .update(schema.documentSeries)
+      .set({ nextNumber: sql`${schema.documentSeries.nextNumber} + ${want}` })
+      .where(eq(schema.documentSeries.id, series.id))
+      .returning({ first: sql<number>`${schema.documentSeries.nextNumber} - ${want}` });
+    for (let seq = Number(row!.first); seq < Number(row!.first) + want; seq++) {
+      const code = formatDocumentNumber(series.pattern, { seq, date: today });
+      if (!taken.has(code.toUpperCase())) out.push(code);
+    }
+  }
+  return out;
 }

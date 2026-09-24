@@ -197,3 +197,9 @@ export const CustomerCategoryBody = z.strictObject({ name: z.string().trim().min
 export const SettingBody = z.strictObject({ value: z.unknown() });
 
 export const TaxRateEndBody = z.strictObject({ effectiveTo: IsoDate });
+
+/** Rows of a spreadsheet (header -> cell text), validated and imported all-or-nothing. */
+export const ImportBody = z.strictObject({
+  dryRun: z.boolean().default(false),
+  rows: z.array(z.record(z.string().trim().max(60), z.string().max(500).nullish())).min(1).max(5000),
+});

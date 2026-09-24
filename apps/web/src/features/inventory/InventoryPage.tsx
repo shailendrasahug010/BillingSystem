@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { searchProducts } from "@vyapaar/core";
 import type { TranslationKey } from "@vyapaar/i18n";
-import { ClipboardCheck, Download, Search, Trash2 } from "lucide-react";
+import { ArrowLeftRight, ClipboardCheck, Download, Search, Trash2 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -13,12 +13,13 @@ import { Segmented, Skeleton } from "../../components/ui/misc";
 import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useToast } from "../../components/ui/Toast";
-import { allowed, productById, TODAY } from "../../data/db";
+import { allowed, productById, TODAY, WORKSPACE } from "../../data/db";
 import { useSearchableProducts } from "../../data/hooks";
 import { refreshCatalog } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
+import { TransferDialog } from "./TransferDialog";
 
 interface StockRow {
   productId: string;
@@ -43,7 +44,15 @@ export function InventoryPage() {
   const [level, setLevel] = useState<"all" | "low" | "out">("all");
   const [ledgerFor, setLedgerFor] = useState<StockRow | null>(null);
   const [adjusting, setAdjusting] = useState(false);
-  const list = usePaged<StockRow>("stock", "/stock", { level, q: q.trim() || undefined }, { pageSize: 100 });
+  const [transferring, setTransferring] = useState(false);
+  const [warehouseId, setWarehouseId] = useState("");
+  const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
+  const list = usePaged<StockRow>("stock", "/stock", { level, warehouseId, q: q.trim() || undefined }, { pageSize: 100 });
+  const transfers = useQuery({
+    queryKey: ["stock", "transfers"],
+    queryFn: () => api.get<{ data: Array<{ id: string; transferNumber: string; transferDate: string; from: string; to: string; notes: string | null; lines: number; qty: string }> }>("/stock/transfers").then((r) => r.data),
+    enabled: godowns.length > 1,
+  });
   const adjustments = useQuery({
     queryKey: ["stock", "adjustments"],
     queryFn: () => api.get<{ data: Array<{ id: string; adjustmentNumber: string; adjustmentDate: string; reason: Reason; notes: string | null }> }>("/stock/adjustments").then((r) => r.data),
@@ -112,6 +121,11 @@ export function InventoryPage() {
             >
               {t("common.export")}
             </Button>
+            {allowed("inventory.transfer") && godowns.length > 1 && (
+              <Button icon={<ArrowLeftRight size={16} />} onClick={() => setTransferring(true)}>
+                {t("godowns.transfer")}
+              </Button>
+            )}
             {allowed("inventory.adjust") && (
               <Button variant="primary" icon={<ClipboardCheck size={16} />} onClick={() => setAdjusting(true)}>
                 {t("inventory.adjust")}
@@ -128,10 +142,25 @@ export function InventoryPage() {
           <Tabs.Trigger value="adjustments" className={TAB_TRIGGER}>
             {t("inventory.adjustments")}
           </Tabs.Trigger>
+          {godowns.length > 1 && (
+            <Tabs.Trigger value="transfers" className={TAB_TRIGGER}>
+              {t("godowns.transfers")}
+            </Tabs.Trigger>
+          )}
         </Tabs.List>
         <Tabs.Content value="stock" className="flex flex-col gap-4">
           <FilterBar>
             <Input className="flex-1" leading={<Search size={16} />} placeholder={t("product.search")} aria-label={t("product.search")} value={q} onChange={(e) => setQ(e.target.value)} />
+            {godowns.length > 1 && (
+              <Select aria-label={t("godowns.godown")} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="md:w-48">
+                <option value="">{t("godowns.allGodowns")}</option>
+                {godowns.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </Select>
+            )}
             <Segmented
               size="sm"
               label={t("common.status")}
@@ -161,8 +190,25 @@ export function InventoryPage() {
             ]}
           />
         </Tabs.Content>
+        {godowns.length > 1 && (
+          <Tabs.Content value="transfers">
+            <DataTable
+              rows={transfers.data ?? []}
+              loading={transfers.isPending}
+              rowKey={(x) => x.id}
+              columns={[
+                { key: "date", header: t("common.date"), render: (x) => x.transferDate },
+                { key: "number", header: t("common.number"), render: (x) => <span className="font-medium text-ink">{x.transferNumber}</span> },
+                { key: "route", header: `${t("godowns.from")} → ${t("godowns.to")}`, render: (x) => `${x.from} → ${x.to}` },
+                { key: "lines", header: t("invoice.items"), align: "right", render: (x) => x.lines },
+                { key: "notes", header: t("common.notes"), render: (x) => <span className="text-ink-2">{x.notes ?? ""}</span> },
+              ]}
+            />
+          </Tabs.Content>
+        )}
       </Tabs.Root>
       <StockLedgerDialog row={ledgerFor} onClose={() => setLedgerFor(null)} />
+      <TransferDialog open={transferring} onOpenChange={setTransferring} />
       <AdjustmentDialog open={adjusting} onOpenChange={setAdjusting} />
     </div>
   );
@@ -230,6 +276,22 @@ function AdjustmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange(
   const searchable = useSearchableProducts();
   const [reason, setReason] = useState<Reason>("count_correction");
   const [notes, setNotes] = useState("");
+  const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
+  const [warehouseId, setWarehouseId] = useState("");
+  // With several godowns a count is compared with that godown's stock, not the total.
+  const [byGodown, setByGodown] = useState<Record<string, Record<string, number>>>({});
+  const godownId = warehouseId || (godowns.find((w) => w.isDefault)?.id ?? "");
+  const systemQty = (productId: string) =>
+    godowns.length > 1 ? (byGodown[productId]?.[godownId] ?? 0) : (productById.get(productId)?.stock ?? 0);
+  const addLine = (id: string) => {
+    if (lines.some((l) => l.productId === id)) return;
+    setLines((ls) => [...ls, { productId: id, value: "" }]);
+    if (godowns.length > 1) {
+      void api.get<{ stock: { byWarehouse: Array<{ warehouseId: string; qty: string }> } }>(`/products/${id}`).then((d) =>
+        setByGodown((m) => ({ ...m, [id]: Object.fromEntries(d.stock.byWarehouse.map((w) => [w.warehouseId, Number(w.qty)])) })),
+      );
+    }
+  };
   const [lines, setLines] = useState<AdjLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -239,6 +301,8 @@ function AdjustmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange(
       setReason("count_correction");
       setNotes("");
       setLines([]);
+      setByGodown({});
+      setWarehouseId("");
       setError(null);
     }
   }, [open]);
@@ -247,7 +311,7 @@ function AdjustmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange(
   const change = (l: AdjLine): number | null => {
     if (!/^-?\d{1,12}(\.\d{1,3})?$/.test(l.value)) return null;
     const v = Number(l.value);
-    if (reason === "count_correction") return Math.round((v - (productById.get(l.productId)?.stock ?? 0)) * 1000) / 1000;
+    if (reason === "count_correction") return Math.round((v - systemQty(l.productId)) * 1000) / 1000;
     if (signed) return v;
     return -Math.abs(v);
   };
@@ -262,6 +326,7 @@ function AdjustmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange(
     try {
       const res = await api.post<{ adjustmentNumber: string; lines: unknown[] }>("/stock/adjustments", {
         reason,
+        ...(warehouseId ? { warehouseId } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         lines: lines.map((l) => ({ productId: l.productId, qtyChange: String(change(l)) })),
       });
@@ -304,13 +369,24 @@ function AdjustmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange(
               ))}
             </Select>
           </Field>
+          {godowns.length > 1 && (
+            <Field label={t("godowns.godown")} htmlFor="adj-godown">
+              <Select id="adj-godown" value={warehouseId || (godowns.find((w) => w.isDefault)?.id ?? "")} onChange={(e) => setWarehouseId(e.target.value)}>
+                {godowns.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label={t("common.notes")} htmlFor="adj-notes" hint={t("common.optional")}>
             <Input id="adj-notes" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
         </div>
         <SearchSelect
           value={null}
-          onChange={(id) => id && !lines.some((l) => l.productId === id) && setLines((ls) => [...ls, { productId: id, value: "" }])}
+          onChange={(id) => id && addLine(id)}
           placeholder={t("invoice.searchProduct")}
           clearLabel={t("common.clear")}
           emptyText={t("empty.products")}
@@ -326,7 +402,7 @@ function AdjustmentDialog({ open, onOpenChange }: { open: boolean; onOpenChange(
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium text-ink">{p?.name}</p>
                     <p className="num text-[12px] text-ink-3">
-                      {t("inventory.system")}: {number(p?.stock ?? 0)} {p?.unit}
+                      {t("inventory.system")}: {number(systemQty(l.productId))} {p?.unit}
                       {c !== null && c !== 0 && (
                         <span className={c > 0 ? "text-good" : "text-danger"}>
                           {" "}

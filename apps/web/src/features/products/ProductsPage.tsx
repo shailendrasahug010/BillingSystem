@@ -1,5 +1,5 @@
 import { stockLevel } from "@vyapaar/core";
-import { Download, PackagePlus, Search } from "lucide-react";
+import { Download, FileUp, PackagePlus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
@@ -13,6 +13,7 @@ import { LIVE } from "../../data/source";
 import { cn } from "../../lib/cn";
 import { downloadCsv } from "../../lib/download";
 import { searchProducts } from "@vyapaar/core";
+import { ImportDialog } from "../imports/ImportDialog";
 import { ProductEditor } from "./ProductEditor";
 
 export function ProductsPage() {
@@ -23,6 +24,7 @@ export function ProductsPage() {
   const searchable = useSearchableProducts();
   const toast = useToast();
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
+  const [importing, setImporting] = useState(false);
   const canEdit = LIVE && allowed("product.update");
 
   const rows = useMemo(() => {
@@ -45,6 +47,11 @@ export function ProductsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {LIVE && allowed("product.import") && (
+            <Button icon={<FileUp size={16} />} onClick={() => setImporting(true)}>
+              {t("imports.import")}
+            </Button>
+          )}
           <Button
             icon={<Download size={16} />}
             onClick={() =>
@@ -170,6 +177,7 @@ export function ProductsPage() {
           </div>
         )}
       </div>
+      {LIVE && <ImportDialog kind="products" open={importing} onOpenChange={setImporting} />}
       {LIVE && <ProductEditor productId={editing?.id ?? null} open={editing !== null} onOpenChange={(v) => !v && setEditing(null)} />}
     </div>
   );

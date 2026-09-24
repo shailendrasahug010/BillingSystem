@@ -1,4 +1,4 @@
-import { AdjustmentBody, StockLedgerQuery, StockQuery } from "@vyapaar/contracts";
+import { AdjustmentBody, StockLedgerQuery, StockQuery, TransferBody } from "@vyapaar/contracts";
 import { dec, toQtyString, type StockMovementType } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
-import { ApiError, badRequest } from "../../lib/errors.js";
+import { ApiError, badRequest, conflict } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { getSetting } from "../../services/settings.js";
@@ -248,6 +248,123 @@ export const inventoryModule: ApiModule = async (app, deps) => {
           .orderBy(sql`${schema.stockAdjustments.adjustmentDate} desc, ${schema.stockAdjustments.id} desc`)
           .limit(100),
       ),
+    };
+  });
+
+  /**
+   * Moves stock between godowns in one transaction: out of the source and
+   * into the destination at the current average cost (so the average does
+   * not move), numbered like other documents.
+   */
+  r.post("/stock/transfers", { preHandler: guard(deps, "inventory.transfer"), schema: { tags: ["inventory"], body: TransferBody } }, async (request, reply) => {
+    const ctx = request.ctx;
+    const body = request.body;
+    if (body.fromWarehouseId === body.toWarehouseId) throw badRequest("TRANSFER_SAME_GODOWN", {}, "toWarehouseId");
+    const result = await tenant(ctx, async (tx) => {
+      const today = deps.clock.today(ctx.timeZone);
+      const date = body.transferDate ?? today;
+      if (date > today) throw badRequest("FUTURE_DATE_NOT_ALLOWED", {}, "transferDate");
+      const godowns = await tx
+        .select({ id: schema.warehouses.id, name: schema.warehouses.name, isActive: schema.warehouses.isActive })
+        .from(schema.warehouses)
+        .where(and(eq(schema.warehouses.businessId, ctx.businessId), inArray(schema.warehouses.id, [body.fromWarehouseId, body.toWarehouseId]), isNull(schema.warehouses.deletedAt)));
+      const from = godowns.find((g) => g.id === body.fromWarehouseId);
+      const to = godowns.find((g) => g.id === body.toWarehouseId);
+      if (!from) throw badRequest("REFERENCE_NOT_FOUND", {}, "fromWarehouseId");
+      if (!to) throw badRequest("REFERENCE_NOT_FOUND", {}, "toWarehouseId");
+      if (!to.isActive) throw conflict("GODOWN_INACTIVE", { godown: to.name }, "toWarehouseId");
+
+      const quantities = new Map<string, ReturnType<typeof dec>>();
+      body.lines.forEach((l, i) => {
+        if (dec(l.qty).lte(0)) throw badRequest("QTY_NOT_POSITIVE", {}, `lines[${i}].qty`);
+        const key = `${l.productId}|${l.batchId ?? ""}`;
+        quantities.set(key, (quantities.get(key) ?? dec(0)).plus(l.qty));
+      });
+      const productIds = [...new Set(body.lines.map((l) => l.productId))];
+      const products = await tx
+        .select({ id: schema.products.id, name: schema.products.name, avgCost: schema.products.avgCost })
+        .from(schema.products)
+        .where(and(eq(schema.products.businessId, ctx.businessId), inArray(schema.products.id, productIds), isNull(schema.products.deletedAt)));
+      const byId = new Map(products.map((p) => [p.id, p]));
+      body.lines.forEach((l, i) => {
+        if (!byId.has(l.productId)) throw badRequest("REFERENCE_NOT_FOUND", {}, `lines[${i}].productId`);
+      });
+
+      const [business] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
+      const numbering = await nextDocumentNumber(tx, ctx.businessId, "stock_transfer", date, business!.financialYearStartMonth, { name: "Stock transfer", pattern: "STR/{FYS}/{SEQ:5}" });
+      const policy = await getSetting(tx, ctx.businessId, "stock.negative_policy");
+      const id = uuidv7();
+      const now = deps.clock.now().toISOString();
+      await tx.insert(schema.stockTransfers).values({
+        id,
+        businessId: ctx.businessId,
+        transferNumber: numbering.number,
+        transferDate: date,
+        fromWarehouseId: from.id,
+        toWarehouseId: to.id,
+        status: "received",
+        notes: body.notes ?? null,
+        receivedAt: now,
+        receivedBy: ctx.userId,
+        createdBy: ctx.userId,
+        updatedBy: ctx.userId,
+      });
+      const lines = [...quantities.entries()].sort(([a], [b]) => a.localeCompare(b));
+      const out: Array<{ productId: string; name: string; qty: string; fromAfter: string; toAfter: string }> = [];
+      for (const [key, qty] of lines) {
+        const [productId, batchId] = key.split("|") as [string, string];
+        const product = byId.get(productId)!;
+        const itemId = uuidv7();
+        await tx.insert(schema.stockTransferItems).values({ id: itemId, businessId: ctx.businessId, transferId: id, productId, batchId: batchId || null, qty: toQtyString(qty), receivedQty: toQtyString(qty) });
+        const common = {
+          businessId: ctx.businessId,
+          productId,
+          productName: product.name,
+          batchId: batchId || null,
+          date,
+          qty: toQtyString(qty),
+          unitCost: product.avgCost,
+          refType: "stock_transfer",
+          refId: id,
+          refLineId: itemId,
+          refNumber: numbering.number,
+          reason: body.notes ?? null,
+          userId: ctx.userId,
+        };
+        const moved = await postStockMovement(tx, { ...common, warehouseId: from.id, type: "transfer_out" }, policy);
+        const arrived = await postStockMovement(tx, { ...common, warehouseId: to.id, type: "transfer_in" }, "allow");
+        out.push({ productId, name: product.name, qty: toQtyString(qty), fromAfter: moved.balanceAfter, toAfter: arrived.balanceAfter });
+      }
+      await audit(tx, ctx, {
+        action: "stock.transferred",
+        entityType: "stock_transfer",
+        entityId: id,
+        entityLabel: numbering.number,
+        changes: { from: from.name, to: to.name, lines: out.map((l) => [l.name, l.qty]) },
+      });
+      return { id, transferNumber: numbering.number, transferDate: date, from: { id: from.id, name: from.name }, to: { id: to.id, name: to.name }, lines: out };
+    });
+    return reply.code(201).send(result);
+  });
+
+  r.get("/stock/transfers", { preHandler: guard(deps, "inventory.view"), schema: { tags: ["inventory"] } }, async (request) => {
+    const ctx = request.ctx;
+    const rows = await tenant(ctx, async (tx) =>
+      (
+        await tx.execute<{ id: string; transfer_number: string; transfer_date: string; from_name: string; to_name: string; notes: string | null; lines: number; qty: string }>(sql`
+          select t.id, t.transfer_number, t.transfer_date::text, f.name as from_name, w.name as to_name, t.notes,
+                 (select count(*)::int from stock_transfer_items i where i.transfer_id = t.id) as lines,
+                 (select coalesce(sum(i.qty), 0)::text from stock_transfer_items i where i.transfer_id = t.id) as qty
+          from stock_transfers t
+          join warehouses f on f.id = t.from_warehouse_id
+          join warehouses w on w.id = t.to_warehouse_id
+          where t.business_id = ${ctx.businessId}
+          order by t.transfer_date desc, t.id desc
+          limit 100`)
+      ).rows,
+    );
+    return {
+      data: rows.map((x) => ({ id: x.id, transferNumber: x.transfer_number, transferDate: x.transfer_date, from: x.from_name, to: x.to_name, notes: x.notes, lines: x.lines, qty: x.qty })),
     };
   });
 };

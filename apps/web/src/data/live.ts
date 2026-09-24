@@ -247,15 +247,39 @@ export async function refreshSuppliers(): Promise<void> {
   touch();
 }
 
+/** Reloads the godown list (after one is added or changed). */
+export async function refreshWarehouses(): Promise<void> {
+  if (!can("product.view")) return;
+  WORKSPACE.warehouses = (await api.get<{ data: typeof WORKSPACE.warehouses }>("/warehouses")).data;
+  touch();
+}
+
+/** Reloads all customers and routes (after an import). */
+export async function refreshCustomers(): Promise<void> {
+  if (!can("customer.view")) return;
+  const [customers, routes] = await Promise.all([
+    fetchAll<CustomerRow>("/customers", { active: "true" }),
+    api.get<{ data: Array<{ id: string; name: string }> }>("/routes").then((r) => r.data),
+  ]);
+  const routeName = new Map(routes.map((r) => [r.id, r.name]));
+  replaceAll(ROUTES, routes.map((r) => r.name));
+  const mapped = customers.map((c) => mapCustomer(c, routeName));
+  replaceAll(CUSTOMERS, mapped);
+  replaceMap(customerById, mapped.map((c) => [c.id, c]));
+  touch();
+}
+
 /** Loads the catalogue snapshot, customers and suppliers into the workspace. */
 export async function hydrateWorkspace(me: MeResponse): Promise<void> {
   applyMe(me);
-  const [catalog, customers, routes, suppliers] = await Promise.all([
+  const [catalog, customers, routes, suppliers, warehouses] = await Promise.all([
     can("product.view") ? api.get<Catalog>("/catalog") : Promise.resolve(null),
     can("customer.view") ? fetchAll<CustomerRow>("/customers", { active: "true" }) : Promise.resolve([] as CustomerRow[]),
     can("customer.view") ? api.get<{ data: Array<{ id: string; name: string }> }>("/routes").then((r) => r.data) : Promise.resolve([]),
     can("supplier.view") ? fetchAll<SupplierRow>("/suppliers", { active: "true" }) : Promise.resolve([] as SupplierRow[]),
+    can("product.view") ? api.get<{ data: typeof WORKSPACE.warehouses }>("/warehouses").then((r) => r.data) : Promise.resolve([]),
   ]);
+  WORKSPACE.warehouses = warehouses;
   if (catalog) applyCatalog(catalog);
   const routeName = new Map(routes.map((r) => [r.id, r.name]));
   replaceAll(ROUTES, routes.map((r) => r.name));

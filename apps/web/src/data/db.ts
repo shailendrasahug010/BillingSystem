@@ -58,6 +58,8 @@ export const WORKSPACE = {
   unitList: [] as Array<{ id: string; symbol: string; name: string }>,
   taxCategories: [] as Array<{ id: string; name: string; kind: string }>,
   categories: [] as Array<{ id: string; name: string }>,
+  /** Godowns (live). */
+  warehouses: [] as Array<{ id: string; name: string; code: string; city: string | null; isDefault: boolean; isActive: boolean }>,
 };
 
 export interface Supplier {

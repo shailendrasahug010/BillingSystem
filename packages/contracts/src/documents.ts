@@ -183,6 +183,18 @@ export const AdjustmentBody = z.strictObject({
     .max(300),
 });
 
+/** Stock moved from one godown to another (posted at once: out of one, into the other). */
+export const TransferBody = z.strictObject({
+  transferDate: IsoDate.optional(),
+  fromWarehouseId: Id,
+  toWarehouseId: Id,
+  notes: z.string().trim().max(500).optional(),
+  lines: z
+    .array(z.strictObject({ productId: Id, qty: Qty, batchId: Id.optional() }))
+    .min(1)
+    .max(300),
+});
+
 export const StockQuery = PageQuery.extend({
   warehouseId: z.uuid().optional(),
   level: z.enum(["all", "low", "out"]).default("all"),

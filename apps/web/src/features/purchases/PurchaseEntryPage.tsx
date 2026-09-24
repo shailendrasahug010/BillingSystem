@@ -78,6 +78,8 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
   const [head, setHead] = useState({ billNumber: "", billDate: TODAY, receivedDate: TODAY, itc: "eligible", reverseCharge: false, notes: "" });
   const [lines, setLines] = useState<Line[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
+  const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
+  const [warehouseId, setWarehouseId] = useState(() => godowns.find((w) => w.isDefault)?.id ?? "");
   const [paid, setPaid] = useState({ amount: "", method: "cash" as PaymentMethod, reference: "" });
   const [key] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
@@ -193,6 +195,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
           supplierInvoiceDate: head.billDate,
           receivedDate: head.receivedDate,
           itcEligibility: head.itc,
+          ...(godowns.length > 1 && warehouseId ? { warehouseId } : {}),
           isReverseCharge: head.reverseCharge,
           lines: lines.map((l) => {
             const p = productById.get(l.productId)!;
@@ -278,6 +281,17 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
               ))}
             </Select>
           </Field>
+          {godowns.length > 1 && (
+            <Field label={t("godowns.godown")} htmlFor="pu-godown">
+              <Select id="pu-godown" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+                {godowns.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <div className="flex items-end pb-2 sm:col-span-2">
             <Checkbox label={t("purchase.reverseCharge")} checked={head.reverseCharge} onChange={(v) => setHead((h) => ({ ...h, reverseCharge: v }))} />
           </div>

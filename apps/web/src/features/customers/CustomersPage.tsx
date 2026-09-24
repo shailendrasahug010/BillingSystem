@@ -1,5 +1,5 @@
 import { daysBetween } from "@vyapaar/core";
-import { ArrowDownUp, ChevronRight, Download, Search, UserPlus } from "lucide-react";
+import { ArrowDownUp, ChevronRight, Download, FileUp, Search, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -7,12 +7,14 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { EmptyState, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
-import { CUSTOMERS, ROUTES, TODAY } from "../../data/db";
+import { allowed, CUSTOMERS, ROUTES, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { customerInsight, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
+import { downloadCsv } from "../../lib/download";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 import { searchCustomers } from "../invoice/CustomerPicker";
+import { ImportDialog } from "../imports/ImportDialog";
 import { AddCustomerDialog } from "./AddCustomerDialog";
 
 type Sort = "outstanding" | "name" | "last";
@@ -29,6 +31,7 @@ export function CustomersPage() {
   const [onlyOverdue, setOnlyOverdue] = useState(false);
   const [sort, setSort] = useState<Sort>("outstanding");
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const rows = useMemo(() => {
     const base = query.trim() ? searchCustomers(query, 100) : CUSTOMERS;
@@ -64,7 +67,31 @@ export function CustomersPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button icon={<Download size={16} />}>{t("common.export")}</Button>
+          {LIVE && allowed("customer.create") && (
+            <Button icon={<FileUp size={16} />} onClick={() => setImporting(true)}>
+              {t("imports.import")}
+            </Button>
+          )}
+          <Button
+            icon={<Download size={16} />}
+            onClick={() =>
+              downloadCsv(
+                "customers.csv",
+                [
+                  { label: t("common.code"), value: (c) => c.code },
+                  { label: t("customer.businessName"), value: (c) => c.businessName },
+                  { label: t("customer.name"), value: (c) => c.name },
+                  { label: t("common.mobile"), value: (c) => c.mobile },
+                  { label: t("customer.gstin"), value: (c) => c.gstin },
+                  { label: t("common.city"), value: (c) => c.city },
+                  { label: t("customer.outstanding"), value: (c) => c.balance ?? "" },
+                ],
+                CUSTOMERS,
+              )
+            }
+          >
+            {t("common.export")}
+          </Button>
           <Button variant="primary" icon={<UserPlus size={16} />} onClick={() => setAdding(true)}>
             {t("customer.add")}
           </Button>
@@ -204,6 +231,7 @@ export function CustomersPage() {
         )}
       </div>
       <AddCustomerDialog open={adding} onOpenChange={setAdding} />
+      {LIVE && <ImportDialog kind="customers" open={importing} onOpenChange={setImporting} />}
     </div>
   );
 }

@@ -181,6 +181,7 @@ export async function seedBusinessDefaults(db: Db, businessId: string, today: st
       ["expense", "Expense", "EXP/{FYS}/{SEQ:5}"],
       ["packing", "Packing slip", "PK/{FYS}/{SEQ:5}"],
       ["dispatch", "Dispatch", "DSP/{FYS}/{SEQ:5}"],
+      ["stock_transfer", "Stock transfer", "STR/{FYS}/{SEQ:5}"],
     ];
     await tx
       .insert(s.documentSeries)
