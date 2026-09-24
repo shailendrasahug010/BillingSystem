@@ -1,0 +1,420 @@
+import { translateError } from "@vyapaar/i18n";
+import { ArrowLeft, ArrowRight, Check, Copy, ScanBarcode, TriangleAlert } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useI18n } from "../../app/i18n";
+import { useRouter } from "../../app/router";
+import { INVOICE_SHORTCUTS, useShortcuts } from "../../app/shortcuts";
+import { Button } from "../../components/ui/Button";
+import { Dialog } from "../../components/ui/Dialog";
+import { Input } from "../../components/ui/Field";
+import { Kbd } from "../../components/ui/misc";
+import { useToast } from "../../components/ui/Toast";
+import { BUSINESS, CUSTOMERS, PRODUCTS } from "../../data/mock";
+import { customerInsight, getSyncState, peekNextInvoiceNumber, saveInvoice, useStoreVersion } from "../../data/store";
+import { cn } from "../../lib/cn";
+import { useMediaQuery } from "../../lib/useMediaQuery";
+import { CustomerCard } from "./CustomerCard";
+import { CustomerPicker } from "./CustomerPicker";
+import { LineItems } from "./LineItems";
+import { ProductSearch } from "./ProductSearch";
+import { SuggestionsPanel } from "./SuggestionsPanel";
+import { SummaryPanel } from "./SummaryPanel";
+import { useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
+
+function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChange(v: boolean): void; onFound(productId: string): void }) {
+  const { t } = useI18n();
+  const [code, setCode] = useState("");
+  const [miss, setMiss] = useState(false);
+  const sample = PRODUCTS.slice(0, 3);
+  const submit = () => {
+    const p = PRODUCTS.find((x) => x.barcode === code.trim());
+    if (p) {
+      onFound(p.id);
+      setCode("");
+      setMiss(false);
+      onOpenChange(false);
+    } else setMiss(true);
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange} title={t("invoice.scan")} description="USB / Bluetooth scanners type the barcode and press Enter. On Android the camera scanner (ML Kit) fills this field." size="sm" closeLabel={t("common.close")}>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <Input id="scan-code" autoFocus inputMode="numeric" placeholder="890…" value={code} onChange={(e) => setCode(e.target.value)} leading={<ScanBarcode size={16} />} invalid={miss} />
+        {miss && <p className="text-[12.5px] text-danger">{t("search.noResults", { query: code })}</p>}
+        <div className="flex flex-wrap gap-1.5 text-[12px] text-ink-3">
+          {t("common.sampleData")}:
+          {sample.map((p) => (
+            <button key={p.id} type="button" className="font-mono text-accent hover:underline" onClick={() => setCode(p.barcode)}>
+              {p.barcode}
+            </button>
+          ))}
+        </div>
+        <Button type="submit" variant="primary">
+          {t("common.add")}
+        </Button>
+      </form>
+    </Dialog>
+  );
+}
+
+function ShareDialog({ text, onClose }: { text: string | null; onClose(): void }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  return (
+    <Dialog open={text !== null} onOpenChange={(v) => !v && onClose()} title={t("invoice.saveAndShare")} size="md" closeLabel={t("common.close")}>
+      <textarea ref={ref} readOnly value={text ?? ""} rows={9} className="w-full rounded-lg border border-line bg-surface-2 p-3 font-mono text-[12.5px] text-ink" />
+      <div className="mt-3 flex justify-end">
+        <Button
+          icon={copied ? <Check size={16} /> : <Copy size={16} />}
+          onClick={() => {
+            navigator.clipboard
+              ?.writeText(text ?? "")
+              .then(() => setCopied(true))
+              .catch(() => ref.current?.select());
+          }}
+        >
+          {copied ? "Copied" : "Copy message"}
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function useSave(view: DraftView) {
+  const { t, money } = useI18n();
+  const toast = useToast();
+  const { navigate } = useRouter();
+  const [shareText, setShareText] = useState<string | null>(null);
+
+  const save = useCallback(
+    (mode: "save" | "print" | "share") => {
+      const { totals, customer, draft, dueDate, credit } = view;
+      if (!totals || !customer) return;
+      if (credit?.level === "block") return;
+      const paid = Math.min(totals.amountPaid.toNumber(), totals.grandTotal.toNumber());
+      const invoice = saveInvoice(
+        {
+          date: draft.date,
+          dueDate,
+          customerId: customer.id,
+          lines: draft.lines.map((l) => ({ productId: l.productId, qty: l.qty, rate: l.rate, discountPercent: l.discountPercent })),
+          taxable: totals.taxableTotal.toNumber(),
+          tax: totals.taxTotal.toNumber(),
+          total: totals.grandTotal.toNumber(),
+          cost: 0,
+          paid,
+          settledOn: paid >= totals.grandTotal.toNumber() ? draft.date : null,
+        },
+        paid > 0 ? { date: draft.date, customerId: customer.id, amount: paid, method: draft.method, reference: "" } : undefined,
+      );
+      const offline = !getSyncState().online;
+      toast({
+        tone: offline ? "offline" : "success",
+        title: t("invoice.saved", { number: invoice.number }),
+        ...(offline ? { body: t("invoice.savedOffline") } : { body: `${customer.businessName} · ${money(invoice.total)}` }),
+        action: { label: t("common.details"), onClick: () => navigate({ name: "invoice-view", invoiceId: invoice.id }) },
+      });
+      view.dispatch({ type: "reset" });
+      if (mode === "print") navigate({ name: "invoice-view", invoiceId: invoice.id });
+      if (mode === "share") {
+        const balance = invoice.total - invoice.paid;
+        setShareText(
+          [
+            `${BUSINESS.name}`,
+            `Invoice ${invoice.number} · ${invoice.date.split("-").reverse().join("/")}`,
+            `${customer.businessName}`,
+            `Items: ${invoice.lines.length}`,
+            `Total: ${money(invoice.total)}`,
+            invoice.paid > 0 ? `Received: ${money(invoice.paid)}` : "",
+            balance > 0 ? `Balance due: ${money(balance)} by ${dueDate.split("-").reverse().join("/")}` : "Paid in full. Thank you!",
+            `UPI: ${BUSINESS.bank.upi}`,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+      }
+    },
+    [view, toast, t, money, navigate],
+  );
+  return { save, shareText, closeShare: () => setShareText(null) };
+}
+
+function DesktopInvoice({ view }: { view: DraftView }) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const { navigate } = useRouter();
+  const productRef = useRef<HTMLInputElement>(null);
+  const customerRef = useRef<HTMLInputElement>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const { save, shareText, closeShare } = useSave(view);
+  const { draft, dispatch, customer, insight, totals, error, credit } = view;
+  const blocked = credit?.level === "block";
+  useStoreVersion();
+
+  useShortcuts([
+    { id: "focus-product", keys: INVOICE_SHORTCUTS.focusProduct, allowInInputs: true, handler: () => productRef.current?.focus() },
+    { id: "focus-customer", keys: INVOICE_SHORTCUTS.focusCustomer, allowInInputs: true, handler: () => (customer ? dispatch({ type: "customer", customerId: null }) : customerRef.current?.focus()) },
+    { id: "save", keys: INVOICE_SHORTCUTS.save, allowInInputs: true, handler: () => save("save") },
+  ]);
+
+  const onFocused = useCallback(() => dispatch({ type: "focused" }), [dispatch]);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => navigate({ name: "dashboard" })} className="inline-flex size-9 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 hover:text-ink" aria-label={t("common.back")}>
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-[24px] font-semibold text-ink">{t("invoice.new")}</h1>
+        </div>
+        <div className="hidden items-center gap-4 text-[12.5px] text-ink-3 xl:flex">
+          <span className="inline-flex items-center gap-1.5">
+            <Kbd keys="f3" /> {t("shortcuts.focusCustomer")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Kbd keys="f2" /> {t("shortcuts.focusProduct")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Kbd keys="alt+1" /> {t("shortcuts.addSuggestion")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Kbd keys="mod+enter" /> {t("shortcuts.saveInvoice")}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          {customer && insight ? (
+            <CustomerCard customer={customer} insight={insight} credit={credit} onClear={() => dispatch({ type: "customer", customerId: null })} />
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label className="text-[13px] font-medium text-ink-2" htmlFor="customer-search">
+                {t("invoice.customer")}
+              </label>
+              <CustomerPicker ref={customerRef} autoFocus onSelect={(id) => {
+                dispatch({ type: "customer", customerId: id });
+                setTimeout(() => productRef.current?.focus(), 0);
+              }} />
+            </div>
+          )}
+
+          <ProductSearch ref={productRef} customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
+
+          <SuggestionsPanel
+            hasCustomer={Boolean(customer)}
+            customerName={customer?.businessName ?? null}
+            suggestions={view.suggestions}
+            reorder={view.reorder}
+            onAdd={(productId, qty) => dispatch({ type: "add", productId, qty })}
+          />
+
+          <section className="rounded-[var(--radius-card)] border border-line bg-surface shadow-card" aria-labelledby="items-h">
+            <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+              <h2 id="items-h" className="text-[15px] font-semibold text-ink">
+                {t("invoice.items")} <span className="num ml-1 text-[13px] font-normal text-ink-3">{draft.lines.length}</span>
+              </h2>
+            </div>
+            {error && (
+              <p className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger" role="alert">
+                <TriangleAlert size={15} />
+                {translateError(i18n, error)}
+              </p>
+            )}
+            <LineItems
+              lines={draft.lines}
+              totals={totals}
+              focusKey={draft.focusKey}
+              onFocused={onFocused}
+              onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
+              onRemove={(key) => dispatch({ type: "remove", key })}
+              onBackToSearch={() => productRef.current?.focus()}
+            />
+          </section>
+        </div>
+
+        <div className="lg:sticky lg:top-24">
+          <SummaryPanel view={view} invoiceNumber={peekNextInvoiceNumber()} onSave={save} blocked={blocked} />
+        </div>
+      </div>
+
+      <ScanDialog open={scanOpen} onOpenChange={setScanOpen} onFound={(id) => dispatch({ type: "add", productId: id })} />
+      <ShareDialog text={shareText} onClose={closeShare} />
+    </div>
+  );
+}
+
+/** Phone flow: Customer → Products → Review & pay, big targets, sticky total. */
+function MobileInvoice({ view }: { view: DraftView }) {
+  const { t, money, locale } = useI18n();
+  const { save, shareText, closeShare } = useSave(view);
+  const [step, setStep] = useState(view.customer ? 1 : 0);
+  const [scanOpen, setScanOpen] = useState(false);
+  const { draft, dispatch, customer, insight, totals, credit } = view;
+  const onFocused = useCallback(() => dispatch({ type: "focused" }), [dispatch]);
+
+  const recent = useMemo(
+    () =>
+      CUSTOMERS.map((c) => ({ c, last: customerInsight(c.id).lastPurchase ?? "" }))
+        .sort((a, b) => b.last.localeCompare(a.last))
+        .slice(0, 6),
+    [],
+  );
+
+  const steps = [t("invoice.steps.customer"), t("invoice.steps.products"), t("invoice.steps.review")];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
+        <span className="font-mono text-[12.5px] text-ink-3">{peekNextInvoiceNumber()}</span>
+      </div>
+      <ol className="grid grid-cols-3 gap-2" aria-label={t("invoice.quick")}>
+        {steps.map((s, i) => (
+          <li key={s}>
+            <button
+              type="button"
+              disabled={i > 0 && !customer}
+              onClick={() => setStep(i)}
+              aria-current={step === i ? "step" : undefined}
+              className={cn("flex w-full flex-col gap-1.5 text-left text-[12px] font-medium disabled:opacity-40", step === i ? "text-accent" : step > i ? "text-ink-2" : "text-ink-3")}
+            >
+              <span className={cn("h-1 rounded-full", step >= i ? "bg-accent" : "bg-surface-3")} />
+              {i + 1}. {s}
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      {step === 0 && (
+        <div className="flex flex-col gap-4">
+          <CustomerPicker
+            large
+            onSelect={(id) => {
+              dispatch({ type: "customer", customerId: id });
+              setStep(1);
+            }}
+          />
+          <div>
+            <p className="eyebrow mb-2">{t("invoice.customerCard.lastPurchase")}</p>
+            <ul className="flex flex-col gap-2">
+              {recent.map(({ c }) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dispatch({ type: "customer", customerId: c.id });
+                      setStep(1);
+                    }}
+                    className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-line bg-surface px-4 text-left"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-medium text-ink">{c.businessName}</span>
+                      <span className="block truncate text-[12.5px] text-ink-3">
+                        {c.city} · {c.route}
+                      </span>
+                    </span>
+                    <ArrowRight size={18} className="text-ink-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {step === 1 && customer && insight && (
+        <div className="flex flex-col gap-4">
+          <button type="button" onClick={() => setStep(0)} className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3 text-left">
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-semibold text-ink">{customer.businessName}</span>
+              <span className={cn("num text-[12.5px]", insight.overdue > 0 ? "text-danger" : "text-ink-3")}>
+                {t("invoice.customerCard.outstanding")} {money(insight.outstanding, 0)}
+              </span>
+            </span>
+            <span className="text-[13px] font-medium text-accent">{t("invoice.changeCustomer")}</span>
+          </button>
+          <ProductSearch large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
+          <SuggestionsPanel
+            variant="mobile"
+            hasCustomer
+            customerName={customer.businessName}
+            suggestions={view.suggestions}
+            reorder={view.reorder}
+            onAdd={(productId, qty) => dispatch({ type: "add", productId, qty })}
+          />
+          <section className="rounded-[var(--radius-card)] border border-line bg-surface px-4 shadow-card">
+            <h2 className="pt-3 text-[15px] font-semibold text-ink">
+              {t("invoice.items")} <span className="num text-ink-3">{draft.lines.length}</span>
+            </h2>
+            <LineItems
+              variant="mobile"
+              lines={draft.lines}
+              totals={totals}
+              focusKey={draft.focusKey}
+              onFocused={onFocused}
+              onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
+              onRemove={(key) => dispatch({ type: "remove", key })}
+              onBackToSearch={() => undefined}
+            />
+          </section>
+          <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom,0px))] z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
+            <div className="mx-auto flex max-w-xl items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
+                <p className="num font-display text-[22px] leading-tight font-semibold text-ink">{money(totals?.grandTotal.toNumber() ?? 0)}</p>
+              </div>
+              <Button variant="primary" size="lg" disabled={!totals} onClick={() => setStep(2)} trailing={<ArrowRight size={18} />}>
+                {t("common.next")}
+              </Button>
+            </div>
+          </div>
+          <div className="h-20" aria-hidden />
+        </div>
+      )}
+
+      {step === 2 && customer && insight && (
+        <div className="flex flex-col gap-4">
+          <CustomerCard customer={customer} insight={insight} credit={credit} compact />
+          <section className="rounded-[var(--radius-card)] border border-line bg-surface px-4 py-2 shadow-card">
+            <p className="eyebrow pt-2">{t("invoice.reviewItems")}</p>
+            <ul className="divide-y divide-line">
+              {draft.lines.map((l) => {
+                const r = totals?.lines.find((x) => x.key === l.key);
+                const p = PRODUCTS.find((x) => x.id === l.productId)!;
+                return (
+                  <li key={l.key} className="flex items-center justify-between gap-3 py-2.5 text-[14px]">
+                    <span className="min-w-0 truncate text-ink">
+                      {locale === "hi" ? p.nameHi : p.name} <span className="num text-ink-3">× {l.qty}</span>
+                    </span>
+                    <span className="num font-medium text-ink">{r ? money(r.total.toNumber()) : ""}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+          <SummaryPanel view={view} invoiceNumber={peekNextInvoiceNumber()} onSave={(m) => {
+            save(m);
+            setStep(0);
+          }} blocked={credit?.level === "block"} />
+        </div>
+      )}
+
+      <ScanDialog open={scanOpen} onOpenChange={setScanOpen} onFound={(id) => dispatch({ type: "add", productId: id })} />
+      <ShareDialog text={shareText} onClose={closeShare} />
+    </div>
+  );
+}
+
+export function CreateInvoicePage({ customerId }: { customerId?: string }) {
+  const view = useInvoiceDraft(customerId ?? null);
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  return desktop ? <DesktopInvoice view={view} /> : <MobileInvoice view={view} />;
+}

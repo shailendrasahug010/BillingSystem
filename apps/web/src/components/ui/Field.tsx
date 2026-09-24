@@ -1,0 +1,72 @@
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { cn } from "../../lib/cn";
+
+const control =
+  "w-full rounded-[var(--radius-control)] border border-line bg-surface text-ink placeholder:text-ink-3 transition-colors " +
+  "hover:border-line-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:bg-surface-2";
+
+export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  inputSize?: "sm" | "md" | "lg";
+  invalid?: boolean;
+}
+
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { leading, trailing, inputSize = "md", invalid, className, ...rest },
+  ref,
+) {
+  const height = inputSize === "sm" ? "h-8 text-[13px]" : inputSize === "lg" ? "h-12 text-[15px]" : "h-10 text-sm";
+  return (
+    <div className={cn("relative flex items-center", className)}>
+      {leading && <span className="pointer-events-none absolute left-3 flex text-ink-3">{leading}</span>}
+      <input
+        ref={ref}
+        aria-invalid={invalid || undefined}
+        className={cn(control, height, leading ? "pl-9" : "pl-3", trailing ? "pr-10" : "pr-3", invalid && "border-danger focus:border-danger focus:ring-danger/20")}
+        {...rest}
+      />
+      {trailing && <span className="absolute right-2 flex items-center">{trailing}</span>}
+    </div>
+  );
+});
+
+export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select className={cn(control, "h-10 px-3 text-sm", className)} {...rest}>
+      {children}
+    </select>
+  );
+}
+
+export function Field({
+  label,
+  hint,
+  error,
+  children,
+  htmlFor,
+}: {
+  label: string;
+  hint?: string;
+  error?: string | null;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  const fallback = useId();
+  const id = htmlFor ?? fallback;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-[13px] font-medium text-ink-2">
+        {label}
+      </label>
+      {children}
+      {error ? (
+        <p className="text-[12px] text-danger" role="alert">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="text-[12px] text-ink-3">{hint}</p>
+      ) : null}
+    </div>
+  );
+}

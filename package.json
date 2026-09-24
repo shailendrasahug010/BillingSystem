@@ -1,0 +1,23 @@
+{
+  "name": "vyapaar-distributor-crm",
+  "private": true,
+  "description": "Distributor & Supplier CRM, Inventory, Billing and GST platform for Indian distributors and wholesalers",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter=!./apps/* run build && pnpm --filter @vyapaar/web build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "lint:i18n": "pnpm --filter @vyapaar/i18n test",
+    "db:generate": "pnpm --filter @vyapaar/db generate",
+    "db:verify": "pnpm --filter @vyapaar/db verify",
+    "dev:web": "pnpm --filter @vyapaar/web dev"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "5.0.1",
+    "@types/node": "22.20.4"
+  }
+}

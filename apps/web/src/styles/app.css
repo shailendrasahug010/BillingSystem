@@ -1,0 +1,282 @@
+@import "tailwindcss";
+
+/*
+ * VYAPAAR DESIGN TOKENS
+ * ---------------------
+ * Every colour in the app comes from these tokens. Components never use raw
+ * hex values, so light/dark themes (and a future white-label brand) are a
+ * change in this file only.
+ *
+ * Accent: peacock teal. Status colours (paid / due / overdue / stock) are
+ * reserved for state and never used as decoration.
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces: neutrals carry a slight teal bias toward the accent. */
+  --bg: #f3f6f6;
+  --surface: #ffffff;
+  --surface-2: #eef3f3;
+  --surface-3: #e3eaeb;
+  --border: #d7e0e1;
+  --border-strong: #b9c7c9;
+
+  /* Ink */
+  --ink: #0f2629;
+  --ink-2: #4a5f62;
+  --ink-3: #6f8487;
+  --ink-inverse: #ffffff;
+
+  /* Brand */
+  --accent: #0b6e82;
+  --accent-hover: #085a6a;
+  --accent-soft: #dcf0f3;
+  --accent-ink: #065262;
+  --marigold: #e29a0c;
+
+  /* Status (text on soft background) */
+  --good: #0b7a3e;
+  --good-soft: #e1f3e8;
+  --warn: #8a5a00;
+  --warn-soft: #fcefd2;
+  --danger: #b42318;
+  --danger-soft: #fde7e4;
+  --info: #0b6e82;
+  --info-soft: #dcf0f3;
+
+  /* Chart series (validated categorical order) + ordinal ramp */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --ordinal-1: #86b6ef;
+  --ordinal-2: #5598e7;
+  --ordinal-3: #256abf;
+  --ordinal-4: #184f95;
+  --grid: #e3eaeb;
+
+  --focus: #0b6e82;
+  --shadow-1: 0 1px 2px rgb(15 38 41 / 0.06), 0 1px 1px rgb(15 38 41 / 0.04);
+  --shadow-2: 0 10px 30px -12px rgb(15 38 41 / 0.28), 0 2px 6px rgb(15 38 41 / 0.08);
+
+  --font-display: "Anek Latin", "Anek Devanagari", "IBM Plex Sans", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Devanagari", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --leading-body: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0c1618;
+    --surface: #122023;
+    --surface-2: #172a2e;
+    --surface-3: #1f363a;
+    --border: #25393d;
+    --border-strong: #37525a;
+    --ink: #e6eff0;
+    --ink-2: #a8babd;
+    --ink-3: #7f9497;
+    --ink-inverse: #0c1618;
+    --accent: #3cb4ca;
+    --accent-hover: #5cc4d6;
+    --accent-soft: #113840;
+    --accent-ink: #8fd7e4;
+    --marigold: #f0b23a;
+    --good: #4cc987;
+    --good-soft: #12301f;
+    --warn: #f2bd4f;
+    --warn-soft: #36290c;
+    --danger: #f2837a;
+    --danger-soft: #3d1714;
+    --info: #3cb4ca;
+    --info-soft: #113840;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --ordinal-1: #1c5cab;
+    --ordinal-2: #2a78d6;
+    --ordinal-3: #5598e7;
+    --ordinal-4: #86b6ef;
+    --grid: #1f363a;
+    --focus: #5cc4d6;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-2: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c1618;
+  --surface: #122023;
+  --surface-2: #172a2e;
+  --surface-3: #1f363a;
+  --border: #25393d;
+  --border-strong: #37525a;
+  --ink: #e6eff0;
+  --ink-2: #a8babd;
+  --ink-3: #7f9497;
+  --ink-inverse: #0c1618;
+  --accent: #3cb4ca;
+  --accent-hover: #5cc4d6;
+  --accent-soft: #113840;
+  --accent-ink: #8fd7e4;
+  --marigold: #f0b23a;
+  --good: #4cc987;
+  --good-soft: #12301f;
+  --warn: #f2bd4f;
+  --warn-soft: #36290c;
+  --danger: #f2837a;
+  --danger-soft: #3d1714;
+  --info: #3cb4ca;
+  --info-soft: #113840;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --ordinal-1: #1c5cab;
+  --ordinal-2: #2a78d6;
+  --ordinal-3: #5598e7;
+  --ordinal-4: #86b6ef;
+  --grid: #1f363a;
+  --focus: #5cc4d6;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.4);
+}
+
+/* Devanagari needs more vertical room for matras above and below the line. */
+:root[lang="hi"] {
+  --leading-body: 1.65;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-marigold: var(--marigold);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --shadow-card: var(--shadow-1);
+  --shadow-pop: var(--shadow-2);
+  --radius-control: 0.625rem;
+  --radius-card: 0.875rem;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+:root[lang="hi"] .eyebrow {
+  letter-spacing: 0;
+  font-size: 12px;
+}
+
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0.4;
+    transform: translateY(4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-pop {
+  animation: pop-in 160ms ease-out;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+  background-size: 400px 100%;
+  animation: shimmer 1.2s linear infinite;
+  border-radius: 6px;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
