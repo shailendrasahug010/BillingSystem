@@ -36,6 +36,13 @@
       "when": 1790227421680,
       "tag": "0004_saas_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790241859404,
+      "tag": "0005_session_business",
+      "breakpoints": true
     }
   ]
 }

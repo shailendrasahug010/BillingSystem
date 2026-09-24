@@ -49,6 +49,21 @@ export const ResetPasswordBody = z.strictObject({
   password: z.string().min(8).max(128),
 });
 
+export const ChangePasswordBody = z.strictObject({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(8).max(128),
+});
+
+/** Native clients (Android/Windows) send the refresh token in the body; browsers use the cookie. */
+export const RefreshBody = z.strictObject({ refreshToken: z.string().min(20).max(200).optional() }).nullish();
+
+export interface OtpRequestResponse {
+  sent: true;
+  expiresIn: number;
+  /** Development only (OTP_DEV_ECHO). */
+  devCode?: string;
+}
+
 export const SwitchBusinessBody = z.strictObject({ businessId: z.uuid() });
 
 export const CreateBusinessBody = BusinessInput;
@@ -60,7 +75,10 @@ export interface BusinessSummary {
   gstin: string | null;
   stateCode: string;
   status: string;
+  plan: string;
+  trialEndsAt: string | null;
   role: string;
+  isOwner: boolean;
 }
 
 export interface SessionResponse {

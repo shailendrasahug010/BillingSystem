@@ -40,6 +40,8 @@ async function ensureRole(adminUrl: string): Promise<void> {
 export interface TestApp {
   app: FastifyInstance;
   otp: MemoryOtpSender;
+  /** Moves the API clock forward (token expiry, OTP expiry, rotation grace). */
+  advance(ms: number): void;
   /** Superuser/owner access to the test database, for assertions that bypass RLS. */
   owner: pg.Pool;
   close(): Promise<void>;
@@ -75,12 +77,13 @@ export async function createTestApp(): Promise<TestApp> {
   });
   const { db, pool } = createDb(config.databaseUrl, { max: 8 });
   const otp = new MemoryOtpSender();
+  let offsetMs = 0;
   const app = await buildApp({
     config,
     db,
     tokens: await createTokenService(config),
     otp,
-    clock: { now: () => new Date(), today: () => TEST_TODAY },
+    clock: { now: () => new Date(Date.now() + offsetMs), today: () => TEST_TODAY },
   });
   await app.ready();
   const owner = new pg.Pool({ connectionString: ownerUrl, max: 2 });
@@ -89,6 +92,9 @@ export async function createTestApp(): Promise<TestApp> {
     app,
     otp,
     owner,
+    advance(ms) {
+      offsetMs += ms;
+    },
     async close() {
       await app.close();
       await pool.end();
@@ -107,7 +113,12 @@ export async function call<T = any>(
   method: InjectOptions["method"],
   url: string,
   options: { token?: string; body?: unknown; headers?: Record<string, string>; cookies?: Record<string, string> } = {},
-): Promise<{ status: number; body: T; headers: Record<string, unknown>; cookies: Array<{ name: string; value: string }> }> {
+): Promise<{
+  status: number;
+  body: T;
+  headers: Record<string, unknown>;
+  cookies: Array<{ name: string; value: string; httpOnly?: boolean; sameSite?: string; path?: string; maxAge?: number }>;
+}> {
   const res = await app.inject({
     method,
     url: `/api/v1${url}`,
@@ -123,6 +134,57 @@ export async function call<T = any>(
     status: res.statusCode,
     body: (text ? JSON.parse(text) : null) as T,
     headers: res.headers as Record<string, unknown>,
-    cookies: res.cookies.map((c) => ({ name: c.name, value: c.value })),
+    cookies: res.cookies.map((c) => ({ ...c })),
+  };
+}
+
+let mobileSeq = 0;
+/** A unique valid Indian mobile number per call (per test file and worker). */
+export function nextMobile(): string {
+  mobileSeq += 1;
+  const base = (process.pid % 1000) * 10_000 + mobileSeq;
+  return `9${String(base).padStart(9, "0")}`;
+}
+
+export interface Session {
+  token: string;
+  refreshCookie: string;
+  userId: string;
+  businessId: string;
+  mobile: string;
+  password: string;
+}
+
+/** Self-service signup through the public API (OTP + signup), as a new tenant owner. */
+export async function signup(
+  t: TestApp,
+  opts: { name?: string; legalName?: string; stateCode?: string; gstin?: string; email?: string } = {},
+): Promise<Session> {
+  const mobile = nextMobile();
+  const password = "Str0ng-pass!";
+  const otpRes = await call(t.app, "POST", "/auth/otp", { body: { mobile, purpose: "signup" } });
+  if (otpRes.status !== 202) throw new Error(`otp failed: ${JSON.stringify(otpRes.body)}`);
+  const res = await call(t.app, "POST", "/auth/signup", {
+    body: {
+      name: opts.name ?? "Owner",
+      mobile,
+      password,
+      otp: t.otp.last(mobile),
+      ...(opts.email ? { email: opts.email } : {}),
+      business: {
+        legalName: opts.legalName ?? "Test Traders",
+        stateCode: opts.stateCode ?? "23",
+        ...(opts.gstin ? { gstin: opts.gstin } : {}),
+      },
+    },
+  });
+  if (res.status !== 201) throw new Error(`signup failed: ${JSON.stringify(res.body)}`);
+  return {
+    token: res.body.accessToken,
+    refreshCookie: res.cookies.find((c) => c.name === "vy_rt")!.value,
+    userId: res.body.user.id,
+    businessId: res.body.business.id,
+    mobile,
+    password,
   };
 }

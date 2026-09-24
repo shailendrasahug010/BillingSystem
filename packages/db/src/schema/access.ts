@@ -73,6 +73,8 @@ export const refreshTokens = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     familyId: uuid().notNull(),
+    /** Business the session is working in; kept per session so each device can be in a different business. */
+    businessId: uuid().references(() => businesses.id),
     tokenHash: varchar({ length: 64 }).notNull(),
     deviceId: uuid().references(() => devices.id),
     ip: varchar({ length: 45 }),

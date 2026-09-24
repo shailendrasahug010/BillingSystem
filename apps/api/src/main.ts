@@ -2,7 +2,7 @@ import { todayIn } from "@vyapaar/core";
 import { createDb } from "@vyapaar/db";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { ConsoleOtpSender } from "./lib/otp.js";
+import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
 
 const config = loadConfig();
@@ -12,8 +12,8 @@ const app = await buildApp({
   config,
   db,
   tokens,
-  // Replace with the SMS/WhatsApp provider adapter in production.
-  otp: new ConsoleOtpSender((msg) => app.log.info(msg)),
+  // Production requires a gateway (checked in loadConfig); development logs the code.
+  otp: config.otpWebhook ? new WebhookOtpSender(config.otpWebhook) : new ConsoleOtpSender((msg) => app.log.info(msg)),
   clock: { now: () => new Date(), today: (tz) => todayIn(tz ?? "Asia/Kolkata") },
 });
 

@@ -58,7 +58,8 @@ export async function loadAccess(db: Database, userId: string, businessId: strin
     return {
       userName: row.user_name,
       roleKey: row.role_key,
-      grants: row.grants ?? [],
+      // The owner can never be locked out by editing roles.
+      grants: row.is_owner ? ["*"] : (row.grants ?? []),
       isOwner: row.is_owner,
       timeZone: row.time_zone,
       businessStatus: row.status,

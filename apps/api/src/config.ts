@@ -20,6 +20,11 @@ const Env = z.object({
   COOKIE_SECURE: bool.optional(),
   /** Development only: include OTP codes in API responses instead of sending an SMS. */
   OTP_DEV_ECHO: bool.default(false),
+  /** Where OTPs are delivered: an SMS/WhatsApp gateway adapter that accepts {mobile, code, purpose}. */
+  OTP_WEBHOOK_URL: z.url().optional(),
+  OTP_WEBHOOK_TOKEN: z.string().optional(),
+  /** Days a new SaaS business stays in trial. */
+  TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().default(20),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -36,6 +41,8 @@ export interface Config {
   corsOrigins: string[];
   cookieSecure: boolean;
   otpDevEcho: boolean;
+  otpWebhook?: { url: string; token?: string };
+  trialDays: number;
   rateLimit: { max: number; authMax: number };
   logLevel: string;
   docsEnabled: boolean;
@@ -51,6 +58,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (e.NODE_ENV === "production") {
     if (!e.JWT_PRIVATE_KEY || !e.JWT_PUBLIC_KEY) throw new Error("JWT_PRIVATE_KEY and JWT_PUBLIC_KEY are required in production");
     if (e.OTP_DEV_ECHO) throw new Error("OTP_DEV_ECHO must not be enabled in production");
+    if (!e.OTP_WEBHOOK_URL) throw new Error("OTP_WEBHOOK_URL is required in production (OTPs are never logged there)");
   }
   return {
     env: e.NODE_ENV,
@@ -68,6 +76,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     corsOrigins: e.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     cookieSecure: e.COOKIE_SECURE ?? e.NODE_ENV === "production",
     otpDevEcho: e.OTP_DEV_ECHO,
+    ...(e.OTP_WEBHOOK_URL ? { otpWebhook: { url: e.OTP_WEBHOOK_URL, ...(e.OTP_WEBHOOK_TOKEN ? { token: e.OTP_WEBHOOK_TOKEN } : {}) } } : {}),
+    trialDays: e.TRIAL_DAYS,
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },
     logLevel: e.LOG_LEVEL,
     docsEnabled: e.DOCS_ENABLED ?? e.NODE_ENV !== "production",

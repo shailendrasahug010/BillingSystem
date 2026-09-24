@@ -142,3 +142,30 @@ describe("every domain error in @vyapaar/core is translated", () => {
     expect([...codes].filter((c) => !errors[c])).toEqual([]);
   });
 });
+
+describe("every API error code is translated", () => {
+  const apiSrc = join(import.meta.dirname, "../../../apps/api/src");
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) walk(path);
+      else if (name.endsWith(".ts")) files.push(path);
+    }
+  };
+  walk(apiSrc);
+  const codes = new Set<string>();
+  const pattern = /(?:ApiError\(\d+,\s*|badRequest\(|conflict\(|unauthorized\(|code(?::| =) )"([A-Z][A-Z0-9_]+)"/g;
+  for (const file of files) {
+    for (const m of readFileSync(file, "utf8").matchAll(pattern)) codes.add(m[1]!);
+  }
+
+  it("found the error codes", () => {
+    expect(codes.size).toBeGreaterThan(30);
+  });
+
+  it.each(LOCALES.map((l) => l.code as LocaleCode))("%s has a message for each code", (code) => {
+    const errors = CATALOGS[code].errors as Record<string, string>;
+    expect([...codes].filter((c) => !errors[c])).toEqual([]);
+  });
+});

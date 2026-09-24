@@ -22,3 +22,23 @@ export class MemoryOtpSender implements OtpSender {
     return this.sent.get(mobile);
   }
 }
+
+/**
+ * Posts {mobile, code, purpose} to an SMS / WhatsApp gateway adapter. The
+ * adapter owns templates and DLT registration; the API never logs the code.
+ */
+export class WebhookOtpSender implements OtpSender {
+  constructor(private readonly target: { url: string; token?: string }) {}
+  async send(mobile: string, code: string, purpose: string): Promise<void> {
+    const res = await fetch(this.target.url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(this.target.token ? { authorization: `Bearer ${this.target.token}` } : {}),
+      },
+      body: JSON.stringify({ mobile: `+91${mobile}`, code, purpose }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) throw new Error(`OTP gateway responded ${res.status}`);
+  }
+}
