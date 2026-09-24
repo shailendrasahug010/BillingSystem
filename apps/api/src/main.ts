@@ -1,6 +1,7 @@
 import { todayIn } from "@vyapaar/core";
 import { createDb } from "@vyapaar/db";
 import { buildApp } from "./app.js";
+import { createFieldCipher } from "./lib/crypto.js";
 import { loadConfig } from "./config.js";
 import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
@@ -15,6 +16,7 @@ const app = await buildApp({
   // Production requires a gateway (checked in loadConfig); development logs the code.
   otp: config.otpWebhook ? new WebhookOtpSender(config.otpWebhook) : new ConsoleOtpSender((msg) => app.log.info(msg)),
   clock: { now: () => new Date(), today: (tz) => todayIn(tz ?? "Asia/Kolkata") },
+  cipher: createFieldCipher(config.dataEncryptionKey, config.env),
 });
 
 const shutdown = async (signal: string) => {

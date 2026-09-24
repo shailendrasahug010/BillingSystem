@@ -99,6 +99,21 @@ const SALARY_COMPONENTS = [
 ];
 
 /**
+ * Starter GST rate buckets. Rates are data: each bucket is an effective-dated
+ * rule the business can edit or extend, and products point at a bucket. The
+ * taxable buckets start on 22-Sep-2025 (slab rationalisation), so back-dated
+ * documents fail loudly until the older rate is added instead of silently
+ * using today's rate. Always confirm each product's HSN rate.
+ */
+const TAX_BUCKETS: Array<{ name: string; kind: "taxable" | "exempt" | "nil_rated"; gstRate?: string; description: string }> = [
+  { name: "GST 5%", kind: "taxable", gstRate: "5", description: "Merit rate: most packaged food, daily-use items" },
+  { name: "GST 18%", kind: "taxable", gstRate: "18", description: "Standard rate" },
+  { name: "GST 40%", kind: "taxable", gstRate: "40", description: "Special rate: aerated / sugary beverages, luxury and sin goods" },
+  { name: "Nil rated (0%)", kind: "nil_rated", description: "Goods notified at 0%" },
+  { name: "Exempt", kind: "exempt", description: "Exempt supplies (fresh produce, unbranded staples...)" },
+];
+
+/**
  * Defaults created for every new business: editable roles, units, rate lists,
  * a main godown, cash account, expense categories, leave types, salary
  * components, number series for the current financial year and business rules.
@@ -136,6 +151,23 @@ export async function seedBusinessDefaults(db: Db, businessId: string, today: st
       .insert(s.salaryComponents)
       .values(SALARY_COMPONENTS.map((c, i) => ({ ...c, businessId, sortOrder: i })))
       .onConflictDoNothing();
+
+    for (const bucket of TAX_BUCKETS) {
+      const [cat] = await tx
+        .insert(s.taxCategories)
+        .values({ businessId, name: bucket.name, kind: bucket.kind, description: bucket.description })
+        .onConflictDoNothing()
+        .returning({ id: s.taxCategories.id });
+      if (cat && bucket.gstRate) {
+        await tx.insert(s.taxRates).values({
+          businessId,
+          taxCategoryId: cat.id,
+          effectiveFrom: "2025-09-22",
+          gstRate: bucket.gstRate,
+          reference: "GST rate rationalisation effective 22-Sep-2025 (starter bucket, verify per HSN)",
+        });
+      }
+    }
 
     const fy = financialYearOf(today);
     const series: Array<[string, string, string]> = [

@@ -4,6 +4,7 @@ import type { FastifyInstance, InjectOptions } from "fastify";
 import pg from "pg";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
+import { createFieldCipher } from "../src/lib/crypto.js";
 import { MemoryOtpSender } from "../src/lib/otp.js";
 import { createTokenService } from "../src/lib/security.js";
 
@@ -84,6 +85,7 @@ export async function createTestApp(): Promise<TestApp> {
     tokens: await createTokenService(config),
     otp,
     clock: { now: () => new Date(Date.now() + offsetMs), today: () => TEST_TODAY },
+    cipher: createFieldCipher(undefined, "test"),
   });
   await app.ready();
   const owner = new pg.Pool({ connectionString: ownerUrl, max: 2 });

@@ -1,5 +1,6 @@
 import type { Database } from "@vyapaar/db";
 import type { Config } from "../config.js";
+import type { FieldCipher } from "./crypto.js";
 import type { OtpSender } from "./otp.js";
 import type { TokenService } from "./security.js";
 
@@ -15,6 +16,7 @@ export interface AppDeps {
   tokens: TokenService;
   otp: OtpSender;
   clock: Clock;
+  cipher: FieldCipher;
 }
 
 /** Who is calling and in which business. Present on every tenant route. */

@@ -13,6 +13,8 @@ const Env = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   JWT_PRIVATE_KEY: z.string().optional(),
   JWT_PUBLIC_KEY: z.string().optional(),
+  /** 32 random bytes, base64: encrypts bank account numbers and other sensitive fields at rest. */
+  DATA_ENCRYPTION_KEY: z.string().optional(),
   JWT_ISSUER: z.string().default("vyapaar"),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
@@ -41,6 +43,7 @@ export interface Config {
   corsOrigins: string[];
   cookieSecure: boolean;
   otpDevEcho: boolean;
+  dataEncryptionKey?: string;
   otpWebhook?: { url: string; token?: string };
   trialDays: number;
   rateLimit: { max: number; authMax: number };
@@ -76,6 +79,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     corsOrigins: e.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     cookieSecure: e.COOKIE_SECURE ?? e.NODE_ENV === "production",
     otpDevEcho: e.OTP_DEV_ECHO,
+    ...(e.DATA_ENCRYPTION_KEY ? { dataEncryptionKey: e.DATA_ENCRYPTION_KEY } : {}),
     ...(e.OTP_WEBHOOK_URL ? { otpWebhook: { url: e.OTP_WEBHOOK_URL, ...(e.OTP_WEBHOOK_TOKEN ? { token: e.OTP_WEBHOOK_TOKEN } : {}) } } : {}),
     trialDays: e.TRIAL_DAYS,
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },

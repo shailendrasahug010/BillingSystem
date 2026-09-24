@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Code, Gstin, GstRegistration, Hsn, Id, IsoDate, Mobile, Money, Pan, PageQuery, Percent, Pincode, Qty, Rate, StateCode } from "./common.js";
+import { Code, Gstin, patchOf, GstRegistration, Hsn, Id, IsoDate, Mobile, Money, Pan, PageQuery, Percent, Pincode, Qty, Rate, StateCode } from "./common.js";
 
 // ---------- Catalogue ----------
 
@@ -90,7 +90,7 @@ export const ProductBody = z.strictObject({
   openingStockCost: Rate.optional(),
 });
 
-export const ProductPatch = ProductBody.omit({ openingStock: true, openingStockCost: true }).partial();
+export const ProductPatch = patchOf(ProductBody.omit({ openingStock: true, openingStockCost: true }));
 
 export const ProductListQuery = PageQuery.extend({
   brandId: z.uuid().optional(),
@@ -133,7 +133,7 @@ export const CustomerBody = z.strictObject({
   isActive: z.boolean().default(true),
 });
 
-export const CustomerPatch = CustomerBody.omit({ openingBalance: true, openingBalanceSide: true }).partial();
+export const CustomerPatch = patchOf(CustomerBody.omit({ openingBalance: true, openingBalanceSide: true }));
 
 export const CustomerListQuery = PageQuery.extend({
   type: z.enum(["all", "b2b", "b2c"]).default("all"),
@@ -166,7 +166,7 @@ export const SupplierBody = z.strictObject({
   isActive: z.boolean().default(true),
 });
 
-export const SupplierPatch = SupplierBody.omit({ openingBalance: true, openingBalanceSide: true }).partial();
+export const SupplierPatch = patchOf(SupplierBody.omit({ openingBalance: true, openingBalanceSide: true }));
 
 export const SupplierListQuery = PageQuery.extend({
   outstanding: z.enum(["any", "yes"]).default("any"),
@@ -195,3 +195,5 @@ export const RouteBody = z.strictObject({
 export const CustomerCategoryBody = z.strictObject({ name: z.string().trim().min(1).max(100) });
 
 export const SettingBody = z.strictObject({ value: z.unknown() });
+
+export const TaxRateEndBody = z.strictObject({ effectiveTo: IsoDate });

@@ -38,6 +38,9 @@ services:
       DATABASE_URL: postgres://vyapaar_app:${APP_DB_PASSWORD}@postgres:5432/vyapaar
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?run pnpm --filter @vyapaar/api keys}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?run pnpm --filter @vyapaar/api keys}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?run pnpm --filter @vyapaar/api keys}
+      OTP_WEBHOOK_URL: ${OTP_WEBHOOK_URL:?set the OTP gateway URL}
+      OTP_WEBHOOK_TOKEN: ${OTP_WEBHOOK_TOKEN:-}
       COOKIE_SECURE: "true"
       CORS_ORIGINS: https://${DOMAIN:-localhost}
       LOG_LEVEL: info

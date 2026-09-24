@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { generateJwtKeyPairPem } from "../src/lib/security.js";
 
 // Prints a fresh Ed25519 key pair for the access-token signer, in the
@@ -6,3 +7,4 @@ const { privateKey, publicKey } = await generateJwtKeyPairPem();
 const oneLine = (pem: string) => pem.trim().replaceAll("\n", "\\n");
 console.log(`JWT_PRIVATE_KEY="${oneLine(privateKey)}"`);
 console.log(`JWT_PUBLIC_KEY="${oneLine(publicKey)}"`);
+console.log(`DATA_ENCRYPTION_KEY="${randomBytes(32).toString("base64")}"`);
