@@ -12,6 +12,7 @@ import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
+import { periodLocked } from "../../services/gst-period.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
 import { applyToDocument } from "../../services/payments.js";
@@ -27,20 +28,6 @@ type Side = "customer" | "supplier";
 const AMOUNTS = ["grossAmount", "discountAmount", "documentDiscountShare", "taxableValue", "cgstAmount", "sgstAmount", "igstAmount", "cessAmount"] as const;
 type AmountKey = (typeof AMOUNTS)[number];
 type LineRow = typeof schema.invoiceItems.$inferSelect | typeof schema.purchaseItems.$inferSelect;
-
-async function periodLocked(tx: Tx, businessId: string, date: string): Promise<boolean> {
-  const [row] = await tx
-    .select({ id: schema.gstReturnPeriods.id })
-    .from(schema.gstReturnPeriods)
-    .where(
-      and(
-        eq(schema.gstReturnPeriods.businessId, businessId),
-        eq(schema.gstReturnPeriods.period, date.slice(0, 7)),
-        sql`${schema.gstReturnPeriods.status} in ('locked', 'filed')`,
-      ),
-    );
-  return Boolean(row);
-}
 
 /** Posted returns against a document (shown on the invoice / purchase and blocking its cancellation). */
 export async function documentReturns(tx: Tx, target: { invoiceId: string } | { purchaseId: string }) {

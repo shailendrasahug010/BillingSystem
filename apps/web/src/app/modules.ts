@@ -52,7 +52,7 @@ const planned = (module: PlannedModule): Route => ({ name: "planned", module });
 
 /** Modules whose screens exist in live mode (the demo preview keeps showing their plan). */
 export const LIVE_MODULES: ReadonlySet<PlannedModule> = new Set<PlannedModule>(
-  LIVE ? ["orders", "payments", "purchases", "suppliers", "inventory", "reports", "gst", "users", "audit"] : [],
+  LIVE ? ["orders", "payments", "purchases", "suppliers", "inventory", "reports", "gst", "expenses", "users", "audit"] : [],
 );
 
 /** Roadmap badge for the menu: hidden once the screen exists. */

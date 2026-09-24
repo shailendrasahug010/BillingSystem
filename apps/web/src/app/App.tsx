@@ -37,6 +37,7 @@ const SupplierProfilePage = lazy(() => import("../features/suppliers/SupplierPro
 const SuppliersPage = lazy(() => import("../features/suppliers/SuppliersPage").then((m) => ({ default: m.SuppliersPage })));
 const OrdersPage = lazy(() => import("../features/orders/OrdersPage").then((m) => ({ default: m.OrdersPage })));
 const OrderViewPage = lazy(() => import("../features/orders/OrderViewPage").then((m) => ({ default: m.OrderViewPage })));
+const ExpensesPage = lazy(() => import("../features/expenses/ExpensesPage").then((m) => ({ default: m.ExpensesPage })));
 const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 const DesignSystemPage = lazy(() => import("../features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
@@ -95,6 +96,8 @@ function Screen({ route }: { route: Route }) {
             return <ReportsPage />;
           case "gst":
             return <GstPage />;
+          case "expenses":
+            return <ExpensesPage />;
           case "users":
             return <UsersPage />;
           case "audit":

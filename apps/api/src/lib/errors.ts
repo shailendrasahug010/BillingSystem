@@ -58,6 +58,8 @@ const CONSTRAINT_CODES: Record<string, { status: number; code: string; field?: s
   price_levels_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },
   roles_key_uq: { status: 409, code: "DUPLICATE_NAME", field: "key" },
   warehouses_code_uq: { status: 409, code: "DUPLICATE_CODE", field: "code" },
+  expense_categories_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },
+  expenses_client_id_uq: { status: 409, code: "DUPLICATE_REQUEST" },
   business_members_uq: { status: 409, code: "ALREADY_MEMBER" },
   customers_b2b_gstin_chk: { status: 400, code: "GSTIN_REQUIRED_FOR_B2B", field: "gstin" },
 };

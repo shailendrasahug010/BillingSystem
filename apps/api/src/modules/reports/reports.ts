@@ -22,7 +22,7 @@ const TRUNC: Record<string, SQL> = {
   year: sql`'year'`,
 };
 
-interface Column {
+export interface Column {
   key: string;
   label: string;
 }
@@ -37,7 +37,7 @@ export function toCsv(columns: Column[], rows: Array<Record<string, unknown>>): 
   return [columns.map((c) => cell(c.label)).join(","), ...rows.map((r) => columns.map((c) => cell(r[c.key])).join(","))].join("\r\n") + "\r\n";
 }
 
-function send(reply: FastifyReply, ctx: RequestCtx, format: "json" | "csv", name: string, columns: Column[], body: { rows: Array<Record<string, unknown>> } & Record<string, unknown>) {
+export function sendReport(reply: FastifyReply, ctx: RequestCtx, format: "json" | "csv", name: string, columns: Column[], body: { rows: Array<Record<string, unknown>> } & Record<string, unknown>) {
   if (format === "json") return body;
   if (!can(ctx, "report.export")) throw forbidden("report.export");
   reply.header("content-type", "text/csv; charset=utf-8");
@@ -111,7 +111,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
       total: dec(x.total).toFixed(2),
     }));
     const totals = out.reduce((acc, x) => ({ taxable: acc.taxable.plus(x.taxable), tax: acc.tax.plus(x.tax), total: acc.total.plus(x.total) }), { taxable: dec(0), tax: dec(0), total: dec(0) });
-    return send(reply, ctx, q.format, `sales-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "invoices", label: "Invoices" }, ...(itemLevel ? [{ key: "qty", label: "Qty" }] : [])]), {
+    return sendReport(reply, ctx, q.format, `sales-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "invoices", label: "Invoices" }, ...(itemLevel ? [{ key: "qty", label: "Qty" }] : [])]), {
       from: q.from,
       to: q.to,
       groupBy: q.groupBy,
@@ -145,7 +145,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
       );
       const out = rows.map((x) => ({ key: x.key, label: x.label, count: x.count, amount: dec(x.amount).toFixed(2) }));
       const total = out.reduce((acc, x) => acc.plus(x.amount), dec(0));
-      return send(reply, ctx, q.format, `collections-${q.from}-${q.to}`, [{ key: "label", label: q.groupBy }, { key: "count", label: "Receipts" }, { key: "amount", label: "Amount" }], {
+      return sendReport(reply, ctx, q.format, `collections-${q.from}-${q.to}`, [{ key: "label", label: q.groupBy }, { key: "count", label: "Receipts" }, { key: "amount", label: "Amount" }], {
         from: q.from,
         to: q.to,
         groupBy: q.groupBy,
@@ -191,7 +191,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
       });
       const out = rows.map((x) => ({ key: x.key, label: x.label, bills: x.bills, taxable: dec(x.taxable).toFixed(2), tax: dec(x.tax).toFixed(2), total: dec(x.total).toFixed(2) }));
       const total = out.reduce((acc, x) => acc.plus(x.total), dec(0));
-      return send(reply, ctx, q.format, `purchases-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "bills", label: "Bills" }]), {
+      return sendReport(reply, ctx, q.format, `purchases-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "bills", label: "Bills" }]), {
         from: q.from,
         to: q.to,
         groupBy: q.groupBy,
@@ -254,7 +254,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
       });
       rows.sort((a, b) => Number(b.total) - Number(a.total));
       const totals = { total: rows.reduce((acc, x) => acc.plus(x.total), dec(0)).toFixed(2), notDue: rows.reduce((acc, x) => acc.plus(x.notDue), dec(0)).toFixed(2) };
-      return send(
+      return sendReport(
         reply,
         ctx,
         q.format,

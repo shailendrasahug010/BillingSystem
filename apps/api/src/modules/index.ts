@@ -2,6 +2,7 @@ import { auditLogModule } from "./audit-log.js";
 import { businessModule } from "./business/routes.js";
 import { catalogMastersModule } from "./catalog/masters.js";
 import { productsModule } from "./catalog/products.js";
+import { expensesModule } from "./expenses/routes.js";
 import { healthModule } from "./health.js";
 import { identityModule } from "./identity/routes.js";
 import { inventoryModule } from "./inventory/routes.js";
@@ -37,6 +38,7 @@ export const MODULES: ApiModule[] = [
   inventoryModule,
   paymentsModule,
   notesModule,
+  expensesModule,
   dashboardModule,
   reportsModule,
   searchModule,

@@ -321,9 +321,8 @@ export const dispatchOrders = pgTable(
     dispatchId: uuid()
       .notNull()
       .references(() => dispatches.id, { onDelete: "cascade" }),
-    salesOrderId: uuid()
-      .notNull()
-      .references(() => salesOrders.id),
+    /** Set when the goods were ordered first; a bill made at the counter travels without an order. */
+    salesOrderId: uuid().references(() => salesOrders.id),
     packingId: uuid().references(() => packings.id),
     invoiceId: uuid().references(() => invoices.id),
     deliverySequence: smallint(),
@@ -336,7 +335,10 @@ export const dispatchOrders = pgTable(
   },
   (t) => [
     unique("dispatch_orders_uq").on(t.dispatchId, t.salesOrderId),
+    uniqueIndex("dispatch_orders_invoice_uq").on(t.dispatchId, t.invoiceId).where(sql`${t.invoiceId} is not null`),
     index("dispatch_orders_order_idx").on(t.salesOrderId),
+    index("dispatch_orders_invoice_idx").on(t.invoiceId),
+    check("dispatch_orders_document_chk", sql`${t.salesOrderId} is not null or ${t.invoiceId} is not null`),
   ],
 );
 

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, date, index, pgTable, text, unique, uuid, varchar } from "drizzle-orm/pg-core";
-import { auditColumns, money, percent, pk, softDelete, versioned } from "./columns.js";
+import { boolean, check, date, index, pgTable, text, unique, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { auditColumns, money, percent, pk, softDelete, tstz, versioned } from "./columns.js";
 import { documentStatus, itcEligibility, paymentMethod } from "./enums.js";
 import { suppliers } from "./parties.js";
 import { paymentAccounts } from "./payments.js";
@@ -50,6 +50,11 @@ export const expenses = pgTable(
     notes: text(),
     status: documentStatus().notNull().default("posted"),
     approvedBy: uuid(),
+    cancelledAt: tstz(),
+    cancelledBy: uuid(),
+    cancelReason: text(),
+    /** Idempotency key from the client (a retried save returns the same expense). */
+    clientId: uuid(),
     ...auditColumns,
     ...softDelete,
     ...versioned,
@@ -57,6 +62,8 @@ export const expenses = pgTable(
   (t) => [
     index("expenses_date_idx").on(t.businessId, t.expenseDate),
     index("expenses_category_idx").on(t.businessId, t.categoryId, t.expenseDate),
+    uniqueIndex("expenses_number_uq").on(t.businessId, t.expenseNumber).where(sql`${t.expenseNumber} is not null`),
+    uniqueIndex("expenses_client_id_uq").on(t.businessId, t.clientId).where(sql`${t.clientId} is not null`),
     check("expenses_amount_chk", sql`${t.amount} > 0 and ${t.totalAmount} >= ${t.amount}`),
   ],
 );

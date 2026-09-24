@@ -823,7 +823,10 @@
     "CANCEL_REASON_REQUIRED": "Give a reason (at least 3 characters).",
     "ORDER_NOT_CONFIRMED": "Confirm the order before invoicing it.",
     "ORDER_QTY_EXCEEDS": "Only {{max}} of {{product}} is left on the order.",
-    "ORDER_FULLY_INVOICED": "Everything on this order has been invoiced."
+    "ORDER_FULLY_INVOICED": "Everything on this order has been invoiced.",
+    "EXPENSE_GSTIN_REQUIRED": "Enter the vendor's GSTIN to record GST on this expense.",
+    "EXPENSE_NOT_POSTED": "This expense is already {{status}}.",
+    "AMOUNT_NOT_POSITIVE": "The amount must be more than zero."
   },
   "validation": {
     "required": "This field is required",
@@ -1333,5 +1336,49 @@
     "invoices": "Invoices",
     "noInvoices": "Not invoiced yet.",
     "history": "History"
+  },
+  "expenses": {
+    "title": "Expenses",
+    "subtitle": "Rent, electricity, fuel and other running costs, with GST credit where the bill allows it",
+    "new": "New expense",
+    "newHint": "An expense paid now. Add the vendor's GSTIN when the bill charges GST to claim the credit.",
+    "expense": "Expense",
+    "category": "Category",
+    "chooseCategory": "Choose a category",
+    "categories": "Categories",
+    "summary": "Summary",
+    "amountBeforeGst": "Amount before GST",
+    "billTotal": "Bill total (with GST)",
+    "gstRate": "GST on the bill",
+    "noGst": "No GST",
+    "vendorGstin": "Vendor GSTIN",
+    "gstinHint": "Needed to claim the GST as input tax credit",
+    "itc": "Input tax credit",
+    "itcShort": "ITC",
+    "itcTypes": {
+      "input_services": "Services (claim)",
+      "eligible": "Goods (claim)",
+      "capital_goods": "Capital goods (claim)",
+      "ineligible": "Not claimable"
+    },
+    "amountIncludesGst": "The amount I entered already includes GST",
+    "paidTo": "Paid to",
+    "billNumber": "Bill number",
+    "saved": "Expense saved",
+    "search": "Search number, paid to, bill number or notes",
+    "count": "Expenses",
+    "empty": "No expenses in this view",
+    "emptyHint": "Record rent, electricity, fuel and other costs to see where the money goes.",
+    "cancel": "Cancel expense",
+    "confirmCancel": "Confirm cancellation",
+    "cancelHint": "At least 3 characters. The GST credit is removed too.",
+    "cancelled": "Expense cancelled",
+    "nameHi": "Name in Hindi",
+    "addCategory": "Add category",
+    "categoryAdded": "Category added",
+    "hide": "Hide",
+    "show": "Show",
+    "categoryHidden": "Category hidden from new expenses",
+    "categoryShown": "Category shown again"
   }
 }

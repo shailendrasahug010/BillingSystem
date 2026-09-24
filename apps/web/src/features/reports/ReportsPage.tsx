@@ -1,43 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
 import { Tabs } from "radix-ui";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { Button } from "../../components/ui/Button";
-import { Input, Select } from "../../components/ui/Field";
+import { Select } from "../../components/ui/Field";
 import { Segmented } from "../../components/ui/misc";
 import { DataTable, ErrorNote, FilterBar, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
-import { useToast } from "../../components/ui/Toast";
 import { allowed } from "../../data/db";
-import { rangeDates, type RangeKey } from "../../data/store";
 import { ApiError, api } from "../../lib/api";
-import { downloadReport } from "../../lib/download";
+import { ExportButton, PeriodBar, usePeriod } from "./period";
 
 type Row = Record<string, unknown> & { key: string | null; label: string | null };
-const PRESETS: RangeKey[] = ["thisMonth", "lastMonth", "last7", "thisFy"];
 
 const GROUPS = {
   sales: ["day", "week", "month", "customer", "product", "brand", "category", "salesperson"],
   collections: ["day", "week", "month", "method", "customer"],
   purchases: ["day", "month", "supplier", "product", "brand"],
 } as const;
-
-/** Date range picker shared by the report tabs: presets plus from / to. */
-function usePeriod(initial: RangeKey = "thisMonth") {
-  const start = rangeDates(initial);
-  const [preset, setPreset] = useState<RangeKey | "custom">(initial);
-  const [from, setFrom] = useState(start.from);
-  const [to, setTo] = useState(start.to);
-  const choose = (p: RangeKey | "custom") => {
-    setPreset(p);
-    if (p !== "custom") {
-      const r = rangeDates(p);
-      setFrom(r.from);
-      setTo(r.to);
-    }
-  };
-  return { preset, from, to, choose, setFrom: (v: string) => (setPreset("custom"), setFrom(v)), setTo: (v: string) => (setPreset("custom"), setTo(v)) };
-}
 
 export function ReportsPage() {
   const { t } = useI18n();
@@ -81,46 +59,6 @@ export function ReportsPage() {
         )}
       </Tabs.Root>
     </div>
-  );
-}
-
-function ExportButton({ path, query, filename }: { path: string; query: Record<string, string>; filename: string }) {
-  const i18n = useI18n();
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  if (!allowed("report.export")) return null;
-  return (
-    <Button
-      icon={<Download size={16} />}
-      disabled={busy}
-      onClick={() => {
-        setBusy(true);
-        downloadReport(path, query, filename)
-          .catch((e: unknown) => toast({ tone: "danger", title: i18n.t("errors.generic"), body: e instanceof ApiError ? e.code : undefined }))
-          .finally(() => setBusy(false));
-      }}
-    >
-      {i18n.t("common.export")}
-    </Button>
-  );
-}
-
-function PeriodBar({ period, children }: { period: ReturnType<typeof usePeriod>; children?: ReactNode }) {
-  const { t } = useI18n();
-  return (
-    <FilterBar>
-      <Select aria-label={t("common.period")} value={period.preset} onChange={(e) => period.choose(e.target.value as RangeKey | "custom")} className="md:w-52">
-        {PRESETS.map((p) => (
-          <option key={p} value={p}>
-            {t(`dashboard.range.${p}`)}
-          </option>
-        ))}
-        <option value="custom">{t("dashboard.range.custom")}</option>
-      </Select>
-      <Input type="date" aria-label={t("common.from")} value={period.from} max={period.to} onChange={(e) => period.setFrom(e.target.value)} className="md:w-40" />
-      <Input type="date" aria-label={t("common.to")} value={period.to} min={period.from} onChange={(e) => period.setTo(e.target.value)} className="md:w-40" />
-      {children}
-    </FilterBar>
   );
 }
 
@@ -186,8 +124,8 @@ function GroupedReport({ kind }: { kind: keyof typeof GROUPS }) {
                 ) : (
                   <>
                     {r0HasQty(q.data?.rows) && <td />}
-                    <td className="py-2.5 pl-3 text-right">{totals.taxable ? money(totals.taxable) : ""}</td>
-                    <td className="py-2.5 pl-3 text-right">{totals.tax ? money(totals.tax) : ""}</td>
+                    <td className="py-2.5 pr-3 pl-3 text-right">{totals.taxable ? money(totals.taxable) : ""}</td>
+                    <td className="py-2.5 pr-3 pl-3 text-right">{totals.tax ? money(totals.tax) : ""}</td>
                     <td className="py-2.5 pr-4 pl-3 text-right">{money(totals.total ?? "0")}</td>
                   </>
                 )}

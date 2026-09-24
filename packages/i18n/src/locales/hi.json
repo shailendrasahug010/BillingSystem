@@ -823,7 +823,10 @@
     "CANCEL_REASON_REQUIRED": "कारण लिखें (कम से कम 3 अक्षर)।",
     "ORDER_NOT_CONFIRMED": "बिल बनाने से पहले ऑर्डर की पुष्टि करें।",
     "ORDER_QTY_EXCEEDS": "ऑर्डर में {{product}} की सिर्फ़ {{max}} मात्रा बाकी है।",
-    "ORDER_FULLY_INVOICED": "इस ऑर्डर का पूरा बिल बन चुका है।"
+    "ORDER_FULLY_INVOICED": "इस ऑर्डर का पूरा बिल बन चुका है।",
+    "EXPENSE_GSTIN_REQUIRED": "इस खर्च पर GST दर्ज करने के लिए विक्रेता का GSTIN डालें।",
+    "EXPENSE_NOT_POSTED": "यह खर्च पहले से {{status}} है।",
+    "AMOUNT_NOT_POSITIVE": "रकम शून्य से ज़्यादा होनी चाहिए।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -1333,5 +1336,49 @@
     "invoices": "बिल",
     "noInvoices": "अभी बिल नहीं बना।",
     "history": "इतिहास"
+  },
+  "expenses": {
+    "title": "खर्चे",
+    "subtitle": "किराया, बिजली, ईंधन और दूसरे चालू खर्च, बिल में GST हो तो उसका क्रेडिट भी",
+    "new": "नया खर्च",
+    "newHint": "अभी चुकाया गया खर्च। बिल में GST हो तो क्रेडिट के लिए विक्रेता का GSTIN डालें।",
+    "expense": "खर्च",
+    "category": "श्रेणी",
+    "chooseCategory": "श्रेणी चुनें",
+    "categories": "श्रेणियाँ",
+    "summary": "सारांश",
+    "amountBeforeGst": "GST से पहले रकम",
+    "billTotal": "बिल कुल (GST सहित)",
+    "gstRate": "बिल पर GST",
+    "noGst": "GST नहीं",
+    "vendorGstin": "विक्रेता का GSTIN",
+    "gstinHint": "GST को इनपुट टैक्स क्रेडिट में लेने के लिए ज़रूरी",
+    "itc": "इनपुट टैक्स क्रेडिट",
+    "itcShort": "ITC",
+    "itcTypes": {
+      "input_services": "सेवाएँ (क्रेडिट लें)",
+      "eligible": "माल (क्रेडिट लें)",
+      "capital_goods": "पूँजीगत माल (क्रेडिट लें)",
+      "ineligible": "क्रेडिट नहीं मिलेगा"
+    },
+    "amountIncludesGst": "डाली गई रकम में GST पहले से शामिल है",
+    "paidTo": "किसे दिया",
+    "billNumber": "बिल नंबर",
+    "saved": "खर्च सेव हुआ",
+    "search": "नंबर, किसे दिया, बिल नंबर या नोट खोजें",
+    "count": "खर्चे",
+    "empty": "इस सूची में कोई खर्च नहीं",
+    "emptyHint": "किराया, बिजली, ईंधन जैसे खर्च दर्ज करें ताकि पता चले पैसा कहाँ जा रहा है।",
+    "cancel": "खर्च रद्द करें",
+    "confirmCancel": "रद्द करना पक्का करें",
+    "cancelHint": "कम से कम 3 अक्षर। GST क्रेडिट भी हट जाएगा।",
+    "cancelled": "खर्च रद्द हुआ",
+    "nameHi": "हिंदी में नाम",
+    "addCategory": "श्रेणी जोड़ें",
+    "categoryAdded": "श्रेणी जुड़ गई",
+    "hide": "छिपाएँ",
+    "show": "दिखाएँ",
+    "categoryHidden": "नए खर्चों से श्रेणी छिपा दी गई",
+    "categoryShown": "श्रेणी फिर से दिखेगी"
   }
 }
