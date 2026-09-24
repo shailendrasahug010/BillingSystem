@@ -638,7 +638,17 @@
     "INVALID_PERIOD": "The end date must be on or after the start date.",
     "PARTY_HAS_BALANCE": "This party has a balance of {{balance, currency}}. Settle it before deleting.",
     "SERIES_NOT_AVAILABLE": "No number series is available. Check Settings → Number series.",
-    "CODE_SERIES_EXHAUSTED": "Could not generate a free code. Enter a code manually."
+    "CODE_SERIES_EXHAUSTED": "Could not generate a free code. Enter a code manually.",
+    "CREDIT_BLOCKED": "This bill goes beyond the customer's credit terms. Ask a manager to approve, or collect payment first.",
+    "CUSTOMER_INACTIVE": "This customer is inactive. Reactivate them to bill.",
+    "DUPLICATE_REQUEST": "This was already saved.",
+    "EDIT_WINDOW_CLOSED": "Invoices can only be cancelled within {{hours}} hours. Ask the owner, or issue a credit note.",
+    "FUTURE_DATE_NOT_ALLOWED": "The date cannot be in the future.",
+    "INVALID_IDEMPOTENCY_KEY": "The request id is not valid.",
+    "INVOICE_NOT_POSTED": "Only a posted invoice can be cancelled (this one is {{status}}).",
+    "PRODUCT_INACTIVE": "{{product}} is inactive and cannot be billed.",
+    "TOTALS_MISMATCH": "The total changed on the server ({{expected}} instead of {{received}}). Please review the bill.",
+    "UNIT_NOT_ON_PRODUCT": "{{product}} is not sold in this unit."
   },
   "validation": {
     "required": "This field is required",

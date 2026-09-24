@@ -17,7 +17,8 @@ export const DocumentLineInput = z.strictObject({
   freeQty: Qty.default("0"),
   /** Defaults to the customer's rate list price. */
   rate: Rate.optional(),
-  discountPercent: Percent.default("0"),
+  /** Defaults to the rate list's discount for this product. */
+  discountPercent: Percent.optional(),
   discountAmount: Money.default("0"),
   batchId: Id.optional(),
 });
