@@ -17,7 +17,7 @@ describe.skipIf(!hasDatabase)("GST returns", () => {
   const post = (url: string, body: unknown, token = owner.token) => call(t.app, "POST", url, { token, body });
   const get = (url: string, token = owner.token) => call(t.app, "GET", url, { token });
   const raw = (url: string, token = owner.token) => t.app.inject({ method: "GET", url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` } });
-  const invoice = async (customerId: string, lines: Array<{ productId: string; qty: string }>) => (await post("/invoices", { customerId, lines })).body;
+  const invoice = async (customerId: string | undefined, lines: Array<{ productId: string | undefined; qty: string }>) => (await post("/invoices", { customerId, lines })).body;
 
   beforeAll(async () => {
     t = await createTestApp();
