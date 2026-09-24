@@ -4,7 +4,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { ApiError } from "../lib/errors.js";
 
-const MASTER_PATTERNS = { customer: "C{SEQ:4}", supplier: "S{SEQ:4}", product: "P{SEQ:5}" } as const;
+const MASTER_PATTERNS = { customer: "C{SEQ:4}", supplier: "S{SEQ:4}", product: "P{SEQ:5}", employee: "E{SEQ:3}" } as const;
 export type MasterKind = keyof typeof MASTER_PATTERNS;
 
 /** Master codes are not per financial year. */

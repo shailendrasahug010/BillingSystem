@@ -25,3 +25,10 @@ export function todayIn(timeZone = "Asia/Kolkata", now: Date = new Date()): stri
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   return parts;
 }
+
+/** First and last day of a "YYYY-MM" month. */
+export function monthBounds(month: string): { start: string; end: string } {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  return { start: `${month}-01`, end: addDays(next, -1) };
+}

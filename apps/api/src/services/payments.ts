@@ -196,3 +196,53 @@ export async function releaseAllocations(tx: Tx, target: { invoiceId: string } |
   }
   return released.toFixed(2);
 }
+
+/**
+ * Money paid to an employee (salary, advance, loan): a numbered payment-out
+ * row so it shows in the payments list and cash book. Employees have no
+ * party ledger; the payroll slip or advance holds the balance.
+ */
+export async function recordEmployeePayment(
+  tx: Tx,
+  ctx: RequestCtx,
+  financialYearStartMonth: number,
+  input: { employeeId: string; employeeName: string; date: string; amount: string; method: PaymentMethod; paymentAccountId?: string | null; referenceNumber?: string | null; notes: string },
+): Promise<{ id: string; paymentNumber: string }> {
+  if (input.paymentAccountId) {
+    const [acc] = await tx
+      .select({ id: schema.paymentAccounts.id })
+      .from(schema.paymentAccounts)
+      .where(and(eq(schema.paymentAccounts.id, input.paymentAccountId), eq(schema.paymentAccounts.businessId, ctx.businessId)));
+    if (!acc) throw badRequest("REFERENCE_NOT_FOUND", {}, "paymentAccountId");
+  }
+  const numbering = await nextDocumentNumber(tx, ctx.businessId, "payment_out", input.date, financialYearStartMonth);
+  const id = uuidv7();
+  await tx.insert(schema.payments).values({
+    id,
+    businessId: ctx.businessId,
+    paymentNumber: numbering.number,
+    seriesId: numbering.seriesId,
+    financialYear: numbering.financialYear,
+    direction: "out",
+    partyType: "employee",
+    employeeId: input.employeeId,
+    paymentDate: input.date,
+    amount: toAmountString(input.amount),
+    method: input.method,
+    paymentAccountId: input.paymentAccountId ?? (await defaultAccountId(tx, ctx.businessId, input.method)),
+    referenceNumber: input.referenceNumber ?? null,
+    chequeStatus: input.method === "cheque" ? "pending" : null,
+    status: "posted",
+    notes: input.notes,
+    createdBy: ctx.userId,
+    updatedBy: ctx.userId,
+  });
+  await audit(tx, ctx, {
+    action: "payment.made",
+    entityType: "payment",
+    entityId: id,
+    entityLabel: numbering.number,
+    changes: { employee: input.employeeName, amount: toAmountString(input.amount), method: input.method, for: input.notes },
+  });
+  return { id, paymentNumber: numbering.number };
+}

@@ -294,7 +294,7 @@ export const gstModule: ApiModule = async (app, deps) => {
           format: e.format,
           warnings: sql<number>`jsonb_array_length(${e.warnings})`,
           generatedAt: e.generatedAt,
-          generatedBy: sql<string | null>`(select u.name from users u where u.id = ${e.generatedBy})`,
+          generatedBy: sql<string | null>`(select u.name from users u where u.id = "gst_exports"."generated_by")`,
         })
         .from(e)
         .where(and(eq(e.businessId, ctx.businessId), ...(request.query.period ? [eq(e.period, request.query.period)] : [])))

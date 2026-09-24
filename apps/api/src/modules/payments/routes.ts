@@ -45,7 +45,9 @@ async function paymentDetail(tx: Tx, ctx: RequestCtx, id: string) {
   const party =
     p.partyType === "customer"
       ? (await tx.select({ id: schema.customers.id, name: sql<string>`coalesce(${schema.customers.businessName}, ${schema.customers.name})` }).from(schema.customers).where(eq(schema.customers.id, p.customerId!)))[0]
-      : (await tx.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId!)))[0];
+      : p.partyType === "employee"
+        ? (await tx.select({ id: schema.employees.id, name: schema.employees.name }).from(schema.employees).where(eq(schema.employees.id, p.employeeId!)))[0]
+        : (await tx.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId!)))[0];
   const { businessId: _b, ...rest } = p;
   return {
     ...rest,
@@ -196,7 +198,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
           partyType: p.partyType,
           customerId: p.customerId,
           supplierId: p.supplierId,
-          partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = "payments"."customer_id"), (select name from suppliers s where s.id = "payments"."supplier_id"))`,
+          partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = "payments"."customer_id"), (select name from suppliers s where s.id = "payments"."supplier_id"), (select name from employees e where e.id = "payments"."employee_id"))`,
           amount: p.amount,
           method: p.method,
           referenceNumber: p.referenceNumber,
@@ -222,6 +224,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
       const [p] = await tx.select().from(schema.payments).where(and(eq(schema.payments.id, request.params.id), eq(schema.payments.businessId, ctx.businessId))).for("update");
       if (!p) throw notFound("payment");
       if (p.status !== "posted") throw conflict("PAYMENT_NOT_POSTED", { status: p.status });
+      if (p.partyType === "employee") throw conflict("EMPLOYEE_PAYMENT_LOCKED");
       await reversePayment(tx, ctx, p, request.body.reason, deps.clock.now().toISOString(), deps.clock.today(ctx.timeZone), false);
       return paymentDetail(tx, ctx, p.id);
     });
@@ -234,6 +237,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
       const [p] = await tx.select().from(schema.payments).where(and(eq(schema.payments.id, request.params.id), eq(schema.payments.businessId, ctx.businessId))).for("update");
       if (!p) throw notFound("payment");
       if (p.method !== "cheque") throw conflict("NOT_A_CHEQUE");
+      if (p.partyType === "employee" && request.body.status === "bounced") throw conflict("EMPLOYEE_PAYMENT_LOCKED");
       if (p.status !== "posted" || p.chequeStatus === "bounced" || p.chequeStatus === "cleared") throw conflict("PAYMENT_NOT_POSTED", { status: p.chequeStatus ?? p.status });
       if (request.body.status === "bounced") {
         if (!can(ctx, "payment.cancel")) throw forbidden("payment.cancel");
