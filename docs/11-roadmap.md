@@ -9,10 +9,17 @@ Work proceeds in small milestones. Each one ends with something a real user can 
 | **1 · Product architecture** | ✅ Done | This `docs/` folder (A–K), repository structure, CI |
 | **Foundations pulled forward from later phases** | ✅ Done | `@vyapaar/core` (GST engine, invoice totals, stock rules, receivables, credit, workflow, suggestions, search, validators, RBAC) with 66 unit tests; `@vyapaar/i18n` (English + Hindi, parity tests); `@vyapaar/db` (86-table schema, migrations, integrity triggers, row-level security, seeds) with integration tests on PostgreSQL |
 | **2 · UI/UX** | ✅ Done for the key screens | Design tokens and components, app shell (desktop sidebar, phone bottom navigation), Login, Dashboard, **Create Invoice** (desktop and phone flows, live GST, smart suggestions), Invoice document (A4, English/Hindi), Customers, Customer profile, Products, Settings, Global search, Design system gallery; remaining screens specified in [06-screens.md](06-screens.md) |
-| 3 · MVP | Next | See below |
+| **3 · MVP** | ✅ 3.1–3.7 built; 3.8 (pilot) next | Multi-tenant SaaS API (`apps/api`, Fastify) with self-service sign-up, auth, team and roles, masters, invoicing, purchases, inventory, payments, dashboard, reports, search — 92 integration tests against PostgreSQL; web app connected (live mode) and verified end to end in a browser; Docker/Compose/Caddy deployment files |
 | 4–6 | Planned | See below |
 
-The prototype runs on sample data in the browser; nothing is saved. Phase 3 connects the same screens to the real API.
+The web app runs against the API; the single-file preview build keeps the demo data so the design can be shared without a server.
+
+### Phase 3: what was built, and what moved
+
+* **Built as planned:** posting transactions for invoices, purchases and payments (gap-free numbering under concurrency, stock and party ledgers, GST register, audit, outbox rows), cancellations with reversals, GST period lock, credit and negative-stock policies, rate lists, moving-average and landed cost, reverse charge, ITC eligibility, batches and expiry, allocation and advances, cheque bounce, statements, aging, dashboard, reports with CSV export, GST summary (B2B/B2CL/B2CS, HSN), global search, purchase-history suggestions with reasons, English/Hindi messages for every API error.
+* **SaaS additions:** self-service sign-up with OTP creates the business with its defaults (roles, series, settings, godown, cash account, starter GST rate buckets from the 22-Sep-2025 structure); users can own or join several businesses; trial/active/suspended status; RLS on the businesses table itself; foreign-key ids checked against the tenant.
+* **Changed:** Fastify instead of NestJS (see [02-technology-stack.md](02-technology-stack.md#fastify-api)).
+* **Moved to Phase 4:** pg-boss worker (outbox rows are already written; summaries are computed live today), server-side PDF and WhatsApp/email share (the browser prints the same template), object storage (MinIO/S3), Excel import, purchase returns and stock transfers, receipt PDF, device registry. The 10,000-invoice randomised client/server property test is replaced for now by: one shared engine, the server rejecting any total difference (`TOTALS_MISMATCH`), and a browser end-to-end run that posts a bill and checks the server total.
 
 ## Milestones
 
@@ -22,7 +29,7 @@ Each milestone lists its **acceptance test**: the demonstration that proves it i
 
 | # | Milestone | Scope | Acceptance test |
 |---|---|---|---|
-| 3.1 | API skeleton | `apps/api` (NestJS/Fastify), config, request context, error format, Zod contracts package, OpenAPI, health checks, pg-boss worker, Docker Compose (API, worker, PostgreSQL, MinIO, Caddy), CI with a Postgres service | `docker compose up` gives a running API; `/health` green; CI runs unit + integration tests on every PR |
+| 3.1 | API skeleton | `apps/api` (Fastify), config, request context, error format, Zod contracts package, OpenAPI, health checks, pg-boss worker, Docker Compose (API, worker, PostgreSQL, MinIO, Caddy), CI with a Postgres service | `docker compose up` gives a running API; `/health` green; CI runs unit + integration tests on every PR |
 | 3.2 | Authentication & access | Login (password + OTP), refresh rotation, devices, business switch, roles/permissions guard, RLS session variables, audit log writer, users & roles screens | Role matrix tests: each default role × each endpoint allowed/denied; cross-tenant test returns 404 |
 | 3.3 | Masters | Customers, suppliers, products (units, barcodes, rate lists, tax categories/rates, batches), brands, categories, godowns; Excel import; catalogue delta feed | Import 5,000 products and 1,000 customers; search returns in < 100 ms on the server, < 20 ms on the device |
 | 3.4 | Invoicing | Invoice posting transaction (numbering, stock ledger, party ledger, GST register, payment at sale), cancel, PDF (A4/A5/thermal, English/Hindi), WhatsApp/email share adapter, connect the Create Invoice screen | 200 concurrent invoice posts: no duplicate numbers, no negative stock under `block`, ledgers equal balances; totals identical client vs server for 10,000 randomised invoices (property test) |

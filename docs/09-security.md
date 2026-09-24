@@ -1,5 +1,7 @@
 # I. Security: authentication, authorisation and data protection
 
+> **Implementation status (Phase 3).** Built and tested: argon2id passwords with lockout; OTP (hashed, 5-minute expiry, 5 attempts, per-number resend wait and hourly cap, delivered through a gateway webhook, never logged in production); 15-minute EdDSA access tokens held in memory; rotating refresh tokens with reuse detection (HttpOnly `SameSite=Strict` cookie for browsers, body token for native apps); per-session business; log out / log out everywhere; password reset and change end other sessions; per-IP rate limits; role permissions with wildcard grants and an anti-escalation rule (nobody grants access they do not hold; owners can never be locked out); row-level security with the API on a non-owner role; client-sent ids checked against the tenant (foreign keys alone ignore RLS); cost fields hidden without `product.view_cost`; AES-256-GCM encryption of supplier bank account numbers; append-only ledgers and audit log; CSV exports protected against formula injection. Planned: MFA, device registry and revocation, breached-password list, key rotation with `kid`, record-level rules (routes, godowns).
+
 The system holds a business's customers, prices, margins, receivables, employees' bank details and GST data. The threat model covers: an outsider guessing passwords or scraping the API, a staff member seeing or changing more than their role allows (the most common real risk in distribution businesses), a lost phone with cached data, another tenant's data leaking through a bug, and an operator or script rewriting financial history.
 
 ## 1. Authentication
@@ -25,11 +27,15 @@ Three layers, all of which must allow an action.
 * The business id comes from the verified token, never from the URL or body.
 * Every repository query filters by `business_id`, and **PostgreSQL row-level security** enforces the same rule underneath: the API connects as a non-owner role (`vyapaar_app`) and sets `app.business_id` per transaction, so a query that forgets its filter returns nothing and cannot insert into another tenant (tested in `packages/db/test/integrity.test.ts`).
 * Resource ids of other tenants return `404`, never `403`, so existence is not revealed.
+* **Foreign keys ignore RLS**, so every id a client sends (brand, tax category, route, price level, customer…) is checked against the current business before it is stored (`assertOwned`); tests post another tenant's ids and expect `REFERENCE_NOT_FOUND`.
+* The `businesses` table itself is under RLS: a user sees a business only when it is the current one or they are an active member; memberships can be read across the user's businesses (for the switcher) but only created or changed in the current business.
+* A SaaS business can be `trial`, `active`, `suspended` or `closed`; suspended and closed businesses are refused on every business route while their users can still sign in and see why.
 
 ### 2.2 Role-based permissions (what action)
 * Permissions are code-defined (`PERMISSION_CATALOG` in `@vyapaar/core`, `<module>.<action>`, 100 of them); roles are data, fully editable per business. Grants support wildcards (`invoice.*`, `*`) so new permissions reach Admin automatically.
 * Default roles seeded per business: **Admin** (everything), **Manager** (sales, purchase, inventory, customers, reports), **Sales Employee** (customers, orders, invoices, collection — no purchase cost, no profit reports), **Accountant** (payments, GST, expenses, reports, audit), **Warehouse** (packing, dispatch, inventory), **HR** (employees, salary, leave).
-* A NestJS guard checks the permission on every endpoint (`@RequirePermission("invoice.cancel")`); the client uses the same catalogue only to hide what the user cannot do.
+* A Fastify `preHandler` checks the permission on every endpoint (`guard(deps, "invoice.cancel")`); the client uses the same catalogue (from `/me`) only to hide what the user cannot do.
+* **No privilege escalation:** creating or editing a role, inviting a member or changing someone's role requires holding every permission involved; a user cannot change their own membership, and the owner's membership cannot be changed.
 * Sensitive operations have their own permissions: `invoice.override_price`, `invoice.override_credit_limit`, `invoice.backdate`, `invoice.cancel`, `gst.lock_period`, `backup.restore`, `user.manage_roles`, `employee.view_sensitive`.
 
 ### 2.3 Field- and record-level rules

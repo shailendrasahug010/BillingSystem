@@ -54,6 +54,8 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 
 `★` = MVP (Phase 3). Permissions in brackets.
 
+> **Built in Phase 3** (the OpenAPI document is served at `/api/docs` outside production): sign-up with OTP that creates the business (`POST /auth/otp`, `POST /auth/signup`), password and OTP login (`/auth/login`, `/auth/login/otp`), `/auth/refresh` (cookie, or body token with `X-Client: native`), logout, logout-all, password reset and change, `GET/POST /businesses`, `/auth/switch-business`, `/me`; members, roles and permissions; audit log; business profile, typed settings, number series, godowns; units, brands, categories, rate lists, tax categories with dated rules, products, barcode lookup, catalogue snapshot (`GET /catalog`); customers, suppliers, routes, statements; invoices (preview, post, list, detail, cancel), `GET /customers/:id/insight` and `/suggestions`; purchases (post, list, detail, cancel); stock, stock ledger, adjustments; payments (post, list, detail, cancel, cheque status, allocate advance), payment accounts; dashboard, sales/collection/purchase/outstanding reports with CSV export, GST summary per period, global search. Every create that can be retried (invoice, purchase, payment) accepts an `Idempotency-Key` header. Not yet built: devices, orders, notes, fulfilment, HR/payroll, files, backup, sync.
+
 ### Authentication and session
 
 | Method & path | Purpose |

@@ -43,7 +43,7 @@ flowchart LR
   end
 
   subgraph Server["Server (single region: India)"]
-    API["API — NestJS on Fastify<br/>modular monolith"]
+    API["API — Fastify<br/>modular monolith"]
     CORE2["@vyapaar/core<br/>(authoritative recalculation)"]
     JOBS["Workers — pg-boss<br/>outbox, stats, reminders,<br/>exports, PDFs, backups"]
     PG[("PostgreSQL 16+<br/>RLS, append-only ledgers")]
@@ -75,7 +75,7 @@ flowchart LR
 | **Web client** (`apps/web`) | All screens; responsive from 360 px phones to 1920 px desktops; PWA install; offline cache | CDN / static hosting |
 | **Desktop shell** (`apps/desktop`, Tauri) | Wraps the web build for Windows: native printing to thermal/A4 printers, local backup folder, auto-update | — |
 | **Android shell** (`apps/mobile`, Capacitor) | Wraps the web build: ML Kit barcode camera, Bluetooth printer, share sheet, push notifications | — |
-| **API** (`apps/api`, NestJS) | Authentication, authorisation, validation, business services, transactions, audit | Horizontal (stateless); 2+ instances behind a load balancer |
+| **API** (`apps/api`, Fastify) | Authentication, authorisation, validation, business services, transactions, audit | Horizontal (stateless); 2+ instances behind a load balancer |
 | **Workers** (`apps/api` worker entrypoint) | Transactional outbox consumer, purchase-history stats, association mining, reminders, report exports, PDF rendering, backups, integration calls | Separate process; more workers per queue |
 | **PostgreSQL** | System of record; integrity rules; reporting summaries | Vertical first, then read replica for reports, then partitioning of ledgers |
 | **Object storage** | Product images, receipts, PDFs, proof of delivery, backup archives | Managed service |
@@ -86,8 +86,8 @@ flowchart LR
 ```
 BillingSystem/
 ├── apps/
-│   ├── web/                 React 19 + Vite PWA — built in this commit (prototype screens)
-│   ├── api/                 NestJS modular monolith — Phase 3
+│   ├── web/                 React 19 + Vite PWA — live on the API (demo mode for previews)
+│   ├── api/                 Fastify modular monolith — built in Phase 3
 │   ├── desktop/             Tauri 2 shell for Windows — Phase 6
 │   └── mobile/              Capacitor shell for Android — Phase 5/6
 ├── packages/
@@ -96,7 +96,7 @@ BillingSystem/
 │   │                        suggestions, search ranking, validators, RBAC catalogue
 │   ├── i18n/                Translation catalogues + Indian formatting (built)
 │   ├── db/                  Drizzle schema, SQL migrations, seeds, integration tests (built)
-│   └── contracts/           Zod schemas for API requests/responses shared by API and clients — Phase 3
+│   └── contracts/           Zod request schemas and response types shared by API and clients (built)
 └── docs/                    This design
 ```
 
@@ -104,7 +104,9 @@ Dependency rule (enforced in CI with an import linter): `apps/* → packages/*`;
 
 ### API modules (`apps/api/src/modules/*`)
 
-Each module owns its tables, its services and its HTTP controllers:
+Built in Phase 3: `health`, `identity` (OTP, sign-up, login, refresh rotation, businesses, `/me`), `team` (members, roles, permissions), `audit-log`, `business` (profile, settings, number series, godowns), `catalog` (units, brands, categories, rate lists, tax categories/rates, products, catalogue snapshot), `parties` (customers, suppliers, routes, statements), `invoices` (posting, preview, cancel, suggestions, customer insight), `purchases`, `inventory` (stock, stock ledger, adjustments), `payments` (receipts, supplier payments, allocation, cheques, accounts), `reports` (dashboard, reports, GST summary, search). Shared flows are in `apps/api/src/services` (numbering, stock, party ledger, payments, settings, sales document, tenant ownership checks).
+
+The full target list — each module owns its tables, its services and its routes:
 
 ```
 modules/
@@ -131,27 +133,27 @@ modules/
   files/         uploads, signed URLs
 ```
 
-Inside a module:
+Inside a module (as built):
 
 ```
-sales/
-  sales.module.ts
-  invoices.controller.ts      HTTP only: parse, authorise, call service
-  invoices.service.ts         business flow, runs inside a DB transaction
-  invoices.repository.ts      Drizzle queries for this module's tables
-  invoice-posting.ts          the posting use case (see §6)
-  dto/                        Zod schemas (from packages/contracts)
-  events.ts                   domain events published to the outbox
-  invoices.service.spec.ts
+modules/invoices/
+  routes.ts          Fastify plugin: routes with Zod schemas, guard(deps, permission), one withTenant transaction per request
+  suggestions.ts     customer insight + suggestions
+services/
+  sales-document.ts  prices and taxes a sale from server data only (shared by preview and posting)
+  stock.ts           postStockMovement(tx, …): the only way stock changes
+  party-ledger.ts    postPartyEntry(tx, …): ledger row + cached balance
+  payments.ts        recordPayment(tx, …): numbering, allocation, ledger
+test/invoices.test.ts   integration tests against PostgreSQL through the real HTTP app
 ```
 
-**Cross-module calls** go through a module's exported service interface (e.g. `InventoryService.move(tx, movements)`), passing the open transaction so a sale and its stock movement commit together. Modules never write each other's tables directly. **Asynchronous side effects** (stats, notifications, report summaries) go through domain events in the transactional outbox.
+**Cross-module calls** go through exported service functions that take the open transaction (e.g. `postStockMovement(tx, movement, policy)`), so a sale and its stock movement commit together. Modules never write each other's tables directly. **Asynchronous side effects** (stats, notifications, report summaries) go through domain events in the transactional outbox.
 
 ### Adding a module
 
 1. Add tables in `packages/db/src/schema/<module>.ts`, run `pnpm db:generate` to create the migration.
 2. Add permissions to `PERMISSION_CATALOG` in `packages/core` (they are synced to the DB on deploy; roles pick them up by wildcard or by admin choice).
-3. Add `apps/api/src/modules/<module>` and register it.
+3. Add `apps/api/src/modules/<module>` (a Fastify plugin) and add it to `MODULES` in `apps/api/src/modules/index.ts`.
 4. Add translation keys to `en.json` and `hi.json` (the parity test lists anything missing).
 5. Add one entry to the client module registry (`apps/web/src/app/modules.ts`); navigation, command palette and permission-based visibility follow automatically.
 
@@ -202,7 +204,7 @@ All of these run in **one** database transaction at `READ COMMITTED` with explic
 
 **Post a purchase** — mirror image: stock in (with batch/expiry), moving-average cost update (`movingAverageCost`), supplier ledger credit, inward GST rows with ITC eligibility. The unique index on `(supplier, supplier_invoice_number, FY)` stops the same bill being entered twice.
 
-**Receive a payment** — payment row, allocations (oldest due first by default, `allocatePayment`), invoice `amount_paid`/`balance_due`/`payment_status` updates, party-ledger credit, cached balance update.
+**Receive a payment** — payment row, allocations (oldest due first by default, `allocatePayment`), invoice `amount_paid`/`balance_due`/`payment_status` updates, party-ledger credit, cached balance update. Locks are taken party first, then its open documents, then the number series, so a payment and an invoice-with-payment for the same customer never deadlock.
 
 **Stock adjustment / transfer** — never a direct balance edit: always ledger rows with a reason code, approval where configured, audit log.
 

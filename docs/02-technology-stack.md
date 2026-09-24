@@ -14,27 +14,28 @@ Supporting criteria, in order: data integrity for money and stock, cross-platfor
 | Shared domain logic | `@vyapaar/core` (pure TS) + decimal.js | 10.6 | **Built, 66 tests** |
 | Database | PostgreSQL | 16+ (tested on 16.13) | **Schema built, integration-tested** |
 | ORM / migrations | Drizzle ORM + drizzle-kit | 0.45 / 0.31 | **Built** |
-| API framework | NestJS on the Fastify adapter | 12.x | Phase 3 |
-| Validation / contracts | Zod (shared schemas) | 4.x | Phase 3 |
-| Background jobs | pg-boss (queues + cron on PostgreSQL) | 12.x | Phase 3 |
+| API framework | Fastify (plugins) + fastify-type-provider-zod | 5.12 | **Built** (Phase 3) |
+| Validation / contracts | Zod schemas in `@vyapaar/contracts`, shared by API and clients | 4.x | **Built** |
+| Background jobs | pg-boss (queues + cron on PostgreSQL); outbox rows are already written in every posting transaction | 12.x | Phase 4 |
 | Web UI | React + Vite | 19.3 / 8.3 | **Prototype built** |
 | Styling | Tailwind CSS v4 on CSS-variable design tokens | 4.3 | **Built** |
 | Accessible primitives | Radix UI (dialog, popover, tabs…) | 1.6 | **Built** |
 | Icons | Lucide | 1.x | Used |
-| Server state (client) | TanStack Query | 5.x | Phase 3 |
-| Routing (client) | TanStack Router | 1.x | Phase 3 |
+| Server state (client) | TanStack Query | 5.x | **Built** |
+| Routing (client) | TanStack Router (a minimal screen router is used today) | 1.x | Phase 4 |
 | Data grids | TanStack Table + TanStack Virtual | 9.x / 3.x | Phase 3 |
 | Offline store | IndexedDB via Dexie + service worker (vite-plugin-pwa / Workbox) | 4.x | Phase 5 |
 | Localisation | `@vyapaar/i18n` (typed keys, i18next-compatible JSON) | — | **Built** |
 | Charts | Hand-built SVG components following one chart spec | — | **Built** (dashboard) |
 | Windows desktop | Tauri 2 | 2.x | Phase 6 |
 | Android | Capacitor + ML Kit barcode scanning | 8.x | Phase 5–6 |
-| PDF | HTML/CSS templates rendered by headless Chromium (Playwright) | — | Phase 3 |
+| PDF | HTML/CSS templates rendered by headless Chromium (Playwright); the browser prints the same template today | — | Phase 4 |
 | Excel/CSV export | ExcelJS / streaming CSV | 4.x | Phase 4 |
-| Object storage | S3-compatible (AWS S3, Cloudflare R2, or MinIO when self-hosted) | — | Phase 3 |
-| Auth crypto | argon2id (password hashing), JWT (EdDSA/ES256), SHA-256 token hashes | — | Phase 3 |
-| Observability | pino logs, OpenTelemetry, Sentry | — | Phase 6 |
-| Tests | Vitest (unit + DB integration), Playwright (E2E) | 5.0 | **Unit + DB tests running** |
+| Object storage | S3-compatible (AWS S3, Cloudflare R2, or MinIO when self-hosted) | — | Phase 4 |
+| Auth crypto | argon2id (`@node-rs/argon2`), EdDSA JWT (`jose`), SHA-256 refresh/OTP hashes, AES-256-GCM field encryption | — | **Built** |
+| Observability | pino logs (built); OpenTelemetry, Sentry | — | Phase 6 |
+| Tests | Vitest (unit, DB integration, API integration against PostgreSQL), Playwright (end-to-end script) | 5.0 | **Running in CI** (E2E script run manually) |
+| Deployment | Docker multi-stage image (api, migrate, web), Compose, Caddy (TLS, same-origin `/api`) | — | **Built** |
 | CI | GitHub Actions (typecheck, tests with a Postgres service, build) | — | **Built** |
 | Package manager | pnpm workspaces | 10.x | Used |
 
@@ -54,11 +55,13 @@ Supporting criteria, in order: data integrity for money and stock, cross-platfor
 * The schema expresses check constraints, partial and trigram indexes and `NULLS NOT DISTINCT` directly; migrations are **plain SQL files** reviewed in pull requests (`packages/db/migrations`). Hand-written SQL migrations (triggers, RLS) sit in the same sequence.
 * Thin runtime (no query engine binary), which matters for cold starts and small servers.
 
-### NestJS on Fastify (API)
-* Enforces the module structure the architecture depends on (modules, providers, dependency injection), so a growing team does not slide into a tangle.
-* Guards (permissions), interceptors (audit, request context), pipes (Zod validation) and OpenAPI generation are built in.
-* Fastify adapter for throughput and low memory.
-* Alternatives considered: plain Fastify (lighter, but we would rebuild module structure and DI by hand), .NET or Go (excellent, but they break the "one engine everywhere" rule).
+### Fastify (API)
+Phase 1 planned NestJS on the Fastify adapter. While building Phase 3 we used **Fastify directly**:
+* NestJS dependency injection needs legacy decorators with `emitDecoratorMetadata`. The workspace shares packages as TypeScript source (ESM, `verbatimModuleSyntax`) run by `tsx` in development and bundled by esbuild for production; neither emits decorator metadata, so NestJS would have forced a separate compile step for every package.
+* What Nest would have given us is small in code: each module is a Fastify plugin (`ApiModule = (app, deps) => …`) registered in one list (`apps/api/src/modules/index.ts`); permission checks are `preHandler`s (`guard(deps, "invoice.cancel")`); the tenant transaction is one helper (`withTenant`); request validation and the OpenAPI document (`/api/docs` outside production) come from `fastify-type-provider-zod` with the shared contracts.
+* Dependencies are passed explicitly (`AppDeps`: config, db, token service, OTP sender, clock, field cipher), which also makes tests simple: every API test builds the real app with a test clock and an in-memory OTP sender.
+* Business flows that several modules share (numbering, stock movements, party ledger, payments, settings) live in `apps/api/src/services` and always take the caller's transaction.
+* Alternatives considered: NestJS (see above), .NET or Go (excellent, but they break the "one engine everywhere" rule).
 
 ### pg-boss (jobs) instead of Redis + BullMQ at the start
 Jobs, retries, cron schedules and the outbox all live in PostgreSQL: one fewer service to run, back up and pay for, and job enqueueing can happen inside the business transaction. Redis is added only when caching or rate-limit volume needs it.
