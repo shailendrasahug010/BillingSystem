@@ -36,9 +36,9 @@ export interface MiningOptions {
 }
 
 export function mineAssociations(baskets: readonly Basket[], options: MiningOptions = {}): AssociationRule[] {
-  const minPairCount = options.minPairCount ?? 3;
-  const minConfidence = options.minConfidence ?? 0.2;
-  const minLift = options.minLift ?? 1.2;
+  const minPairCount = options.minPairCount ?? 5;
+  const minConfidence = options.minConfidence ?? 0.25;
+  const minLift = options.minLift ?? 1.3;
   const maxPerProduct = options.maxPerProduct ?? 10;
   const maxBasketSize = options.maxBasketSize ?? 60;
 
