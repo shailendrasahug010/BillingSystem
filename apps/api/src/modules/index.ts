@@ -10,6 +10,9 @@ import { suggestionsModule } from "./invoices/suggestions.js";
 import { partiesModule } from "./parties/routes.js";
 import { paymentsModule } from "./payments/routes.js";
 import { purchasesModule } from "./purchases/routes.js";
+import { dashboardModule } from "./reports/dashboard.js";
+import { reportsModule } from "./reports/reports.js";
+import { searchModule } from "./reports/search.js";
 import { teamModule } from "./team/routes.js";
 import type { ApiModule } from "./types.js";
 
@@ -28,4 +31,7 @@ export const MODULES: ApiModule[] = [
   purchasesModule,
   inventoryModule,
   paymentsModule,
+  dashboardModule,
+  reportsModule,
+  searchModule,
 ];

@@ -658,7 +658,8 @@
     "NOT_A_CHEQUE": "This payment was not made by cheque.",
     "NO_OPEN_DOCUMENTS": "There are no unpaid bills to apply this amount to.",
     "PARTY_REQUIRED": "Select the customer or supplier.",
-    "PAYMENT_NOT_POSTED": "This payment is already {{status}}."
+    "PAYMENT_NOT_POSTED": "This payment is already {{status}}.",
+    "PERIOD_TOO_LONG": "Choose a period of at most {{maxDays}} days."
   },
   "validation": {
     "required": "This field is required",
