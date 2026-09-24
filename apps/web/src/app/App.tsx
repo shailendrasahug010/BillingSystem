@@ -41,6 +41,8 @@ const ExpensesPage = lazy(() => import("../features/expenses/ExpensesPage").then
 const EmployeesPage = lazy(() => import("../features/people/EmployeesPage").then((m) => ({ default: m.EmployeesPage })));
 const LeavePage = lazy(() => import("../features/people/LeavePage").then((m) => ({ default: m.LeavePage })));
 const PayrollPage = lazy(() => import("../features/people/PayrollPage").then((m) => ({ default: m.PayrollPage })));
+const PackingPage = lazy(() => import("../features/logistics/PackingPage").then((m) => ({ default: m.PackingPage })));
+const DispatchPage = lazy(() => import("../features/logistics/DispatchPage").then((m) => ({ default: m.DispatchPage })));
 const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 const DesignSystemPage = lazy(() => import("../features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
@@ -95,6 +97,10 @@ function Screen({ route }: { route: Route }) {
             return <SuppliersPage />;
           case "inventory":
             return <InventoryPage />;
+          case "packing":
+            return <PackingPage />;
+          case "dispatch":
+            return <DispatchPage />;
           case "reports":
             return <ReportsPage />;
           case "gst":

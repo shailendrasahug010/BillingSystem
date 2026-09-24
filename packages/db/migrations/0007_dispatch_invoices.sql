@@ -1,0 +1,1 @@
+ALTER TABLE "dispatch_orders" DROP CONSTRAINT "dispatch_orders_uq";

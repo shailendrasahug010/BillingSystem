@@ -334,7 +334,7 @@ export const dispatchOrders = pgTable(
     ...auditColumns,
   },
   (t) => [
-    unique("dispatch_orders_uq").on(t.dispatchId, t.salesOrderId),
+    // An order invoiced in parts can travel as several invoices on one trip; each invoice appears once.
     uniqueIndex("dispatch_orders_invoice_uq").on(t.dispatchId, t.invoiceId).where(sql`${t.invoiceId} is not null`),
     index("dispatch_orders_order_idx").on(t.salesOrderId),
     index("dispatch_orders_invoice_idx").on(t.invoiceId),

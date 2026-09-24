@@ -8,6 +8,7 @@ import { healthModule } from "./health.js";
 import { identityModule } from "./identity/routes.js";
 import { inventoryModule } from "./inventory/routes.js";
 import { importsModule } from "./imports/routes.js";
+import { logisticsModule } from "./logistics/routes.js";
 import { invoicesModule } from "./invoices/routes.js";
 import { suggestionsModule } from "./invoices/suggestions.js";
 import { notesModule } from "./notes/routes.js";
@@ -37,6 +38,7 @@ export const MODULES: ApiModule[] = [
   importsModule,
   invoicesModule,
   ordersModule,
+  logisticsModule,
   suggestionsModule,
   purchasesModule,
   inventoryModule,
