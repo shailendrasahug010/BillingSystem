@@ -4,7 +4,7 @@ import { useI18n } from "../../app/i18n";
 import { applyTheme, readTheme, type ThemeChoice } from "../../app/theme";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Segmented } from "../../components/ui/misc";
-import { BUSINESS } from "../../data/mock";
+import { BUSINESS } from "../../data/db";
 import { getSyncState, setOnline, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
 

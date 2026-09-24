@@ -234,12 +234,18 @@ export const partiesModule: ApiModule = async (app, deps) => {
           credit_limit: string | null;
           credit_days: number;
           route_id: string | null;
+          state_code: string;
+          address_line1: string | null;
+          pincode: string | null;
+          price_level_id: string | null;
+          category_id: string | null;
           is_active: boolean;
           created_at: string;
           overdue: string;
         }>(sql`
           select c.id, c.code, c.name, c.business_name, c.customer_type, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
-                 c.credit_days, c.route_id, c.is_active, c.created_at, coalesce(od.amount, 0)::text as overdue
+                 c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
+                 c.is_active, c.created_at, coalesce(od.amount, 0)::text as overdue
           from customers c
           left join lateral (
             select sum(i.balance_due) as amount from invoices i
@@ -264,6 +270,11 @@ export const partiesModule: ApiModule = async (app, deps) => {
       creditLimit: c.credit_limit,
       creditDays: c.credit_days,
       routeId: c.route_id,
+      stateCode: c.state_code,
+      addressLine1: c.address_line1,
+      pincode: c.pincode,
+      priceLevelId: c.price_level_id,
+      categoryId: c.category_id,
       isActive: c.is_active,
       createdAt: new Date(c.created_at).toISOString(),
     }));

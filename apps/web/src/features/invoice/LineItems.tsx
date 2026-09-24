@@ -3,7 +3,7 @@ import { Minus, Plus, ShoppingBasket, Trash, TriangleAlert } from "lucide-react"
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useI18n } from "../../app/i18n";
 import { EmptyState } from "../../components/ui/misc";
-import { productById } from "../../data/mock";
+import { productById } from "../../data/db";
 import { cn } from "../../lib/cn";
 import type { DraftLine } from "./useInvoiceDraft";
 

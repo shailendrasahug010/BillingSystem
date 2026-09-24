@@ -9,36 +9,35 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Avatar, EmptyState } from "../../components/ui/misc";
-import { customerById, PRODUCTS, productById, TODAY } from "../../data/mock";
-import { customerInsight, customerInvoices, customerPayments, useStoreVersion } from "../../data/store";
+import { customerById, PRODUCTS, productById, TODAY } from "../../data/db";
+import { useCustomerInsight } from "../../data/hooks";
+import { useStoreVersion } from "../../data/store";
+import { useCustomerHistory } from "./useCustomerHistory";
 import { cn } from "../../lib/cn";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 
-const orderMultiples = new Map(PRODUCTS.map((p) => [p.id, { id: p.id, name: p.name, active: true, stockQty: p.stock, orderMultiple: p.caseSize }]));
 
 export function CustomerProfilePage({ customerId }: { customerId: string }) {
   const { t, money, compact, date, locale } = useI18n();
   const { navigate } = useRouter();
-  useStoreVersion();
+  const version = useStoreVersion();
   const customer = customerById.get(customerId);
-  const insight = customer ? customerInsight(customer.id) : null;
-  const invoices = useMemo(() => (customer ? [...customerInvoices(customer.id)].reverse() : []), [customer]);
-  const payments = useMemo(() => (customer ? [...customerPayments(customer.id)].reverse() : []), [customer]);
-
-  const ledger = useMemo(() => {
-    if (!customer) return [];
-    const entries = [
-      ...customerInvoices(customer.id).map((i) => ({ date: i.date, key: `i${i.id}`, label: `${t("nav.invoices")} ${i.number}`, debit: i.total, credit: 0 })),
-      ...customerPayments(customer.id).map((p) => ({ date: p.date, key: `p${p.id}`, label: `${t(`paymentMethod.${p.method}`)} ${p.number}${p.reference ? ` · ${p.reference}` : ""}`, debit: 0, credit: p.amount })),
-    ].sort((a, b) => a.date.localeCompare(b.date) || (a.debit ? -1 : 1));
-    let bal = customer.openingBalance;
-    return entries.map((e) => ({ ...e, balance: (bal += e.debit - e.credit) })).reverse().slice(0, 40);
-  }, [customer, t]);
+  const insight = useCustomerInsight(customer ? customer.id : null);
+  const { invoices, payments, ledger } = useCustomerHistory(customerId);
+  const orderMultiples = useMemo(
+    () => new Map(PRODUCTS.map((p) => [p.id, { id: p.id, name: p.name, active: true, stockQty: p.stock, orderMultiple: p.caseSize }])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version],
+  );
+  const productName = (id: string) => {
+    const p = productById.get(id);
+    return p ? (locale === "hi" ? p.nameHi : p.name) : "—";
+  };
 
   if (!customer || !insight) return <EmptyState title={t("empty.generic")} />;
   const state = findState(customer.stateCode);
   const top = [...insight.stats.values()]
-    .map((s) => ({ id: s.productId, label: locale === "hi" ? productById.get(s.productId)!.nameHi : productById.get(s.productId)!.name, amount: s.totalQty.toNumber() * (s.lastRate?.toNumber() ?? 0) }))
+    .map((s) => ({ id: s.productId, label: productName(s.productId), amount: s.totalQty.toNumber() * (s.lastRate?.toNumber() ?? 0) }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 8);
   const reorder = buildReorderList({ stats: insight.stats, products: orderMultiples }).slice(0, 8);
@@ -175,9 +174,9 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               </thead>
               <tbody className="num">
                 {invoices.slice(0, 30).map((i) => {
-                  const bal = i.total - i.paid;
+                  const bal = i.cancelled ? 0 : i.total - i.paid;
                   const overdue = bal > 0.5 && i.dueDate < TODAY;
-                  const status = bal <= 0.5 ? "paid" : overdue ? "overdue" : i.paid > 0 ? "partial" : "unpaid";
+                  const status = i.cancelled ? "cancelled" : bal <= 0.5 ? "paid" : overdue ? "overdue" : i.paid > 0 ? "partial" : "unpaid";
                   return (
                     <tr key={i.id} onClick={() => navigate({ name: "invoice-view", invoiceId: i.id })} className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2">
                       <td className="px-4 py-2.5 font-mono text-[12.5px] text-accent">{i.number}</td>
@@ -187,7 +186,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
                       <td className="px-3 py-2.5 text-right text-ink">{bal > 0.5 ? money(bal) : "—"}</td>
                       <td className="px-4 py-2.5">
                         <Badge tone={status === "paid" ? "good" : status === "overdue" ? "danger" : status === "partial" ? "warn" : "neutral"} dot>
-                          {t(`status.payment.${status}`)}
+                          {status === "cancelled" ? t("status.document.cancelled") : t(`status.payment.${status}`)}
                         </Badge>
                       </td>
                     </tr>
@@ -221,7 +220,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
                         {t(`paymentMethod.${p.method}`)}
                         {p.reference && <span className="ml-2 font-mono text-[12px] text-ink-3">{p.reference}</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-medium text-good">{money(p.amount)}</td>
+                      <td className={cn("px-4 py-2.5 text-right font-medium", p.cancelled ? "text-ink-3 line-through" : "text-good")}>{money(p.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -249,7 +248,9 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
                     <td className="px-3 py-2.5 text-ink">{e.label}</td>
                     <td className="px-3 py-2.5 text-right">{e.debit ? money(e.debit) : ""}</td>
                     <td className="px-3 py-2.5 text-right text-good">{e.credit ? money(e.credit) : ""}</td>
-                    <td className="px-4 py-2.5 text-right font-medium">{money(e.balance)} Dr</td>
+                    <td className="px-4 py-2.5 text-right font-medium">
+                      {money(Math.abs(e.balance))} {e.balance < 0 ? "Cr" : "Dr"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -274,7 +275,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
                   .sort((a, b) => b.orderCount - a.orderCount)
                   .map((s) => (
                     <tr key={s.productId} className="border-b border-line last:border-b-0">
-                      <td className="px-4 py-2.5 text-ink">{locale === "hi" ? productById.get(s.productId)!.nameHi : productById.get(s.productId)!.name}</td>
+                      <td className="px-4 py-2.5 text-ink">{productName(s.productId)}</td>
                       <td className="px-3 py-2.5 text-right">{s.orderCount}</td>
                       <td className="px-3 py-2.5 text-right">{s.totalQty.toString()}</td>
                       <td className="px-3 py-2.5 text-ink-2">

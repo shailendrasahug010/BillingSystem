@@ -6,6 +6,10 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
+import { translateError } from "@vyapaar/i18n";
+import { upsertCustomer, type CustomerRow } from "../../data/live";
+import { LIVE } from "../../data/source";
+import { api, ApiError } from "../../lib/api";
 
 /**
  * Only the fields a counter clerk needs to start billing; everything else
@@ -13,8 +17,11 @@ import { useToast } from "../../components/ui/Toast";
  * full profile. Validation runs as you type, with specific messages: a GSTIN
  * typo is caught by its check digit, and a GSTIN from another state is flagged.
  */
-export function AddCustomerDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v: boolean): void }) {
-  const { t, locale } = useI18n();
+export function AddCustomerDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange(v: boolean): void; onCreated?(id: string): void }) {
+  const i18n = useI18n();
+  const { t, locale } = i18n;
+  const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState<ApiError | null>(null);
   const toast = useToast();
   const [type, setType] = useState<"b2b" | "b2c">("b2b");
   const [form, setForm] = useState({ businessName: "", name: "", mobile: "", gstin: "", stateCode: "23", pincode: "", creditLimit: "" });
@@ -37,7 +44,36 @@ export function AddCustomerDialog({ open, onOpenChange }: { open: boolean; onOpe
     gstin: type === "b2b" ? issueText(gstinIssues, "gstin") : null,
   };
   const valid = Object.values(errors).every((e) => !e);
-  const show = (k: keyof typeof errors) => (touched[k] ? errors[k] : null);
+  const serverFieldError = (k: string) => (serverError && serverError.field === k ? translateError(i18n, serverError) : null);
+  const show = (k: keyof typeof errors) => (touched[k] ? errors[k] : null) ?? serverFieldError(k);
+
+  /** Live mode: the server validates again (GSTIN checksum and state, duplicates) and assigns the code. */
+  const create = async () => {
+    setBusy(true);
+    setServerError(null);
+    try {
+      const res = await api.post<CustomerRow & { summary: { overdue: string } }>("/customers", {
+        name: form.name.trim() || form.businessName.trim(),
+        businessName: form.businessName.trim(),
+        customerType: type,
+        mobile: form.mobile,
+        stateCode: form.stateCode,
+        ...(type === "b2b" && form.gstin ? { gstin: form.gstin } : {}),
+        ...(form.pincode ? { pincode: form.pincode } : {}),
+        ...(form.creditLimit ? { creditLimit: form.creditLimit } : {}),
+      });
+      const saved = upsertCustomer({ ...res, overdue: res.summary.overdue });
+      toast({ tone: "success", title: t("customer.saved"), body: `${saved.code} · ${saved.businessName}` });
+      onCreated?.(saved.id);
+      onOpenChange(false);
+      setForm({ businessName: "", name: "", mobile: "", gstin: "", stateCode: form.stateCode, pincode: "", creditLimit: "" });
+      setTouched({});
+    } catch (e) {
+      setServerError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Dialog
@@ -51,9 +87,11 @@ export function AddCustomerDialog({ open, onOpenChange }: { open: boolean; onOpe
           <Button onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             variant="primary"
+            disabled={busy}
             onClick={() => {
               setTouched({ businessName: true, mobile: true, pincode: true, gstin: true });
               if (!valid) return;
+              if (LIVE) return void create();
               toast({ tone: "success", title: t("customer.saved"), body: form.businessName });
               onOpenChange(false);
             }}
@@ -64,6 +102,11 @@ export function AddCustomerDialog({ open, onOpenChange }: { open: boolean; onOpe
       }
     >
       <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={(e) => e.preventDefault()}>
+        {serverError && !serverError.field && (
+          <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger sm:col-span-2" role="alert">
+            {translateError(i18n, serverError)}
+          </p>
+        )}
         <div className="sm:col-span-2">
           <Segmented
             label={t("customer.type")}

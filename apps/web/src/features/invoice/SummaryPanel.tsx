@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Kbd } from "../../components/ui/misc";
-import { BUSINESS } from "../../data/mock";
+import { BUSINESS } from "../../data/db";
 import { cn } from "../../lib/cn";
 import type { DraftView } from "./useInvoiceDraft";
 

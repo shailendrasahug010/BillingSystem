@@ -93,7 +93,19 @@ export interface SessionResponse {
 
 export interface MeResponse {
   user: SessionResponse["user"];
-  business: (BusinessSummary & { financialYearStartMonth: number; timeZone: string; gstRegistration: string }) | null;
+  business:
+    | (BusinessSummary & {
+        financialYearStartMonth: number;
+        timeZone: string;
+        gstRegistration: string;
+        addressLine1: string | null;
+        addressLine2: string | null;
+        city: string | null;
+        pincode: string | null;
+        phone: string | null;
+        email: string | null;
+      })
+    | null;
   permissions: string[];
   settings: Record<string, unknown>;
   today: string;

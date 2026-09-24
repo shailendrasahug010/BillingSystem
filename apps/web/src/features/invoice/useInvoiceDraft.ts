@@ -1,6 +1,7 @@
 import {
   addDays,
   calculateDocument,
+  determineSupplyType,
   DomainError,
   evaluateCredit,
   NO_TAX,
@@ -13,11 +14,13 @@ import {
   type Suggestion,
   type ReorderRow,
   type CreditCheck,
+  type PartyGstRegistration,
   type SuggestionProduct,
 } from "@vyapaar/core";
 import { useMemo, useReducer, type Dispatch } from "react";
-import { BUSINESS, customerById, PRODUCTS, productById, TODAY } from "../../data/mock";
-import { customerInsight, storeAssociations, type CustomerInsight } from "../../data/store";
+import { BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
+import { useCustomerInsight } from "../../data/hooks";
+import { storeAssociations, useStoreVersion, type CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 
 export interface DraftLine {
@@ -50,8 +53,25 @@ type Action =
 
 let lineSeq = 0;
 
+/**
+ * The customer's rate-list price, exactly as the server prices it: the price
+ * for the customer's rate list (else the default list), else the product's
+ * selling price.
+ */
 export function rateFor(product: Product, customer: Customer | null): number {
+  if (product.prices) {
+    const level = customer?.priceLevelId ?? WORKSPACE.defaultPriceLevelId;
+    return (level ? product.prices[level] : undefined) ?? product.rate;
+  }
   return customer?.priceLevel === "wholesale" ? product.wholesaleRate : product.rate;
+}
+
+function discountFor(product: Product, customer: Customer | null): number {
+  if (product.discounts) {
+    const level = customer?.priceLevelId ?? WORKSPACE.defaultPriceLevelId;
+    return (level ? product.discounts[level] : undefined) ?? 0;
+  }
+  return customer?.priceLevel === "wholesale" ? 2 : 0;
 }
 
 function reducer(state: Draft, action: Action): Draft {
@@ -78,7 +98,7 @@ function reducer(state: Draft, action: Action): Draft {
       const key = `l${lineSeq}`;
       return {
         ...state,
-        lines: [...state.lines, { key, productId: product.id, qty, rate: rateFor(product, customer), discountPercent: customer?.priceLevel === "wholesale" ? 2 : 0 }],
+        lines: [...state.lines, { key, productId: product.id, qty, rate: rateFor(product, customer), discountPercent: discountFor(product, customer) }],
         focusKey: key,
       };
     }
@@ -101,9 +121,6 @@ function initialDraft(customerId: string | null): Draft {
   return { customerId, date: TODAY, lines: [], received: "", method: "cash", focusKey: null };
 }
 
-const suggestionProducts: Map<string, SuggestionProduct> = new Map(
-  PRODUCTS.map((p) => [p.id, { id: p.id, name: p.name, active: true, stockQty: p.stock, minStock: p.minStock, orderMultiple: p.caseSize }]),
-);
 
 export interface DraftView {
   draft: Draft;
@@ -122,28 +139,41 @@ export interface DraftView {
 
 export function useInvoiceDraft(initialCustomerId: string | null = null): DraftView {
   const [draft, dispatch] = useReducer(reducer, initialCustomerId, initialDraft);
+  const version = useStoreVersion();
   const customer = draft.customerId ? customerById.get(draft.customerId) ?? null : null;
-  const insight = useMemo(() => (customer ? customerInsight(customer.id) : null), [customer]);
+  const insight = useCustomerInsight(customer?.id ?? null);
   const placeOfSupply = customer?.stateCode ?? BUSINESS.stateCode;
-  const supplyType = placeOfSupply === BUSINESS.stateCode ? "intra_state" : "inter_state";
+  const supplyType = determineSupplyType({
+    supplierStateCode: BUSINESS.stateCode,
+    placeOfSupplyStateCode: placeOfSupply,
+    ...(customer?.gstRegistration ? { recipientRegistration: customer.gstRegistration as PartyGstRegistration } : {}),
+  });
+  const suggestionProducts = useMemo<Map<string, SuggestionProduct>>(
+    () => new Map(PRODUCTS.map((p) => [p.id, { id: p.id, name: p.name, active: p.active ?? true, stockQty: p.stock, minStock: p.minStock, orderMultiple: p.caseSize }])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version],
+  );
 
   const { totals, error } = useMemo(() => {
     if (draft.lines.length === 0) return { totals: null, error: null };
     try {
+      // Same inputs as the server (rules, round-off, registration), so the totals shown are the totals posted.
       const t = calculateDocument({
         supplyType,
-        chargeTax: true,
+        chargeTax: WORKSPACE.chargeTax,
+        roundOff: WORKSPACE.roundOff,
         amountPaid: draft.received.trim() === "" ? 0 : Number(draft.received) || 0,
         lines: draft.lines.map((l) => {
           const p = productById.get(l.productId)!;
           const tax =
             p.taxCategory.kind === "taxable"
-              ? resolveTax(p.taxCategory, { date: draft.date, unitValue: l.rate })
+              ? resolveTax(p.taxCategory, { date: draft.date, unitValue: l.rate, unitValueIncludesTax: Boolean(p.pricesIncludeTax) })
               : { ...NO_TAX, kind: p.taxCategory.kind };
           return {
             key: l.key,
             qty: l.qty > 0 ? l.qty : 0.001,
             rate: l.rate >= 0 ? l.rate : 0,
+            rateIncludesTax: Boolean(p.pricesIncludeTax),
             discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)),
             tax,
             hsnCode: p.hsn,
@@ -164,16 +194,16 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
         asOf: TODAY,
         summary: insight.summary,
         stats: insight.stats,
-        associations: storeAssociations(),
+        associations: insight.storeAssociations ?? storeAssociations(),
         customerAssociations: insight.customerAssociations,
         cartProductIds: draft.lines.map((l) => l.productId),
         products: suggestionProducts,
       },
       { limit: 24 },
     );
-  }, [insight, draft.lines]);
+  }, [insight, draft.lines, suggestionProducts]);
 
-  const reorder = useMemo(() => (insight ? buildReorderList({ stats: insight.stats, products: suggestionProducts }) : []), [insight]);
+  const reorder = useMemo(() => (insight ? buildReorderList({ stats: insight.stats, products: suggestionProducts }) : []), [insight, suggestionProducts]);
 
   const credit = useMemo(() => {
     if (!customer || !insight || !totals) return null;
@@ -183,6 +213,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
       newAmount: totals.balanceDue,
       openDocuments: insight.openInvoices.map((i) => ({ id: i.id, number: i.number, date: i.date, dueDate: i.dueDate, balance: (i.total - i.paid).toFixed(2) })),
       asOf: TODAY,
+      policy: WORKSPACE.creditPolicy,
     });
   }, [customer, insight, totals]);
 

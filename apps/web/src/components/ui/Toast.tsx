@@ -1,8 +1,8 @@
-import { CircleCheckBig, CloudOff, Info } from "lucide-react";
+import { CircleCheckBig, CloudOff, Info, TriangleAlert } from "lucide-react";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
-type ToastTone = "success" | "info" | "offline";
+type ToastTone = "success" | "info" | "offline" | "danger";
 interface ToastItem {
   id: number;
   tone: ToastTone;
@@ -28,14 +28,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         className="pointer-events-none fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-[60] flex flex-col items-center gap-2 px-4 lg:bottom-6 lg:items-end lg:px-6"
       >
         {items.map((t) => {
-          const Icon = t.tone === "success" ? CircleCheckBig : t.tone === "offline" ? CloudOff : Info;
+          const Icon = t.tone === "success" ? CircleCheckBig : t.tone === "offline" ? CloudOff : t.tone === "danger" ? TriangleAlert : Info;
           return (
             <div
               key={t.id}
               className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-line bg-surface px-4 py-3 shadow-pop animate-pop"
               role="status"
             >
-              <Icon size={18} className={cn("mt-0.5 shrink-0", t.tone === "success" ? "text-good" : t.tone === "offline" ? "text-warn" : "text-accent")} />
+              <Icon size={18} className={cn("mt-0.5 shrink-0", t.tone === "success" ? "text-good" : t.tone === "offline" ? "text-warn" : t.tone === "danger" ? "text-danger" : "text-accent")} />
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-medium text-ink">{t.title}</p>
                 {t.body && <p className="text-[13px] text-ink-3">{t.body}</p>}

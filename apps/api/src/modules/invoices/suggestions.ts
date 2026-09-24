@@ -1,5 +1,7 @@
 import {
   addDays,
+  daysBetween,
+  paymentBehaviour,
   buildReorderList,
   computeCustomerStats,
   mineAssociations,
@@ -56,6 +58,93 @@ async function storeAssociations(tx: Tx, businessId: string, since: string): Pro
 
 export const suggestionsModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
+
+  /**
+   * Everything the billing screen and the customer profile show about a
+   * customer's buying: per-product purchase statistics, payment behaviour,
+   * open bills and association rules. Clients feed it to the same suggestion
+   * engine (@vyapaar/core) the server uses, so offline and online agree.
+   */
+  r.get(
+    "/customers/:id/insight",
+    { preHandler: guard(deps, "customer.view"), schema: { tags: ["customers"], params: Params } },
+    async (request) => {
+      const ctx: RequestCtx = request.ctx;
+      const today = deps.clock.today(ctx.timeZone);
+      return withTenant(deps.db, ctx, async (tx) => {
+        const [customer] = await tx
+          .select({ id: schema.customers.id, balance: schema.customers.balance })
+          .from(schema.customers)
+          .where(and(eq(schema.customers.id, request.params.id), eq(schema.customers.businessId, ctx.businessId), isNull(schema.customers.deletedAt)));
+        if (!customer) throw notFound("customer");
+        const windowDays = (await getSettings(tx, ctx.businessId, ["suggestions.window_days"] as const))["suggestions.window_days"];
+        const since = addDays(today, -windowDays);
+        const invoices = (
+          await tx.execute<{ id: string; number: string; date: string; due_date: string; total: string; paid: string; balance: string; settled_on: string | null }>(sql`
+            select i.id, i.invoice_number as number, i.invoice_date::text as date, coalesce(i.due_date, i.invoice_date)::text as due_date,
+                   i.grand_total::text as total, i.amount_paid::text as paid, i.balance_due::text as balance,
+                   case when i.balance_due = 0 then (
+                     select max(p.payment_date)::text from payment_allocations a join payments p on p.id = a.payment_id
+                     where a.invoice_id = i.id and a.reversed_at is null) end as settled_on
+            from invoices i
+            where i.business_id = ${ctx.businessId} and i.customer_id = ${customer.id} and i.status = 'posted'
+              and (i.invoice_date >= ${since} or i.balance_due > 0)
+            order by i.invoice_date`)
+        ).rows;
+        const lines = (
+          await tx.execute<{ invoice_id: string; invoice_date: string; product_id: string; qty: string; rate: string }>(sql`
+            select i.id as invoice_id, i.invoice_date::text as invoice_date, ii.product_id, ii.qty_base::text as qty,
+                   (ii.taxable_value / nullif(ii.qty_base, 0))::numeric(15,4)::text as rate
+            from invoices i join invoice_items ii on ii.invoice_id = i.id
+            where i.business_id = ${ctx.businessId} and i.customer_id = ${customer.id} and i.status = 'posted'
+              and i.invoice_date >= ${since} and i.invoice_date <= ${today}`)
+        ).rows;
+        const purchaseLines: PurchaseLine[] = lines.map((l) => ({ invoiceId: l.invoice_id, date: l.invoice_date, productId: l.product_id, qty: l.qty, ...(l.rate ? { rate: l.rate } : {}) }));
+        const { summary, products } = computeCustomerStats(purchaseLines, { asOf: today, windowDays });
+        const byInvoice = new Map<string, string[]>();
+        for (const l of purchaseLines) byInvoice.set(l.invoiceId, [...(byInvoice.get(l.invoiceId) ?? []), l.productId]);
+        const customerAssociations = mineAssociations([...byInvoice].map(([id, productIds]) => ({ id, productIds })), { minPairCount: 3, minConfidence: 0.6, minLift: 1.05 });
+        const inWindow = invoices.filter((i) => i.date >= since);
+        const open = invoices.filter((i) => Number(i.balance) > 0);
+        const overdue = open.filter((i) => i.due_date < today);
+        const totalSales = inWindow.reduce((acc, i) => acc + Number(i.total), 0);
+        return {
+          asOf: today,
+          windowDays,
+          summary,
+          stats: [...products.values()].map((s) => ({
+            productId: s.productId,
+            orderCount: s.orderCount,
+            orderShare: s.orderShare,
+            totalQty: s.totalQty.toString(),
+            avgQty: s.avgQty.toString(),
+            lastQty: s.lastQty.toString(),
+            lastRate: s.lastRate?.toString() ?? null,
+            firstPurchasedOn: s.firstPurchasedOn,
+            lastPurchasedOn: s.lastPurchasedOn,
+            daysSinceLast: s.daysSinceLast,
+            typicalIntervalDays: s.typicalIntervalDays,
+            recentQtys: s.recentQtys.map((q) => q.toString()),
+          })),
+          totalSales: totalSales.toFixed(2),
+          invoiceCount: inWindow.length,
+          avgOrderValue: inWindow.length ? (totalSales / inWindow.length).toFixed(2) : "0.00",
+          outstanding: customer.balance,
+          overdue: overdue.reduce((acc, i) => acc + Number(i.balance), 0).toFixed(2),
+          overdueCount: overdue.length,
+          oldestOverdueDays: overdue.length ? Math.max(...overdue.map((i) => daysBetween(i.due_date, today))) : 0,
+          lastPurchase: summary.lastInvoiceOn,
+          behaviour: paymentBehaviour(
+            inWindow.map((i) => ({ date: i.date, dueDate: i.due_date, settledOn: i.settled_on })),
+            today,
+          ),
+          openInvoices: open.map((i) => ({ id: i.id, number: i.number, date: i.date, dueDate: i.due_date, total: i.total, paid: i.paid, balance: i.balance })),
+          customerAssociations,
+          storeAssociations: await storeAssociations(tx, ctx.businessId, addDays(today, -180)),
+        };
+      });
+    },
+  );
 
   /**
    * What this customer is likely to need now, with the reasons (reorder due,

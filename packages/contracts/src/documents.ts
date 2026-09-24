@@ -169,6 +169,8 @@ export const SuggestionQuery = z.object({
 
 export const DashboardQuery = z.object({
   range: z.enum(["today", "yesterday", "last7", "thisMonth", "lastMonth", "thisFy", "custom"]).default("thisMonth"),
+  /** Trend buckets: 30 days, 12 weeks, 6 months or 3 financial years. */
+  grain: z.enum(["daily", "weekly", "monthly", "yearly"]).default("daily"),
   from: IsoDate.optional(),
   to: IsoDate.optional(),
 });

@@ -4,7 +4,7 @@ import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { Badge, type Tone } from "../../components/ui/Badge";
 import { Avatar, ProgressBar } from "../../components/ui/misc";
-import { TODAY } from "../../data/mock";
+import { TODAY } from "../../data/db";
 import type { CustomerInsight } from "../../data/store";
 import type { Customer } from "../../data/types";
 import { cn } from "../../lib/cn";

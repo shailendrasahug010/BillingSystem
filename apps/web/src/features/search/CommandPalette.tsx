@@ -1,11 +1,15 @@
 import { normalizeSearchText, searchProducts } from "@vyapaar/core";
 import { CornerDownLeft, FileText, Package, Search, Users, Zap } from "lucide-react";
 import { Dialog as D } from "radix-ui";
-import { useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { MODULES } from "../../app/modules";
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
-import { customerById, INVOICES, PRODUCTS } from "../../data/mock";
+import { customerById, INVOICES, PRODUCTS } from "../../data/db";
+import { LIVE } from "../../data/source";
+import { useStoreVersion } from "../../data/store";
+import { api } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { searchCustomers } from "../invoice/CustomerPicker";
 
@@ -18,7 +22,12 @@ interface Item {
   route: Route;
 }
 
-const searchable = PRODUCTS.map((p) => ({ ...p, barcodes: [p.barcode], aliases: [p.nameHi, ...p.aliases], active: true }));
+interface RemoteInvoice {
+  id: string;
+  invoiceNumber: string;
+  partyName: string;
+  grandTotal: string;
+}
 
 /**
  * Global search (Ctrl+K): customers by name / mobile / GSTIN, products by name
@@ -31,6 +40,24 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const { navigate } = useRouter();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const version = useStoreVersion();
+  // Customers and products are searched in the local workspace (instant, works offline);
+  // invoices are looked up on the server.
+  const searchable = useMemo(
+    () => PRODUCTS.map((p) => ({ ...p, barcodes: [p.barcode], aliases: [p.nameHi, ...p.aliases], active: true })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version],
+  );
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const remote = useQuery({
+    queryKey: ["search", debounced],
+    queryFn: () => api.get<{ invoices?: RemoteInvoice[] }>("/search", { q: debounced, limit: 5 }),
+    enabled: LIVE && debounced.length >= 2,
+  });
 
   const items = useMemo<Item[]>(() => {
     const q = normalizeSearchText(query);
@@ -59,19 +86,28 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       route: { name: "products" },
     }));
     const needle = query.trim().toLowerCase();
-    const invoices: Item[] = INVOICES.filter((i) => i.number.toLowerCase().includes(needle))
-      .slice(-5)
-      .reverse()
-      .map((i) => ({
-        id: `i-${i.id}`,
-        group: "invoices",
-        title: i.number,
-        sub: `${customerById.get(i.customerId)?.businessName} · ${money(i.total)}`,
-        icon: <FileText size={16} />,
-        route: { name: "invoice-view", invoiceId: i.id },
-      }));
+    const invoices: Item[] = LIVE
+      ? (remote.data?.invoices ?? []).map((i) => ({
+          id: `i-${i.id}`,
+          group: "invoices" as const,
+          title: i.invoiceNumber,
+          sub: `${i.partyName} · ${money(Number(i.grandTotal))}`,
+          icon: <FileText size={16} />,
+          route: { name: "invoice-view" as const, invoiceId: i.id },
+        }))
+      : INVOICES.filter((i) => i.number.toLowerCase().includes(needle))
+          .slice(-5)
+          .reverse()
+          .map((i) => ({
+            id: `i-${i.id}`,
+            group: "invoices" as const,
+            title: i.number,
+            sub: `${customerById.get(i.customerId)?.businessName} · ${money(i.total)}`,
+            icon: <FileText size={16} />,
+            route: { name: "invoice-view" as const, invoiceId: i.id },
+          }));
     return [...customers, ...products, ...invoices, ...actions.slice(0, 4)];
-  }, [query, t, money, locale]);
+  }, [query, t, money, locale, searchable, remote.data]);
 
   const go = (item: Item) => {
     navigate(item.route);

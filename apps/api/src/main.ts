@@ -7,7 +7,11 @@ import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
 
 const config = loadConfig();
-const { db, pool } = createDb(config.databaseUrl, { max: config.databasePoolMax });
+let log: ((msg: string, err: Error) => void) | null = null;
+const { db, pool } = createDb(config.databaseUrl, {
+  max: config.databasePoolMax,
+  onError: (err) => (log ? log("idle database connection lost; it will be replaced", err) : console.error(err.message)),
+});
 const tokens = await createTokenService(config);
 const app = await buildApp({
   config,
@@ -18,6 +22,8 @@ const app = await buildApp({
   clock: { now: () => new Date(), today: (tz) => todayIn(tz ?? "Asia/Kolkata") },
   cipher: createFieldCipher(config.dataEncryptionKey, config.env),
 });
+
+log = (msg, err) => app.log.warn({ err: err.message }, msg);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");

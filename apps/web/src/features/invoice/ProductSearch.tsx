@@ -4,20 +4,12 @@ import { forwardRef, useId, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
 import { Kbd } from "../../components/ui/misc";
-import { PRODUCTS } from "../../data/mock";
+import { useSearchableProducts } from "../../data/hooks";
 import type { CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 import { cn } from "../../lib/cn";
 import { rateFor } from "./useInvoiceDraft";
 
-const searchable = PRODUCTS.map((p) => ({
-  ...p,
-  barcodes: [p.barcode],
-  aliases: [p.nameHi, ...p.aliases],
-  sku: p.code,
-  active: true,
-  inStock: p.stock > 0,
-}));
 
 /**
  * Product search runs locally over the cached catalogue (instant, works
@@ -33,6 +25,7 @@ export const ProductSearch = forwardRef<
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listId = useId();
+  const searchable = useSearchableProducts();
 
   const affinity = useMemo(() => {
     const m = new Map<string, number>();
@@ -42,7 +35,7 @@ export const ProductSearch = forwardRef<
 
   const hits = useMemo(
     () => (query.trim() ? searchProducts(query, searchable, { customerAffinity: affinity, limit: 8 }) : []),
-    [query, affinity],
+    [query, affinity, searchable],
   );
 
   const add = (p: Product) => {

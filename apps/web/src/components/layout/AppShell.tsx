@@ -20,7 +20,9 @@ import { GROUP_LABELS, MODULES, moduleForRoute, type ModuleDef } from "../../app
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
 import { applyTheme, readTheme, type ThemeChoice } from "../../app/theme";
-import { BUSINESS, ORDERS } from "../../data/mock";
+import { useSession } from "../../app/session";
+import { BUSINESS, ORDERS, WORKSPACE } from "../../data/db";
+import { LIVE } from "../../data/source";
 import { getSyncState, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
 import { Dialog } from "../ui/Dialog";
@@ -172,6 +174,37 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const [moreOpen, setMoreOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const pendingOrders = ORDERS.filter((o) => o.status === "pending").length;
+  const session = useSession();
+  const userName = LIVE ? (session.user?.name ?? "") : "Anil Sharma";
+  const initials = userName
+    .split(/\s+/)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const roleLabel = LIVE ? WORKSPACE.role.replace(/^\w/, (c) => c.toUpperCase()) : "Admin";
+  /** Live mode: switch business (when there are several) and sign out. */
+  const accountActions = LIVE ? (
+    <div className="flex flex-col gap-1 border-t border-line pt-2">
+      {session.businesses.length > 1 && (
+        <select
+          aria-label={t("auth.switchBusiness")}
+          value={WORKSPACE.businessId ?? ""}
+          onChange={(e) => void session.switchBusiness(e.target.value)}
+          className="h-9 w-full rounded-lg border border-line bg-surface px-2 text-[13px] text-ink"
+        >
+          {session.businesses.map((b) => (
+            <option key={b.id} value={b.id} disabled={b.status === "suspended" || b.status === "closed"}>
+              {b.tradeName ?? b.legalName}
+            </option>
+          ))}
+        </select>
+      )}
+      <button type="button" onClick={() => void session.logout()} className="h-9 rounded-lg px-2 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
+        {t("auth.signOut")}
+      </button>
+    </div>
+  ) : null;
 
   const quickActions: Array<{ label: string; route: Route; icon: ReactNode }> = [
     { label: t("dashboard.actions.createInvoice"), route: { name: "invoice-new" }, icon: <Receipt size={18} /> },
@@ -199,16 +232,17 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         </div>
         <div className="mx-3 mb-3 rounded-xl border border-line bg-surface-2 px-3 py-2.5">
           <p className="truncate text-[13px] font-semibold text-ink">{BUSINESS.name}</p>
-          <p className="truncate font-mono text-[11px] text-ink-3">GSTIN {BUSINESS.gstin}</p>
+          {BUSINESS.gstin && <p className="truncate font-mono text-[11px] text-ink-3">GSTIN {BUSINESS.gstin}</p>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           <NavList />
         </div>
+        {accountActions && <div className="px-3 pb-2">{accountActions}</div>}
         <div className="flex items-center gap-3 border-t border-line px-4 py-3">
-          <span className="inline-flex size-8 items-center justify-center rounded-full bg-surface-3 font-display text-[12px] font-semibold text-ink-2">AS</span>
+          <span className="inline-flex size-8 items-center justify-center rounded-full bg-surface-3 font-display text-[12px] font-semibold text-ink-2">{initials}</span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-medium text-ink">Anil Sharma</p>
-            <p className="text-[11.5px] text-ink-3">Admin</p>
+            <p className="truncate text-[13px] font-medium text-ink">{userName}</p>
+            <p className="text-[11.5px] text-ink-3">{roleLabel}</p>
           </div>
           <button
             type="button"
@@ -273,9 +307,11 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           </div>
         </header>
 
-        <div className="border-b border-line bg-accent-soft/60 px-4 py-1.5 text-center text-[12px] text-accent-ink lg:px-6">
-          {t("app.prototypeBanner")}
-        </div>
+        {!LIVE && (
+          <div className="border-b border-line bg-accent-soft/60 px-4 py-1.5 text-center text-[12px] text-accent-ink lg:px-6">
+            {t("app.prototypeBanner")}
+          </div>
+        )}
 
         <main className="mx-auto w-full max-w-[1480px] flex-1 px-4 pt-5 pb-28 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12">{children}</main>
       </div>
@@ -310,11 +346,12 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         })}
       </nav>
 
-      <Dialog open={moreOpen} onOpenChange={setMoreOpen} title={BUSINESS.name} description={`GSTIN ${BUSINESS.gstin}`} closeLabel={t("common.close")}>
+      <Dialog open={moreOpen} onOpenChange={setMoreOpen} title={BUSINESS.name} {...(BUSINESS.gstin ? { description: `GSTIN ${BUSINESS.gstin}` } : {})} closeLabel={t("common.close")}>
         <div className="mb-4 sm:hidden">
           <LanguageToggle />
         </div>
         <NavList onNavigate={() => setMoreOpen(false)} />
+        {accountActions && <div className="mt-3">{accountActions}</div>}
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen} title={t("dashboard.quickActions")} closeLabel={t("common.close")}>

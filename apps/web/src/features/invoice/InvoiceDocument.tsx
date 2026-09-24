@@ -1,7 +1,7 @@
 import { amountInWords, findState } from "@vyapaar/core";
 import { createTranslator, formatAmount, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
-import { BUSINESS, customerById, invoiceTotals, productById } from "../../data/mock";
-import type { Invoice } from "../../data/types";
+import { BUSINESS } from "../../data/db";
+import type { PrintableInvoice } from "./printable";
 
 /**
  * Printable A4 tax invoice. It is paper, so it keeps a fixed black-on-white
@@ -9,19 +9,19 @@ import type { Invoice } from "../../data/types";
  * can print English invoices and vice versa). In production the same template
  * renders to PDF on the server (headless Chromium, correct Devanagari shaping).
  */
-export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale: LocaleCode }) {
+export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice; locale: LocaleCode }) {
   const { t } = createTranslator(locale);
-  const customer = customerById.get(invoice.customerId)!;
-  const totals = invoiceTotals(invoice.lines, invoice.date, customer);
-  const intra = customer.stateCode === BUSINESS.stateCode;
-  const pos = findState(customer.stateCode);
+  const customer = invoice.buyer;
+  const totals = invoice;
+  const intra = invoice.intraState;
+  const pos = findState(invoice.placeOfSupply);
   const stateName = (code: string) => {
     const s = findState(code);
     return s ? `${s.code} – ${locale === "hi" ? s.nameHi : s.name}` : code;
   };
-  const m = (v: { toNumber(): number } | number) => formatCurrency(typeof v === "number" ? v : v.toNumber(), locale);
-  const n = (v: { toNumber(): number } | number) => formatAmount(typeof v === "number" ? v : v.toNumber(), locale);
-  const balance = invoice.total - invoice.paid;
+  const m = (v: number) => formatCurrency(v, locale);
+  const n = (v: number) => formatAmount(v, locale);
+  const balance = invoice.balance;
   const stateLabel = pos?.component === "UTGST" ? "UTGST" : "SGST";
 
   const th = "border border-[#c9d2d3] bg-[#eef3f3] px-2 py-1.5 text-left font-semibold";
@@ -38,15 +38,13 @@ export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale:
           <h2 className="text-[22px] leading-tight font-bold text-[#0b3b44]" style={{ fontFamily: "var(--font-display)" }}>
             {BUSINESS.name}
           </h2>
-          <p>{BUSINESS.address}</p>
-          <p>{BUSINESS.city}</p>
-          <p>
-            {BUSINESS.phone} · {BUSINESS.email}
-          </p>
-          <p className="mt-1 font-mono font-medium">GSTIN: {BUSINESS.gstin}</p>
+          {BUSINESS.address && <p>{BUSINESS.address}</p>}
+          {BUSINESS.city && <p>{BUSINESS.city}</p>}
+          {(BUSINESS.phone || BUSINESS.email) && <p>{[BUSINESS.phone, BUSINESS.email].filter(Boolean).join(" · ")}</p>}
+          {BUSINESS.gstin && <p className="mt-1 font-mono font-medium">GSTIN: {BUSINESS.gstin}</p>}
         </div>
         <div className="text-right">
-          <p className="text-[18px] font-bold tracking-wide text-[#0b6e82]">{t("invoice.taxInvoice").toUpperCase()}</p>
+          <p className="text-[18px] font-bold tracking-wide text-[#0b6e82]">{(invoice.billOfSupply ? t("invoice.billOfSupply") : t("invoice.taxInvoice")).toUpperCase()}</p>
           <p className="text-[11px] text-[#4a5f62]">{t("invoice.print.original")}</p>
           <table className="mt-2 ml-auto text-left text-[12px]">
             <tbody>
@@ -64,11 +62,11 @@ export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale:
               </tr>
               <tr>
                 <td className="pr-3 text-[#4a5f62]">{t("invoice.placeOfSupply")}</td>
-                <td>{stateName(customer.stateCode)}</td>
+                <td>{stateName(invoice.placeOfSupply)}</td>
               </tr>
               <tr>
                 <td className="pr-3 text-[#4a5f62]">{t("invoice.print.reverseCharge")}</td>
-                <td>{t("invoice.print.no")}</td>
+                <td>{invoice.reverseCharge ? t("common.yes") : t("invoice.print.no")}</td>
               </tr>
             </tbody>
           </table>
@@ -115,27 +113,31 @@ export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale:
           </thead>
           <tbody className="num">
             {invoice.lines.map((l, i) => {
-              const p = productById.get(l.productId)!;
-              const r = totals.lines[i]!;
+              const r = l;
               return (
-                <tr key={`${l.productId}-${i}`}>
+                <tr key={`${l.name}-${i}`}>
                   <td className={td}>{i + 1}</td>
                   <td className={td}>
-                    {locale === "hi" ? p.nameHi : p.name}
-                    {p.batch && (
+                    {locale === "hi" ? l.nameLocal : l.name}
+                    {l.batch && (
                       <span className="block text-[10.5px] text-[#4a5f62]">
-                        {t("invoice.batch")} {p.batch.number} · {t("invoice.expiry")} {formatDate(p.batch.expiry)}
+                        {t("invoice.batch")} {l.batch.split(" · ")[0]}
+                        {l.batch.includes(" · ") && (
+                          <>
+                            {" "}· {t("invoice.expiry")} {formatDate(l.batch.split(" · ")[1]!)}
+                          </>
+                        )}
                       </span>
                     )}
                   </td>
-                  <td className={`${td} font-mono`}>{p.hsn}</td>
+                  <td className={`${td} font-mono`}>{l.hsn}</td>
                   <td className={`${td} text-right`}>
-                    {l.qty} {p.unit}
+                    {l.qty} {l.unit}
                   </td>
                   <td className={`${td} text-right`}>{n(l.rate)}</td>
                   <td className={`${td} text-right`}>{l.discountPercent ? `${l.discountPercent}%` : "—"}</td>
                   <td className={`${td} text-right`}>{n(r.taxable)}</td>
-                  <td className={`${td} text-right`}>{r.gstRate.toNumber()}%</td>
+                  <td className={`${td} text-right`}>{r.gstRate}%</td>
                   {intra ? (
                     <>
                       <td className={`${td} text-right`}>{n(r.cgst)}</td>
@@ -174,10 +176,10 @@ export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale:
               </thead>
               <tbody className="num">
                 {totals.hsnSummary.map((h) => (
-                  <tr key={`${h.hsnCode}-${h.gstRate.toString()}`}>
-                    <td className={`${td} font-mono`}>{h.hsnCode}</td>
+                  <tr key={`${h.hsn}-${h.gstRate}`}>
+                    <td className={`${td} font-mono`}>{h.hsn}</td>
                     <td className={`${td} text-right`}>{n(h.taxable)}</td>
-                    <td className={`${td} text-right`}>{h.gstRate.toNumber()}%</td>
+                    <td className={`${td} text-right`}>{h.gstRate}%</td>
                     {intra ? (
                       <>
                         <td className={`${td} text-right`}>{n(h.cgst)}</td>
@@ -193,17 +195,21 @@ export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale:
           </div>
           <div>
             <p className="text-[10.5px] font-semibold tracking-wider text-[#4a5f62] uppercase">{t("invoice.amountInWords")}</p>
-            <p className="font-medium">{amountInWords(totals.grandTotal, locale)}</p>
+            <p className="font-medium">{amountInWords(totals.grandTotal.toFixed(2), locale)}</p>
           </div>
-          <div>
-            <p className="text-[10.5px] font-semibold tracking-wider text-[#4a5f62] uppercase">{t("invoice.print.bankDetails")}</p>
-            <p>
-              {BUSINESS.bank.name} · A/c {BUSINESS.bank.account} · IFSC <span className="font-mono">{BUSINESS.bank.ifsc}</span>
-            </p>
-            <p>
-              UPI: <span className="font-mono">{BUSINESS.bank.upi}</span>
-            </p>
-          </div>
+          {BUSINESS.bank.name && (
+            <div>
+              <p className="text-[10.5px] font-semibold tracking-wider text-[#4a5f62] uppercase">{t("invoice.print.bankDetails")}</p>
+              <p>
+                {BUSINESS.bank.name} · A/c {BUSINESS.bank.account} · IFSC <span className="font-mono">{BUSINESS.bank.ifsc}</span>
+              </p>
+              {BUSINESS.bank.upi && (
+                <p>
+                  UPI: <span className="font-mono">{BUSINESS.bank.upi}</span>
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <dl className="flex flex-col gap-1 text-[12px]">
           {[
@@ -214,7 +220,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale:
                   [stateLabel, m(totals.sgstTotal)],
                 ]
               : [["IGST", m(totals.igstTotal)]]),
-            ...(totals.cessTotal.gt(0) ? [[t("invoice.cess"), m(totals.cessTotal)]] : []),
+            ...(totals.cessTotal > 0 ? [[t("invoice.cess"), m(totals.cessTotal)]] : []),
             [t("invoice.roundOff"), m(totals.roundOff)],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between gap-3">
@@ -240,7 +246,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: Invoice; locale:
       <footer className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-[#c9d2d3] pt-3">
         <div className="max-w-md text-[10.5px] text-[#4a5f62]">
           <p className="font-semibold text-[#10201f]">{t("invoice.print.terms")}</p>
-          <p>1. Goods once sold will be taken back only as per company return policy. 2. Interest @18% p.a. on payments beyond the due date. 3. Subject to Bhopal jurisdiction.</p>
+          <p>1. Goods once sold will be taken back only as per company return policy. 2. Interest @18% p.a. on payments beyond the due date. 3. Subject to {BUSINESS.city.split(/[ ,]/)[0] || "local"} jurisdiction.</p>
           <p className="mt-2">{t("invoice.print.computerGenerated")}</p>
         </div>
         <div className="text-right">

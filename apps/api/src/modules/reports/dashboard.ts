@@ -1,5 +1,5 @@
 import { DashboardQuery } from "@vyapaar/contracts";
-import { addDays, ageDocuments, dec } from "@vyapaar/core";
+import { addDays, ageDocuments, dec, financialYearOf } from "@vyapaar/core";
 import { schema } from "@vyapaar/db";
 import { eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -82,15 +82,43 @@ export const dashboardModule: ApiModule = async (app, deps) => {
                  (select coalesce(-sum(balance) filter (where balance < 0), 0) from customers where business_id = ${b} and deleted_at is null)::text as advances`)
       ).rows;
 
-      const trendFrom = addDays(today, -29);
+      // Trend buckets for the chosen grain, oldest first; the last bucket ends today.
+      const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
+      const buckets: Array<{ from: string; to: string }> = [];
+      const grain = request.query.grain;
+      if (grain === "daily") {
+        for (let i = 29; i >= 0; i--) buckets.push({ from: addDays(today, -i), to: addDays(today, -i) });
+      } else if (grain === "weekly") {
+        for (let i = 11; i >= 0; i--) buckets.push({ from: addDays(today, -7 * i - 6), to: addDays(today, -7 * i) });
+      } else if (grain === "monthly") {
+        let start = monthStart(today);
+        const starts = [start];
+        for (let i = 0; i < 5; i++) {
+          start = monthStart(addDays(start, -1));
+          starts.unshift(start);
+        }
+        starts.forEach((s, i) => buckets.push({ from: s, to: i === starts.length - 1 ? today : addDays(starts[i + 1]!, -1) }));
+      } else {
+        const fy = financialYearOf(today, business!.financialYearStartMonth);
+        for (let back = 2; back >= 0; back--) {
+          const from = `${fy.startYear - back}${fy.startDate.slice(4)}`;
+          const to = back === 0 ? today : addDays(`${fy.startYear - back + 1}${fy.startDate.slice(4)}`, -1);
+          buckets.push({ from, to });
+        }
+      }
       const trend = (
-        await tx.execute<{ day: string; sales: string; collections: string }>(sql`
-          select d::date::text as day,
-                 coalesce((select sum(grand_total) from invoices where business_id = ${b} and status = 'posted' and invoice_date = d::date), 0)::text as sales,
-                 coalesce((select sum(amount) from payments where business_id = ${b} and status = 'posted' and direction = 'in' and payment_date = d::date), 0)::text as collections
-          from generate_series(${trendFrom}::date, ${today}::date, interval '1 day') d
-          order by d`)
+        await tx.execute<{ from: string; to: string; sales: string; collections: string }>(sql`
+          select bk.f::text as from, bk.t::text as to,
+                 coalesce((select sum(grand_total) from invoices where business_id = ${b} and status = 'posted' and invoice_date between bk.f and bk.t), 0)::text as sales,
+                 coalesce((select sum(amount) from payments where business_id = ${b} and status = 'posted' and direction = 'in' and payment_date between bk.f and bk.t), 0)::text as collections
+          from (values ${sql.join(
+            buckets.map((x) => sql`(${x.from}::date, ${x.to}::date)`),
+            sql`, `,
+          )}) as bk(f, t)
+          order by bk.f`)
       ).rows;
+      const month = resolvePeriod("thisMonth", today, business!.financialYearStartMonth);
+      const [monthNow, monthBefore] = [await sums(month.from, month.to), await sums(month.previous.from, month.previous.to)];
 
       const topCustomers = (
         await tx.execute<{ id: string; name: string; sales: string; invoices: number }>(sql`
@@ -98,6 +126,14 @@ export const dashboardModule: ApiModule = async (app, deps) => {
           from invoices i join customers c on c.id = i.customer_id
           where i.business_id = ${b} and i.status = 'posted' and i.invoice_date between ${period.from} and ${period.to}
           group by c.id, c.name order by sum(i.grand_total) desc limit 5`)
+      ).rows;
+      const topBrands = (
+        await tx.execute<{ id: string; name: string; taxable: string }>(sql`
+          select coalesce(p.brand_id::text, '-') as id, coalesce(max(br.name), '-') as name, sum(ii.taxable_value)::text as taxable
+          from invoice_items ii join invoices i on i.id = ii.invoice_id
+          join products p on p.id = ii.product_id left join brands br on br.id = p.brand_id
+          where i.business_id = ${b} and i.status = 'posted' and i.invoice_date between ${period.from} and ${period.to}
+          group by 1 order by sum(ii.taxable_value) desc limit 7`)
       ).rows;
       const topProducts = (
         await tx.execute<{ id: string; name: string; qty: string; taxable: string }>(sql`
@@ -120,11 +156,12 @@ export const dashboardModule: ApiModule = async (app, deps) => {
             (select count(distinct customer_id) from invoices where business_id = ${b} and status = 'posted' and balance_due > 0 and due_date < ${today})::int as overdue_customers`)
       ).rows;
       const overdueCustomers = (
-        await tx.execute<{ id: string; name: string; mobile: string | null; overdue: string; oldest_days: number }>(sql`
-          select c.id, c.name, c.mobile, sum(i.balance_due)::text as overdue, (${today}::date - min(i.due_date))::int as oldest_days
+        await tx.execute<{ id: string; name: string; mobile: string | null; city: string | null; overdue: string; count: number; oldest_days: number }>(sql`
+          select c.id, coalesce(c.business_name, c.name) as name, c.mobile, c.city, sum(i.balance_due)::text as overdue, count(*)::int as count,
+                 (${today}::date - min(i.due_date))::int as oldest_days
           from invoices i join customers c on c.id = i.customer_id
           where i.business_id = ${b} and i.status = 'posted' and i.balance_due > 0 and i.due_date < ${today}
-          group by c.id, c.name, c.mobile order by sum(i.balance_due) desc limit 5`)
+          group by c.id, c.name, c.business_name, c.mobile, c.city order by sum(i.balance_due) desc limit 5`)
       ).rows;
       const [orders] = (
         await tx.execute<{ pending: number; to_pack: number; to_dispatch: number }>(sql`
@@ -149,7 +186,10 @@ export const dashboardModule: ApiModule = async (app, deps) => {
           aging: aging.buckets.map((x) => ({ label: x.label, from: x.from, to: x.to, amount: x.amount.toFixed(2), count: x.count })),
         },
         ...(financials ? { payable: { total: dec(balances!.payable).toFixed(2) } } : {}),
-        trend: trend.map((d) => ({ date: d.day, sales: dec(d.sales).toFixed(2), collections: dec(d.collections).toFixed(2) })),
+        grain,
+        trend: trend.map((d) => ({ from: d.from, to: d.to, sales: dec(d.sales).toFixed(2), collections: dec(d.collections).toFixed(2) })),
+        month: { current: monthNow, previous: monthBefore },
+        topBrands: topBrands.map((x) => ({ id: x.id, name: x.name, sales: dec(x.taxable).toFixed(2) })),
         topCustomers: topCustomers.map((c) => ({ id: c.id, name: c.name, sales: dec(c.sales).toFixed(2), invoices: c.invoices })),
         topProducts: topProducts.map((p) => ({ id: p.id, name: p.name, qty: dec(p.qty).toFixed(3), sales: dec(p.taxable).toFixed(2) })),
         attention: {
@@ -158,7 +198,7 @@ export const dashboardModule: ApiModule = async (app, deps) => {
           expiringBatches: attention!.expiring,
           pendingCheques: attention!.pending_cheques,
           overdueCustomers: attention!.overdue_customers,
-          topOverdue: overdueCustomers.map((c) => ({ id: c.id, name: c.name, mobile: c.mobile, overdue: dec(c.overdue).toFixed(2), oldestDays: c.oldest_days })),
+          topOverdue: overdueCustomers.map((c) => ({ id: c.id, name: c.name, mobile: c.mobile, city: c.city, overdue: dec(c.overdue).toFixed(2), count: c.count, oldestDays: c.oldest_days })),
         },
         orders: { pending: orders!.pending, toPack: orders!.to_pack, toDispatch: orders!.to_dispatch },
       };

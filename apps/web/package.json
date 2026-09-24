@@ -12,6 +12,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.103.2",
+    "@vyapaar/contracts": "workspace:*",
     "@vyapaar/core": "workspace:*",
     "@vyapaar/i18n": "workspace:*",
     "lucide-react": "1.47.0",

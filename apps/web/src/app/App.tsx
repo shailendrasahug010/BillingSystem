@@ -3,6 +3,8 @@ import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
 import { Kbd } from "../components/ui/misc";
 import { ToastProvider } from "../components/ui/Toast";
+import { AuthLayout, AuthPage } from "../features/auth/AuthPage";
+import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
 import { CustomerProfilePage } from "../features/customers/CustomerProfilePage";
 import { CustomersPage } from "../features/customers/CustomersPage";
@@ -14,6 +16,10 @@ import { PlannedPage } from "../features/planned/PlannedPage";
 import { ProductsPage } from "../features/products/ProductsPage";
 import { CommandPalette } from "../features/search/CommandPalette";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { Button } from "../components/ui/Button";
+import { useStoreVersion } from "../data/store";
+import { LIVE } from "../data/source";
+import { SessionProvider, useSession } from "./session";
 import { I18nProvider, useI18n } from "./i18n";
 import { RouterProvider, useRouter, type Route } from "./router";
 import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, useShortcuts } from "./shortcuts";
@@ -76,6 +82,33 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v
   );
 }
 
+/** Live mode: nothing renders until the session and the business workspace are ready. */
+function SessionGate() {
+  const session = useSession();
+  const { t } = useI18n();
+  useStoreVersion();
+  if (!LIVE || session.status === "ready") return <Root />;
+  if (session.status === "signed-out") return <AuthPage />;
+  if (session.status === "no-business") return <BusinessPicker />;
+  return (
+    <AuthLayout>
+      <div className="flex flex-col gap-4" role="status" aria-live="polite">
+        <p className="text-[16px] text-ink-2">{session.status === "error" ? t("auth.loadFailed") : t("auth.loadingWorkspace")}</p>
+        {session.status === "error" && (
+          <div className="flex gap-2">
+            <Button variant="primary" onClick={session.retry}>
+              {t("common.retry")}
+            </Button>
+            <Button variant="ghost" onClick={() => void session.logout()}>
+              {t("auth.signOut")}
+            </Button>
+          </div>
+        )}
+      </div>
+    </AuthLayout>
+  );
+}
+
 function Root() {
   const { route, navigate } = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -90,7 +123,7 @@ function Root() {
     { id: "help", keys: "shift+?", handler: () => setHelpOpen(true) },
   ]);
 
-  if (route.name === "login") return <LoginPage />;
+  if (route.name === "login") return LIVE ? null : <LoginPage />;
 
   return (
     <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
@@ -105,11 +138,13 @@ export function App() {
   useEffect(() => applyTheme(readTheme()), []);
   return (
     <I18nProvider>
-      <RouterProvider>
-        <ToastProvider>
-          <Root />
-        </ToastProvider>
-      </RouterProvider>
+      <SessionProvider>
+        <RouterProvider>
+          <ToastProvider>
+            <SessionGate />
+          </ToastProvider>
+        </RouterProvider>
+      </SessionProvider>
     </I18nProvider>
   );
 }

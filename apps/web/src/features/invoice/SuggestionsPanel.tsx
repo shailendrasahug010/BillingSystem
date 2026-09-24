@@ -6,7 +6,7 @@ import { useI18n } from "../../app/i18n";
 import { useShortcuts } from "../../app/shortcuts";
 import { Badge } from "../../components/ui/Badge";
 import { Kbd } from "../../components/ui/misc";
-import { productById, TODAY } from "../../data/mock";
+import { productById, TODAY } from "../../data/db";
 import { cn } from "../../lib/cn";
 import { daysBetween } from "@vyapaar/core";
 import type { Translate } from "@vyapaar/i18n";

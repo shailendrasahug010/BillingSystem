@@ -5,7 +5,7 @@ import { useRouter } from "../../app/router";
 import { BrandMark, LanguageToggle } from "../../components/layout/AppShell";
 import { Button } from "../../components/ui/Button";
 import { Field, Input } from "../../components/ui/Field";
-import { BUSINESS } from "../../data/mock";
+import { BUSINESS } from "../../data/db";
 
 /**
  * Login. Mobile number is the primary identifier (most shop staff have no

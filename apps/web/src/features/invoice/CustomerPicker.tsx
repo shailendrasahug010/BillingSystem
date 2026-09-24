@@ -3,7 +3,7 @@ import { Search, UserPlus } from "lucide-react";
 import { forwardRef, useId, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Kbd } from "../../components/ui/misc";
-import { CUSTOMERS, WALK_IN_ID } from "../../data/mock";
+import { CUSTOMERS, WALK_IN_ID } from "../../data/db";
 import { customerInsight } from "../../data/store";
 import type { Customer } from "../../data/types";
 import { cn } from "../../lib/cn";

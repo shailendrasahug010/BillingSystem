@@ -13,13 +13,15 @@ import {
 } from "@vyapaar/core";
 import {
   CUSTOMERS,
+  customerById,
   INVOICES,
   NEXT_INVOICE_NUMBER,
   PAYMENTS,
   productById,
   TODAY,
   FY_SHORT,
-} from "./mock";
+} from "./db";
+import { LIVE } from "./source";
 import type { Invoice, Payment } from "./types";
 
 /**
@@ -38,6 +40,11 @@ function emit() {
   version += 1;
   cache.clear();
   for (const l of listeners) l();
+}
+
+/** Tell subscribed screens that workspace data changed (live hydration, saves). */
+export function touch(): void {
+  emit();
 }
 
 export function subscribe(listener: () => void) {
@@ -104,6 +111,8 @@ export interface CustomerInsight {
   behaviour: { avgDaysToPay: number | null; onTimeRatio: number | null; rating: PaymentBehaviour };
   openInvoices: Invoice[];
   customerAssociations: AssociationRule[];
+  /** Live data: store-wide rules shipped with the insight. */
+  storeAssociations?: AssociationRule[];
 }
 
 export function customerInvoices(customerId: string): Invoice[] {
@@ -114,7 +123,40 @@ export function customerPayments(customerId: string): Payment[] {
   return PAYMENTS.filter((p) => p.customerId === customerId);
 }
 
+// Live mode: full insights arrive from the API (useCustomerInsight); until then
+// a quick one is built from the cached customer (balance, overdue).
+const liveInsights = new Map<string, CustomerInsight>();
+
+export function setLiveInsight(customerId: string, insight: CustomerInsight): void {
+  liveInsights.set(customerId, insight);
+  emit();
+}
+
+export function dropLiveInsight(customerId: string): void {
+  liveInsights.delete(customerId);
+}
+
+function quickInsight(customerId: string): CustomerInsight {
+  const c = customerById.get(customerId);
+  return {
+    summary: { invoiceCount: 0, firstInvoiceOn: null, lastInvoiceOn: null, typicalVisitIntervalDays: null },
+    stats: new Map(),
+    totalSales: 0,
+    invoiceCount: 0,
+    avgOrderValue: 0,
+    outstanding: c?.balance ?? 0,
+    overdue: c?.overdue ?? 0,
+    overdueCount: 0,
+    oldestOverdueDays: 0,
+    lastPurchase: null,
+    behaviour: { avgDaysToPay: null, onTimeRatio: null, rating: "new" },
+    openInvoices: [],
+    customerAssociations: [],
+  };
+}
+
 export function customerInsight(customerId: string): CustomerInsight {
+  if (LIVE) return liveInsights.get(customerId) ?? quickInsight(customerId);
   return memo(`insight:${customerId}`, () => {
     const invs = customerInvoices(customerId);
     const lines = invs.flatMap((inv) =>

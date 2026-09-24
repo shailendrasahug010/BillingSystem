@@ -9,7 +9,7 @@ import { Card, CardHeader } from "../../components/ui/Card";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { EmptyState, ErrorState, Kbd, ProgressBar, Segmented, Skeleton } from "../../components/ui/misc";
 import { ORDER_STATUS_TONE, PAYMENT_STATUS_TONE } from "../../lib/status";
-import { BUSINESS, NEXT_INVOICE_NUMBER } from "../../data/mock";
+import { BUSINESS, NEXT_INVOICE_NUMBER } from "../../data/db";
 
 // A GSTIN with a deliberately wrong check character, to show the validation state.
 const TYPO_GSTIN = BUSINESS.gstin.slice(0, 14) + (BUSINESS.gstin.endsWith("A") ? "B" : "A");

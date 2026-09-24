@@ -43,6 +43,14 @@ export interface Product {
   minStock: number;
   aliases: string[];
   batch?: { number: string; expiry: string };
+  /** Live data: base-unit price and default discount per rate list (price level id). */
+  prices?: Record<string, number>;
+  discounts?: Record<string, number>;
+  /** Every barcode of the product (base and pack units). */
+  barcodes?: string[];
+  /** MRP-style pricing: rates include GST. */
+  pricesIncludeTax?: boolean;
+  active?: boolean;
 }
 
 export interface Customer {
@@ -64,6 +72,11 @@ export interface Customer {
   salesRep: string;
   priceLevel: "retail" | "wholesale";
   openingBalance: number;
+  /** Live data. */
+  priceLevelId?: string | null;
+  gstRegistration?: string;
+  balance?: number;
+  overdue?: number;
 }
 
 export interface InvoiceLine {

@@ -13,5 +13,6 @@ export default defineConfig(({ mode }) => ({
     // The prototype ships as one bundle; production code-splits each module route (React.lazy).
     chunkSizeWarningLimit: 800,
   },
-  server: { port: 5173 },
+  // Same-origin /api in development too, so the refresh-token cookie behaves as in production.
+  server: { port: 5173, proxy: { "/api": { target: process.env.API_URL ?? "http://localhost:3000", changeOrigin: false } } },
 }));

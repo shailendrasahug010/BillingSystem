@@ -6,17 +6,18 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { EmptyState, Segmented } from "../../components/ui/misc";
-import { BRANDS, PRODUCTS } from "../../data/mock";
+import { BRANDS, PRODUCTS } from "../../data/db";
+import { useSearchableProducts } from "../../data/hooks";
 import { cn } from "../../lib/cn";
 import { searchProducts } from "@vyapaar/core";
 
-const searchable = PRODUCTS.map((p) => ({ ...p, barcodes: [p.barcode], aliases: [p.nameHi, ...p.aliases], active: true }));
 
 export function ProductsPage() {
   const { t, money, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("");
   const [stock, setStock] = useState<"all" | "low" | "out">("all");
+  const searchable = useSearchableProducts();
 
   const rows = useMemo(() => {
     const base = query.trim() ? searchProducts(query, searchable, { limit: 100 }).map((h) => h.product) : searchable;
@@ -24,7 +25,7 @@ export function ProductsPage() {
       const level = stockLevel(p.stock, p.minStock);
       return (!brand || p.brandId === brand) && (stock === "all" || (stock === "low" ? level === "low" : level === "out_of_stock"));
     });
-  }, [query, brand, stock]);
+  }, [query, brand, stock, searchable]);
 
   const stockValue = rows.reduce((s, p) => s + p.stock * p.purchasePrice, 0);
 

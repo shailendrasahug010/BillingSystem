@@ -83,6 +83,17 @@ describe.skipIf(!hasDatabase)("dashboard, reports and search", () => {
     // Overdue, all within 30 days: 550 (1050 less the 500 receipt), 525 and 2360 (no credit days).
     expect(d.receivable.aging[0]).toMatchObject({ label: "0-30", amount: "3435.00", count: 3 });
     expect(d.trend).toHaveLength(30);
+    expect(d.trend.at(-1)).toMatchObject({ from: "2026-09-24", to: "2026-09-24", sales: "130010.00" });
+    expect(d.month.current.sales).toBe("132895.00");
+    expect(d.topBrands[0]).toMatchObject({ name: "-" });
+    const monthly = await get("/dashboard?range=thisMonth&grain=monthly");
+    expect(monthly.body.trend.map((b: { from: string }) => b.from)).toEqual(["2026-04-01", "2026-05-01", "2026-06-01", "2026-07-01", "2026-08-01", "2026-09-01"]);
+    expect(monthly.body.trend.at(-1)).toMatchObject({ to: "2026-09-24", sales: "132895.00" });
+    const yearly = await get("/dashboard?grain=yearly");
+    expect(yearly.body.trend.map((b: { from: string }) => b.from)).toEqual(["2024-04-01", "2025-04-01", "2026-04-01"]);
+    const weekly = await get("/dashboard?grain=weekly");
+    expect(weekly.body.trend).toHaveLength(12);
+    expect(weekly.body.trend.at(-1)).toMatchObject({ from: "2026-09-18", to: "2026-09-24" });
     expect(d.topCustomers[0].name).toBe("=Evil Formula Co");
     expect(d.topProducts.map((p: { name: string }) => p.name)).toEqual(["Lifebuoy Soap", "Parle-G 100g"]);
     expect(d.attention).toMatchObject({ lowStock: 1, outOfStock: 1, overdueCustomers: 2 });

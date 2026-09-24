@@ -7,7 +7,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { EmptyState, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
-import { CUSTOMERS, ROUTES, TODAY } from "../../data/mock";
+import { CUSTOMERS, ROUTES, TODAY } from "../../data/db";
+import { LIVE } from "../../data/source";
 import { customerInsight, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
@@ -19,7 +20,7 @@ type Sort = "outstanding" | "name" | "last";
 export function CustomersPage() {
   const { t, money, date } = useI18n();
   const { navigate } = useRouter();
-  useStoreVersion();
+  const version = useStoreVersion();
   const ready = useDelayedReady(300);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<"all" | "b2b" | "b2c">("all");
@@ -37,7 +38,8 @@ export function CustomersPage() {
       .sort((a, b) =>
         sort === "name" ? a.c.businessName.localeCompare(b.c.businessName) : sort === "last" ? (b.ins.lastPurchase ?? "").localeCompare(a.ins.lastPurchase ?? "") : b.ins.outstanding - a.ins.outstanding,
       );
-  }, [query, type, route, onlyOutstanding, onlyOverdue, sort]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, type, route, onlyOutstanding, onlyOverdue, sort, version]);
 
   const totalOutstanding = rows.reduce((s, r) => s + r.ins.outstanding, 0);
 
@@ -159,9 +161,11 @@ export function CustomersPage() {
                       )}
                     </td>
                     <td className="px-3 py-3">
-                      <Badge tone={BEHAVIOUR_TONE[ins.behaviour.rating]} dot>
-                        {t(`behaviour.${ins.behaviour.rating}`)}
-                      </Badge>
+                      {(!LIVE || ins.behaviour.rating !== "new") && (
+                        <Badge tone={BEHAVIOUR_TONE[ins.behaviour.rating]} dot>
+                          {t(`behaviour.${ins.behaviour.rating}`)}
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <p className={cn("num font-semibold", ins.overdue > 0 ? "text-danger" : "text-ink")}>{money(ins.outstanding, 0)}</p>
@@ -186,9 +190,11 @@ export function CustomersPage() {
                     </div>
                     <div className="text-right">
                       <p className={cn("num text-[14px] font-semibold", ins.overdue > 0 ? "text-danger" : "text-ink")}>{money(ins.outstanding, 0)}</p>
-                      <Badge tone={BEHAVIOUR_TONE[ins.behaviour.rating]} className="mt-1 h-5 text-[11px]">
-                        {t(`behaviour.${ins.behaviour.rating}`)}
-                      </Badge>
+                      {(!LIVE || ins.behaviour.rating !== "new") && (
+                        <Badge tone={BEHAVIOUR_TONE[ins.behaviour.rating]} className="mt-1 h-5 text-[11px]">
+                          {t(`behaviour.${ins.behaviour.rating}`)}
+                        </Badge>
+                      )}
                     </div>
                   </button>
                 </li>

@@ -9,8 +9,11 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Field";
 import { Kbd } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
-import { BUSINESS, CUSTOMERS, PRODUCTS } from "../../data/mock";
+import { allowed, BUSINESS, CUSTOMERS, PRODUCTS } from "../../data/db";
+import { LIVE } from "../../data/source";
 import { customerInsight, getSyncState, peekNextInvoiceNumber, saveInvoice, useStoreVersion } from "../../data/store";
+import { ApiError, newIdempotencyKey } from "../../lib/api";
+import { postInvoice, type SavedInvoice } from "./postInvoice";
 import { cn } from "../../lib/cn";
 import { useMediaQuery } from "../../lib/useMediaQuery";
 import { CustomerCard } from "./CustomerCard";
@@ -27,7 +30,7 @@ function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChan
   const [miss, setMiss] = useState(false);
   const sample = PRODUCTS.slice(0, 3);
   const submit = () => {
-    const p = PRODUCTS.find((x) => x.barcode === code.trim());
+    const p = PRODUCTS.find((x) => x.barcode === code.trim() || x.barcodes?.includes(code.trim()));
     if (p) {
       onFound(p.id);
       setCode("");
@@ -46,7 +49,7 @@ function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChan
       >
         <Input id="scan-code" autoFocus inputMode="numeric" placeholder="890…" value={code} onChange={(e) => setCode(e.target.value)} leading={<ScanBarcode size={16} />} invalid={miss} />
         {miss && <p className="text-[12.5px] text-danger">{t("search.noResults", { query: code })}</p>}
-        <div className="flex flex-wrap gap-1.5 text-[12px] text-ink-3">
+        <div className={cn("flex flex-wrap gap-1.5 text-[12px] text-ink-3", LIVE && "hidden")}>
           {t("common.sampleData")}:
           {sample.map((p) => (
             <button key={p.id} type="button" className="font-mono text-accent hover:underline" onClick={() => setCode(p.barcode)}>
@@ -86,17 +89,92 @@ function ShareDialog({ text, onClose }: { text: string | null; onClose(): void }
   );
 }
 
+/** The number shown before saving: demo mode knows it; live numbers are assigned by the server. */
+export function nextNumberLabel(t: (key: "invoice.numberOnSave") => string): string {
+  return LIVE ? t("invoice.numberOnSave") : peekNextInvoiceNumber();
+}
+
+/** Credit blocks stop the save unless the user may override the limit (the server applies the same rule). */
+export function isBlocked(view: DraftView): boolean {
+  return view.credit?.level === "block" && !allowed("invoice.override_credit_limit");
+}
+
+const WARNING_KEYS: Record<string, string> = {
+  insufficient_stock: "errors.INSUFFICIENT_STOCK",
+  credit_limit_exceeded: "credit.credit_limit_exceeded",
+  overdue_invoices: "credit.overdue_invoices",
+};
+
 function useSave(view: DraftView) {
-  const { t, money } = useI18n();
+  const i18n = useI18n();
+  const { t, money } = i18n;
   const toast = useToast();
   const { navigate } = useRouter();
   const [shareText, setShareText] = useState<string | null>(null);
+  const saving = useRef(false);
+  const idempotencyKey = useRef(newIdempotencyKey());
+
+  const afterSave = useCallback(
+    (invoice: SavedInvoice, mode: "save" | "print" | "share", offline: boolean) => {
+      const { customer, dueDate } = view;
+      const warning = invoice.warnings[0];
+      toast({
+        tone: offline ? "offline" : warning ? "info" : "success",
+        title: t("invoice.saved", { number: invoice.number }),
+        ...(offline
+          ? { body: t("invoice.savedOffline") }
+          : warning
+            ? { body: t((WARNING_KEYS[warning.code] ?? "errors.generic") as "errors.generic", warning.params) }
+            : { body: `${customer!.businessName} · ${money(invoice.total)}` }),
+        action: { label: t("common.details"), onClick: () => navigate({ name: "invoice-view", invoiceId: invoice.id }) },
+      });
+      view.dispatch({ type: "reset" });
+      if (mode === "print") navigate({ name: "invoice-view", invoiceId: invoice.id });
+      if (mode === "share") {
+        const balance = invoice.total - invoice.paid;
+        setShareText(
+          [
+            `${BUSINESS.name}`,
+            `Invoice ${invoice.number} · ${invoice.date.split("-").reverse().join("/")}`,
+            `${customer!.businessName}`,
+            `Items: ${invoice.lineCount}`,
+            `Total: ${money(invoice.total)}`,
+            invoice.paid > 0 ? `Received: ${money(invoice.paid)}` : "",
+            balance > 0 ? `Balance due: ${money(balance)} by ${dueDate.split("-").reverse().join("/")}` : "Paid in full. Thank you!",
+            BUSINESS.bank.upi ? `UPI: ${BUSINESS.bank.upi}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+      }
+    },
+    [view, toast, t, money, navigate],
+  );
 
   const save = useCallback(
     (mode: "save" | "print" | "share") => {
-      const { totals, customer, draft, dueDate, credit } = view;
+      const { totals, customer, draft, dueDate } = view;
       if (!totals || !customer) return;
-      if (credit?.level === "block") return;
+      if (isBlocked(view)) return;
+      if (LIVE) {
+        if (saving.current) return;
+        saving.current = true;
+        postInvoice(view, idempotencyKey.current)
+          .then((invoice) => {
+            idempotencyKey.current = newIdempotencyKey();
+            afterSave(invoice, mode, false);
+          })
+          .catch((e: unknown) => {
+            const err = e instanceof ApiError ? e : new ApiError(0, "generic");
+            // A definite rejection will not change on retry: start a fresh key for the corrected bill.
+            if (err.status >= 400 && err.status < 500) idempotencyKey.current = newIdempotencyKey();
+            toast({ tone: err.code === "network" ? "offline" : "danger", title: t("invoice.saveFailed"), body: translateError(i18n, err) });
+          })
+          .finally(() => {
+            saving.current = false;
+          });
+        return;
+      }
       const paid = Math.min(totals.amountPaid.toNumber(), totals.grandTotal.toNumber());
       const invoice = saveInvoice(
         {
@@ -113,34 +191,9 @@ function useSave(view: DraftView) {
         },
         paid > 0 ? { date: draft.date, customerId: customer.id, amount: paid, method: draft.method, reference: "" } : undefined,
       );
-      const offline = !getSyncState().online;
-      toast({
-        tone: offline ? "offline" : "success",
-        title: t("invoice.saved", { number: invoice.number }),
-        ...(offline ? { body: t("invoice.savedOffline") } : { body: `${customer.businessName} · ${money(invoice.total)}` }),
-        action: { label: t("common.details"), onClick: () => navigate({ name: "invoice-view", invoiceId: invoice.id }) },
-      });
-      view.dispatch({ type: "reset" });
-      if (mode === "print") navigate({ name: "invoice-view", invoiceId: invoice.id });
-      if (mode === "share") {
-        const balance = invoice.total - invoice.paid;
-        setShareText(
-          [
-            `${BUSINESS.name}`,
-            `Invoice ${invoice.number} · ${invoice.date.split("-").reverse().join("/")}`,
-            `${customer.businessName}`,
-            `Items: ${invoice.lines.length}`,
-            `Total: ${money(invoice.total)}`,
-            invoice.paid > 0 ? `Received: ${money(invoice.paid)}` : "",
-            balance > 0 ? `Balance due: ${money(balance)} by ${dueDate.split("-").reverse().join("/")}` : "Paid in full. Thank you!",
-            `UPI: ${BUSINESS.bank.upi}`,
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        );
-      }
+      afterSave({ id: invoice.id, number: invoice.number, date: invoice.date, total: invoice.total, paid: invoice.paid, lineCount: invoice.lines.length, warnings: [] }, mode, !getSyncState().online);
     },
-    [view, toast, t, money, navigate],
+    [view, toast, t, i18n, afterSave],
   );
   return { save, shareText, closeShare: () => setShareText(null) };
 }
@@ -154,7 +207,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
   const [scanOpen, setScanOpen] = useState(false);
   const { save, shareText, closeShare } = useSave(view);
   const { draft, dispatch, customer, insight, totals, error, credit } = view;
-  const blocked = credit?.level === "block";
+  const blocked = isBlocked(view);
   useStoreVersion();
 
   useShortcuts([
@@ -241,7 +294,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
         </div>
 
         <div className="lg:sticky lg:top-24">
-          <SummaryPanel view={view} invoiceNumber={peekNextInvoiceNumber()} onSave={save} blocked={blocked} />
+          <SummaryPanel view={view} invoiceNumber={nextNumberLabel(t)} onSave={save} blocked={blocked} />
         </div>
       </div>
 
@@ -274,7 +327,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
-        <span className="font-mono text-[12.5px] text-ink-3">{peekNextInvoiceNumber()}</span>
+        <span className="font-mono text-[12.5px] text-ink-3">{nextNumberLabel(t)}</span>
       </div>
       <ol className="grid grid-cols-3 gap-2" aria-label={t("invoice.quick")}>
         {steps.map((s, i) => (
@@ -400,10 +453,10 @@ function MobileInvoice({ view }: { view: DraftView }) {
               })}
             </ul>
           </section>
-          <SummaryPanel view={view} invoiceNumber={peekNextInvoiceNumber()} onSave={(m) => {
+          <SummaryPanel view={view} invoiceNumber={nextNumberLabel(t)} onSave={(m) => {
             save(m);
             setStep(0);
-          }} blocked={credit?.level === "block"} />
+          }} blocked={isBlocked(view)} />
         </div>
       )}
 

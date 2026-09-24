@@ -332,5 +332,15 @@ describe.skipIf(!hasDatabase)("invoicing", () => {
       const count = (await q<{ n: number }>(`select count(*)::int as n from invoices where customer_id = $1`, [ids.history]))[0]!.n;
       expect(count).toBe(5);
     });
+
+    it("returns the customer insight the billing screen runs the same engine on", async () => {
+      const res = await get(`/customers/${ids.history}/insight`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ invoiceCount: 5, overdueCount: 5, lastPurchase: "2026-09-17", behaviour: { rating: "risky" } });
+      const parle = res.body.stats.find((s: { productId: string }) => s.productId === ids.parle);
+      expect(parle).toMatchObject({ orderCount: 5, orderShare: 1, lastQty: "48", typicalIntervalDays: 7 });
+      expect(res.body.openInvoices).toHaveLength(5);
+      expect(res.body.summary.typicalVisitIntervalDays).toBe(7);
+    });
   });
 });

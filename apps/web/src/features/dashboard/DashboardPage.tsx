@@ -1,4 +1,4 @@
-import { addDays, daysBetween, stockLevel } from "@vyapaar/core";
+import { stockLevel } from "@vyapaar/core";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -28,35 +28,12 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Field";
 import { Kbd, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
-import {
-  CUSTOMERS,
-  EXPENSES_BY_DAY,
-  INVOICES,
-  ORDERS,
-  PAYABLE_OUTSTANDING,
-  PAYMENTS,
-  PRODUCTS,
-  PURCHASES_BY_DAY,
-  TODAY,
-} from "../../data/mock";
-import {
-  brandSales,
-  collectionBetween,
-  customerInsight,
-  rangeDates,
-  receivableAging,
-  salesBetween,
-  topCustomers,
-  topProducts,
-  useStoreVersion,
-  type RangeKey,
-} from "../../data/store";
+import { PRODUCTS, TODAY } from "../../data/db";
+import { useStoreVersion, type RangeKey } from "../../data/store";
+import { useSession } from "../../app/session";
+import { useDashboardView, type Grain } from "./data";
 import { cn } from "../../lib/cn";
 
-type Grain = "daily" | "weekly" | "monthly" | "yearly";
-
-const sumDays = (rows: Array<{ date: string; amount: number }>, from: string, to: string) =>
-  rows.filter((r) => r.date >= from && r.date <= to).reduce((s, r) => s + r.amount, 0);
 
 function Delta({ current, previous, upIsGood = true }: { current: number; previous: number; upIsGood?: boolean }) {
   const { t } = useI18n();
@@ -123,101 +100,30 @@ export function DashboardPage() {
   const [grain, setGrain] = useState<Grain>("daily");
   const [asTable, setAsTable] = useState(false);
 
-  const yesterday = addDays(TODAY, -1);
-  const todaySales = salesBetween(TODAY, TODAY);
-  const ydaySales = salesBetween(yesterday, yesterday);
-  const todayColl = collectionBetween(TODAY, TODAY);
-  const ydayColl = collectionBetween(yesterday, yesterday);
-  const todayPurchase = sumDays(PURCHASES_BY_DAY, TODAY, TODAY);
-  const todayExpense = sumDays(EXPENSES_BY_DAY, TODAY, TODAY);
-  const todayOrders = ORDERS.filter((o) => o.date === TODAY).length;
-  const monthStart = `${TODAY.slice(0, 8)}01`;
-  const lm = rangeDates("lastMonth");
-  const sameDayLastMonth = addDays(lm.from, daysBetween(monthStart, TODAY));
-
-  const aging = receivableAging();
-  const receivable = aging.total.toNumber();
-  const overdue = receivable - aging.notDue.toNumber();
-  const pending = ORDERS.filter((o) => o.status === "pending" || o.status === "confirmed");
-  const toPack = ORDERS.filter((o) => o.status === "confirmed" || o.status === "packing");
-  const toDispatch = ORDERS.filter((o) => o.status === "packed");
+  const session = useSession();
+  const view = useDashboardView(range, grain);
   const low = PRODUCTS.filter((p) => stockLevel(p.stock, p.minStock) === "low");
   const out = PRODUCTS.filter((p) => stockLevel(p.stock, p.minStock) === "out_of_stock");
-
-  const r = rangeDates(range);
-  const rangeSales = salesBetween(r.from, r.to);
-  const prevSales = salesBetween(r.prevFrom, r.prevTo);
+  const shown = ready && view !== null;
 
   const trend = useMemo(() => {
-    const salesByDay = new Map<string, number>();
-    for (const inv of INVOICES) salesByDay.set(inv.date, (salesByDay.get(inv.date) ?? 0) + inv.total);
-    const collByDay = new Map<string, number>();
-    for (const p of PAYMENTS) collByDay.set(p.date, (collByDay.get(p.date) ?? 0) + p.amount);
-    const bucket = (from: string, to: string, m: Map<string, number>) => {
-      let s = 0;
-      for (let d = from; d <= to; d = addDays(d, 1)) s += m.get(d) ?? 0;
-      return s;
-    };
+    const buckets = view?.trend ?? [];
     const monthName = (iso: string) => new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { month: "short", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
-    if (grain === "daily") {
-      const days = Array.from({ length: 30 }, (_, i) => addDays(TODAY, i - 29));
-      return {
-        labels: days.map((d) => `${Number(d.slice(8))} ${monthName(d)}`),
-        tips: days.map((d) => dateMedium(d)),
-        sales: days.map((d) => salesByDay.get(d) ?? 0),
-        coll: days.map((d) => collByDay.get(d) ?? 0),
-      };
-    }
-    if (grain === "weekly") {
-      const weeks = Array.from({ length: 12 }, (_, i) => addDays(TODAY, -7 * (11 - i) - 6));
-      return {
-        labels: weeks.map((w) => `${Number(w.slice(8))} ${monthName(w)}`),
-        tips: weeks.map((w) => `${dateMedium(w)} – ${dateMedium(addDays(w, 6))}`),
-        sales: weeks.map((w) => bucket(w, addDays(w, 6), salesByDay)),
-        coll: weeks.map((w) => bucket(w, addDays(w, 6), collByDay)),
-      };
-    }
-    if (grain === "monthly") {
-      const months: string[] = [];
-      let m = monthStart;
-      for (let i = 0; i < 6; i++) {
-        months.unshift(m);
-        m = `${addDays(m, -1).slice(0, 8)}01`;
-      }
-      const end = (start: string) => {
-        const next = `${addDays(start, 32).slice(0, 8)}01`;
-        return addDays(next, -1);
-      };
-      return {
-        labels: months.map(monthName),
-        tips: months.map((mm) => `${monthName(mm)} ${mm.slice(0, 4)}`),
-        sales: months.map((mm) => bucket(mm, end(mm) > TODAY ? TODAY : end(mm), salesByDay)),
-        coll: months.map((mm) => bucket(mm, end(mm) > TODAY ? TODAY : end(mm), collByDay)),
-      };
-    }
-    // Yearly: this financial year from real sample data; earlier years are illustrative.
-    const fy = rangeDates("thisFy");
-    const ytdSales = bucket(fy.from, TODAY, salesByDay);
-    const ytdColl = bucket(fy.from, TODAY, collByDay);
-    const factor = 365 / Math.max(1, daysBetween(fy.from, TODAY) + 1);
-    const y = Number(fy.from.slice(0, 4));
-    const fyLabel = (start: number) => `FY ${start}-${String((start + 1) % 100).padStart(2, "0")}`;
-    return {
-      labels: [fyLabel(y - 2), fyLabel(y - 1), `${fyLabel(y)} YTD`],
-      tips: [fyLabel(y - 2), fyLabel(y - 1), `${fyLabel(y)} (${t("dashboard.range.thisFy")})`],
-      sales: [(ytdSales * factor) / 1.26, (ytdSales * factor) / 1.12, ytdSales],
-      coll: [(ytdColl * factor) / 1.27, (ytdColl * factor) / 1.13, ytdColl],
+    const fyLabel = (iso: string) => {
+      const y = Number(iso.slice(0, 4));
+      return `FY ${y}-${String((y + 1) % 100).padStart(2, "0")}`;
     };
-  }, [grain, locale, dateMedium, monthStart, t]);
-
-  const attention = useMemo(
-    () =>
-      CUSTOMERS.map((c) => ({ c, ins: customerInsight(c.id) }))
-        .filter((x) => x.ins.overdue > 0)
-        .sort((a, b) => b.ins.overdue - a.ins.overdue)
-        .slice(0, 5),
-    [],
-  );
+    const label = (b: { from: string; to: string }, i: number) =>
+      grain === "monthly" ? monthName(b.from) : grain === "yearly" ? `${fyLabel(b.from)}${i === buckets.length - 1 ? " YTD" : ""}` : `${Number(b.from.slice(8))} ${monthName(b.from)}`;
+    const tip = (b: { from: string; to: string }) =>
+      grain === "daily" ? dateMedium(b.from) : grain === "yearly" ? fyLabel(b.from) : `${dateMedium(b.from)} – ${dateMedium(b.to)}`;
+    return {
+      labels: buckets.map(label),
+      tips: buckets.map(tip),
+      sales: buckets.map((b) => b.sales),
+      coll: buckets.map((b) => b.collections),
+    };
+  }, [view, grain, locale, dateMedium]);
 
   const actions: Array<{ label: string; icon: ReactNode; route: Route; keys?: string; primary?: boolean }> = [
     { label: t("dashboard.actions.createInvoice"), icon: <Receipt size={16} />, route: { name: "invoice-new" }, keys: "mod+i", primary: true },
@@ -249,7 +155,7 @@ export function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[13px] text-ink-3">{weekday}</p>
-          <h1 className="mt-0.5 text-[26px] leading-tight font-semibold text-ink sm:text-[30px]">{t("dashboard.greeting", { name: "Anil" })}</h1>
+          <h1 className="mt-0.5 text-[26px] leading-tight font-semibold text-ink sm:text-[30px]">{t("dashboard.greeting", { name: session.user?.name.split(" ")[0] ?? "Anil" })}</h1>
         </div>
       </div>
 
@@ -278,13 +184,13 @@ export function DashboardPage() {
       <section aria-labelledby="today-h" className="flex flex-col gap-3">
         <h2 id="today-h" className="eyebrow">{t("dashboard.section.today")}</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {ready ? (
+          {shown ? (
             <>
-              <StatTile label={t("dashboard.kpi.todaySales")} icon={<Receipt size={15} />} value={money(todaySales, 0)} delta={<Delta current={todaySales} previous={ydaySales} />} foot={t("common.yesterday") + " " + money(ydaySales, 0)} />
-              <StatTile label={t("dashboard.kpi.todayCollection")} icon={<Wallet size={15} />} value={money(todayColl, 0)} delta={<Delta current={todayColl} previous={ydayColl} />} foot={t("common.yesterday") + " " + money(ydayColl, 0)} />
-              <StatTile label={t("dashboard.kpi.todayPurchase")} icon={<ShoppingCart size={15} />} value={money(todayPurchase, 0)} />
-              <StatTile label={t("dashboard.kpi.todayExpenses")} icon={<BadgeIndianRupee size={15} />} value={money(todayExpense, 0)} />
-              <StatTile label={t("dashboard.kpi.todayOrders")} icon={<ClipboardList size={15} />} value={todayOrders} onClick={() => navigate({ name: "planned", module: "orders" })} />
+              <StatTile label={t("dashboard.kpi.todaySales")} icon={<Receipt size={15} />} value={money(view.today.sales, 0)} delta={<Delta current={view.today.sales} previous={view.today.salesPrev} />} foot={t("common.yesterday") + " " + money(view.today.salesPrev, 0)} />
+              <StatTile label={t("dashboard.kpi.todayCollection")} icon={<Wallet size={15} />} value={money(view.today.collections, 0)} delta={<Delta current={view.today.collections} previous={view.today.collectionsPrev} />} foot={t("common.yesterday") + " " + money(view.today.collectionsPrev, 0)} />
+              {view.today.purchases !== null && <StatTile label={t("dashboard.kpi.todayPurchase")} icon={<ShoppingCart size={15} />} value={money(view.today.purchases, 0)} />}
+              {view.today.expenses !== null && <StatTile label={t("dashboard.kpi.todayExpenses")} icon={<BadgeIndianRupee size={15} />} value={money(view.today.expenses, 0)} />}
+              <StatTile label={t("dashboard.kpi.todayOrders")} icon={<ClipboardList size={15} />} value={view.today.orders} onClick={() => navigate({ name: "planned", module: "orders" })} />
             </>
           ) : (
             Array.from({ length: 5 }, (_, i) => (
@@ -342,7 +248,7 @@ export function DashboardPage() {
                 {t("dashboard.charts.sales")} {compact(trend.sales.reduce((a, b) => a + b, 0))} · {t("dashboard.charts.collection")} {compact(trend.coll.reduce((a, b) => a + b, 0))}
               </span>
             </div>
-            {ready ? (
+            {shown ? (
               <TrendChart
                 ariaLabel={t("dashboard.charts.salesTrend")}
                 labels={trend.labels}
@@ -368,19 +274,21 @@ export function DashboardPage() {
             <StatTile
               label={t("dashboard.kpi.receivable")}
               icon={<ArrowDownRight size={15} />}
-              value={compact(receivable)}
-              tone={overdue > 0 ? "danger" : undefined}
-              foot={<span className="text-danger">{t("dashboard.kpi.overdue", { amount: compact(overdue) })}</span>}
+              value={compact(view?.receivable.total ?? 0)}
+              tone={(view?.receivable.overdue ?? 0) > 0 ? "danger" : undefined}
+              foot={<span className="text-danger">{t("dashboard.kpi.overdue", { amount: compact(view?.receivable.overdue ?? 0) })}</span>}
               onClick={() => navigate({ name: "customers" })}
             />
-            <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={15} />} value={compact(PAYABLE_OUTSTANDING)} onClick={() => navigate({ name: "planned", module: "suppliers" })} />
+            {view?.payable !== null && (
+              <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={15} />} value={compact(view?.payable ?? 0)} onClick={() => navigate({ name: "planned", module: "suppliers" })} />
+            )}
           </div>
           <Card className="p-2">
             <p className="eyebrow px-3 pt-2 pb-1">{t("dashboard.section.operations")}</p>
             {[
-              { label: t("dashboard.kpi.pendingOrders"), n: pending.length, icon: <ClipboardList size={16} />, route: { name: "planned", module: "orders" } as Route },
-              { label: t("dashboard.kpi.toPack"), n: toPack.length, icon: <PackageCheck size={16} />, route: { name: "planned", module: "packing" } as Route },
-              { label: t("dashboard.kpi.toDispatch"), n: toDispatch.length, icon: <Truck size={16} />, route: { name: "planned", module: "dispatch" } as Route },
+              { label: t("dashboard.kpi.pendingOrders"), n: view?.orders.pending ?? 0, icon: <ClipboardList size={16} />, route: { name: "planned", module: "orders" } as Route },
+              { label: t("dashboard.kpi.toPack"), n: view?.orders.toPack ?? 0, icon: <PackageCheck size={16} />, route: { name: "planned", module: "packing" } as Route },
+              { label: t("dashboard.kpi.toDispatch"), n: view?.orders.toDispatch ?? 0, icon: <Truck size={16} />, route: { name: "planned", module: "dispatch" } as Route },
             ].map((row) => (
               <button
                 key={row.label}
@@ -405,9 +313,9 @@ export function DashboardPage() {
           </h2>
           <div className="flex items-center gap-3">
             <span className="num text-[13px] text-ink-2">
-              {t("dashboard.charts.sales")} <strong className="text-ink">{money(rangeSales, 0)}</strong>
+              {t("dashboard.charts.sales")} <strong className="text-ink">{money(view?.range.sales ?? 0, 0)}</strong>
             </span>
-            <Delta current={rangeSales} previous={prevSales} />
+            <Delta current={view?.range.sales ?? 0} previous={view?.range.salesPrev ?? 0} />
             <label className="sr-only" htmlFor="range-select">
               {t("common.date")}
             </label>
@@ -421,13 +329,13 @@ export function DashboardPage() {
           </div>
         </div>
         <p className="-mt-1 text-[12.5px] text-ink-3">
-          {date(r.from)} – {date(r.to)}
+          {view ? `${date(view.range.from)} – ${date(view.range.to)}` : "\u00a0"}
         </p>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card>
             <CardHeader title={t("dashboard.charts.topProducts")} />
             <div className="px-4 pt-3 pb-5 sm:px-5">
-              <BarList ariaLabel={t("dashboard.charts.topProducts")} items={topProducts(r.from, r.to)} format={(v) => compact(v)} />
+              <BarList ariaLabel={t("dashboard.charts.topProducts")} items={view?.topProducts ?? []} format={(v) => compact(v)} />
             </div>
           </Card>
           <Card>
@@ -435,7 +343,7 @@ export function DashboardPage() {
             <div className="px-4 pt-3 pb-5 sm:px-5">
               <BarList
                 ariaLabel={t("dashboard.charts.topCustomers")}
-                items={topCustomers(r.from, r.to)}
+                items={view?.topCustomers ?? []}
                 format={(v) => compact(v)}
                 onSelect={(id) => navigate({ name: "customer", customerId: id })}
               />
@@ -444,7 +352,7 @@ export function DashboardPage() {
           <Card>
             <CardHeader title={t("dashboard.charts.companySales")} />
             <div className="px-4 pt-3 pb-5 sm:px-5">
-              <BarList ariaLabel={t("dashboard.charts.companySales")} items={brandSales(r.from, r.to, 6)} format={(v) => compact(v)} />
+              <BarList ariaLabel={t("dashboard.charts.companySales")} items={view?.brands ?? []} format={(v) => compact(v)} />
             </div>
           </Card>
         </div>
@@ -452,15 +360,15 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <Card>
-          <CardHeader title={t("dashboard.charts.outstandingAging")} subtitle={`${t("dashboard.charts.daysPastDue")} · ${t("dashboard.kpi.receivable")} ${money(receivable, 0)}`} />
+          <CardHeader title={t("dashboard.charts.outstandingAging")} subtitle={`${t("dashboard.charts.daysPastDue")} · ${t("dashboard.kpi.receivable")} ${money(view?.receivable.total ?? 0, 0)}`} />
           <div className="px-4 pt-4 pb-5 sm:px-5">
             <AgingColumns
               ariaLabel={t("dashboard.charts.outstandingAging")}
               labels={agingLabels}
               format={(v) => compact(v)}
               buckets={[
-                { key: "notDue", amount: aging.notDue.toNumber(), count: 0 },
-                ...aging.buckets.map((b) => ({ key: b.label, amount: b.amount.toNumber(), count: b.count })),
+                { key: "notDue", amount: view?.receivable.notDue ?? 0, count: 0 },
+                ...(view?.receivable.buckets ?? []).map((b) => ({ key: b.label, amount: b.amount, count: b.count })),
               ]}
             />
           </div>
@@ -468,16 +376,17 @@ export function DashboardPage() {
         <Card>
           <CardHeader title={t("dashboard.needsAttention")} subtitle={t("customer.filters.overdue")} />
           <ul className="px-2 pt-2 pb-3">
-            {attention.map(({ c, ins }) => (
+            {(view?.attention ?? []).map((c) => (
               <li key={c.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-surface-2">
                 <button type="button" onClick={() => navigate({ name: "customer", customerId: c.id })} className="min-w-0 flex-1 text-left">
-                  <p className="truncate text-[14px] font-medium text-ink">{c.businessName}</p>
+                  <p className="truncate text-[14px] font-medium text-ink">{c.name}</p>
                   <p className="text-[12.5px] text-ink-3">
-                    {c.city} · {t("credit.overdue_invoices", { count: ins.overdueCount, amount: ins.overdue.toFixed(2), days: ins.oldestOverdueDays })}
+                    {c.city ? `${c.city} · ` : ""}
+                    {t("credit.overdue_invoices", { count: c.count, amount: c.overdue.toFixed(2), days: c.oldestDays })}
                   </p>
                 </button>
-                <span className="num hidden text-[14px] font-semibold text-danger sm:block">{money(ins.overdue, 0)}</span>
-                <Button size="sm" variant="ghost" icon={<Phone size={14} />} aria-label={`${t("common.call")} ${c.businessName}`} title={c.mobile}>
+                <span className="num hidden text-[14px] font-semibold text-danger sm:block">{money(c.overdue, 0)}</span>
+                <Button size="sm" variant="ghost" icon={<Phone size={14} />} aria-label={`${t("common.call")} ${c.name}`} title={c.mobile}>
                   <span className="hidden sm:inline">{t("common.call")}</span>
                 </Button>
               </li>
@@ -513,9 +422,11 @@ export function DashboardPage() {
       <section aria-labelledby="month-h" className="flex flex-col gap-3">
         <h2 id="month-h" className="eyebrow">{t("dashboard.section.month")}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatTile label={t("dashboard.kpi.monthSales")} icon={<Receipt size={15} />} value={compact(salesBetween(monthStart, TODAY))} delta={<Delta current={salesBetween(monthStart, TODAY)} previous={salesBetween(lm.from, sameDayLastMonth)} />} foot={t("dashboard.kpi.vsPrevious")} />
-          <StatTile label={t("dashboard.kpi.monthCollection")} icon={<Wallet size={15} />} value={compact(collectionBetween(monthStart, TODAY))} delta={<Delta current={collectionBetween(monthStart, TODAY)} previous={collectionBetween(lm.from, sameDayLastMonth)} />} foot={t("dashboard.kpi.vsPrevious")} />
-          <StatTile label={t("dashboard.kpi.monthPurchase")} icon={<ShoppingCart size={15} />} value={compact(sumDays(PURCHASES_BY_DAY, monthStart, TODAY))} delta={<Delta current={sumDays(PURCHASES_BY_DAY, monthStart, TODAY)} previous={sumDays(PURCHASES_BY_DAY, lm.from, sameDayLastMonth)} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
+          <StatTile label={t("dashboard.kpi.monthSales")} icon={<Receipt size={15} />} value={compact(view?.month.sales ?? 0)} delta={<Delta current={view?.month.sales ?? 0} previous={view?.month.salesPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          <StatTile label={t("dashboard.kpi.monthCollection")} icon={<Wallet size={15} />} value={compact(view?.month.collections ?? 0)} delta={<Delta current={view?.month.collections ?? 0} previous={view?.month.collectionsPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          {view?.month.purchases !== null && (
+            <StatTile label={t("dashboard.kpi.monthPurchase")} icon={<ShoppingCart size={15} />} value={compact(view?.month.purchases ?? 0)} delta={<Delta current={view?.month.purchases ?? 0} previous={view?.month.purchasesPrev ?? 0} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
+          )}
         </div>
       </section>
     </div>
