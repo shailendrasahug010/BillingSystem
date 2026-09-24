@@ -196,7 +196,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
           partyType: p.partyType,
           customerId: p.customerId,
           supplierId: p.supplierId,
-          partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = ${p.customerId}), (select name from suppliers s where s.id = ${p.supplierId}))`,
+          partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = "payments"."customer_id"), (select name from suppliers s where s.id = "payments"."supplier_id"))`,
           amount: p.amount,
           method: p.method,
           referenceNumber: p.referenceNumber,

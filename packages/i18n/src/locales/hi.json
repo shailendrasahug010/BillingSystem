@@ -818,7 +818,12 @@
     "IMPORT_UNKNOWN_PRICE_LEVEL": "अज्ञात रेट लिस्ट “{{value}}”।",
     "IMPORT_TOO_MANY": "एक फ़ाइल में अधिकतम 5,000 पंक्तियाँ। फ़ाइल को हिस्सों में बाँटकर आयात करें।",
     "TRANSFER_SAME_GODOWN": "स्टॉक भेजने के लिए दूसरा गोदाम चुनें।",
-    "GODOWN_INACTIVE": "गोदाम {{godown}} निष्क्रिय है।"
+    "GODOWN_INACTIVE": "गोदाम {{godown}} निष्क्रिय है।",
+    "DELIVERY_BEFORE_ORDER": "डिलीवरी की तारीख ऑर्डर की तारीख से पहले नहीं हो सकती।",
+    "CANCEL_REASON_REQUIRED": "कारण लिखें (कम से कम 3 अक्षर)।",
+    "ORDER_NOT_CONFIRMED": "बिल बनाने से पहले ऑर्डर की पुष्टि करें।",
+    "ORDER_QTY_EXCEEDS": "ऑर्डर में {{product}} की सिर्फ़ {{max}} मात्रा बाकी है।",
+    "ORDER_FULLY_INVOICED": "इस ऑर्डर का पूरा बिल बन चुका है।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",

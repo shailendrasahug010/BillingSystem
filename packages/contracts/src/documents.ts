@@ -54,6 +54,36 @@ export const InvoiceBody = z.strictObject({
 
 export const CancelBody = z.strictObject({ reason: z.string().trim().min(3).max(300) });
 
+/** A customer's order: priced like an invoice, no stock or ledger effect until it is invoiced. */
+export const SalesOrderBody = z.strictObject({
+  customerId: Id,
+  orderDate: IsoDate.optional(),
+  expectedDeliveryDate: IsoDate.optional(),
+  source: z.enum(["counter", "salesperson", "phone", "whatsapp", "app"]).default("app"),
+  lines: z.array(DocumentLineInput).min(1).max(300),
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export const OrderListQuery = PageQuery.extend({
+  status: z.enum(["draft", "pending", "confirmed", "packing", "packed", "dispatched", "delivered", "cancelled", "open", "all"]).default("all"),
+  customerId: z.uuid().optional(),
+  from: IsoDate.optional(),
+  to: IsoDate.optional(),
+});
+
+export const OrderStatusBody = z.strictObject({
+  status: z.enum(["pending", "confirmed", "packing", "packed", "dispatched", "delivered", "cancelled"]),
+  note: z.string().trim().max(300).optional(),
+});
+
+/** Invoice an order: everything still open, or chosen quantities per line (in the line's unit). */
+export const OrderInvoiceBody = z.strictObject({
+  invoiceDate: IsoDate.optional(),
+  lines: z.array(z.strictObject({ orderLineId: Id, qty: Qty })).min(1).max(300).optional(),
+  payment: PaymentAtDocument.optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+
 export const InvoiceListQuery = PageQuery.extend({
   customerId: z.uuid().optional(),
   from: IsoDate.optional(),

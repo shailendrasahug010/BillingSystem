@@ -818,7 +818,12 @@
     "IMPORT_UNKNOWN_PRICE_LEVEL": "Unknown rate list “{{value}}”.",
     "IMPORT_TOO_MANY": "At most 5,000 rows per file. Split the file and import it in parts.",
     "TRANSFER_SAME_GODOWN": "Choose a different godown to move the stock to.",
-    "GODOWN_INACTIVE": "Godown {{godown}} is inactive."
+    "GODOWN_INACTIVE": "Godown {{godown}} is inactive.",
+    "DELIVERY_BEFORE_ORDER": "The delivery date cannot be before the order date.",
+    "CANCEL_REASON_REQUIRED": "Give a reason (at least 3 characters).",
+    "ORDER_NOT_CONFIRMED": "Confirm the order before invoicing it.",
+    "ORDER_QTY_EXCEEDS": "Only {{max}} of {{product}} is left on the order.",
+    "ORDER_FULLY_INVOICED": "Everything on this order has been invoiced."
   },
   "validation": {
     "required": "This field is required",

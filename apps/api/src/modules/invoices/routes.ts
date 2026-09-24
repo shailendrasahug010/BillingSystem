@@ -7,7 +7,7 @@ import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
-import type { RequestCtx } from "../../lib/context.js";
+import type { AppDeps, RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
@@ -150,6 +150,279 @@ export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
   };
 }
 
+/**
+ * Posts an invoice in the caller's transaction (used by POST /invoices and by
+ * converting a sales order). `link` ties the invoice and its lines to the
+ * order they fulfil.
+ */
+export async function postInvoice(
+  tx: Tx,
+  ctx: RequestCtx,
+  deps: AppDeps,
+  body: z.output<typeof InvoiceBody>,
+  clientId: string | null,
+  link?: { salesOrderId: string; orderItemIds: string[] },
+) {
+  const today = deps.clock.today(ctx.timeZone);
+  const sale = await prepareSale(tx, ctx, body, today);
+  const t = sale.totals;
+  const warnings: Warning[] = [];
+
+  // 1. Number (locks the series row: gap-free, never duplicated).
+  const numbering = await nextDocumentNumber(tx, ctx.businessId, "invoice", sale.invoiceDate, sale.business.financialYearStartMonth);
+  const id = uuidv7();
+  const c = sale.customer;
+  const address = { line1: c.addressLine1, line2: c.addressLine2, city: c.city, stateCode: c.stateCode, pincode: c.pincode };
+  let costTotal = dec(0);
+  sale.lines.forEach((p, i) => {
+    const l = t.lines[i]!;
+    costTotal = costTotal.plus(l.qtyBase.plus(p.freeQtyBase).times(p.avgCost));
+  });
+
+  // 2. Invoice + lines with the full tax snapshot. Payment fields start
+  //    unpaid; the payment step below settles them.
+  await tx.insert(schema.invoices).values({
+    id,
+    businessId: ctx.businessId,
+    invoiceNumber: numbering.number,
+    seriesId: numbering.seriesId,
+    financialYear: numbering.financialYear,
+    invoiceDate: sale.invoiceDate,
+    dueDate: addDays(sale.invoiceDate, c.creditDays),
+    documentKind: sale.documentKind,
+    customerId: c.id,
+    partyName: c.businessName ?? c.name,
+    partyGstin: c.gstin,
+    partyStateCode: c.stateCode,
+    billingAddress: address,
+    shippingAddress: body.shipToStateCode ? { ...address, stateCode: body.shipToStateCode } : address,
+    placeOfSupply: sale.placeOfSupply,
+    supplyType: sale.supplyType,
+    taxEngineVersion: "gst-line@1",
+    warehouseId: sale.warehouseId,
+    priceLevelId: sale.priceLevelId,
+    salespersonId: body.salespersonId ?? null,
+    status: "posted",
+    grossTotal: toAmountString(t.grossTotal),
+    discountTotal: toAmountString(t.discountTotal),
+    documentDiscountPercent: body.documentDiscount?.percent ?? "0",
+    documentDiscountAmount: body.documentDiscount?.amount ?? "0",
+    taxableTotal: toAmountString(t.taxableTotal),
+    cgstTotal: toAmountString(t.cgstTotal),
+    sgstTotal: toAmountString(t.sgstTotal),
+    igstTotal: toAmountString(t.igstTotal),
+    cessTotal: toAmountString(t.cessTotal),
+    charges: t.charges.map((ch) => ({
+      key: ch.key,
+      label: ch.label,
+      taxable: money(ch.taxable),
+      gstRate: ch.gstRate.toFixed(3),
+      cgst: money(ch.cgst),
+      sgst: money(ch.sgst),
+      igst: money(ch.igst),
+      cess: money(ch.cess),
+      total: money(ch.total),
+    })),
+    chargesTotal: toAmountString(t.chargesTotal),
+    roundOff: toAmountString(t.roundOff),
+    grandTotal: toAmountString(t.grandTotal),
+    amountPaid: "0",
+    balanceDue: toAmountString(t.grandTotal),
+    paymentStatus: t.grandTotal.isZero() ? "paid" : "unpaid",
+    costTotal: toAmountString(costTotal),
+    notes: body.notes ?? null,
+    printLocale: body.printLocale ?? sale.settings["invoice.default_print_locale"],
+    postedAt: deps.clock.now().toISOString(),
+    postedBy: ctx.userId,
+    clientId,
+    salesOrderId: link?.salesOrderId ?? null,
+    createdBy: ctx.userId,
+    updatedBy: ctx.userId,
+  });
+  const itemIds = sale.lines.map(() => uuidv7());
+  await tx.insert(schema.invoiceItems).values(
+    sale.lines.map((p, i) => {
+      const l = t.lines[i]!;
+      return {
+        id: itemIds[i]!,
+        businessId: ctx.businessId,
+        invoiceId: id,
+        orderItemId: link?.orderItemIds[i] ?? null,
+        lineNo: i + 1,
+        productId: p.productId,
+        productName: p.productName,
+        hsnCode: p.hsnCode,
+        uqc: p.uqc,
+        unitId: p.unitId,
+        batchId: p.batchId,
+        conversionFactor: p.conversionFactor,
+        qty: toQtyString(l.qty),
+        freeQty: p.freeQty,
+        qtyBase: toQtyString(l.qtyBase),
+        rate: toRateString(l.rate),
+        rateIncludesTax: p.rateIncludesTax,
+        grossAmount: money(l.gross),
+        discountPercent: body.lines[i]!.discountPercent ?? "0",
+        discountAmount: money(l.lineDiscount),
+        documentDiscountShare: money(l.documentDiscountShare),
+        taxableValue: money(l.taxable),
+        taxability: p.taxability,
+        taxCategoryId: p.taxCategoryId,
+        taxRateId: p.taxRateId,
+        gstRate: l.gstRate.toFixed(3),
+        cgstRate: l.cgstRate.toFixed(3),
+        cgstAmount: money(l.cgst),
+        sgstRate: l.sgstRate.toFixed(3),
+        sgstAmount: money(l.sgst),
+        igstRate: l.igstRate.toFixed(3),
+        igstAmount: money(l.igst),
+        cessRate: l.cessRate.toFixed(3),
+        cessAmount: money(l.cess),
+        lineTotal: money(l.total),
+        unitCost: toRateString(p.avgCost),
+      };
+    }),
+  );
+
+  // 3. Stock out, locking balances in product order (deadlock-free).
+  const policy = sale.settings["stock.negative_policy"];
+  const order = sale.lines.map((_, i) => i).sort((a, b) => sale.lines[a]!.productId.localeCompare(sale.lines[b]!.productId));
+  for (const i of order) {
+    const p = sale.lines[i]!;
+    const qty = t.lines[i]!.qtyBase.plus(p.freeQtyBase);
+    const moved = await postStockMovement(
+      tx,
+      {
+        businessId: ctx.businessId,
+        productId: p.productId,
+        productName: p.productName,
+        warehouseId: sale.warehouseId,
+        batchId: p.batchId,
+        date: sale.invoiceDate,
+        type: "sale",
+        qty: toQtyString(qty),
+        unitCost: p.avgCost,
+        refType: "invoice",
+        refId: id,
+        refLineId: itemIds[i]!,
+        refNumber: numbering.number,
+        userId: ctx.userId,
+      },
+      policy,
+    );
+    if (moved.warning) {
+      warnings.push({
+        code: "insufficient_stock",
+        params: { product: p.productName, available: moved.warning.available.toString(), requested: moved.warning.requested.toString() },
+      });
+    }
+  }
+
+  // 4. Credit policy, with the customer row locked.
+  const [locked] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, c.id)).for("update");
+  const open = (await openInvoices(tx, ctx.businessId, c.id)).filter((d) => d.id !== id);
+  warnings.push(...checkCredit(ctx, sale, locked!.balance, open));
+
+  // 5. Customer ledger debit.
+  await postPartyEntry(tx, {
+    businessId: ctx.businessId,
+    party: { type: "customer", id: c.id },
+    date: sale.invoiceDate,
+    docType: "invoice",
+    docId: id,
+    docNumber: numbering.number,
+    debit: toAmountString(t.grandTotal),
+    narration: `Sales invoice ${numbering.number}`,
+    userId: ctx.userId,
+  });
+
+  // 6. GST register: one row per line (and per taxable charge).
+  const gstBase = {
+    businessId: ctx.businessId,
+    direction: "outward" as const,
+    docType: "invoice" as const,
+    docId: id,
+    docNumber: numbering.number,
+    docDate: sale.invoiceDate,
+    returnPeriod: sale.invoiceDate.slice(0, 7),
+    partyName: c.businessName ?? c.name,
+    partyGstin: c.gstin,
+    partyRegistration: c.gstRegistration,
+    partyStateCode: c.stateCode,
+    placeOfSupply: sale.placeOfSupply,
+    supplyType: sale.supplyType,
+    documentValue: toAmountString(t.grandTotal),
+  };
+  await tx.insert(schema.gstTransactions).values([
+    ...sale.lines.map((p, i) => {
+      const l = t.lines[i]!;
+      return {
+        ...gstBase,
+        docLineId: itemIds[i]!,
+        taxability: p.taxability,
+        hsnCode: p.hsnCode,
+        uqc: p.uqc,
+        qty: toQtyString(l.qtyBase),
+        taxableValue: money(l.taxable),
+        gstRate: l.gstRate.toFixed(3),
+        cgstAmount: money(l.cgst),
+        sgstAmount: money(l.sgst),
+        igstAmount: money(l.igst),
+        cessAmount: money(l.cess),
+      };
+    }),
+    ...t.charges
+      .filter((ch) => ch.gstRate.gt(0))
+      .map((ch) => ({
+        ...gstBase,
+        taxability: "taxable" as const,
+        taxableValue: money(ch.taxable),
+        gstRate: ch.gstRate.toFixed(3),
+        cgstAmount: money(ch.cgst),
+        sgstAmount: money(ch.sgst),
+        igstAmount: money(ch.igst),
+        cessAmount: money(ch.cess),
+      })),
+  ]);
+
+  // 7. Money received with the invoice.
+  let payment = null;
+  if (body.payment && dec(body.payment.amount).gt(0)) {
+    const settle = t.amountPaid.gt(t.grandTotal) ? t.grandTotal : t.amountPaid;
+    payment = await recordPayment(tx, ctx, sale.business.financialYearStartMonth, {
+      direction: "in",
+      party: { type: "customer", id: c.id, name: c.name },
+      date: sale.invoiceDate,
+      amount: body.payment.amount,
+      method: body.payment.method,
+      referenceNumber: body.payment.reference ?? null,
+      paymentAccountId: body.payment.paymentAccountId ?? null,
+      allocations: settle.gt(0) ? [{ documentId: id, amount: settle.toFixed(2) }] : [],
+    });
+  }
+
+  await audit(tx, ctx, {
+    action: "invoice.posted",
+    entityType: "invoice",
+    entityId: id,
+    entityLabel: numbering.number,
+    changes: {
+      customer: c.name,
+      grandTotal: toAmountString(t.grandTotal),
+      ...(sale.rateOverridden ? { rateOverridden: true } : {}),
+      ...(warnings.length ? { warnings: warnings.map((w) => w.code) } : {}),
+    },
+  });
+  await tx.insert(schema.outboxEvents).values({
+    businessId: ctx.businessId,
+    eventType: "invoice.posted",
+    aggregateType: "invoice",
+    aggregateId: id,
+    payload: { customerId: c.id, invoiceDate: sale.invoiceDate, grandTotal: toAmountString(t.grandTotal) },
+  });
+  return { detail: { ...(await invoiceDetail(tx, ctx, id)), ...(payment ? { payment } : {}) }, warnings };
+}
+
 export const invoicesModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
@@ -214,262 +487,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
           .where(and(eq(schema.invoices.businessId, ctx.businessId), eq(schema.invoices.clientId, clientId)));
         if (existing) return { replay: true, detail: await invoiceDetail(tx, ctx, existing.id), warnings: [] as Warning[] };
       }
-      const today = deps.clock.today(ctx.timeZone);
-      const sale = await prepareSale(tx, ctx, body, today);
-      const t = sale.totals;
-      const warnings: Warning[] = [];
-
-      // 1. Number (locks the series row: gap-free, never duplicated).
-      const numbering = await nextDocumentNumber(tx, ctx.businessId, "invoice", sale.invoiceDate, sale.business.financialYearStartMonth);
-      const id = uuidv7();
-      const c = sale.customer;
-      const address = { line1: c.addressLine1, line2: c.addressLine2, city: c.city, stateCode: c.stateCode, pincode: c.pincode };
-      let costTotal = dec(0);
-      sale.lines.forEach((p, i) => {
-        const l = t.lines[i]!;
-        costTotal = costTotal.plus(l.qtyBase.plus(p.freeQtyBase).times(p.avgCost));
-      });
-
-      // 2. Invoice + lines with the full tax snapshot. Payment fields start
-      //    unpaid; the payment step below settles them.
-      await tx.insert(schema.invoices).values({
-        id,
-        businessId: ctx.businessId,
-        invoiceNumber: numbering.number,
-        seriesId: numbering.seriesId,
-        financialYear: numbering.financialYear,
-        invoiceDate: sale.invoiceDate,
-        dueDate: addDays(sale.invoiceDate, c.creditDays),
-        documentKind: sale.documentKind,
-        customerId: c.id,
-        partyName: c.businessName ?? c.name,
-        partyGstin: c.gstin,
-        partyStateCode: c.stateCode,
-        billingAddress: address,
-        shippingAddress: body.shipToStateCode ? { ...address, stateCode: body.shipToStateCode } : address,
-        placeOfSupply: sale.placeOfSupply,
-        supplyType: sale.supplyType,
-        taxEngineVersion: "gst-line@1",
-        warehouseId: sale.warehouseId,
-        priceLevelId: sale.priceLevelId,
-        salespersonId: body.salespersonId ?? null,
-        status: "posted",
-        grossTotal: toAmountString(t.grossTotal),
-        discountTotal: toAmountString(t.discountTotal),
-        documentDiscountPercent: body.documentDiscount?.percent ?? "0",
-        documentDiscountAmount: body.documentDiscount?.amount ?? "0",
-        taxableTotal: toAmountString(t.taxableTotal),
-        cgstTotal: toAmountString(t.cgstTotal),
-        sgstTotal: toAmountString(t.sgstTotal),
-        igstTotal: toAmountString(t.igstTotal),
-        cessTotal: toAmountString(t.cessTotal),
-        charges: t.charges.map((ch) => ({
-          key: ch.key,
-          label: ch.label,
-          taxable: money(ch.taxable),
-          gstRate: ch.gstRate.toFixed(3),
-          cgst: money(ch.cgst),
-          sgst: money(ch.sgst),
-          igst: money(ch.igst),
-          cess: money(ch.cess),
-          total: money(ch.total),
-        })),
-        chargesTotal: toAmountString(t.chargesTotal),
-        roundOff: toAmountString(t.roundOff),
-        grandTotal: toAmountString(t.grandTotal),
-        amountPaid: "0",
-        balanceDue: toAmountString(t.grandTotal),
-        paymentStatus: t.grandTotal.isZero() ? "paid" : "unpaid",
-        costTotal: toAmountString(costTotal),
-        notes: body.notes ?? null,
-        printLocale: body.printLocale ?? sale.settings["invoice.default_print_locale"],
-        postedAt: deps.clock.now().toISOString(),
-        postedBy: ctx.userId,
-        clientId,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
-      });
-      const itemIds = sale.lines.map(() => uuidv7());
-      await tx.insert(schema.invoiceItems).values(
-        sale.lines.map((p, i) => {
-          const l = t.lines[i]!;
-          return {
-            id: itemIds[i]!,
-            businessId: ctx.businessId,
-            invoiceId: id,
-            lineNo: i + 1,
-            productId: p.productId,
-            productName: p.productName,
-            hsnCode: p.hsnCode,
-            uqc: p.uqc,
-            unitId: p.unitId,
-            batchId: p.batchId,
-            conversionFactor: p.conversionFactor,
-            qty: toQtyString(l.qty),
-            freeQty: p.freeQty,
-            qtyBase: toQtyString(l.qtyBase),
-            rate: toRateString(l.rate),
-            rateIncludesTax: p.rateIncludesTax,
-            grossAmount: money(l.gross),
-            discountPercent: body.lines[i]!.discountPercent ?? "0",
-            discountAmount: money(l.lineDiscount),
-            documentDiscountShare: money(l.documentDiscountShare),
-            taxableValue: money(l.taxable),
-            taxability: p.taxability,
-            taxCategoryId: p.taxCategoryId,
-            taxRateId: p.taxRateId,
-            gstRate: l.gstRate.toFixed(3),
-            cgstRate: l.cgstRate.toFixed(3),
-            cgstAmount: money(l.cgst),
-            sgstRate: l.sgstRate.toFixed(3),
-            sgstAmount: money(l.sgst),
-            igstRate: l.igstRate.toFixed(3),
-            igstAmount: money(l.igst),
-            cessRate: l.cessRate.toFixed(3),
-            cessAmount: money(l.cess),
-            lineTotal: money(l.total),
-            unitCost: toRateString(p.avgCost),
-          };
-        }),
-      );
-
-      // 3. Stock out, locking balances in product order (deadlock-free).
-      const policy = sale.settings["stock.negative_policy"];
-      const order = sale.lines.map((_, i) => i).sort((a, b) => sale.lines[a]!.productId.localeCompare(sale.lines[b]!.productId));
-      for (const i of order) {
-        const p = sale.lines[i]!;
-        const qty = t.lines[i]!.qtyBase.plus(p.freeQtyBase);
-        const moved = await postStockMovement(
-          tx,
-          {
-            businessId: ctx.businessId,
-            productId: p.productId,
-            productName: p.productName,
-            warehouseId: sale.warehouseId,
-            batchId: p.batchId,
-            date: sale.invoiceDate,
-            type: "sale",
-            qty: toQtyString(qty),
-            unitCost: p.avgCost,
-            refType: "invoice",
-            refId: id,
-            refLineId: itemIds[i]!,
-            refNumber: numbering.number,
-            userId: ctx.userId,
-          },
-          policy,
-        );
-        if (moved.warning) {
-          warnings.push({
-            code: "insufficient_stock",
-            params: { product: p.productName, available: moved.warning.available.toString(), requested: moved.warning.requested.toString() },
-          });
-        }
-      }
-
-      // 4. Credit policy, with the customer row locked.
-      const [locked] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, c.id)).for("update");
-      const open = (await openInvoices(tx, ctx.businessId, c.id)).filter((d) => d.id !== id);
-      warnings.push(...checkCredit(ctx, sale, locked!.balance, open));
-
-      // 5. Customer ledger debit.
-      await postPartyEntry(tx, {
-        businessId: ctx.businessId,
-        party: { type: "customer", id: c.id },
-        date: sale.invoiceDate,
-        docType: "invoice",
-        docId: id,
-        docNumber: numbering.number,
-        debit: toAmountString(t.grandTotal),
-        narration: `Sales invoice ${numbering.number}`,
-        userId: ctx.userId,
-      });
-
-      // 6. GST register: one row per line (and per taxable charge).
-      const gstBase = {
-        businessId: ctx.businessId,
-        direction: "outward" as const,
-        docType: "invoice" as const,
-        docId: id,
-        docNumber: numbering.number,
-        docDate: sale.invoiceDate,
-        returnPeriod: sale.invoiceDate.slice(0, 7),
-        partyName: c.businessName ?? c.name,
-        partyGstin: c.gstin,
-        partyRegistration: c.gstRegistration,
-        partyStateCode: c.stateCode,
-        placeOfSupply: sale.placeOfSupply,
-        supplyType: sale.supplyType,
-        documentValue: toAmountString(t.grandTotal),
-      };
-      await tx.insert(schema.gstTransactions).values([
-        ...sale.lines.map((p, i) => {
-          const l = t.lines[i]!;
-          return {
-            ...gstBase,
-            docLineId: itemIds[i]!,
-            taxability: p.taxability,
-            hsnCode: p.hsnCode,
-            uqc: p.uqc,
-            qty: toQtyString(l.qtyBase),
-            taxableValue: money(l.taxable),
-            gstRate: l.gstRate.toFixed(3),
-            cgstAmount: money(l.cgst),
-            sgstAmount: money(l.sgst),
-            igstAmount: money(l.igst),
-            cessAmount: money(l.cess),
-          };
-        }),
-        ...t.charges
-          .filter((ch) => ch.gstRate.gt(0))
-          .map((ch) => ({
-            ...gstBase,
-            taxability: "taxable" as const,
-            taxableValue: money(ch.taxable),
-            gstRate: ch.gstRate.toFixed(3),
-            cgstAmount: money(ch.cgst),
-            sgstAmount: money(ch.sgst),
-            igstAmount: money(ch.igst),
-            cessAmount: money(ch.cess),
-          })),
-      ]);
-
-      // 7. Money received with the invoice.
-      let payment = null;
-      if (body.payment && dec(body.payment.amount).gt(0)) {
-        const settle = t.amountPaid.gt(t.grandTotal) ? t.grandTotal : t.amountPaid;
-        payment = await recordPayment(tx, ctx, sale.business.financialYearStartMonth, {
-          direction: "in",
-          party: { type: "customer", id: c.id, name: c.name },
-          date: sale.invoiceDate,
-          amount: body.payment.amount,
-          method: body.payment.method,
-          referenceNumber: body.payment.reference ?? null,
-          paymentAccountId: body.payment.paymentAccountId ?? null,
-          allocations: settle.gt(0) ? [{ documentId: id, amount: settle.toFixed(2) }] : [],
-        });
-      }
-
-      await audit(tx, ctx, {
-        action: "invoice.posted",
-        entityType: "invoice",
-        entityId: id,
-        entityLabel: numbering.number,
-        changes: {
-          customer: c.name,
-          grandTotal: toAmountString(t.grandTotal),
-          ...(sale.rateOverridden ? { rateOverridden: true } : {}),
-          ...(warnings.length ? { warnings: warnings.map((w) => w.code) } : {}),
-        },
-      });
-      await tx.insert(schema.outboxEvents).values({
-        businessId: ctx.businessId,
-        eventType: "invoice.posted",
-        aggregateType: "invoice",
-        aggregateId: id,
-        payload: { customerId: c.id, invoiceDate: sale.invoiceDate, grandTotal: toAmountString(t.grandTotal) },
-      });
-      return { replay: false, detail: { ...(await invoiceDetail(tx, ctx, id)), ...(payment ? { payment } : {}) }, warnings };
+      return { replay: false, ...(await postInvoice(tx, ctx, deps, body, clientId)) };
     });
     if (result.replay) reply.header("idempotent-replay", "true");
     return reply.code(result.replay ? 200 : 201).send({ ...result.detail, warnings: result.warnings });
