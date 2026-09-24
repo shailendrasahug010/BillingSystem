@@ -1,0 +1,64 @@
+# Single-server deployment: PostgreSQL, a one-shot release job, the API and
+# Caddy serving the web app. Copy .env.example to .env and fill it in first.
+#   docker compose up -d --build
+name: vyapaar
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vyapaar_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: vyapaar
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vyapaar_owner -d vyapaar"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Applies migrations and grants as the schema owner, then exits.
+  migrate:
+    build: { context: ., target: migrate }
+    environment:
+      MIGRATION_DATABASE_URL: postgres://vyapaar_owner:${POSTGRES_PASSWORD}@postgres:5432/vyapaar
+      APP_DB_ROLE: vyapaar_app
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  # Connects as the non-owner role, so row-level security isolates tenants.
+  api:
+    build: { context: ., target: api }
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://vyapaar_app:${APP_DB_PASSWORD}@postgres:5432/vyapaar
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?run pnpm --filter @vyapaar/api keys}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?run pnpm --filter @vyapaar/api keys}
+      COOKIE_SECURE: "true"
+      CORS_ORIGINS: https://${DOMAIN:-localhost}
+      LOG_LEVEL: info
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build: { context: ., target: web }
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -41,6 +41,8 @@ export const users = pgTable(
     /** argon2id hash. Never selected by default in API queries. */
     passwordHash: text(),
     preferredLocale: varchar({ length: 10 }).notNull().default("en"),
+    /** Business opened by default at the next login. */
+    lastBusinessId: uuid(),
     isActive: boolean().notNull().default(true),
     mfaSecretEnc: text(),
     failedLoginCount: integer().notNull().default(0),
@@ -80,12 +82,17 @@ export const businesses = pgTable(
     financialYearStartMonth: smallint().notNull().default(4),
     timeZone: text().notNull().default("Asia/Kolkata"),
     currency: char({ length: 3 }).notNull().default("INR"),
+    /** SaaS lifecycle: trial -> active; suspended/closed tenants cannot sign in. */
+    status: varchar({ length: 12 }).notNull().default("trial"),
+    plan: varchar({ length: 30 }).notNull().default("trial"),
+    trialEndsAt: tstz(),
     ...auditColumns,
     ...versioned,
   },
   (t) => [
     index("businesses_gstin_idx").on(t.gstin),
     check("businesses_fy_month_chk", sql`${t.financialYearStartMonth} between 1 and 12`),
+    check("businesses_status_chk", sql`${t.status} in ('trial', 'active', 'suspended', 'closed')`),
   ],
 );
 

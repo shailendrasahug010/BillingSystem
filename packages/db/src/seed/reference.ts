@@ -1,9 +1,9 @@
 import { ALL_PERMISSIONS, DEFAULT_ROLES, financialYearOf, GST_STATES } from "@vyapaar/core";
 import { sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { Executor } from "../executor.js";
 import * as s from "../schema/index.js";
 
-type Db = NodePgDatabase<typeof s>;
+type Db = Executor;
 
 /** Global reference data: GST state codes and the permission catalogue. Idempotent. */
 export async function seedReferenceData(db: Db): Promise<void> {

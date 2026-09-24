@@ -22,6 +22,20 @@
       "when": 1790224151232,
       "tag": "0002_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790227401063,
+      "tag": "0003_tenancy",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790227421680,
+      "tag": "0004_saas_lifecycle",
+      "breakpoints": true
     }
   ]
 }

@@ -17,8 +17,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runMigrations } from "../scripts/migrate.js";
-import { createDb, seedBusinessDefaults, seedReferenceData } from "../src/index.js";
+import { createDb, runMigrations, seedBusinessDefaults, seedReferenceData } from "../src/index.js";
 import * as s from "../src/schema/index.js";
 
 const adminUrl = process.env.DATABASE_URL;

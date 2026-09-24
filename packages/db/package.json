@@ -16,7 +16,8 @@
     "seed": "tsx scripts/seed.ts",
     "verify": "vitest run --reporter=verbose",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "setup-app-role": "tsx scripts/setup-app-role.ts"
   },
   "dependencies": {
     "@vyapaar/core": "workspace:*",
