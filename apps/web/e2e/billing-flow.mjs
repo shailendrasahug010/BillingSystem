@@ -16,7 +16,7 @@ const { chromium } = require("playwright");
 const WEB = process.env.WEB_URL ?? "http://localhost:5173";
 const API = `${process.env.API_URL ?? "http://localhost:3000"}/api/v1`;
 const OUT = process.env.OUT ?? ".";
-const mobile = "9876543210";
+const mobile = process.env.E2E_MOBILE ?? `98765${String(Date.now()).slice(-5)}`;
 const password = "Str0ng-pass!";
 const log = (...a) => console.log("•", ...a);
 

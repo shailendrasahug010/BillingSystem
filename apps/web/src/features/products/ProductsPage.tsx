@@ -6,11 +6,14 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { EmptyState, Segmented } from "../../components/ui/misc";
-import { BRANDS, PRODUCTS } from "../../data/db";
+import { useToast } from "../../components/ui/Toast";
+import { allowed, BRANDS, PRODUCTS } from "../../data/db";
 import { useSearchableProducts } from "../../data/hooks";
+import { LIVE } from "../../data/source";
 import { cn } from "../../lib/cn";
+import { downloadCsv } from "../../lib/download";
 import { searchProducts } from "@vyapaar/core";
-
+import { ProductEditor } from "./ProductEditor";
 
 export function ProductsPage() {
   const { t, money, locale } = useI18n();
@@ -18,6 +21,9 @@ export function ProductsPage() {
   const [brand, setBrand] = useState("");
   const [stock, setStock] = useState<"all" | "low" | "out">("all");
   const searchable = useSearchableProducts();
+  const toast = useToast();
+  const [editing, setEditing] = useState<{ id: string | null } | null>(null);
+  const canEdit = LIVE && allowed("product.update");
 
   const rows = useMemo(() => {
     const base = query.trim() ? searchProducts(query, searchable, { limit: 100 }).map((h) => h.product) : searchable;
@@ -39,10 +45,37 @@ export function ProductsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button icon={<Download size={16} />}>{t("common.export")}</Button>
-          <Button variant="primary" icon={<PackagePlus size={16} />}>
-            {t("product.add")}
+          <Button
+            icon={<Download size={16} />}
+            onClick={() =>
+              downloadCsv(
+                "products.csv",
+                [
+                  { label: t("product.code"), value: (p) => p.code },
+                  { label: t("product.name"), value: (p) => p.name },
+                  { label: t("product.brand"), value: (p) => p.brand },
+                  { label: t("product.hsn"), value: (p) => p.hsn },
+                  { label: t("product.gstRate"), value: (p) => p.gstRate },
+                  { label: t("product.mrp"), value: (p) => p.mrp },
+                  { label: t("product.sellingPrice"), value: (p) => p.rate },
+                  { label: t("product.currentStock"), value: (p) => p.stock },
+                  { label: t("product.unit"), value: (p) => p.unit },
+                ],
+                rows,
+              )
+            }
+          >
+            {t("common.export")}
           </Button>
+          {(!LIVE || allowed("product.create")) && (
+            <Button
+              variant="primary"
+              icon={<PackagePlus size={16} />}
+              onClick={() => (LIVE ? setEditing({ id: null }) : toast({ tone: "info", title: t("common.sampleData"), body: t("product.demoReadOnly") }))}
+            >
+              {t("product.add")}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -73,7 +106,19 @@ export function ProductsPage() {
 
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
         {rows.length === 0 ? (
-          <EmptyState title={t("empty.products")} />
+          <EmptyState
+            title={t("empty.products")}
+            {...(LIVE && allowed("product.create") && PRODUCTS.length === 0
+              ? {
+                  hint: t("product.emptyHint"),
+                  action: (
+                    <Button variant="primary" icon={<PackagePlus size={16} />} onClick={() => setEditing({ id: null })}>
+                      {t("product.add")}
+                    </Button>
+                  ),
+                }
+              : {})}
+          />
         ) : (
           <div className="scroll-x">
             <table className="w-full min-w-[860px] text-[13.5px]">
@@ -94,7 +139,7 @@ export function ProductsPage() {
                   const level = stockLevel(p.stock, p.minStock);
                   const margin = ((p.rate - p.purchasePrice) / p.rate) * 100;
                   return (
-                    <tr key={p.id} className="border-b border-line last:border-b-0 hover:bg-surface-2">
+                    <tr key={p.id} onClick={canEdit ? () => setEditing({ id: p.id }) : undefined} className={cn("border-b border-line last:border-b-0 hover:bg-surface-2", canEdit && "cursor-pointer")}>
                       <td className="px-4 py-2.5">
                         <p className="font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
                         <p className="text-[12px] text-ink-3">
@@ -106,7 +151,7 @@ export function ProductsPage() {
                       <td className="px-3 py-2.5 text-right">{p.taxCategory.kind === "taxable" ? `${p.gstRate}%` : t("gst.nilRated")}</td>
                       <td className="px-3 py-2.5 text-right text-ink-2">{money(p.mrp)}</td>
                       <td className="px-3 py-2.5 text-right text-ink">{money(p.rate)}</td>
-                      <td className="px-3 py-2.5 text-right text-ink-2">{margin.toFixed(1)}%</td>
+                      <td className="px-3 py-2.5 text-right text-ink-2">{p.rate > 0 && (!LIVE || allowed("product.view_cost")) ? `${margin.toFixed(1)}%` : "—"}</td>
                       <td className="px-4 py-2.5 text-right">
                         <p className={cn("font-semibold", level === "out_of_stock" ? "text-danger" : level === "low" ? "text-warn" : "text-ink")}>
                           {p.stock} {p.unit}
@@ -125,6 +170,7 @@ export function ProductsPage() {
           </div>
         )}
       </div>
+      {LIVE && <ProductEditor productId={editing?.id ?? null} open={editing !== null} onOpenChange={(v) => !v && setEditing(null)} />}
     </div>
   );
 }

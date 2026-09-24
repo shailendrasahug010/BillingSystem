@@ -52,7 +52,29 @@ export const WORKSPACE = {
   role: "admin",
   /** Unit id -> symbol (live catalogue). */
   units: new Map<string, string>(),
+  /** Live catalogue masters used by editors. */
+  unitList: [] as Array<{ id: string; symbol: string; name: string }>,
+  taxCategories: [] as Array<{ id: string; name: string; kind: string }>,
+  categories: [] as Array<{ id: string; name: string }>,
 };
+
+export interface Supplier {
+  id: string;
+  code: string;
+  name: string;
+  companyName: string | null;
+  mobile: string | null;
+  city: string | null;
+  gstin: string | null;
+  stateCode: string;
+  gstRegistration: string;
+  balance: number;
+  creditDays: number;
+}
+
+/** Live only: suppliers (purchase entry and supplier payments search them locally). */
+export const SUPPLIERS: Supplier[] = [];
+export const supplierById = new Map<string, Supplier>();
 
 export function setToday(date: string): void {
   TODAY = date;

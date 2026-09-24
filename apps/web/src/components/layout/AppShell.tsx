@@ -16,7 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { GROUP_LABELS, MODULES, moduleForRoute, type ModuleDef } from "../../app/modules";
+import { GROUP_LABELS, MODULES, moduleForRoute, phaseBadge, type ModuleDef } from "../../app/modules";
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
 import { applyTheme, readTheme, type ThemeChoice } from "../../app/theme";
@@ -136,7 +136,7 @@ function NavItem({ mod, active, onClick }: { mod: ModuleDef; active: boolean; on
     >
       <Icon size={17} className={cn("shrink-0", active ? "text-accent" : "text-ink-3 group-hover:text-ink-2")} />
       <span className="min-w-0 flex-1 truncate">{t(mod.label)}</span>
-      {mod.phase && <span className="rounded bg-surface-2 px-1.5 text-[10.5px] font-medium text-ink-3">P{mod.phase}</span>}
+      {phaseBadge(mod) && <span className="rounded bg-surface-2 px-1.5 text-[10.5px] font-medium text-ink-3">P{phaseBadge(mod)}</span>}
     </button>
   );
 }

@@ -1,0 +1,146 @@
+import { Download, Plus, Search } from "lucide-react";
+import { useState } from "react";
+import { useI18n } from "../../app/i18n";
+import { useRouter } from "../../app/router";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Field";
+import { EmptyState, Segmented } from "../../components/ui/misc";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, type Column } from "../../components/ui/Page";
+import { allowed } from "../../data/db";
+import { downloadCsv } from "../../lib/download";
+import { usePaged } from "../../lib/usePaged";
+
+export interface PurchaseRow {
+  id: string;
+  purchaseNumber: string;
+  supplierInvoiceNumber: string;
+  supplierInvoiceDate: string;
+  supplierId: string;
+  partyName: string;
+  grandTotal: string;
+  balanceDue: string;
+  paymentStatus: "unpaid" | "partial" | "paid";
+  status: "posted" | "cancelled";
+}
+
+export function PurchaseStatusBadge({ row }: { row: Pick<PurchaseRow, "status" | "paymentStatus"> }) {
+  const { t } = useI18n();
+  if (row.status === "cancelled") return <Badge tone="danger">{t("common.cancelled")}</Badge>;
+  const tone = row.paymentStatus === "paid" ? "good" : row.paymentStatus === "partial" ? "warn" : "neutral";
+  return <Badge tone={tone}>{t(`status.payment.${row.paymentStatus}`)}</Badge>;
+}
+
+export function PurchasesPage() {
+  const { t, money, dateMedium } = useI18n();
+  const { navigate } = useRouter();
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<"all" | "posted" | "cancelled">("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const list = usePaged<PurchaseRow>("purchases", "/purchases", { status, from, to, q: q.trim().length >= 2 ? q.trim() : undefined });
+
+  const columns: Column<PurchaseRow>[] = [
+    { key: "date", header: t("purchase.billDate"), render: (p) => <span className="text-ink-2">{dateMedium(p.supplierInvoiceDate)}</span> },
+    {
+      key: "bill",
+      header: t("purchase.billNumber"),
+      render: (p) => (
+        <div>
+          <p className="font-medium text-ink">{p.supplierInvoiceNumber}</p>
+          <p className="text-[12px] text-ink-3">{p.purchaseNumber}</p>
+        </div>
+      ),
+    },
+    { key: "supplier", header: t("nav.suppliers"), render: (p) => <span className="text-ink">{p.partyName}</span> },
+    { key: "status", header: t("common.status"), render: (p) => <PurchaseStatusBadge row={p} /> },
+    { key: "total", header: t("common.total"), align: "right", render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(p.grandTotal)}</span> },
+    { key: "due", header: t("common.balance"), align: "right", render: (p) => (p.status === "posted" && Number(p.balanceDue) > 0 ? <span className="font-semibold text-ink">{money(p.balanceDue)}</span> : <span className="text-ink-3">—</span>) },
+  ];
+
+  const posted = list.rows.filter((p) => p.status === "posted");
+  const total = posted.reduce((s, p) => s + Number(p.grandTotal), 0);
+  const due = posted.reduce((s, p) => s + Number(p.balanceDue), 0);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title={t("purchase.title")}
+        subtitle={
+          <>
+            {t("common.total")} {money(total, 0)} · {t("common.balance")} {money(due, 0)}
+          </>
+        }
+        actions={
+          <>
+            <Button
+              icon={<Download size={16} />}
+              onClick={() =>
+                downloadCsv(
+                  "purchases.csv",
+                  [
+                    { label: t("purchase.billDate"), value: (p) => p.supplierInvoiceDate },
+                    { label: t("purchase.billNumber"), value: (p) => p.supplierInvoiceNumber },
+                    { label: t("purchase.number"), value: (p) => p.purchaseNumber },
+                    { label: t("nav.suppliers"), value: (p) => p.partyName },
+                    { label: t("common.status"), value: (p) => (p.status === "cancelled" ? p.status : p.paymentStatus) },
+                    { label: t("common.total"), value: (p) => p.grandTotal },
+                    { label: t("common.balance"), value: (p) => p.balanceDue },
+                  ],
+                  list.rows,
+                )
+              }
+            >
+              {t("common.export")}
+            </Button>
+            {allowed("purchase.create") && (
+              <Button variant="primary" icon={<Plus size={16} />} onClick={() => navigate({ name: "purchase-new" })}>
+                {t("purchase.new")}
+              </Button>
+            )}
+          </>
+        }
+      />
+      <FilterBar>
+        <Input className="flex-1" leading={<Search size={16} />} placeholder={t("purchase.search")} aria-label={t("purchase.search")} value={q} onChange={(e) => setQ(e.target.value)} />
+        <Segmented
+          size="sm"
+          label={t("common.status")}
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "all", label: t("common.all") },
+            { value: "posted", label: t("status.document.posted") },
+            { value: "cancelled", label: t("common.cancelled") },
+          ]}
+        />
+        <Input type="date" aria-label={t("common.from")} value={from} onChange={(e) => setFrom(e.target.value)} className="md:w-40" />
+        <Input type="date" aria-label={t("common.to")} value={to} onChange={(e) => setTo(e.target.value)} className="md:w-40" />
+      </FilterBar>
+      {list.error ? <ErrorNote error={list.error} /> : null}
+      <DataTable
+        columns={columns}
+        rows={list.rows}
+        rowKey={(p) => p.id}
+        loading={list.loading}
+        onRowClick={(p) => navigate({ name: "purchase-view", purchaseId: p.id })}
+        empty={
+          <EmptyState
+            title={t("purchase.empty")}
+            hint={t("purchase.emptyHint")}
+            {...(allowed("purchase.create")
+              ? {
+                  action: (
+                    <Button variant="primary" icon={<Plus size={16} />} onClick={() => navigate({ name: "purchase-new" })}>
+                      {t("purchase.new")}
+                    </Button>
+                  ),
+                }
+              : {})}
+          />
+        }
+      />
+      <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
+    </div>
+  );
+}

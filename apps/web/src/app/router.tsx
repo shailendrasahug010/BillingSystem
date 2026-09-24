@@ -15,7 +15,11 @@ export type Route =
   | { name: "products" }
   | { name: "settings" }
   | { name: "design-system" }
-  | { name: "planned"; module: PlannedModule };
+  | { name: "purchase-new"; supplierId?: string }
+  | { name: "purchase-view"; purchaseId: string }
+  | { name: "supplier"; supplierId: string }
+  /** Module screens; live mode renders the real screen, demo mode the plan. */
+  | { name: "planned"; module: PlannedModule; action?: "collect" | "pay"; partyId?: string };
 
 export type PlannedModule =
   | "suppliers"

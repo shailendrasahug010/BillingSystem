@@ -11,6 +11,7 @@ import { Card, CardHeader } from "../../components/ui/Card";
 import { Avatar, EmptyState } from "../../components/ui/misc";
 import { customerById, PRODUCTS, productById, TODAY } from "../../data/db";
 import { useCustomerInsight } from "../../data/hooks";
+import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { useCustomerHistory } from "./useCustomerHistory";
 import { cn } from "../../lib/cn";
@@ -86,7 +87,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
             {t("common.call")}
           </Button>
           <Button icon={<MessageCircle size={16} />}>{t("common.whatsapp")}</Button>
-          <Button icon={<Wallet size={16} />} onClick={() => navigate({ name: "planned", module: "payments" })}>
+          <Button icon={<Wallet size={16} />} onClick={() => navigate(LIVE ? { name: "planned", module: "payments", action: "collect", partyId: customer.id } : { name: "planned", module: "payments" })}>
             {t("dashboard.actions.receivePayment")}
           </Button>
           <Button variant="primary" icon={<Receipt size={16} />} onClick={() => navigate({ name: "invoice-new", customerId: customer.id })}>

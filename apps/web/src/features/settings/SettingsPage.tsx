@@ -5,6 +5,8 @@ import { applyTheme, readTheme, type ThemeChoice } from "../../app/theme";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Segmented } from "../../components/ui/misc";
 import { BUSINESS } from "../../data/db";
+import { LIVE } from "../../data/source";
+import { LiveSettings } from "./LiveSettings";
 import { getSyncState, setOnline, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
 
@@ -59,6 +61,10 @@ export function SettingsPage() {
         </div>
       </Card>
 
+      {LIVE ? (
+        <LiveSettings />
+      ) : (
+        <>
       <Card>
         <CardHeader title={t("settings.stockPolicy")} subtitle="stock.negative_policy" />
         <div className="p-4 sm:p-5">
@@ -109,6 +115,8 @@ export function SettingsPage() {
           </div>
         </dl>
       </Card>
+        </>
+      )}
     </div>
   );
 }

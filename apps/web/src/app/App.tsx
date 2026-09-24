@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
-import { Kbd } from "../components/ui/misc";
+import { Kbd, Skeleton } from "../components/ui/misc";
 import { ToastProvider } from "../components/ui/Toast";
 import { AuthLayout, AuthPage } from "../features/auth/AuthPage";
 import { BusinessPicker } from "../features/auth/BusinessPicker";
@@ -9,13 +9,13 @@ import { LoginPage } from "../features/auth/LoginPage";
 import { CustomerProfilePage } from "../features/customers/CustomerProfilePage";
 import { CustomersPage } from "../features/customers/CustomersPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { DesignSystemPage } from "../features/design-system/DesignSystemPage";
 import { CreateInvoicePage } from "../features/invoice/CreateInvoicePage";
 import { InvoiceViewPage } from "../features/invoice/InvoiceViewPage";
 import { PlannedPage } from "../features/planned/PlannedPage";
 import { ProductsPage } from "../features/products/ProductsPage";
 import { CommandPalette } from "../features/search/CommandPalette";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { LIVE_MODULES } from "./modules";
 import { Button } from "../components/ui/Button";
 import { useStoreVersion } from "../data/store";
 import { LIVE } from "../data/source";
@@ -24,6 +24,29 @@ import { I18nProvider, useI18n } from "./i18n";
 import { RouterProvider, useRouter, type Route } from "./router";
 import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, useShortcuts } from "./shortcuts";
 import { applyTheme, readTheme } from "./theme";
+
+/** Module screens load on first use, so the billing screens start fast on slow connections. */
+const GstPage = lazy(() => import("../features/gst/GstPage").then((m) => ({ default: m.GstPage })));
+const InventoryPage = lazy(() => import("../features/inventory/InventoryPage").then((m) => ({ default: m.InventoryPage })));
+const PaymentsPage = lazy(() => import("../features/payments/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
+const PurchaseEntryPage = lazy(() => import("../features/purchases/PurchaseEntryPage").then((m) => ({ default: m.PurchaseEntryPage })));
+const PurchasesPage = lazy(() => import("../features/purchases/PurchasesPage").then((m) => ({ default: m.PurchasesPage })));
+const PurchaseViewPage = lazy(() => import("../features/purchases/PurchaseViewPage").then((m) => ({ default: m.PurchaseViewPage })));
+const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const SupplierProfilePage = lazy(() => import("../features/suppliers/SupplierProfilePage").then((m) => ({ default: m.SupplierProfilePage })));
+const SuppliersPage = lazy(() => import("../features/suppliers/SuppliersPage").then((m) => ({ default: m.SuppliersPage })));
+const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
+const DesignSystemPage = lazy(() => import("../features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
+
+function ScreenLoading() {
+  return (
+    <div className="flex flex-col gap-4" role="status" aria-busy="true">
+      <Skeleton className="h-8 w-56" />
+      <Skeleton className="h-12 w-full" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+}
 
 function Screen({ route }: { route: Route }) {
   switch (route.name) {
@@ -44,7 +67,31 @@ function Screen({ route }: { route: Route }) {
       return <SettingsPage />;
     case "design-system":
       return <DesignSystemPage />;
+    case "purchase-new":
+      return <PurchaseEntryPage key={route.supplierId ?? "new"} {...(route.supplierId ? { supplierId: route.supplierId } : {})} />;
+    case "purchase-view":
+      return <PurchaseViewPage purchaseId={route.purchaseId} />;
+    case "supplier":
+      return <SupplierProfilePage supplierId={route.supplierId} />;
     case "planned":
+      if (LIVE_MODULES.has(route.module)) {
+        switch (route.module) {
+          case "payments":
+            return <PaymentsPage {...(route.action ? { action: route.action } : {})} {...(route.partyId ? { partyId: route.partyId } : {})} />;
+          case "purchases":
+            return <PurchasesPage />;
+          case "suppliers":
+            return <SuppliersPage />;
+          case "inventory":
+            return <InventoryPage />;
+          case "reports":
+            return <ReportsPage />;
+          case "gst":
+            return <GstPage />;
+          case "users":
+            return <UsersPage />;
+        }
+      }
       return <PlannedPage module={route.module} />;
     case "login":
       return null;
@@ -118,8 +165,8 @@ function Root() {
     { id: "search", keys: GLOBAL_SHORTCUTS.search, allowInInputs: true, handler: () => setSearchOpen(true) },
     { id: "invoice", keys: GLOBAL_SHORTCUTS.newInvoice, allowInInputs: true, handler: () => navigate({ name: "invoice-new" }) },
     { id: "order", keys: GLOBAL_SHORTCUTS.newOrder, handler: () => navigate({ name: "planned", module: "orders" }) },
-    { id: "purchase", keys: GLOBAL_SHORTCUTS.purchase, handler: () => navigate({ name: "planned", module: "purchases" }) },
-    { id: "collection", keys: GLOBAL_SHORTCUTS.collection, handler: () => navigate({ name: "planned", module: "payments" }) },
+    { id: "purchase", keys: GLOBAL_SHORTCUTS.purchase, handler: () => navigate(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
+    { id: "collection", keys: GLOBAL_SHORTCUTS.collection, handler: () => navigate(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
     { id: "help", keys: "shift+?", handler: () => setHelpOpen(true) },
   ]);
 
@@ -127,7 +174,9 @@ function Root() {
 
   return (
     <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
-      <Screen route={route} />
+      <Suspense fallback={<ScreenLoading />}>
+        <Screen route={route} />
+      </Suspense>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </AppShell>

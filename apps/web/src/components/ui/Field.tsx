@@ -70,3 +70,12 @@ export function Field({
     </div>
   );
 }
+
+export function Checkbox({ label, checked, onChange, disabled, className }: { label: ReactNode; checked: boolean; onChange(v: boolean): void; disabled?: boolean; className?: string }) {
+  return (
+    <label className={cn("inline-flex items-center gap-2 text-[14px] text-ink-2", disabled && "opacity-60", className)}>
+      <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      {label}
+    </label>
+  );
+}

@@ -2,7 +2,7 @@
 
 Distributor & supplier CRM, billing, inventory, GST and collections for Indian FMCG distributors, wholesalers and suppliers. Web, Windows and Android from one code base, in English and Hindi.
 
-> **Status:** Phases 1–2 (architecture, UI/UX) are done, and the **Phase 3 MVP is built as a multi-tenant SaaS**: a Fastify API over PostgreSQL (self-service sign-up, auth, roles, masters, invoicing, purchases, stock, payments, dashboard, reports, GST summary, search) and the web app connected to it. The next step is a pilot with a real distributor. E-invoicing (IRN) is intentionally not included yet. See [docs/11-roadmap.md](docs/11-roadmap.md).
+> **Status:** Phases 1–2 (architecture, UI/UX) are done, and the **Phase 3 MVP is built as a multi-tenant SaaS**: a Fastify API over PostgreSQL (self-service sign-up, auth, roles, masters, invoicing, purchases, stock, payments, dashboard, reports, GST summary, search) and web screens for all of it: billing, customers, products (add/edit), suppliers, purchase bills, payments (receipts, supplier payments, cheques, advances), inventory and adjustments, reports, GST summary, users & roles, and business settings. The next step is a pilot with a real distributor. E-invoicing (IRN) is intentionally not included yet. See [docs/11-roadmap.md](docs/11-roadmap.md).
 
 ## Design documents
 
@@ -66,7 +66,9 @@ DATABASE_URL=postgres://vyapaar_app:devpass@localhost:5432/vyapaar_dev OTP_DEV_E
 pnpm dev:web                                          # http://localhost:5173, proxies /api to the API
 ```
 
-Open the web app, choose **Create account**, and the business is created with default roles, number series, GST rate buckets and a main godown. Add products and customers, then **New Invoice** (Ctrl+I). `apps/web/e2e/billing-flow.mjs` runs this whole flow in a browser (see the header of that file).
+Open the web app, choose **Create account**, and the business is created with default roles, number series, GST rate buckets and a main godown. A typical first day: **Products → Add product**, **Suppliers → Add supplier**, **Purchases → New purchase bill** (Alt+P) to bring stock in, **Customers → Add customer**, then **New Invoice** (Ctrl+I) and **Payments → Receive payment** (Alt+C).
+
+Two browser end-to-end scripts run against a real API and database (see the header of each file): `apps/web/e2e/billing-flow.mjs` (sign-up, bill, server total, session restore) and `apps/web/e2e/operations-flow.mjs` (product editor, supplier, purchase bill with the server agreeing on the total, supplier payment, stock adjustment, collection, reports, GST summary, team and roles, settings).
 
 Demo mode without a server: `VITE_DATA_SOURCE=mock pnpm dev:web`, or `pnpm --filter @vyapaar/web build:preview` for a single shareable HTML file. In demo mode: **New Invoice** (Ctrl+I) → type `ABC` and press Enter → the suggestions explain themselves ("Usually every 7 days · last bought 6 days ago") → Alt+1 adds the first → F2 and type `namak` → Ctrl+Enter saves. Switch **EN / हिं** in the top bar at any time.
 

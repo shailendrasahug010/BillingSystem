@@ -51,6 +51,11 @@ export interface Product {
   /** MRP-style pricing: rates include GST. */
   pricesIncludeTax?: boolean;
   active?: boolean;
+  /** Live data: base unit and the pack units it can be bought / sold in. */
+  unitId?: string;
+  packUnits?: Array<{ unitId: string; symbol: string; factor: number }>;
+  trackBatches?: boolean;
+  trackExpiry?: boolean;
 }
 
 export interface Customer {
