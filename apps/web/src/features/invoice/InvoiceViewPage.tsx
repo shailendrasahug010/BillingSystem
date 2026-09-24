@@ -9,6 +9,7 @@ import { EmptyState, Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { customerById, INVOICES } from "../../data/mock";
 import { useStoreVersion } from "../../data/store";
+import { EMBEDDED } from "../../lib/embedded";
 import { InvoiceDocument } from "./InvoiceDocument";
 
 export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
@@ -22,15 +23,6 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const customer = customerById.get(invoice.customerId)!;
   const balance = invoice.total - invoice.paid;
   const status = balance <= 0.5 ? "paid" : invoice.paid > 0 ? "partial" : "unpaid";
-
-  const print = () => {
-    // Inside an embedded preview the browser refuses the print dialog; the installed app prints normally.
-    if (window.self !== window.top) {
-      toast({ tone: "info", title: t("common.print"), body: "Printing opens the system dialog in the installed app (web, Windows, Android)." });
-      return;
-    }
-    window.print();
-  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -60,12 +52,17 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
               { value: "hi", label: "हिन्दी" },
             ]}
           />
-          <Button icon={<Printer size={16} />} onClick={print}>
-            {t("common.print")}
-          </Button>
-          <Button icon={<Download size={16} />} onClick={() => toast({ tone: "info", title: "PDF", body: "The API renders this template to PDF (GET /invoices/:id/pdf)." })}>
-            PDF
-          </Button>
+          {/* Embedded previews cannot print or download; the installed app and the web app can. */}
+          {!EMBEDDED && (
+            <Button icon={<Printer size={16} />} onClick={() => window.print()}>
+              {t("common.print")}
+            </Button>
+          )}
+          {!EMBEDDED && (
+            <Button icon={<Download size={16} />} onClick={() => toast({ tone: "info", title: "PDF", body: "The API renders this template to PDF (GET /invoices/:id/pdf)." })}>
+              PDF
+            </Button>
+          )}
           <Button variant="primary" icon={<MessageCircle size={16} />} onClick={() => toast({ tone: "info", title: t("common.whatsapp"), body: "Sends the PDF link via the WhatsApp Business API adapter." })}>
             {t("common.share")}
           </Button>
