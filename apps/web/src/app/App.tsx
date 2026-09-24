@@ -35,6 +35,8 @@ const PurchaseViewPage = lazy(() => import("../features/purchases/PurchaseViewPa
 const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
 const SupplierProfilePage = lazy(() => import("../features/suppliers/SupplierProfilePage").then((m) => ({ default: m.SupplierProfilePage })));
 const SuppliersPage = lazy(() => import("../features/suppliers/SuppliersPage").then((m) => ({ default: m.SuppliersPage })));
+const OrdersPage = lazy(() => import("../features/orders/OrdersPage").then((m) => ({ default: m.OrdersPage })));
+const OrderViewPage = lazy(() => import("../features/orders/OrderViewPage").then((m) => ({ default: m.OrderViewPage })));
 const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 const DesignSystemPage = lazy(() => import("../features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
@@ -74,11 +76,15 @@ function Screen({ route }: { route: Route }) {
       return <PurchaseViewPage purchaseId={route.purchaseId} />;
     case "supplier":
       return <SupplierProfilePage supplierId={route.supplierId} />;
+    case "order-view":
+      return <OrderViewPage key={route.orderId} orderId={route.orderId} />;
     case "planned":
       if (LIVE_MODULES.has(route.module)) {
         switch (route.module) {
+          case "orders":
+            return <OrdersPage newOrder={route.action === "new"} {...(route.partyId ? { customerId: route.partyId } : {})} />;
           case "payments":
-            return <PaymentsPage {...(route.action ? { action: route.action } : {})} {...(route.partyId ? { partyId: route.partyId } : {})} />;
+            return <PaymentsPage {...(route.action === "collect" || route.action === "pay" ? { action: route.action } : {})} {...(route.partyId ? { partyId: route.partyId } : {})} />;
           case "purchases":
             return <PurchasesPage />;
           case "suppliers":
@@ -167,7 +173,7 @@ function Root() {
   useShortcuts([
     { id: "search", keys: GLOBAL_SHORTCUTS.search, allowInInputs: true, handler: () => setSearchOpen(true) },
     { id: "invoice", keys: GLOBAL_SHORTCUTS.newInvoice, allowInInputs: true, handler: () => navigate({ name: "invoice-new" }) },
-    { id: "order", keys: GLOBAL_SHORTCUTS.newOrder, handler: () => navigate({ name: "planned", module: "orders" }) },
+    { id: "order", keys: GLOBAL_SHORTCUTS.newOrder, handler: () => navigate(LIVE ? { name: "planned", module: "orders", action: "new" } : { name: "planned", module: "orders" }) },
     { id: "purchase", keys: GLOBAL_SHORTCUTS.purchase, handler: () => navigate(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
     { id: "collection", keys: GLOBAL_SHORTCUTS.collection, handler: () => navigate(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
     { id: "help", keys: "shift+?", handler: () => setHelpOpen(true) },

@@ -1286,5 +1286,52 @@
     "transfer": "Transfer stock",
     "transferred": "Stock transferred",
     "transfers": "Transfers"
+  },
+  "orders": {
+    "title": "Sales orders",
+    "subtitle": "Orders booked by salespeople and at the counter, and what is left to invoice",
+    "new": "New order",
+    "newHint": "Prices come from the customer's rate list; stock moves only when the order is invoiced.",
+    "save": "Save order",
+    "saved": "Order saved",
+    "search": "Search by order number or customer",
+    "open": "Open",
+    "empty": "No orders here",
+    "emptyHint": "Book an order with New order (Alt+O).",
+    "demand": "Stock needed",
+    "demandHint": "Quantities on open orders against the stock in hand (all godowns).",
+    "noDemand": "No open order quantities",
+    "toSupply": "On orders",
+    "short": "Short by {{qty}}",
+    "invoiced": "Invoiced",
+    "ordered": "Ordered",
+    "left": "Left",
+    "invoiceNow": "Invoice now",
+    "deliveryDate": "Delivery by",
+    "source": "Taken by",
+    "sources": {
+      "salesperson": "Salesperson",
+      "counter": "Counter",
+      "phone": "Phone",
+      "whatsapp": "WhatsApp",
+      "app": "App"
+    },
+    "cancel": "Cancel order",
+    "confirmCancel": "Yes, cancel order",
+    "cancelHint": "What is already invoiced stays; the rest is cancelled.",
+    "pendingHint": "Waiting for confirmation (credit and stock check) before it can be invoiced.",
+    "moveTo": {
+      "pending": "Send for confirmation",
+      "confirmed": "Confirm order",
+      "packing": "Start packing",
+      "packed": "Mark packed",
+      "dispatched": "Mark dispatched",
+      "delivered": "Mark delivered"
+    },
+    "makeInvoice": "Make invoice",
+    "makeInvoiceHint": "At the order's rates. Lower a quantity to invoice part of the order now.",
+    "invoices": "Invoices",
+    "noInvoices": "Not invoiced yet.",
+    "history": "History"
   }
 }

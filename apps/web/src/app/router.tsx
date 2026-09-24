@@ -18,8 +18,9 @@ export type Route =
   | { name: "purchase-new"; supplierId?: string }
   | { name: "purchase-view"; purchaseId: string }
   | { name: "supplier"; supplierId: string }
+  | { name: "order-view"; orderId: string }
   /** Module screens; live mode renders the real screen, demo mode the plan. */
-  | { name: "planned"; module: PlannedModule; action?: "collect" | "pay"; partyId?: string };
+  | { name: "planned"; module: PlannedModule; action?: "collect" | "pay" | "new"; partyId?: string };
 
 export type PlannedModule =
   | "suppliers"

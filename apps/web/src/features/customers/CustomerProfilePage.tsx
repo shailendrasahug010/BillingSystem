@@ -1,5 +1,5 @@
 import { buildReorderList, daysBetween, findState } from "@vyapaar/core";
-import { ArrowLeft, MapPin, MessageCircle, Phone, Receipt, Wallet } from "lucide-react";
+import { ArrowLeft, ClipboardPlus, MapPin, MessageCircle, Phone, Receipt, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo } from "react";
 import { useI18n } from "../../app/i18n";
@@ -9,7 +9,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Avatar, EmptyState } from "../../components/ui/misc";
-import { customerById, PRODUCTS, productById, TODAY } from "../../data/db";
+import { allowed, customerById, PRODUCTS, productById, TODAY } from "../../data/db";
 import { useCustomerInsight } from "../../data/hooks";
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
@@ -90,6 +90,11 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           <Button icon={<Wallet size={16} />} onClick={() => navigate(LIVE ? { name: "planned", module: "payments", action: "collect", partyId: customer.id } : { name: "planned", module: "payments" })}>
             {t("dashboard.actions.receivePayment")}
           </Button>
+          {LIVE && allowed("order.create") && (
+            <Button icon={<ClipboardPlus size={16} />} onClick={() => navigate({ name: "planned", module: "orders", action: "new", partyId: customer.id })}>
+              {t("orders.new")}
+            </Button>
+          )}
           <Button variant="primary" icon={<Receipt size={16} />} onClick={() => navigate({ name: "invoice-new", customerId: customer.id })}>
             {t("invoice.new")}
           </Button>

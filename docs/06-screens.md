@@ -77,7 +77,8 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 * **Document (A4):** business name, address, GSTIN; *Tax Invoice — Original for recipient*; number, date, due date, place of supply, reverse charge; bill-to and ship-to with GSTIN and state code; lines (description with batch/expiry, HSN, qty + unit, rate, discount, taxable, GST %, CGST + SGST/UTGST or IGST, amount); HSN tax summary; taxable value, taxes, round-off, **grand total**; paid and balance; amount in words (in the print language); bank and UPI details; terms; *For <business> — Authorised signatory*; "computer-generated invoice".
 * Templates: A4, A5, 80 mm thermal; configurable header, terms, logo, bank details, columns.
 
-## 11. Sales order — Phase 3
+## 11. Sales order — **Built** (live)
+* **Built:** list (open / pending / confirmed / all, search), "Stock needed" (open order quantities against stock), new order (Alt+O, or from the customer profile) with units / cases and free goods, prices from the customer's rate list, order page with status history, confirm / cancel (reason) / packing / dispatch / delivered per the workflow and permissions, make invoice for everything open or chosen quantities at the order's rates, linked invoices. *Suggestions in the order entry, route and salesperson filters:* Phase 4.
 * List with status tabs (Draft, Pending, Confirmed, Packing, Packed, Dispatched, Delivered, Cancelled), route and salesperson filters.
 * Create: same customer + items experience as the invoice (suggestions included), expected delivery date, source (counter, salesperson app, phone, WhatsApp).
 * Detail: timeline of status changes (who, when, note), fulfilment progress bars (packed / dispatched / delivered / invoiced per line), actions allowed by the workflow (`allowedTransitions`), convert to invoice (full or partial).
@@ -148,5 +149,7 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 | Expenses | Phase 4 | Entry (category, amount, GST for ITC, paid by, receipt photo), list, category-wise / monthly / yearly reports |
 | Notifications | Phase 5 | Inbox (payment due, low stock, expiring, pending orders, to pack/dispatch, leave, salary due), mark read, reminder rule settings |
 | Users & roles | **Built** (live) | Invite by mobile, assign role, deactivate; role editor (permission matrix by module); all changes audit-logged |
-| Audit log | Phase 3 | Who, what, entity (linked), old → new values, when, device, IP; filters |
+| Audit log | **Built** (live) | Who, what, record, old → new values, when, IP; filters by record type, user and dates |
+| Import (products, customers) | **Built** (live) | CSV template, header aliases from common exports, check-first with an error table by row and column, then import |
+| Returns (credit / debit notes) | **Built** (live) | From the invoice ("Record return") or the purchase bill ("Return to supplier"): quantities per line, restock or not, reason; printable note; cancel |
 | Backup & restore | Phase 6 | Schedule (daily/weekly), manual backup, list with size and checksum, download, restore with typed confirmation and re-authentication |
