@@ -43,6 +43,7 @@ const LeavePage = lazy(() => import("../features/people/LeavePage").then((m) => 
 const PayrollPage = lazy(() => import("../features/people/PayrollPage").then((m) => ({ default: m.PayrollPage })));
 const PackingPage = lazy(() => import("../features/logistics/PackingPage").then((m) => ({ default: m.PackingPage })));
 const DispatchPage = lazy(() => import("../features/logistics/DispatchPage").then((m) => ({ default: m.DispatchPage })));
+const BackupPage = lazy(() => import("../features/backup/BackupPage").then((m) => ({ default: m.BackupPage })));
 const MessagesPage = lazy(() => import("../features/messages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
 const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
@@ -124,6 +125,8 @@ function Screen({ route }: { route: Route }) {
             return <AuditLogPage />;
           case "messages":
             return <MessagesPage />;
+          case "backup":
+            return <BackupPage />;
         }
       }
       return <PlannedPage module={route.module} />;

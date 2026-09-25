@@ -93,11 +93,15 @@ interface RequestOptions {
   signal?: AbortSignal;
   /** Return the response as a Blob (PDF and other files). */
   raw?: boolean;
+  /** Send a file as it is (application/octet-stream) instead of JSON. */
+  file?: Blob;
+  headers?: Record<string, string>;
 }
 
 async function request<T>(method: string, path: string, options: RequestOptions = {}, retried = false): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (options.body !== undefined) headers["content-type"] = "application/json";
+  const headers: Record<string, string> = { ...options.headers };
+  if (options.file) headers["content-type"] = "application/octet-stream";
+  else if (options.body !== undefined) headers["content-type"] = "application/json";
   if (accessToken) headers.authorization = `Bearer ${accessToken}`;
   if (options.idempotencyKey) headers["idempotency-key"] = options.idempotencyKey;
   let res: Response;
@@ -106,7 +110,7 @@ async function request<T>(method: string, path: string, options: RequestOptions 
       method,
       headers,
       credentials: "same-origin",
-      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+      ...(options.file ? { body: options.file } : options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch (e) {
@@ -131,6 +135,8 @@ export const api = {
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, { body }),
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, { body }),
   delete: <T>(path: string) => request<T>("DELETE", path),
+  /** Uploads a file as it is (backups). */
+  upload: <T>(path: string, file: Blob, options: { query?: Query; headers?: Record<string, string> } = {}) => request<T>("POST", path, { file, ...options }),
 };
 
 /** Fetches every page of a keyset-paginated list (small master lists: customers, suppliers). */

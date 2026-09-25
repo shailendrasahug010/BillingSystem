@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { createDb } from "./client.js";
@@ -20,4 +22,18 @@ export async function runMigrations(ownerConnectionString: string): Promise<void
   } finally {
     await pool.end();
   }
+}
+
+let version: string | null = null;
+
+/** The newest migration's tag (e.g. "0010_messaging"): the schema version a backup was made with. */
+export function schemaVersion(): string {
+  if (version) return version;
+  try {
+    const journal = JSON.parse(readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8")) as { entries: Array<{ tag: string }> };
+    version = journal.entries.at(-1)?.tag ?? "unknown";
+  } catch {
+    version = "unknown";
+  }
+  return version;
 }

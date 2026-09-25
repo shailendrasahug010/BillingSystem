@@ -34,6 +34,8 @@ interface SessionValue {
   resetPassword(mobile: string, otp: string, password: string): Promise<void>;
   switchBusiness(businessId: string): Promise<void>;
   createBusiness(input: SignupInput["business"]): Promise<void>;
+  /** Moves into a session the server already switched (a restored business). */
+  adopt(res: SessionResponse): Promise<void>;
   logout(): Promise<void>;
   retry(): void;
 }
@@ -271,6 +273,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       },
       switchBusiness: (businessId) => withSession(() => api.post<SessionResponse>("/auth/switch-business", { businessId })),
       createBusiness: (input) => withSession(() => api.post<SessionResponse>("/businesses", input)),
+      adopt: (res) => withSession(() => Promise.resolve(res)),
       logout: async () => {
         // Signing out needs the server (it ends the session there too); the caller checks for a connection.
         try {

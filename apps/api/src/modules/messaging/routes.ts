@@ -65,8 +65,13 @@ function resolveChannels(deps: AppDeps, row: SettingsRow | null, business: { nam
   return { whatsapp, email };
 }
 
+/** A business's channels, ready to send (other modules: backups by email). */
+export async function channelsFor(deps: AppDeps, tx: Tx, businessId: string): Promise<Channels> {
+  return resolveChannels(deps, await loadSettings(tx, businessId), await businessContact(tx, businessId));
+}
+
 /** In "log" mode every channel works (messages are recorded, not sent). */
-const ready = (deps: AppDeps, channels: Channels, channel: Channel) =>
+export const ready = (deps: AppDeps, channels: Channels, channel: Channel) =>
   deps.messenger.driver === "log" || (channel === "whatsapp" ? channels.whatsapp.provider !== "none" : channels.email.mode !== "none");
 
 function settingsView(deps: AppDeps, row: SettingsRow | null, channels: Channels) {

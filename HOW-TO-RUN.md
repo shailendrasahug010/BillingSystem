@@ -279,6 +279,8 @@ Without approved templates WhatsApp only delivers to customers who wrote to you 
 | Update to a new version | `git pull && docker compose up -d --build` (database changes are applied on start; installed apps then show "Reload now") |
 | Stop / start | `docker compose stop` / `docker compose start` |
 
+These commands back up the **whole server** (all firms). Each firm's owner can also keep its own copy from the app: **Backup & Restore** downloads one `.dbbackup` file with everything in that business (best with a password; it can also be emailed to the firm, always with a password), and **Restore** brings such a file back as a **new** business next to the current one, never over it (sessions, members of staff, devices and WhatsApp / email passwords are not in the file: add staff again under Users & Roles and re-enter the WhatsApp token and SMTP password in Settings).
+
 A daily backup with cron (`crontab -e`):
 
 ```

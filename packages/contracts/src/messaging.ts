@@ -74,7 +74,7 @@ export const TestMessageBody = z.strictObject({
 export const MessageListQuery = PageQuery.extend({
   channel: MessageChannel.optional(),
   status: z.enum(["queued", "sent", "delivered", "read", "failed"]).optional(),
-  kind: z.enum(["invoice", "note", "receipt", "reminder", "test"]).optional(),
+  kind: z.enum(["invoice", "note", "receipt", "reminder", "test", "backup"]).optional(),
   documentId: z.uuid().optional(),
   partyId: z.uuid().optional(),
 });

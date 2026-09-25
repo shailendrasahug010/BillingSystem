@@ -103,9 +103,9 @@ Logged actions include: invoice create/update/cancel/print/share, price override
 
 ## 9. Backup and restore safety
 
-* Automatic daily (configurable) encrypted backups plus point-in-time recovery on managed PostgreSQL.
-* Manual backup and download require `backup.download` and are audit-logged.
-* **Restore** requires `backup.restore`, re-entering the password (or OTP), typing the business name to confirm, shows what will be replaced, takes a safety backup first, refuses backups from an incompatible schema version, and is logged.
+* Server level: daily `pg_dump` of the whole database (HOW-TO-RUN.md), point-in-time recovery on managed PostgreSQL.
+* **Built — per-firm backup** (`backup.download`, audit-logged, listed with size and SHA-256): every row of the business as gzipped JSON, optionally encrypted with a password (AES-256-GCM, key from scrypt N=2^15); emailed copies are always encrypted. Sign-in sessions, memberships, devices, queued jobs and the WhatsApp / SMTP secrets are left out; field-encrypted values stay encrypted.
+* **Built — restore** (`backup.restore`, audit-logged in both businesses): only ever into a **new** business owned by the person restoring (so nothing is replaced and no safety copy is needed), after a dry run that shows the firm, date and contents and an explicit confirmation. Every row gets a new id and every foreign key is rewritten from Drizzle's metadata; a reference to a row that is not in the file is dropped (optional) or refuses the file (required), so a crafted file cannot link the new business to another firm's rows. Files from a newer schema (unknown tables or columns), damaged files and wrong passwords are refused; the decompressed size is capped (1 GB) and uploads are limited to 200 MB. Re-authentication before restore is planned.
 
 ## 10. Application security practices
 

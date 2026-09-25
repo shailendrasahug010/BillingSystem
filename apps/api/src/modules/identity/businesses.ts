@@ -31,6 +31,9 @@ export async function validateBusinessInput(db: Executor, input: BusinessInputT,
  * The transaction is switched to the new business so row-level security lets
  * the rows in.
  */
+/** How many businesses one person may own (sign-up, new business, restore). */
+export const MAX_OWNED_BUSINESSES = 10;
+
 export async function createBusiness(
   tx: Tx,
   deps: AppDeps,

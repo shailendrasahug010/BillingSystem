@@ -895,7 +895,13 @@
     "MESSAGE_SEND_FAILED": "The message could not be sent: {{reason}}",
     "MESSAGE_NOT_RETRYABLE": "Only failed reminders and test messages can be tried again. Send documents again from the document.",
     "PRIVATE_HOST_NOT_ALLOWED": "{{host}} is not a public address. Use your provider's internet address.",
-    "WEBHOOK_NOT_HTTPS": "The provider's address must start with https://."
+    "WEBHOOK_NOT_HTTPS": "The provider's address must start with https://.",
+    "BACKUP_NOT_RECOGNISED": "This is not a Digital Bahi backup file, or the file is damaged.",
+    "BACKUP_TOO_NEW": "This backup was made by a newer version of Digital Bahi. Update this server first.",
+    "BACKUP_PASSWORD_REQUIRED": "This backup is protected with a password. Type the password.",
+    "BACKUP_PASSWORD_WRONG": "The password does not open this backup.",
+    "BACKUP_INCONSISTENT": "The backup has entries that do not fit together ({{table}}). It cannot be restored.",
+    "BACKUP_TOO_LARGE_FOR_EMAIL": "The backup is {{mb}} MB, too large for email. Download it instead."
   },
   "validation": {
     "required": "This field is required",
@@ -2004,7 +2010,8 @@
       "note": "Credit / debit note",
       "receipt": "Receipt",
       "reminder": "Payment reminder",
-      "test": "Test"
+      "test": "Test",
+      "backup": "Backup"
     },
     "status": {
       "queued": "Waiting",
@@ -2069,5 +2076,60 @@
       "sendTest": "Send test",
       "testSent": "Test message sent"
     }
+  },
+  "backup": {
+    "title": "Backup & Restore",
+    "subtitle": "Keep a copy of your whole book: customers, products, bills, payments, stock, GST, salary and settings",
+    "downloadTitle": "Download a backup",
+    "downloadHint": "One file with everything in this business. Keep it on a pen drive or in your email, away from this computer.",
+    "password": "Password for the file",
+    "passwordHint": "At least 8 characters. Without the password nobody can open the file, not even us, so write it down.",
+    "passwordIfAny": "The file's password (if it has one)",
+    "noPasswordWarning": "Without a password anyone who gets the file can read your customers, bills and accounts. A password is recommended.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "download": "Download backup",
+    "preparing": "Preparing…",
+    "downloaded": "Backup downloaded",
+    "emailTitle": "Email a protected copy",
+    "emailHint": "The backup goes as an attachment, always with a password.",
+    "emailSend": "Email backup",
+    "emailed": "Backup emailed to {{to}}",
+    "historyTitle": "Earlier backups",
+    "historyHint": "Who made a backup and when. The files themselves are only with you.",
+    "historyEmpty": "No backup made yet.",
+    "when": "When",
+    "kind": "What",
+    "by": "By",
+    "size": "Size",
+    "checksum": "Checksum",
+    "protected": "Password",
+    "kinds": {
+      "download": "Downloaded",
+      "email": "Emailed",
+      "restore": "Restored from a file"
+    },
+    "restoreTitle": "Restore from a backup",
+    "restoreHint": "A backup is always restored as a NEW business next to this one. Nothing in the current business is changed or deleted.",
+    "file": "Backup file (.dbbackup)",
+    "check": "Check the file",
+    "madeOn": "backup of {{when}}",
+    "tables": {
+      "customers": "Customers",
+      "suppliers": "Suppliers",
+      "products": "Products",
+      "invoices": "Invoices",
+      "purchases": "Purchases",
+      "payments": "Payments",
+      "credit_debit_notes": "Credit / debit notes",
+      "expenses": "Expenses",
+      "employees": "Employees"
+    },
+    "understand": "I understand this creates a new business “{{name}}” (a fresh trial from {{today}}); the current business stays as it is.",
+    "restore": "Restore as a new business",
+    "restoring": "Restoring…",
+    "restored": "Restored: {{name}}",
+    "restoredRows_one": "{{count}} record restored",
+    "restoredRows_other": "{{count}} records restored"
   }
 }

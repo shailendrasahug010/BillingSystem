@@ -23,7 +23,7 @@ import { withTenant, withUser } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, unauthorized } from "../../lib/errors.js";
 import { hashPassword, sha256, verifyPassword } from "../../lib/security.js";
 import type { ApiModule } from "../types.js";
-import { createBusiness, validateBusinessInput } from "./businesses.js";
+import { createBusiness, MAX_OWNED_BUSINESSES, validateBusinessInput } from "./businesses.js";
 import { issueOtp, requireOtp } from "./otp.js";
 import {
   clearRefreshCookie,
@@ -44,7 +44,6 @@ import {
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
 /** Businesses one person may own (abuse guard for free trials). */
-const MAX_OWNED_BUSINESSES = 10;
 
 function mobileOrThrow(raw: string, field = "mobile"): string {
   const mobile = normalizeIndianMobile(raw);
