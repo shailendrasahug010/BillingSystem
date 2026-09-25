@@ -13,7 +13,10 @@ import { allowed, BUSINESS, CUSTOMERS, PRODUCTS } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { customerInsight, getSyncState, peekNextInvoiceNumber, saveInvoice, useStoreVersion } from "../../data/store";
 import { ApiError, newIdempotencyKey } from "../../lib/api";
+import { peekOfflineNumber } from "../../offline/device";
+import { getOfflineState, useOffline } from "../../offline/sync";
 import { postInvoice, type SavedInvoice } from "./postInvoice";
+import { OfflineNotReady, saveOffline } from "./saveOffline";
 import { cn } from "../../lib/cn";
 import { useMediaQuery } from "../../lib/useMediaQuery";
 import { CustomerCard } from "./CustomerCard";
@@ -89,10 +92,20 @@ function ShareDialog({ text, onClose }: { text: string | null; onClose(): void }
   );
 }
 
-/** The number shown before saving: demo mode knows it; live numbers are assigned by the server. */
-export function nextNumberLabel(t: (key: "invoice.numberOnSave") => string): string {
-  return LIVE ? t("invoice.numberOnSave") : peekNextInvoiceNumber();
+/**
+ * The number shown before saving: demo mode knows it; live numbers are
+ * assigned by the server, except offline, where the device gives its own.
+ */
+export function useNextNumberLabel(date: string): string {
+  const { t } = useI18n();
+  const offline = useOffline();
+  if (!LIVE) return peekNextInvoiceNumber();
+  if ((offline.offlineMode || !offline.online) && offline.device) return peekOfflineNumber(offline.device, date);
+  return t("invoice.numberOnSave");
 }
+
+/** No server to talk to: the bill is kept on the device. */
+const workingOffline = () => getOfflineState().offlineMode || !navigator.onLine;
 
 /** Credit blocks stop the save unless the user may override the limit (the server applies the same rule). */
 export function isBlocked(view: DraftView): boolean {
@@ -159,12 +172,28 @@ function useSave(view: DraftView) {
       if (LIVE) {
         if (saving.current) return;
         saving.current = true;
-        postInvoice(view, idempotencyKey.current)
-          .then((invoice) => {
+        const key = idempotencyKey.current;
+        const offline = (invoice: SavedInvoice) => ({ invoice, offline: true });
+        // Offline, or the connection dropped on the way: keep the bill on the device (same key, so never twice).
+        const attempt = workingOffline()
+          ? saveOffline(view, key).then(offline)
+          : postInvoice(view, key).then(
+              (invoice) => ({ invoice, offline: false }),
+              (e: unknown) => {
+                if (e instanceof ApiError && e.code === "network" && getOfflineState().device) return saveOffline(view, key).then(offline);
+                throw e;
+              },
+            );
+        attempt
+          .then(({ invoice, offline: savedOffline }) => {
             idempotencyKey.current = newIdempotencyKey();
-            afterSave(invoice, mode, false);
+            afterSave(invoice, mode, savedOffline);
           })
           .catch((e: unknown) => {
+            if (e instanceof OfflineNotReady) {
+              toast({ tone: "offline", title: t("invoice.saveFailed"), body: t("offline.notReady") });
+              return;
+            }
             const err = e instanceof ApiError ? e : new ApiError(0, "generic");
             // A definite rejection will not change on retry: start a fresh key for the corrected bill.
             if (err.status >= 400 && err.status < 500) idempotencyKey.current = newIdempotencyKey();
@@ -207,6 +236,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
   const [scanOpen, setScanOpen] = useState(false);
   const { save, shareText, closeShare } = useSave(view);
   const { draft, dispatch, customer, insight, totals, error, credit } = view;
+  const numberLabel = useNextNumberLabel(draft.date);
   const blocked = isBlocked(view);
   useStoreVersion();
 
@@ -294,7 +324,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
         </div>
 
         <div className="lg:sticky lg:top-24">
-          <SummaryPanel view={view} invoiceNumber={nextNumberLabel(t)} onSave={save} blocked={blocked} />
+          <SummaryPanel view={view} invoiceNumber={numberLabel} onSave={save} blocked={blocked} />
         </div>
       </div>
 
@@ -311,6 +341,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
   const [step, setStep] = useState(view.customer ? 1 : 0);
   const [scanOpen, setScanOpen] = useState(false);
   const { draft, dispatch, customer, insight, totals, credit } = view;
+  const numberLabel = useNextNumberLabel(draft.date);
   const onFocused = useCallback(() => dispatch({ type: "focused" }), [dispatch]);
 
   const recent = useMemo(
@@ -327,7 +358,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
-        <span className="font-mono text-[12.5px] text-ink-3">{nextNumberLabel(t)}</span>
+        <span className="font-mono text-[12.5px] text-ink-3">{numberLabel}</span>
       </div>
       <ol className="grid grid-cols-3 gap-2" aria-label={t("invoice.quick")}>
         {steps.map((s, i) => (
@@ -453,7 +484,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
               })}
             </ul>
           </section>
-          <SummaryPanel view={view} invoiceNumber={nextNumberLabel(t)} onSave={(m) => {
+          <SummaryPanel view={view} invoiceNumber={numberLabel} onSave={(m) => {
             save(m);
             setStep(0);
           }} blocked={isBlocked(view)} />

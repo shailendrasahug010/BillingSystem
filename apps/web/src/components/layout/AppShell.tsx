@@ -30,6 +30,9 @@ import { installApp, useCanInstall } from "../../lib/pwa";
 import { Dialog } from "../ui/Dialog";
 import { Kbd } from "../ui/misc";
 import { UpdateBanner } from "./UpdateBanner";
+import { OfflineBanner, OfflineChip } from "../offline/OfflineBills";
+import { getOfflineState } from "../../offline/sync";
+import { useToast } from "../ui/Toast";
 import { BrandMark, FirmLogo } from "../brand/Brand";
 
 function sameRoute(a: Route, b: Route): boolean {
@@ -163,6 +166,17 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const [createOpen, setCreateOpen] = useState(false);
   const pendingOrders = ORDERS.filter((o) => o.status === "pending").length;
   const session = useSession();
+  const toast = useToast();
+  /** Signing out needs the server; bills still waiting stay on the device for the next sign-in. */
+  const signOut = () => {
+    const { offlineMode, online, entries } = getOfflineState();
+    if (offlineMode || !online) {
+      toast({ tone: "offline", title: t("offline.signOutOffline") });
+      return;
+    }
+    if (entries.length > 0 && !window.confirm(t("offline.signOutPending", { count: entries.length }))) return;
+    void session.logout().catch(() => undefined);
+  };
   const userName = LIVE ? (session.user?.name ?? "") : "Anil Sharma";
   const initials = userName
     .split(/\s+/)
@@ -200,7 +214,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           ))}
         </select>
       )}
-      <button type="button" onClick={() => void session.logout()} className="h-9 rounded-lg px-2 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
+      <button type="button" onClick={signOut} className="h-9 rounded-lg px-2 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
         {t("auth.signOut")}
       </button>
     </div>
@@ -291,7 +305,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             <Kbd keys="mod+k" className="hidden sm:inline-flex" />
           </button>
           <div className="ml-auto flex items-center gap-1.5">
-            <SyncChip />
+            {LIVE ? <OfflineChip /> : <SyncChip />}
             <LanguageToggle />
             <ThemeToggle />
             <button
@@ -318,6 +332,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         </header>
 
         <UpdateBanner className="border-b border-line lg:px-6" />
+        {LIVE && <OfflineBanner />}
         {!LIVE && (
           <div className="border-b border-line bg-accent-soft/60 px-4 py-1.5 text-center text-[12px] text-accent-ink lg:px-6">
             {t("app.prototypeBanner")}

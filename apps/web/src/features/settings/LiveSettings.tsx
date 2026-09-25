@@ -59,6 +59,7 @@ export function LiveSettings() {
       <RulesCard />
       <WarehousesCard />
       <SeriesCard />
+      <DevicesCard />
     </>
   );
 }
@@ -504,6 +505,83 @@ function SeriesCard() {
           ]}
         />
         <p className="text-[12.5px] text-ink-3">{t("settings.patternHint")}</p>
+      </div>
+    </Card>
+  );
+}
+
+interface DeviceRow {
+  id: string;
+  name: string;
+  platform: string;
+  seriesCode: string | null;
+  userName: string;
+  lastSeenAt: string | null;
+  lastSyncAt: string | null;
+  revokedAt: string | null;
+  offlineBills: number;
+}
+
+/** Phones and PCs that bill offline, each with its own series; a lost one can be removed. */
+function DevicesCard() {
+  const { t, dateTime } = useI18n();
+  const toast = useToast();
+  const canEdit = allowed("settings.update");
+  const q = useQuery({ queryKey: ["devices"], queryFn: () => api.get<{ data: DeviceRow[] }>("/devices").then((r) => r.data) });
+  const [error, setError] = useState<unknown>(null);
+
+  const revoke = async (d: DeviceRow) => {
+    if (!window.confirm(t("offline.devices.removeConfirm", { name: d.name, code: d.seriesCode ?? "" }))) return;
+    setError(null);
+    try {
+      await api.post(`/devices/${d.id}/revoke`);
+      await q.refetch();
+      toast({ tone: "success", title: t("offline.devices.removedToast"), body: `${d.name} · ${d.seriesCode ?? ""}` });
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader title={t("offline.devices.title")} subtitle={t("offline.devices.help")} />
+      <div className="flex flex-col gap-3 p-4 sm:p-5">
+        {error ? <ErrorNote error={error} /> : null}
+        <DataTable
+          rows={q.data ?? []}
+          loading={q.isPending}
+          rowKey={(d) => d.id}
+          minWidth={640}
+          empty={<p className="p-4 text-[13.5px] text-ink-3">{t("offline.devices.empty")}</p>}
+          columns={[
+            {
+              key: "name",
+              header: t("offline.devices.name"),
+              render: (d) => (
+                <span className={d.revokedAt ? "text-ink-3 line-through" : "font-medium text-ink"}>
+                  {d.name}
+                  <span className="block text-[12px] font-normal text-ink-3 no-underline">{d.userName}</span>
+                </span>
+              ),
+            },
+            { key: "series", header: t("offline.devices.series"), render: (d) => <span className="font-mono">{d.seriesCode}</span> },
+            { key: "seen", header: t("offline.devices.lastSeen"), render: (d) => <span className="text-ink-2">{d.lastSeenAt ? dateTime(d.lastSeenAt) : "—"}</span> },
+            { key: "bills", header: t("offline.devices.bills"), align: "right", render: (d) => d.offlineBills },
+            {
+              key: "action",
+              header: "",
+              align: "right",
+              render: (d) =>
+                d.revokedAt ? (
+                  <Badge tone="neutral">{t("offline.devices.removed")}</Badge>
+                ) : canEdit ? (
+                  <Button size="sm" variant="ghost" onClick={() => void revoke(d)}>
+                    {t("offline.devices.remove")}
+                  </Button>
+                ) : null,
+            },
+          ]}
+        />
       </div>
     </Card>
   );

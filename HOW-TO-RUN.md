@@ -189,7 +189,7 @@ The phone needs the **https** address of your server (section 5).
 * The bottom bar has **Home, Customers, + (create), Products, More**; everything else is under **More**.
 * Barcode entry works with a Bluetooth scanner, which types like a keyboard.
 * Invoices and receipts can be sent from their **Share on WhatsApp** button.
-* The app itself opens without internet and says it is offline; it continues as soon as the connection is back. Bills, payments and stock are saved on the server, so entering them needs internet (saving bills while offline and sending them later is on the [roadmap](docs/11-roadmap.md)).
+* **Billing without internet.** Open the app once with internet on each phone or PC: it keeps a copy of your products, prices and customers and gets its own bill series (A1, A2 …, see **Settings → Devices for offline billing**). Without internet the app still opens (a yellow strip says so) and bills are saved on the device with numbers like `A1/26-27/0001`, ready to print or share. When the internet is back they are sent by themselves; the cloud button at the top shows how many are waiting and has **Sync now**. Payments, purchases and reports still need internet. Sign out only when everything is synced (the app warns you).
 
 ---
 
@@ -295,7 +295,9 @@ Installing from the browser (sections 3 and 4) needs no store. If you also want 
 | `password authentication failed for user "postgres"` | Use the password you set when installing PostgreSQL in the database addresses. |
 | `port 3000 (or 5173) already in use` | Another copy is still running: close that terminal, or start the API with `PORT=3001` and the app with `API_URL=http://localhost:3001 pnpm dev:web`. |
 | The app stays on "Loading your business…" or shows "Could not load" | The API is not running or cannot reach the database: look at the API terminal for the error. |
-| "You are offline" | The device has no internet, or cannot reach the server. The app continues by itself when it can. |
+| "You are offline" | The device has no internet, or cannot reach the server, and has not been opened online before. The app continues by itself when it can. |
+| "This device is not ready for offline bills yet" | Open the app once with internet on this device (it then gets its bill series), and bill offline after that. |
+| A bill shows "Not accepted" in **Bills on this device** | The server refused it (the reason is shown, e.g. the product was deleted or the device was removed). Fix the cause and press **Try again**, or **Remove** it and make the bill again online. |
 | No OTP arrives (on a server) | Check `docker compose logs api` and the OTP adapter's logs; on your own computer the code is shown on screen instead. |
 | No **Install** option | Use Chrome or Edge (Safari on iPhone); open the `https://` address (or `localhost` on the computer itself); it is not offered if the app is already installed. |
 | The phone cannot open the computer's address | Same Wi-Fi on both, start the app with `pnpm dev:web --host`, and allow Node.js in the computer's firewall. |

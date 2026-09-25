@@ -11,6 +11,7 @@ import type { AppDeps, RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
+import { offlineInvoiceNumber } from "../../services/devices.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
 import { recordPayment, releaseAllocations } from "../../services/payments.js";
@@ -82,8 +83,8 @@ async function openInvoices(tx: Tx, businessId: string, customerId: string): Pro
   return rows.map((r) => ({ id: r.id, number: r.number ?? "", date: r.date, dueDate: r.dueDate ?? r.date, balance: r.balance }));
 }
 
-/** Credit check against the business policy; returns warnings or throws when blocked. */
-function checkCredit(ctx: RequestCtx, sale: PreparedSale, outstanding: string, open: OpenDocument[]): Warning[] {
+/** Credit check against the business policy; returns warnings or throws when blocked (never for a bill made offline). */
+function checkCredit(ctx: RequestCtx, sale: PreparedSale, outstanding: string, open: OpenDocument[], offline = false): Warning[] {
   const newAmount = sale.totals.grandTotal.minus(sale.totals.amountPaid);
   const result = evaluateCredit({
     creditLimit: sale.customer.creditLimit,
@@ -94,7 +95,7 @@ function checkCredit(ctx: RequestCtx, sale: PreparedSale, outstanding: string, o
     policy: sale.settings["credit.policy"],
   });
   const warnings = result.reasons.map((r) => ({ code: r.code, params: r.params }));
-  if (result.level === "block" && !can(ctx, "invoice.override_credit_limit")) {
+  if (result.level === "block" && !offline && !can(ctx, "invoice.override_credit_limit")) {
     const first = result.reasons[0]!;
     throw new ApiError(409, "CREDIT_BLOCKED", { reason: first.code, ...first.params });
   }
@@ -168,8 +169,11 @@ export async function postInvoice(
   const t = sale.totals;
   const warnings: Warning[] = [];
 
-  // 1. Number (locks the series row: gap-free, never duplicated).
-  const numbering = await nextDocumentNumber(tx, ctx.businessId, "invoice", sale.invoiceDate, sale.business.financialYearStartMonth);
+  // 1. Number (locks the series row: gap-free, never duplicated). A bill made
+  //    offline keeps the number its device gave it.
+  const numbering = body.offline
+    ? await offlineInvoiceNumber(tx, ctx, body.offline, sale.invoiceDate, sale.business.financialYearStartMonth)
+    : await nextDocumentNumber(tx, ctx.businessId, "invoice", sale.invoiceDate, sale.business.financialYearStartMonth);
   const id = uuidv7();
   const c = sale.customer;
   const address = { line1: c.addressLine1, line2: c.addressLine2, city: c.city, stateCode: c.stateCode, pincode: c.pincode };
@@ -235,6 +239,7 @@ export async function postInvoice(
     postedAt: deps.clock.now().toISOString(),
     postedBy: ctx.userId,
     clientId,
+    deviceId: body.offline?.deviceId ?? null,
     salesOrderId: link?.salesOrderId ?? null,
     createdBy: ctx.userId,
     updatedBy: ctx.userId,
@@ -285,7 +290,8 @@ export async function postInvoice(
   );
 
   // 3. Stock out, locking balances in product order (deadlock-free).
-  const policy = sale.settings["stock.negative_policy"];
+  const setPolicy = sale.settings["stock.negative_policy"];
+  const policy = body.offline && setPolicy === "block" ? "warn" : setPolicy;
   const order = sale.lines.map((_, i) => i).sort((a, b) => sale.lines[a]!.productId.localeCompare(sale.lines[b]!.productId));
   for (const i of order) {
     const p = sale.lines[i]!;
@@ -321,7 +327,7 @@ export async function postInvoice(
   // 4. Credit policy, with the customer row locked.
   const [locked] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, c.id)).for("update");
   const open = (await openInvoices(tx, ctx.businessId, c.id)).filter((d) => d.id !== id);
-  warnings.push(...checkCredit(ctx, sale, locked!.balance, open));
+  warnings.push(...checkCredit(ctx, sale, locked!.balance, open, Boolean(body.offline)));
 
   // 5. Customer ledger debit.
   await postPartyEntry(tx, {
@@ -411,6 +417,7 @@ export async function postInvoice(
       grandTotal: toAmountString(t.grandTotal),
       ...(sale.rateOverridden ? { rateOverridden: true } : {}),
       ...(warnings.length ? { warnings: warnings.map((w) => w.code) } : {}),
+      ...(body.offline ? { savedOffline: body.offline.savedAt ?? true, device: body.offline.deviceId } : {}),
     },
   });
   await tx.insert(schema.outboxEvents).values({

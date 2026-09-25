@@ -278,9 +278,16 @@ export async function refreshCustomers(): Promise<void> {
   touch();
 }
 
-/** Loads the catalogue snapshot, customers and suppliers into the workspace. */
-export async function hydrateWorkspace(me: MeResponse): Promise<void> {
-  applyMe(me);
+/** Everything the app keeps in memory for a business: also saved on the device for offline use. */
+export interface WorkspaceData {
+  catalog: Catalog | null;
+  customers: CustomerRow[];
+  routes: Array<{ id: string; name: string }>;
+  suppliers: SupplierRow[];
+  warehouses: typeof WORKSPACE.warehouses;
+}
+
+async function fetchWorkspace(): Promise<WorkspaceData> {
   const [catalog, customers, routes, suppliers, warehouses] = await Promise.all([
     can("product.view") ? api.get<Catalog>("/catalog") : Promise.resolve(null),
     can("customer.view") ? fetchAll<CustomerRow>("/customers", { active: "true" }) : Promise.resolve([] as CustomerRow[]),
@@ -288,18 +295,31 @@ export async function hydrateWorkspace(me: MeResponse): Promise<void> {
     can("supplier.view") ? fetchAll<SupplierRow>("/suppliers", { active: "true" }) : Promise.resolve([] as SupplierRow[]),
     can("product.view") ? api.get<{ data: typeof WORKSPACE.warehouses }>("/warehouses").then((r) => r.data) : Promise.resolve([]),
   ]);
-  WORKSPACE.warehouses = warehouses;
-  if (catalog) applyCatalog(catalog);
-  const routeName = new Map(routes.map((r) => [r.id, r.name]));
-  replaceAll(ROUTES, routes.map((r) => r.name));
-  const mapped = customers.map((c) => mapCustomer(c, routeName));
+  return { catalog, customers, routes, suppliers, warehouses };
+}
+
+/** Puts workspace data (fresh from the server, or saved on the device) in place. */
+export function applyWorkspace(data: WorkspaceData): void {
+  WORKSPACE.warehouses = data.warehouses;
+  if (data.catalog) applyCatalog(data.catalog);
+  const routeName = new Map(data.routes.map((r) => [r.id, r.name]));
+  replaceAll(ROUTES, data.routes.map((r) => r.name));
+  const mapped = data.customers.map((c) => mapCustomer(c, routeName));
   replaceAll(CUSTOMERS, mapped);
   replaceMap(customerById, mapped.map((c) => [c.id, c]));
-  const supplierRows = suppliers.map(mapSupplier);
+  const supplierRows = data.suppliers.map(mapSupplier);
   replaceAll(SUPPLIERS, supplierRows);
   replaceMap(supplierById, supplierRows.map((s) => [s.id, s]));
   WORKSPACE.ready = true;
   touch();
+}
+
+/** Loads the business from the server; returns what it loaded so it can be kept on the device. */
+export async function hydrateWorkspace(me: MeResponse): Promise<WorkspaceData> {
+  applyMe(me);
+  const data = await fetchWorkspace();
+  applyWorkspace(data);
+  return data;
 }
 
 /** Adds or refreshes one supplier after it was created or edited. */

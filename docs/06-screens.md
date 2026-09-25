@@ -141,7 +141,7 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 * Every report: filters (date, customer, supplier, product, company, employee, payment method, GST type), search, sort, column choice, **export Excel / CSV / PDF**, print, saved views.
 
 ## 22. Settings — **Built** (partial)
-* **Built:** app language, theme; live: business profile editing (legal/trade name, GST registration, GSTIN, PAN, address, mobile, email) with the **firm logo** (upload, change, remove; a preview of the letterhead as it prints), negative-stock and credit policies, round-off, invoice print language, payment allocation, expiry warning days, document number patterns. Demo: simulated online/offline.
+* **Built:** app language, theme; live: business profile editing (legal/trade name, GST registration, GSTIN, PAN, address, mobile, email) with the **firm logo** (upload, change, remove; a preview of the letterhead as it prints), negative-stock and credit policies, round-off, invoice print language, payment allocation, expiry warning days, document number patterns, **devices for offline billing** (series, user, last seen, offline bills; remove a lost device). Demo: simulated online/offline.
 * **Phase 3:** business profile editing (logo, address, GSTIN, bank), invoice settings (series, templates, print language, terms, round-off, edit window), tax categories and rates, credit policy, order workflow steps, units, rate lists, godowns, reminder rules and channels, keyboard preset (default / Tally-style), backup schedule.
 
 ## Additional screens

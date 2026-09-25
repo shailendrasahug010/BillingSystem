@@ -165,12 +165,13 @@ export const businessModule: ApiModule = async (app, deps) => {
   );
 
   // ---------------------------------------------------------------- number series
+  // Offline devices' own series ("A1/26-27/0001") are fixed and listed with the devices instead.
   r.get("/document-series", { preHandler: guard(deps, "settings.view"), schema: { tags: ["business"] } }, async (request) => ({
     data: await tenant(request.ctx, (tx) =>
       tx
         .select()
         .from(schema.documentSeries)
-        .where(eq(schema.documentSeries.businessId, request.ctx.businessId))
+        .where(and(eq(schema.documentSeries.businessId, request.ctx.businessId), isNull(schema.documentSeries.deviceId)))
         .orderBy(asc(schema.documentSeries.docType), asc(schema.documentSeries.financialYear)),
     ),
   }));
@@ -184,7 +185,7 @@ export const businessModule: ApiModule = async (app, deps) => {
         const [series] = await tx
           .select()
           .from(schema.documentSeries)
-          .where(and(eq(schema.documentSeries.id, request.params.id), eq(schema.documentSeries.businessId, ctx.businessId)))
+          .where(and(eq(schema.documentSeries.id, request.params.id), eq(schema.documentSeries.businessId, ctx.businessId), isNull(schema.documentSeries.deviceId)))
           .for("update");
         if (!series) throw notFound("document_series");
         if (request.body.pattern) {

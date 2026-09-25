@@ -50,6 +50,25 @@ export const InvoiceBody = z.strictObject({
   salespersonId: Id.optional(),
   printLocale: z.enum(["en", "hi"]).optional(),
   clientTotals: ClientTotals.optional(),
+  /**
+   * A bill made while the device was offline, synced now: numbered from the
+   * device's own series. Stock and credit "block" rules only warn, since the
+   * customer already has the bill.
+   */
+  offline: z
+    .strictObject({
+      deviceId: Id,
+      invoiceNumber: z.string().trim().min(1).max(16),
+      savedAt: z.iso.datetime({ offset: true }).optional(),
+    })
+    .optional(),
+});
+
+export const DeviceBody = z.strictObject({
+  name: z.string().trim().min(1).max(80),
+  platform: z.enum(["web", "android", "ios", "windows", "mac", "linux"]).default("web"),
+  /** The id this device was given before, to keep its series. */
+  deviceId: Id.optional(),
 });
 
 export const CancelBody = z.strictObject({ reason: z.string().trim().min(3).max(300) });

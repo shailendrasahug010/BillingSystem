@@ -1,7 +1,7 @@
 import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
-import { ArrowLeft, MessageCircle, Printer } from "lucide-react";
+import { ArrowLeft, CloudOff, MessageCircle, Printer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
@@ -15,6 +15,7 @@ import { api } from "../../lib/api";
 import { shareOnWhatsApp } from "../../lib/share";
 import { printableFromApi, printableFromDemo, type ApiInvoice, type PrintableInvoice } from "./printable";
 import { EMBEDDED } from "../../lib/embedded";
+import { findOfflineBill, useOffline } from "../../offline/sync";
 import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { InvoiceDocument } from "./InvoiceDocument";
 
@@ -23,14 +24,22 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const { navigate } = useRouter();
   useStoreVersion();
   const [printLocale, setPrintLocale] = useState<LocaleCode>(LIVE ? (WORKSPACE.printLocale as LocaleCode) || locale : locale);
+  // A bill made offline ("offline:<key>") prints from the copy on this device until the server has it.
+  const offlineKey = invoiceId.startsWith("offline:") ? invoiceId.slice("offline:".length) : null;
+  useOffline();
+  const kept = offlineKey ? findOfflineBill(offlineKey) : {};
+  const syncedId = kept.synced?.serverId;
+  useEffect(() => {
+    if (syncedId) navigate({ name: "invoice-view", invoiceId: syncedId });
+  }, [syncedId, navigate]);
   const live = useQuery({
     queryKey: ["invoice-raw", invoiceId],
     queryFn: () => api.get<ApiInvoice & { returns: ReturnRow[] }>(`/invoices/${invoiceId}`),
-    enabled: LIVE,
+    enabled: LIVE && !offlineKey,
   });
   const demo = LIVE ? undefined : INVOICES.find((i) => i.id === invoiceId);
-  const invoice: PrintableInvoice | undefined = LIVE ? live.data && printableFromApi(live.data) : demo && printableFromDemo(demo);
-  if (LIVE && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
+  const invoice: PrintableInvoice | undefined = offlineKey ? kept.entry?.printable : LIVE ? live.data && printableFromApi(live.data) : demo && printableFromDemo(demo);
+  if (LIVE && !offlineKey && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
   if (!invoice) return <EmptyState title={t("empty.generic")} />;
   const status = invoice.status;
   const share = () => {
@@ -64,6 +73,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
           <Badge tone={status === "paid" ? "good" : status === "partial" ? "warn" : status === "cancelled" ? "neutral" : "danger"} dot>
             {status === "cancelled" ? t("status.document.cancelled") : t(`status.payment.${status}`)}
           </Badge>
+          {offlineKey && (
+            <Badge tone="warn" icon={<CloudOff size={13} />}>
+              {kept.entry?.status === "failed" ? t("offline.failed") : t("offline.notSynced")}
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Segmented

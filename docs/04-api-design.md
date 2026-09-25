@@ -68,7 +68,7 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 | `POST /auth/switch-business` ★ | New access token for another business the user belongs to |
 | `POST /auth/logout` ★ · `POST /auth/logout-all` | Revoke current / all sessions |
 | `GET /me` ★ | Profile, current business, role, effective permissions, settings needed by the client |
-| `POST /devices` · `DELETE /devices/:id` | Register a device (gets an offline number-series code) / revoke it (its cached data is wiped on next contact) |
+| `POST /devices` · `GET /devices` · `POST /devices/:id/revoke` | Register this device or confirm it (returns its series code, pattern and next number for the financial year) / list devices with last seen and offline bill count / revoke one (its unsynced bills are refused). Offline bills are sent to `POST /invoices` with an `Idempotency-Key` and `offline: { deviceId, invoiceNumber, savedAt }` |
 
 ### Settings, users and roles
 

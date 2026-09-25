@@ -1,0 +1,188 @@
+/**
+ * End-to-end check of offline billing on the production build (the service
+ * worker serves the app without a network): sign up -> the device gets its
+ * own series -> the connection goes -> the app still opens from the copy on
+ * the device -> two bills are made and printed with the device's numbers
+ * (A1/26-27/0001, 0002) -> sign-out is refused while offline -> the
+ * connection comes back -> the bills reach the server with the same numbers
+ * and the stock moves -> a third bill made when the network drops in the
+ * middle of work is sent by itself when it returns.
+ *
+ * Build the app and serve it with the API behind /api:
+ *   pnpm --filter @vyapaar/web build && (cd apps/web && npx vite preview --port 4173)
+ *   API_URL=http://localhost:3000 WEB_URL=http://localhost:4173 node apps/web/e2e/offline-flow.mjs
+ * Needs the `playwright` package (PLAYWRIGHT_PATH if it is not resolvable
+ * from here) and a Chromium (CHROMIUM_PATH optional).
+ */
+import { createRequire } from "node:module";
+const require = createRequire(process.env.PLAYWRIGHT_PATH ?? import.meta.url);
+const { chromium } = require("playwright");
+
+const API = (process.env.API_URL ?? "http://localhost:3000") + "/api/v1";
+const WEB = process.env.WEB_URL ?? "http://localhost:4173";
+const OUT = process.env.OUT ?? ".";
+const mobile = process.env.E2E_MOBILE ?? `98767${String(Date.now()).slice(-5)}`;
+const password = "Str0ng-pass!";
+const log = (...a) => console.log("•", ...a);
+
+async function api(method, path, token, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), "x-client": "native" },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${JSON.stringify(json)}`);
+  return json;
+}
+
+const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+const context = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+const page = await context.newPage();
+const errors = [];
+let signedIn = false;
+let offline = false;
+page.on("pageerror", (e) => errors.push(e.message));
+page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(m.text()));
+page.on("response", (r) => {
+  if (!signedIn && r.status() === 401 && r.url().endsWith("/auth/refresh")) return;
+  if (r.status() >= 400) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
+});
+page.on("requestfailed", (r) => {
+  // Without a network the app's requests fail by design.
+  if (!offline && r.url().includes("/api/")) errors.push(`failed ${r.method()} ${r.url()}`);
+});
+
+const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
+const goOffline = async (value) => {
+  offline = value;
+  await context.setOffline(value);
+};
+
+async function bill(customer, product, qty) {
+  const customerBox = page.getByPlaceholder("Search customer by name, mobile, GSTIN or code");
+  await customerBox.waitFor({ timeout: 15000 });
+  await customerBox.fill(customer);
+  await page.keyboard.press("Enter");
+  const productBox = page.getByPlaceholder(/Search product/);
+  await productBox.fill(product);
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  if (qty !== 1) {
+    await page.getByLabel(/^Qty /).first().fill(String(qty));
+    await page.keyboard.press("Tab");
+  }
+  await page.getByRole("button", { name: "Save invoice" }).click();
+}
+
+// 1. Sign up and the master data.
+await page.goto(WEB);
+await page.evaluate(() => navigator.serviceWorker.ready);
+await page.getByRole("button", { name: "Create account" }).click();
+await page.fill("#su-name", "Mohan Lal");
+await page.fill("#su-mobile", mobile);
+await page.fill("#su-password", password);
+await page.fill("#su-business", "Mohan Traders");
+await page.getByRole("button", { name: "Send OTP" }).click();
+const hint = page.getByText(/Development code: \d{6}/);
+await hint.waitFor();
+await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
+await page.getByRole("button", { name: "Verify and create account" }).click();
+await page.getByRole("heading", { name: /Mohan/ }).waitFor({ timeout: 15000 });
+signedIn = true;
+const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
+const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
+const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).data.map((c) => [c.name, c.id]));
+const soap = await api("POST", "/products", token, { name: "Lifebuoy Soap 100g", hsnCode: "3401", taxCategoryId: taxes["GST 18%"], baseUnitId: units.PCS, sellingPrice: "40", openingStock: "50", openingStockCost: "30" });
+await api("POST", "/customers", token, { name: "Sharma Kirana", mobile: "9826012345", stateCode: "23", city: "Indore" });
+log("signed up; product (50 in stock) and customer added");
+
+// 2. Loaded once online: the business is kept on the device and the device gets its series.
+await page.reload();
+await page.getByRole("heading", { name: /Mohan/ }).waitFor({ timeout: 15000 });
+await page.waitForFunction(
+  () =>
+    new Promise((resolve) => {
+      const req = indexedDB.open("digital-bahi");
+      req.onsuccess = () => {
+        const all = req.result.transaction("kv").objectStore("kv").getAllKeys();
+        all.onsuccess = () => resolve(all.result.some((k) => String(k).startsWith("device:")) && all.result.some((k) => String(k).startsWith("snapshot:")));
+      };
+      req.onerror = () => resolve(false);
+    }),
+  null,
+  { timeout: 15000 },
+);
+const devices = (await api("GET", "/devices", token)).data;
+log("device registered:", devices.map((d) => `${d.seriesCode} ${d.name}`).join(", "));
+
+// 3. No connection: the app still opens, from the copy on the device.
+await goOffline(true);
+await page.reload();
+await page.getByText("No connection. Bills are saved on this device").waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /Mohan/ }).waitFor();
+await page.screenshot({ path: `${OUT}/offline-1-start.png` });
+log("opened offline from the saved copy");
+
+// 4. Two bills offline, numbered by the device.
+await page.goto(`${WEB}/#invoice`);
+await page.getByText("A1/26-27/0001").first().waitFor({ timeout: 15000 });
+await bill("Sharma", "lifebuoy", 3);
+await toast("Invoice A1/26-27/0001 saved");
+await page.getByText("Saved offline · will sync when online").first().waitFor();
+await page.getByRole("button", { name: "Details" }).first().click();
+await page.getByRole("heading", { name: "A1/26-27/0001" }).waitFor({ timeout: 15000 });
+await page.getByText("Not synced yet").waitFor();
+await page.screenshot({ path: `${OUT}/offline-2-bill.png`, fullPage: true });
+log("bill A1/26-27/0001 saved and printed offline");
+await page.goto(`${WEB}/#invoice`);
+await bill("Sharma", "lifebuoy", 1);
+await toast("Invoice A1/26-27/0002 saved");
+await page.getByRole("button", { name: /Offline.*2 changes waiting to sync/ }).click();
+await page.getByRole("dialog").getByText("A1/26-27/0002").waitFor();
+await page.screenshot({ path: `${OUT}/offline-3-waiting.png` });
+await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+log("second bill queued; 2 waiting");
+
+// Signing out needs the server.
+await page.getByRole("button", { name: "Sign out" }).first().click({ timeout: 5000 }).catch(async () => {
+  await page.getByRole("button", { name: /menu/i }).first().click();
+  await page.getByRole("button", { name: "Sign out" }).first().click();
+});
+await toast("Connect to the internet to sign out.");
+log("sign-out refused while offline");
+
+// 5. Back online: the bills go to the server with their numbers.
+await goOffline(false);
+await page.getByRole("button", { name: /^Online$/ }).waitFor({ timeout: 45000 });
+const synced = (await api("GET", "/invoices?q=A1/", token)).data;
+log("server now has:", synced.map((i) => `${i.invoiceNumber} ${i.grandTotal}`).join(" | "));
+if (synced.length !== 2) errors.push(`expected 2 synced bills, got ${synced.length}`);
+const stockAfter = (await api("GET", "/catalog", token)).products.find((p) => p.id === soap.id).stock;
+if (Number(stockAfter) !== 46) errors.push(`stock after sync ${stockAfter}, expected 46`);
+await page.getByRole("button", { name: /^Online$/ }).click();
+await page.getByRole("dialog").getByText("Recently synced").waitFor();
+await page.screenshot({ path: `${OUT}/offline-4-synced.png` });
+await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+log("synced; stock now", stockAfter);
+
+// 6. The network drops in the middle of work: the bill is kept, then sent by itself.
+await page.goto(`${WEB}/#invoice`);
+await page.getByPlaceholder("Search customer by name, mobile, GSTIN or code").waitFor({ timeout: 15000 });
+await goOffline(true);
+await bill("Sharma", "lifebuoy", 2);
+await toast("Invoice A1/26-27/0003 saved");
+await goOffline(false);
+for (let i = 0; i < 30; i++) {
+  const found = (await api("GET", "/invoices?q=A1/26-27/0003", token)).data;
+  if (found.length === 1) break;
+  await page.waitForTimeout(500);
+}
+const third = (await api("GET", "/invoices?q=A1/26-27/0003", token)).data;
+if (third.length !== 1) errors.push("third bill not synced after the network returned");
+log("bill made during a drop synced:", third.map((i) => i.invoiceNumber).join(", "));
+
+console.log(errors.length ? `ERRORS:\n${errors.join("\n")}` : "no errors");
+await browser.close();
+process.exit(errors.length ? 1 : 0);

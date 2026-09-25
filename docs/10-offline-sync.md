@@ -2,6 +2,19 @@
 
 Salespeople bill and collect in shops with weak 4G; a counter PC loses broadband for an afternoon. The daily loop must keep working. Everything else can wait for the connection.
 
+## 0. What is built today
+
+* **The app opens without a network.** The service worker serves the app; after every online start the business (profile, rules, permissions, catalogue with prices and tax rules, customers, suppliers, godowns) is kept on the device in IndexedDB (`apps/web/src/offline/snapshot.ts`). Without a server at start the app opens from that copy, shows *"No connection…"* and uses the device's calendar date in the business time zone. It looks for the server when the network returns and every 30 seconds, and continues in the background (a bill being typed stays on screen).
+* **Bills without a connection, numbered by the device.** Every browser or phone of a user who may bill registers itself (`POST /devices`) and gets a code (A1, A2 …) and its own series `{DEVICE}/{FYS}/{SEQ:4}`, e.g. `A1/26-27/0001`; the device keeps its counters per financial year and hands out numbers under a Web Lock, so two tabs never take the same one. Offline — or when the connection drops while saving — the bill is kept in the outbox with its number, printed from the same totals the form showed, and stock and the customer's balance move on the device at once (and again after a reload, until the bill is sent).
+* **Sync** (`apps/web/src/offline/sync.ts`) sends waiting bills oldest first through the normal `POST /invoices`, with the bill's `Idempotency-Key` and an `offline` block (device, number, time made). It runs when the network returns, after sign-in, every minute while bills wait, and from **Sync now**. A cut-off send is simply sent again; if the online attempt that failed had in fact reached the server, the replay returns that bill (the list then shows *"Saved as INV/…"*). After a sync the workspace reloads from the server.
+* **Server rules for offline bills** (`apps/api/src/services/devices.ts`): the number must be the device's own series for the bill's financial year (else `OFFLINE_NUMBER_INVALID`), numbers are unique (`DUPLICATE_NUMBER`), a removed device is refused (`DEVICE_REVOKED`), the device series moves past the number, and the device's last sync is recorded. Stock and credit rules set to *block* only **warn** for offline bills (the customer already has the bill); the warnings are kept in the audit log with `savedOffline`. A bill dated the day it was made offline (within the last 7 days, by the device clock) is not treated as back-dated.
+* **When the server refuses a bill** it stays on the device marked *Not accepted* with the reason, **Try again** (after fixing the cause) or **Remove** (its number stays unused — a gap to explain in the GST return).
+* **Screens:** the sync chip (Online / Offline / Syncing, with the number waiting) opens **Bills on this device** (waiting and refused bills, this device's series and next number, recently synced bills); an offline bill opens and prints as `offline:<id>` with a *Not synced yet* badge until it is on the server. **Settings → Devices for offline billing** lists devices with their series, user, last seen and offline bill count, and removes a lost one. Device series are not editable in the number-series card.
+* **Sign-out** needs the server (it ends the session there); bills still waiting stay on the device for the user's next sign-in and the saved business copy is wiped. A session that ends (revoked, expired) wipes the copy too. Tokens and passwords are never stored on the device.
+* **Tests:** `apps/api/test/offline-sync.test.ts` (registration, numbers kept and replayed, invalid and duplicate numbers, block rules downgraded, revoked devices, device series hidden) and the browser flow `apps/web/e2e/offline-flow.mjs` on the production build (offline start, two bills offline, sign-out refused, sync on reconnect with the stock checked on the server, a bill made during a drop sent by itself).
+
+Not yet offline: payments, orders and customer edits (they still need the connection), the pull feed and the *Needs review* state below (refused bills wait on the device instead), and encryption of the device copy (browser storage is private to the app's origin; encryption with a key in the OS keystore comes with the native shells). The rest of this page is the full design.
+
 ## 1. What works offline
 
 | Works offline | Why it is safe offline |
@@ -22,7 +35,7 @@ Salespeople bill and collect in shops with weak 4G; a counter PC loses broadband
 | Reports beyond the cached range, dashboards across the business | Need all data |
 | Payroll, leave approval, user and role management, settings, backup/restore | Administrative, low frequency, security-sensitive |
 
-The UI makes the state obvious: a sync chip (Online / Offline / Syncing · *3 changes waiting*), offline-only actions stay enabled, online-only actions are disabled with the reason, and offline saves say *"Saved offline · will sync when online"* (implemented in the prototype: Settings → simulate offline).
+The UI makes the state obvious: a sync chip (Online / Offline / Syncing · *3 changes waiting*), offline-only actions stay enabled, online-only actions are disabled with the reason, and offline saves say *"Saved offline · will sync when online"* (built for invoices, see section 0).
 
 ## 2. Client architecture
 

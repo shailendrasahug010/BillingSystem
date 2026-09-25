@@ -1,5 +1,6 @@
 import type { InvoiceBody } from "@vyapaar/contracts";
 import {
+  addDays,
   calculateDocument,
   chargesGst,
   compareTotals,
@@ -9,6 +10,7 @@ import {
   resolveTax,
   roundRate,
   taxAt,
+  todayIn,
   type BusinessGstRegistration,
   type DocumentLineInput,
   type DocumentTotals,
@@ -71,6 +73,9 @@ const loadSaleSettings = (tx: Tx, businessId: string) =>
  * override them, tax comes from the dated rules on the invoice date, and the
  * totals are computed by the same engine the client uses.
  */
+/** How long a bill made offline may wait on a device and still keep its own date without the back-date permission. */
+const OFFLINE_DAYS = 7;
+
 export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: string): Promise<PreparedSale> {
   const businessId = ctx.businessId;
   const [business] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, businessId));
@@ -83,7 +88,11 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
 
   const invoiceDate = body.invoiceDate ?? today;
   if (invoiceDate > today) throw badRequest("FUTURE_DATE_NOT_ALLOWED", {}, "invoiceDate");
-  if (invoiceDate < today && !can(ctx, "invoice.backdate")) throw forbidden("invoice.backdate");
+  // A bill made offline carries the day it was made; that is not back-dating
+  // (for bills made in the last week: the day comes from the device's clock).
+  const madeOfflineThatDay =
+    body.offline?.savedAt !== undefined && todayIn(ctx.timeZone, new Date(body.offline.savedAt)) === invoiceDate && invoiceDate >= addDays(today, -OFFLINE_DAYS);
+  if (invoiceDate < today && !madeOfflineThatDay && !can(ctx, "invoice.backdate")) throw forbidden("invoice.backdate");
 
   let warehouseId = body.warehouseId;
   const [wh] = await tx
