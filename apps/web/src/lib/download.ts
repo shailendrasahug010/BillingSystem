@@ -30,11 +30,11 @@ export function downloadCsv<T>(filename: string, columns: Array<{ label: string;
   downloadText(filename, `﻿${lines.join("\r\n")}\r\n`);
 }
 
-/** A report from the server as CSV (Excel) or PDF (letterhead, totals, page numbers); needs report.export. */
-export async function downloadReport(path: string, query: Record<string, string>, filename: string, format: "csv" | "pdf" = "csv"): Promise<void> {
-  const name = filename.replace(/\.(csv|pdf)$/i, "") + `.${format}`;
-  if (format === "pdf") {
-    downloadBlob(name, await api.blob(path, { ...query, format: "pdf" }));
+/** A report from the server as Excel (.xlsx), CSV or PDF (letterhead, totals, page numbers); needs report.export. */
+export async function downloadReport(path: string, query: Record<string, string>, filename: string, format: "csv" | "pdf" | "xlsx" = "csv"): Promise<void> {
+  const name = filename.replace(/\.(csv|pdf|xlsx)$/i, "") + `.${format}`;
+  if (format === "pdf" || format === "xlsx") {
+    downloadBlob(name, await api.blob(path, { ...query, format }));
     return;
   }
   const text = await api.get<string>(path, { ...query, format: "csv" });

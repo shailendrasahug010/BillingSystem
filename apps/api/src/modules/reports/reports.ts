@@ -12,9 +12,10 @@ import { badRequest, forbidden } from "../../lib/errors.js";
 import { assertRange } from "../../lib/period.js";
 import { loadLetterhead } from "../../services/letterhead.js";
 import { pdfDate, renderReportPdf } from "../../services/pdf-report.js";
+import { renderReportXlsx } from "../../services/xlsx-report.js";
 import type { ApiModule } from "../types.js";
 
-export const Format = { format: z.enum(["json", "csv", "pdf"]).default("json") };
+export const Format = { format: z.enum(["json", "csv", "pdf", "xlsx"]).default("json") };
 
 /** Date buckets as fixed SQL (never user text). */
 const TRUNC: Record<string, SQL> = {
@@ -48,14 +49,15 @@ export interface ReportMeta {
 }
 
 /**
- * A report as JSON (the screen), CSV (Excel) or PDF (letterhead, title,
- * period, table with totals, page numbers). CSV and PDF need report.export.
+ * A report as JSON (the screen), Excel (.xlsx: numbers and dates as such,
+ * totals, frozen header), CSV or PDF (letterhead, title, period, table with
+ * totals, page numbers). Files need report.export.
  */
 export async function sendReport(
   reply: FastifyReply,
   ctx: RequestCtx,
   deps: AppDeps,
-  format: "json" | "csv" | "pdf",
+  format: "json" | "csv" | "pdf" | "xlsx",
   name: string,
   columns: Column[],
   body: { rows: Array<Record<string, unknown>>; totals?: Record<string, unknown> } & Record<string, unknown>,
@@ -63,11 +65,19 @@ export async function sendReport(
 ) {
   if (format === "json") return body;
   if (!can(ctx, "report.export")) throw forbidden("report.export");
+  const period = meta.from && meta.to ? `${pdfDate(meta.from)} – ${pdfDate(meta.to)}` : meta.asOf ? `As of ${pdfDate(meta.asOf)}` : null;
+  if (format === "xlsx") {
+    const letterhead = await loadLetterhead(deps, ctx);
+    const file = await renderReportXlsx({ firm: letterhead.name, title: meta.title, period, columns, rows: body.rows, totals: body.totals ?? null });
+    reply.header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    reply.header("content-disposition", `attachment; filename="${name}.xlsx"`);
+    return reply.send(file);
+  }
   if (format === "pdf") {
     const pdf = await renderReportPdf({
       letterhead: await loadLetterhead(deps, ctx),
       title: meta.title,
-      period: meta.from && meta.to ? `${pdfDate(meta.from)} – ${pdfDate(meta.to)}` : meta.asOf ? `As of ${pdfDate(meta.asOf)}` : null,
+      period,
       generatedAt: new Intl.DateTimeFormat("en-IN", { timeZone: ctx.timeZone, day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(deps.clock.now()),
       columns,
       rows: body.rows,

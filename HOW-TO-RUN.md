@@ -158,7 +158,7 @@ Digital Bahi now opens in its own window, without the browser's tabs and address
 
 **Printing.** Invoices, receipts, credit notes, packing slips, trip sheets and salary slips have a **Print / PDF** button (or press Ctrl+P). For a thermal or dot-matrix printer, set it as the default printer and choose its paper size in the print window once; the browser remembers it.
 
-**PDF files.** Every report has a **PDF** button (with your letterhead and page numbers) next to **Excel (CSV)**. Invoices, credit / debit notes and receipts have **Download PDF**: a proper A4 file made on the server with your logo, GST table, tax summary and amount in words, in English or Hindi (the language switch next to it). Packing slips, trip sheets and salary slips are saved as PDF from **Print / PDF** (choose "Save as PDF" in the print window).
+**PDF and Excel files.** Every report has **PDF** (with your letterhead and page numbers), **Excel** (an .xlsx workbook: real numbers and dates, totals, the heading row stays in view) and **CSV**. Invoices, credit / debit notes and receipts have **Download PDF**: a proper A4 file made on the server with your logo, GST table, tax summary and amount in words, in English or Hindi (the language switch next to it). Packing slips, trip sheets and salary slips are saved as PDF from **Print / PDF** (choose "Save as PDF" in the print window).
 
 **Keyboard.** Ctrl+I new invoice, Alt+P purchase bill, Alt+O sales order, Alt+C receive payment, Ctrl+K search. The keyboard icon at the bottom of the left menu lists them all.
 

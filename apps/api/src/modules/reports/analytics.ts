@@ -10,7 +10,7 @@ import { assertRange } from "../../lib/period.js";
 import type { ApiModule } from "../types.js";
 import { sendReport } from "./reports.js";
 
-const Range = { from: z.iso.date(), to: z.iso.date(), format: z.enum(["json", "csv", "pdf"]).default("json") };
+const Range = { from: z.iso.date(), to: z.iso.date(), format: z.enum(["json", "csv", "pdf", "xlsx"]).default("json") };
 const ProfitQuery = z.object({ ...Range, groupBy: z.enum(["product", "brand", "category", "customer", "salesperson", "month"]).default("product") });
 
 /**

@@ -1103,8 +1103,9 @@
     "oldestDue": "oldest due",
     "asOf": "as of {{date}}",
     "exportPdf": "PDF",
-    "exportCsv": "Excel (CSV)",
-    "preparing": "Preparing…"
+    "exportCsv": "CSV",
+    "preparing": "Preparing…",
+    "exportXlsx": "Excel"
   },
   "gstPage": {
     "title": "GST summary",

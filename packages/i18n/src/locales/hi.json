@@ -1103,8 +1103,9 @@
     "oldestDue": "सबसे पुराना देय",
     "asOf": "{{date}} तक",
     "exportPdf": "PDF",
-    "exportCsv": "Excel (CSV)",
-    "preparing": "तैयार हो रहा है…"
+    "exportCsv": "CSV",
+    "preparing": "तैयार हो रहा है…",
+    "exportXlsx": "एक्सेल"
   },
   "gstPage": {
     "title": "GST सारांश",

@@ -48,5 +48,5 @@ export const ExpenseReportQuery = z.object({
   from: IsoDate,
   to: IsoDate,
   groupBy: z.enum(["category", "month", "year", "method"]).default("category"),
-  format: z.enum(["json", "csv", "pdf"]).default("json"),
+  format: z.enum(["json", "csv", "pdf", "xlsx"]).default("json"),
 });

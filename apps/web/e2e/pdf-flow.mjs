@@ -99,7 +99,7 @@ await page.getByRole("button", { name: "Save purchase" }).click();
 await toast("Purchase saved");
 log("bill SG/1044 read from the PDF, matched, reviewed and saved");
 
-// 5. Reports as PDF (and CSV).
+// 5. Reports as PDF, Excel and CSV.
 await nav("Business Reports");
 await page.getByRole("tab", { name: "Purchases", exact: true }).click();
 await page.getByRole("button", { name: "PDF", exact: true }).waitFor();
@@ -110,11 +110,18 @@ const pdfPath = join(OUT, pdf.suggestedFilename());
 await pdf.saveAs(pdfPath);
 if (!/^purchases-.*\.pdf$/.test(pdf.suggestedFilename())) errors.push(`PDF name ${pdf.suggestedFilename()}`);
 if (readFileSync(pdfPath).subarray(0, 5).toString() !== "%PDF-") errors.push("download is not a PDF");
+const xlsxDownload = page.waitForEvent("download");
+await page.getByRole("button", { name: "Excel", exact: true }).click();
+const xlsx = await xlsxDownload;
+const xlsxPath = join(OUT, xlsx.suggestedFilename());
+await xlsx.saveAs(xlsxPath);
+// An .xlsx file is a zip archive.
+if (!xlsx.suggestedFilename().endsWith(".xlsx") || readFileSync(xlsxPath).subarray(0, 2).toString() !== "PK") errors.push(`Excel download ${xlsx.suggestedFilename()}`);
 const csvDownload = page.waitForEvent("download");
-await page.getByRole("button", { name: "Excel (CSV)" }).click();
+await page.getByRole("button", { name: "CSV", exact: true }).click();
 const csv = await csvDownload;
 if (!csv.suggestedFilename().endsWith(".csv")) errors.push(`CSV name ${csv.suggestedFilename()}`);
-log("purchases report downloaded as", pdf.suggestedFilename(), "and", csv.suggestedFilename());
+log("purchases report downloaded as", pdf.suggestedFilename(), xlsx.suggestedFilename(), "and", csv.suggestedFilename());
 
 if (errors.length) {
   console.log("Errors:\n" + errors.join("\n"));

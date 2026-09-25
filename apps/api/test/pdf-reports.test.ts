@@ -1,4 +1,5 @@
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { readSheet } from "read-excel-file/node";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pdfCell } from "../src/services/pdf-report.js";
 import { call, createTestApp, hasDatabase, nextMobile, signup, type Session, type TestApp } from "./helpers.js";
@@ -28,7 +29,7 @@ describe("PDF cells", () => {
   });
 });
 
-describe.skipIf(!hasDatabase)("reports as PDF", () => {
+describe.skipIf(!hasDatabase)("reports as PDF and Excel", () => {
   let t: TestApp;
   let owner: Session;
   let salesToken: string;
@@ -107,5 +108,30 @@ describe.skipIf(!hasDatabase)("reports as PDF", () => {
     expect(outstanding).toContain("Customer outstanding");
     expect(outstanding).toMatch(/As of \d{1,2} \w{3} \d{4}/);
     expect((await pdf(`/reports/sales?${RANGE}&format=pdf`, salesToken)).statusCode).toBe(403);
+  });
+
+  it("downloads an Excel workbook with numbers, dates and totals Excel can add up", async () => {
+    const res = await pdf(`/reports/sales?${RANGE}&groupBy=product&format=xlsx`);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="sales-2026-09-01-2026-09-30.xlsx"');
+    const rows = await readSheet(res.rawPayload);
+    expect(rows[0]![0]).toBe("Sales by product");
+    expect(rows[1]![0]).toBe("Laxmi Traders · 1 Sep 2026 – 30 Sep 2026");
+    const header = rows[3]!;
+    expect(header).toContain("Taxable");
+    const powder = rows.find((r) => r[0] === "Washing Powder" || r.includes("Washing Powder"))!;
+    const taxable = header.indexOf("Taxable");
+    expect(powder[taxable]).toBe(120000);
+    const total = rows.at(-1)!;
+    expect(total[0]).toBe("Total");
+    expect(total[taxable]).toBe(224500);
+    // Dates are dates.
+    const byDay = await readSheet((await pdf(`/reports/sales?${RANGE}&groupBy=day&format=xlsx`)).rawPayload);
+    expect(byDay.slice(4).some((r) => r.some((c) => c instanceof Date))).toBe(true);
+    expect((await pdf(`/reports/sales?${RANGE}&format=xlsx`, salesToken)).statusCode).toBe(403);
+    for (const url of [`/reports/outstanding?party=customer&format=xlsx`, `/reports/profit?${RANGE}&groupBy=product&format=xlsx`, `/reports/expenses?${RANGE}&format=xlsx`, `/reports/products?${RANGE}&format=xlsx`]) {
+      expect((await pdf(url)).statusCode, url).toBe(200);
+    }
   });
 });

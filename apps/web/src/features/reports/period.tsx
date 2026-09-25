@@ -1,4 +1,4 @@
-import { Download, FileText } from "lucide-react";
+import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
@@ -33,9 +33,9 @@ export function usePeriod(initial: RangeKey = "thisMonth") {
 export function ExportButton({ path, query, filename }: { path: string; query: Record<string, string>; filename: string }) {
   const i18n = useI18n();
   const toast = useToast();
-  const [busy, setBusy] = useState<"pdf" | "csv" | null>(null);
+  const [busy, setBusy] = useState<"pdf" | "xlsx" | "csv" | null>(null);
   if (!allowed("report.export")) return null;
-  const run = (format: "pdf" | "csv") => {
+  const run = (format: "pdf" | "xlsx" | "csv") => {
     setBusy(format);
     downloadReport(path, query, filename, format)
       .catch((e: unknown) => toast({ tone: "danger", title: i18n.t("errors.generic"), body: e instanceof ApiError ? e.code : undefined }))
@@ -45,6 +45,9 @@ export function ExportButton({ path, query, filename }: { path: string; query: R
     <div className="flex gap-2">
       <Button icon={<FileText size={16} />} disabled={busy !== null} onClick={() => run("pdf")}>
         {busy === "pdf" ? i18n.t("reports.preparing") : i18n.t("reports.exportPdf")}
+      </Button>
+      <Button icon={<FileSpreadsheet size={16} />} disabled={busy !== null} onClick={() => run("xlsx")}>
+        {busy === "xlsx" ? i18n.t("reports.preparing") : i18n.t("reports.exportXlsx")}
       </Button>
       <Button icon={<Download size={16} />} disabled={busy !== null} onClick={() => run("csv")}>
         {i18n.t("reports.exportCsv")}
