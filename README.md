@@ -28,7 +28,7 @@ Distributor & supplier CRM, billing, inventory, GST and collections for Indian F
 
 ```
 apps/
-  api/            Fastify REST API, multi-tenant (148 integration tests against PostgreSQL)
+  api/            Fastify REST API, multi-tenant (154 integration tests against PostgreSQL)
   web/            React 19 + Vite + Tailwind 4 — live on the API; demo mode for previews
 packages/
   core/           Pure TypeScript business logic shared by server and clients (84 tests)
