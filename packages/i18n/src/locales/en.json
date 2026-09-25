@@ -1927,7 +1927,24 @@
       "barcode": "By barcode",
       "code": "By code",
       "name": "By name"
-    }
+    },
+    "addAllNew_one": "Add {{count}} as new product",
+    "addAllNew_other": "Add {{count}} as new products",
+    "newProductsTitle": "Add new products from the bill",
+    "newProductsHint": "These items are not in your product list. Their name, GST, unit, rate, MRP and HSN come from the bill; check the selling price, then add them. They go on this purchase straight away.",
+    "margin": "Selling price = purchase rate +",
+    "marginHint": "% margin (never above MRP)",
+    "productName": "Product name",
+    "unit": "Unit",
+    "purchaseRate": "Purchase rate",
+    "sellingPrice": "Selling price",
+    "pickGst": "Choose the GST rate",
+    "looksLike": "Looks like your “{{name}}”: match it instead, or tick to add as new",
+    "addProducts_one": "Add {{count}} product",
+    "addProducts_other": "Add {{count}} products",
+    "productsAdded_one": "{{count}} new product added",
+    "productsAdded_other": "{{count}} new products added",
+    "packAboveMrp": "Billed per {{unit}} above its MRP, so the MRP is probably per piece. Check the unit and price."
   },
   "offline": {
     "notReady": "This device is not ready for offline bills yet. Open Digital Bahi once while connected to the internet.",

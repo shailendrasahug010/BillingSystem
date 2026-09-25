@@ -1,4 +1,5 @@
 import type { BillFileBill, BillFileLine } from "@vyapaar/core";
+import { WORKSPACE } from "../../data/db";
 import type { Product } from "../../data/types";
 
 export type MatchedBy = "supplier_item" | "barcode" | "code" | "name";
@@ -142,3 +143,50 @@ export const SAMPLE_BILL = [
   ["SG/1021", "20/09/2026", "23AAACM1234M1ZR", "SURF EXCEL EASY WASH 1KG", "HU-1102", "8901030865278", "3402", "PCS", "24", "", "115", "2", "18", "", "", "140"],
   ["SG/1021", "20/09/2026", "23AAACM1234M1ZR", "PARLE-G 100G", "PA-100", "8901719101045", "1905", "PCS", "240", "12", "8", "", "5", "B2291", "08/27", "10"],
 ];
+
+/** A product we do not have yet, as the supplier's bill line describes it. */
+export interface NewProductGuess {
+  name: string;
+  hsnCode: string | null;
+  taxCategoryId: string | null;
+  baseUnitId: string | null;
+  /** Per bill unit, before GST. */
+  purchasePrice: string | null;
+  mrp: string | null;
+  barcode: string | null;
+  trackBatches: boolean;
+  trackExpiry: boolean;
+}
+
+/** Bills print names in capitals; a product name reads better in title case. */
+export function productNameFrom(itemName: string): string {
+  const name = itemName.trim().replace(/\s+/g, " ");
+  return /\p{Ll}/u.test(name) ? name : name.toLowerCase().replace(/(^|[\s(/-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+}
+
+/** The GST category for a rate on a bill: the taxable one at that rate, or nil-rated / exempt for 0%. */
+export function taxCategoryForRate(gstRate: string | null): string | null {
+  if (gstRate === null || gstRate === "") return null;
+  const rate = Number(gstRate);
+  const cats = WORKSPACE.taxCategories;
+  if (rate === 0) return (cats.find((c) => c.kind === "nil_rated") ?? cats.find((c) => c.kind === "exempt"))?.id ?? null;
+  return cats.find((c) => c.kind === "taxable" && c.rate === rate)?.id ?? null;
+}
+
+export function newProductFrom(item: ImportedItem): NewProductGuess {
+  const f = item.file;
+  const unit = f.unit ? WORKSPACE.unitList.find((u) => sameUnit(u.symbol, f.unit!)) : undefined;
+  // Without a unit on the bill, pieces (or numbers) are the usual stock unit.
+  const fallback = WORKSPACE.unitList.find((u) => u.symbol === "PCS") ?? WORKSPACE.unitList.find((u) => u.symbol === "NOS") ?? WORKSPACE.unitList[0];
+  return {
+    name: productNameFrom(f.itemName),
+    hsnCode: f.hsnCode && /^\d{4,8}$/.test(f.hsnCode) ? f.hsnCode : null,
+    taxCategoryId: taxCategoryForRate(f.gstRate),
+    baseUnitId: (unit ?? fallback)?.id ?? null,
+    purchasePrice: f.rate,
+    mrp: f.mrp,
+    barcode: f.barcode && f.barcode.length >= 4 ? f.barcode : null,
+    trackBatches: Boolean(f.batchNumber),
+    trackExpiry: Boolean(f.expiryDate),
+  };
+}

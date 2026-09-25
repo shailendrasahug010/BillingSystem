@@ -94,7 +94,7 @@ await page.screenshot({ path: `${OUT}/flow-bill-import-review.png`, fullPage: tr
 // Harpic: one of the close matches. Colgate: a new product, filled from the bill.
 await page.getByRole("button", { name: "Harpic Toilet Cleaner 500ml" }).click();
 await page.getByText("1 item to match").waitFor();
-await page.getByRole("button", { name: "New product" }).click();
+await page.getByRole("button", { name: "New product", exact: true }).click();
 if ((await dialog().locator("input").first().inputValue()) !== "Colgate Strong Teeth 200g") errors.push("new product not prefilled");
 await dialog().getByRole("button", { name: "Save" }).click();
 await toast("Product saved");

@@ -12,7 +12,7 @@ import {
   type ResolvedTax,
 } from "@vyapaar/core";
 import { translateError } from "@vyapaar/i18n";
-import { FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
+import { FileSpreadsheet, PackagePlus, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -33,7 +33,8 @@ import { cn } from "../../lib/cn";
 import { invalidateMoney, METHODS } from "../payments/PaymentDialog";
 import { ProductEditor, type ProductPrefill } from "../products/ProductEditor";
 import { searchSuppliers, supplierLabel } from "../suppliers/search";
-import { lineFromItem, sameUnit, type ImportedItem, type PurchaseDraft } from "./billImport";
+import { lineFromItem, newProductFrom, type ImportedItem, type PurchaseDraft } from "./billImport";
+import { NewProductsDialog } from "./NewProductsDialog";
 
 interface Line {
   key: string;
@@ -73,21 +74,17 @@ const byFileRow = (a: Line, b: Line) => (a.fileRow ?? Infinity) - (b.fileRow ?? 
 
 /** A new product's details from the supplier's bill line. */
 function prefillFrom(item: ImportedItem): ProductPrefill {
-  const f = item.file;
-  const tax = f.gstRate !== null ? WORKSPACE.taxCategories.find((c) => c.kind === "taxable" && c.rate === Number(f.gstRate)) : undefined;
-  const unit = f.unit ? WORKSPACE.unitList.find((u) => sameUnit(u.symbol, f.unit!)) : undefined;
-  // Bills print names in capitals; a product name reads better in title case.
-  const name = /\p{Ll}/u.test(f.itemName) ? f.itemName : f.itemName.toLowerCase().replace(/(^|[\s(/-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+  const g = newProductFrom(item);
   return {
-    name,
-    ...(f.hsnCode ? { hsnCode: f.hsnCode } : {}),
-    ...(tax ? { taxCategoryId: tax.id } : {}),
-    ...(unit ? { baseUnitId: unit.id } : {}),
-    ...(f.rate ? { purchasePrice: f.rate } : {}),
-    ...(f.mrp ? { mrp: f.mrp } : {}),
-    ...(f.barcode ? { barcodes: f.barcode } : {}),
-    trackBatches: Boolean(f.batchNumber),
-    trackExpiry: Boolean(f.expiryDate),
+    name: g.name,
+    ...(g.hsnCode ? { hsnCode: g.hsnCode } : {}),
+    ...(g.taxCategoryId ? { taxCategoryId: g.taxCategoryId } : {}),
+    ...(g.baseUnitId ? { baseUnitId: g.baseUnitId } : {}),
+    ...(g.purchasePrice ? { purchasePrice: g.purchasePrice } : {}),
+    ...(g.mrp ? { mrp: g.mrp } : {}),
+    ...(g.barcode ? { barcodes: g.barcode } : {}),
+    trackBatches: g.trackBatches,
+    trackExpiry: g.trackExpiry,
   };
 }
 
@@ -125,6 +122,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
   const [pending, setPending] = useState<ImportedItem[]>(() => (draft?.items ?? []).filter((item) => !item.productId || !productById.has(item.productId)));
   const matchedAtOpen = useRef(draft ? draft.items.length - pending.length : 0);
   const [creating, setCreating] = useState<ImportedItem | null>(null);
+  const [addingAll, setAddingAll] = useState(false);
   const [charges, setCharges] = useState<Charge[]>([]);
   const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
   const [warehouseId, setWarehouseId] = useState(() => godowns.find((w) => w.isDefault)?.id ?? "");
@@ -391,7 +389,17 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
 
       {pending.length > 0 && (
         <Card className="border-warn/40">
-          <CardHeader title={t("billImport.toMatch", { count: pending.length })} subtitle={t("billImport.toMatchHint")} />
+          <CardHeader
+            title={t("billImport.toMatch", { count: pending.length })}
+            subtitle={t("billImport.toMatchHint")}
+            action={
+              allowed("product.create") ? (
+                <Button variant="primary" size="sm" icon={<PackagePlus size={14} />} onClick={() => setAddingAll(true)}>
+                  {t("billImport.addAllNew", { count: pending.length })}
+                </Button>
+              ) : undefined
+            }
+          />
           <ul className="flex flex-col divide-y divide-line">
             {pending.map((item) => {
               const f = item.file;
@@ -677,6 +685,18 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
           </Button>
         </Card>
       </div>
+      <NewProductsDialog
+        open={addingAll}
+        onOpenChange={setAddingAll}
+        items={pending}
+        supplierId={supplierId}
+        onAdded={(created) => {
+          for (const c of created) {
+            const item = pending.find((x) => x.key === c.key);
+            if (item) matchItem(item, c.productId);
+          }
+        }}
+      />
       {creating && (
         <ProductEditor
           productId={null}
