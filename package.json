@@ -14,6 +14,7 @@
     "db:generate": "pnpm --filter @vyapaar/db generate",
     "db:verify": "pnpm --filter @vyapaar/db verify",
     "dev:web": "pnpm --filter @vyapaar/web dev",
+    "preview:web": "pnpm --filter @vyapaar/web preview",
     "db:migrate": "pnpm --filter @vyapaar/db migrate",
     "dev:api": "pnpm --filter @vyapaar/api dev",
     "db:deploy": "pnpm --filter @vyapaar/api deploy:db"

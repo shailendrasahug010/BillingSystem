@@ -62,7 +62,13 @@ function toError(status: number, body: unknown): ApiError {
 export function refreshSession(): Promise<SessionResponse | null> {
   refreshing ??= (async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await fetch(url("/auth/refresh"), { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" });
+      let res: Response;
+      try {
+        res = await fetch(url("/auth/refresh"), { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" });
+      } catch {
+        // No network: the session is not known to be over, so keep it.
+        throw new ApiError(0, "network");
+      }
       const body = await parse(res);
       if (res.ok) {
         setSession(body as SessionResponse);

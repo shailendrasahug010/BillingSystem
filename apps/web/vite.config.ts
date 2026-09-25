@@ -1,12 +1,45 @@
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
+
+const here = import.meta.dirname;
+
+/** Files in public/ (served as they are), as site paths. */
+function publicFiles(dir = join(here, "public")): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? publicFiles(join(dir, e.name)) : [`/${relative(join(here, "public"), join(dir, e.name)).replaceAll("\\", "/")}`],
+  );
+}
+
+/**
+ * Emits sw.js: service-worker.js with the build's file list in front, so the
+ * installed app (desktop or phone) opens without a network and each build
+ * replaces the previous one's files in one step.
+ */
+function serviceWorker(): Plugin {
+  return {
+    name: "vyapaar-service-worker",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      const built = Object.keys(bundle)
+        .filter((f) => f !== "index.html" && !f.endsWith(".map"))
+        .map((f) => `/${f}`);
+      const precache = ["/", ...built, ...publicFiles()].sort();
+      const version = createHash("sha256").update(precache.join("\n")).digest("hex").slice(0, 12);
+      const source = `const VERSION = ${JSON.stringify(version)};\nconst PRECACHE = ${JSON.stringify(precache)};\n${readFileSync(join(here, "service-worker.js"), "utf8")}`;
+      this.emitFile({ type: "asset", fileName: "sw.js", source });
+    },
+  };
+}
 
 // `vite build --mode singlefile` inlines everything into one HTML file: used to
 // publish a shareable, static preview of the prototype.
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), ...(mode === "singlefile" ? [viteSingleFile()] : [])],
+  plugins: [react(), tailwindcss(), ...(mode === "singlefile" ? [viteSingleFile()] : [serviceWorker()])],
   build: {
     outDir: mode === "singlefile" ? "dist-singlefile" : "dist",
     target: "es2022",

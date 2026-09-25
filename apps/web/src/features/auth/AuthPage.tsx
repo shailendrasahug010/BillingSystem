@@ -1,6 +1,7 @@
 import { GST_STATES } from "@vyapaar/core";
 import { Building2, KeyRound, LockKeyhole, Smartphone, UserRound } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { UpdateBanner } from "../../components/layout/UpdateBanner";
 import { useI18n } from "../../app/i18n";
 import { useSession } from "../../app/session";
 import { BrandMark, LanguageToggle } from "../../components/layout/AppShell";
@@ -16,13 +17,13 @@ export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-full grid-cols-1 bg-bg lg:grid-cols-[1.05fr_1fr]">
       <section className="relative hidden flex-col justify-between overflow-hidden bg-accent p-10 text-ink-inverse lg:flex">
-        <BrandMark />
+        <BrandMark inverse />
         <div className="max-w-md">
           <p className="font-display text-[40px] leading-[1.05] font-semibold">{t("app.tagline")}</p>
           <ul className="mt-6 flex flex-col gap-2 text-[15px] opacity-90">
             <li>GST · CGST / SGST / IGST · HSN</li>
             <li>English · हिन्दी</li>
-            <li>Web · Windows · Android · Offline</li>
+            <li>Web · Windows · Mac · Android · iPhone</li>
           </ul>
         </div>
         <p className="text-[12.5px] opacity-75">{t("auth.secureNote")}</p>
@@ -31,6 +32,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       </section>
       <section className="flex flex-col justify-center px-4 py-10 sm:px-10">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
+          <UpdateBanner className="rounded-lg" />
           <div className="flex items-center justify-between">
             <span className="lg:hidden">
               <BrandMark />

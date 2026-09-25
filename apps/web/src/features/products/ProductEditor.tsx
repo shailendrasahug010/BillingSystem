@@ -54,7 +54,8 @@ const list = (s: string) =>
 
 function emptyForm() {
   const defaultTax = WORKSPACE.taxCategories.find((c) => c.kind === "taxable") ?? WORKSPACE.taxCategories[0];
-  const defaultUnit = WORKSPACE.unitList.find((u) => ["PCS", "NOS"].includes(u.symbol.toUpperCase())) ?? WORKSPACE.unitList[0];
+  const bySymbol = (symbol: string) => WORKSPACE.unitList.find((u) => u.symbol.toUpperCase() === symbol);
+  const defaultUnit = bySymbol("PCS") ?? bySymbol("NOS") ?? WORKSPACE.unitList[0];
   return {
     name: "",
     nameLocal: "",

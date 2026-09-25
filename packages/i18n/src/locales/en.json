@@ -2,7 +2,11 @@
   "app": {
     "name": "Vyapaar CRM",
     "tagline": "Billing, stock and collections for distributors",
-    "prototypeBanner": "Design prototype · sample data · nothing is saved"
+    "prototypeBanner": "Design prototype · sample data · nothing is saved",
+    "install": "Install app",
+    "installHint": "Opens in its own window from the desktop, taskbar or home screen",
+    "updateReady": "A new version of Vyapaar CRM is ready.",
+    "reload": "Reload now"
   },
   "common": {
     "save": "Save",
@@ -170,7 +174,8 @@
     "signOut": "Sign out",
     "switchBusiness": "Switch business",
     "loadingWorkspace": "Loading your business…",
-    "loadFailed": "Could not load your business."
+    "loadFailed": "Could not load your business.",
+    "offlineStart": "You are offline. Your business opens as soon as the internet connection is back; your data is kept safely on the server."
   },
   "dashboard": {
     "greeting": "Good morning, {{name}}",
@@ -689,7 +694,7 @@
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
-    "network": "You appear to be offline. Changes are saved on this device and will sync later.",
+    "network": "You appear to be offline. Check the internet connection and try again.",
     "forbidden": "You do not have permission to do this.",
     "TAX_RULE_NOT_FOUND": "No GST rate is set for “{{category}}” on {{date}}. Ask an admin to update the tax category.",
     "QTY_NOT_POSITIVE": "Quantity must be more than zero.",

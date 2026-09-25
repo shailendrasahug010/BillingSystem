@@ -2,6 +2,7 @@ import {
   Bell,
   Cloud,
   CloudOff,
+  Download,
   House,
   Keyboard,
   LayoutGrid,
@@ -25,8 +26,10 @@ import { BUSINESS, ORDERS, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { getSyncState, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
+import { installApp, useCanInstall } from "../../lib/pwa";
 import { Dialog } from "../ui/Dialog";
 import { Kbd } from "../ui/misc";
+import { UpdateBanner } from "./UpdateBanner";
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
@@ -34,16 +37,17 @@ function sameRoute(a: Route, b: Route): boolean {
   return true;
 }
 
-export function BrandMark({ compact }: { compact?: boolean }) {
+/** The "व" mark and name; `inverse` for use on the brand colour. */
+export function BrandMark({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="relative flex size-8 items-center justify-center rounded-lg bg-accent font-display text-[17px] font-bold text-ink-inverse">
+      <span className={cn("relative flex size-8 items-center justify-center rounded-lg font-display text-[17px] font-bold", inverse ? "bg-white text-accent" : "bg-accent text-ink-inverse")}>
         व
-        <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-surface bg-marigold" aria-hidden />
+        <span className={cn("absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 bg-marigold", inverse ? "border-accent" : "border-surface")} aria-hidden />
       </span>
       {!compact && (
-        <span className="font-display text-[18px] leading-none font-semibold tracking-tight text-ink">
-          Vyapaar<span className="text-ink-3"> CRM</span>
+        <span className={cn("font-display text-[18px] leading-none font-semibold tracking-tight", inverse ? "text-white" : "text-ink")}>
+          Vyapaar<span className={inverse ? "text-white/70" : "text-ink-3"}> CRM</span>
         </span>
       )}
     </div>
@@ -183,6 +187,18 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
     .slice(0, 2)
     .toUpperCase();
   const roleLabel = LIVE ? WORKSPACE.role.replace(/^\w/, (c) => c.toUpperCase()) : "Admin";
+  const canInstall = useCanInstall();
+  const installButton = canInstall ? (
+    <button
+      type="button"
+      onClick={() => void installApp()}
+      title={t("app.installHint")}
+      className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium text-accent hover:bg-accent-soft"
+    >
+      <Download size={16} />
+      {t("app.install")}
+    </button>
+  ) : null;
   /** Live mode: switch business (when there are several) and sign out. */
   const accountActions = LIVE ? (
     <div className="flex flex-col gap-1 border-t border-line pt-2">
@@ -237,6 +253,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           <NavList />
         </div>
+        {installButton && <div className="px-3 pb-1">{installButton}</div>}
         {accountActions && <div className="px-3 pb-2">{accountActions}</div>}
         <div className="flex items-center gap-3 border-t border-line px-4 py-3">
           <span className="inline-flex size-8 items-center justify-center rounded-full bg-surface-3 font-display text-[12px] font-semibold text-ink-2">{initials}</span>
@@ -307,6 +324,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           </div>
         </header>
 
+        <UpdateBanner className="border-b border-line lg:px-6" />
         {!LIVE && (
           <div className="border-b border-line bg-accent-soft/60 px-4 py-1.5 text-center text-[12px] text-accent-ink lg:px-6">
             {t("app.prototypeBanner")}
@@ -351,6 +369,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           <LanguageToggle />
         </div>
         <NavList onNavigate={() => setMoreOpen(false)} />
+        {installButton && <div className="mt-3">{installButton}</div>}
         {accountActions && <div className="mt-3">{accountActions}</div>}
       </Dialog>
 

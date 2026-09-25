@@ -168,18 +168,21 @@ function SessionGate() {
   if (!LIVE || session.status === "ready") return <Root />;
   if (session.status === "signed-out") return <AuthPage />;
   if (session.status === "no-business") return <BusinessPicker />;
+  const offline = session.status === "error" && session.error?.code === "network";
   return (
     <AuthLayout>
       <div className="flex flex-col gap-4" role="status" aria-live="polite">
-        <p className="text-[16px] text-ink-2">{session.status === "error" ? t("auth.loadFailed") : t("auth.loadingWorkspace")}</p>
+        <p className="text-[16px] text-ink-2">{offline ? t("auth.offlineStart") : session.status === "error" ? t("auth.loadFailed") : t("auth.loadingWorkspace")}</p>
         {session.status === "error" && (
           <div className="flex gap-2">
             <Button variant="primary" onClick={session.retry}>
               {t("common.retry")}
             </Button>
-            <Button variant="ghost" onClick={() => void session.logout()}>
-              {t("auth.signOut")}
-            </Button>
+            {!offline && (
+              <Button variant="ghost" onClick={() => void session.logout()}>
+                {t("auth.signOut")}
+              </Button>
+            )}
           </div>
         )}
       </div>

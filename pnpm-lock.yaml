@@ -127,7 +127,7 @@ importers:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
       read-excel-file:
-        specifier: ^9.3.10
+        specifier: 9.3.10
         version: 9.3.10
     devDependencies:
       '@tailwindcss/vite':

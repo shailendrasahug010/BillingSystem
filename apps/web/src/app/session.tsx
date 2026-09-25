@@ -93,9 +93,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!LIVE) return;
     let cancelled = false;
-    void refreshSession().then((res) => {
-      if (!cancelled) void enter(res);
-    });
+    void refreshSession().then(
+      (res) => {
+        if (!cancelled) void enter(res);
+      },
+      (e: unknown) => {
+        if (cancelled) return;
+        setError(e instanceof ApiError ? e : new ApiError(0, "network"));
+        setStatus("error");
+      },
+    );
     // A failed background refresh (session revoked, cookie expired) signs out everywhere.
     const off = onSessionChange((res) => {
       if (!res) {
@@ -108,6 +115,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       off();
     };
   }, [enter, attempt]);
+
+  // Started without a network: try again as soon as the connection is back.
+  useEffect(() => {
+    if (status !== "error" || error?.code !== "network") return;
+    const again = () => setAttempt((n) => n + 1);
+    window.addEventListener("online", again);
+    return () => window.removeEventListener("online", again);
+  }, [status, error]);
 
   const withSession = useCallback(
     async (call: () => Promise<SessionResponse>) => {

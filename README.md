@@ -45,6 +45,8 @@ docs/             Architecture and design (A–K)
 
 ## Getting started
 
+**Step-by-step instructions for everyone** (running it on a computer, installing the desktop app on Windows / Mac / Linux and the mobile app on Android / iPhone, putting it on a server with your own web address, backups and troubleshooting) are in **[HOW-TO-RUN.md](HOW-TO-RUN.md)**. The short version for developers:
+
 Requirements: Node.js 22+, pnpm 10, PostgreSQL 16+.
 
 ```bash

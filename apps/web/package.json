@@ -2,14 +2,15 @@
   "name": "@vyapaar/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Responsive web client (PWA). The same build is wrapped by Tauri for Windows and Capacitor for Android.",
+  "description": "Responsive web client, installable as an app (PWA) on Windows, Mac, Linux, Android and iPhone.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "build:preview": "vite build --mode singlefile",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tanstack/react-query": "5.103.2",
@@ -20,7 +21,7 @@
     "radix-ui": "1.6.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "read-excel-file": "^9.3.10"
+    "read-excel-file": "9.3.10"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
