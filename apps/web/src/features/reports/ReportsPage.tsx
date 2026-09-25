@@ -7,6 +7,7 @@ import { Segmented } from "../../components/ui/misc";
 import { DataTable, ErrorNote, FilterBar, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { allowed } from "../../data/db";
 import { ApiError, api } from "../../lib/api";
+import { PnlReport, ProductsReport, ProfitReport } from "./Analytics";
 import { ExportButton, PeriodBar, usePeriod } from "./period";
 
 type Row = Record<string, unknown> & { key: string | null; label: string | null };
@@ -17,19 +18,23 @@ const GROUPS = {
   purchases: ["day", "month", "supplier", "product", "brand"],
 } as const;
 
-export function ReportsPage() {
+type ReportTab = "sales" | "collections" | "purchases" | "outstanding" | "profit" | "pnl" | "products";
+
+export function ReportsPage({ initialTab, initialGroup }: { initialTab?: ReportTab; initialGroup?: "brand" | "product" } = {}) {
   const { t } = useI18n();
-  const tabs = [
+  const tabs: ReportTab[] = [
     ...(allowed("report.view_sales") ? (["sales"] as const) : []),
     ...(allowed("report.view_collection") ? (["collections"] as const) : []),
     ...(allowed("report.view_purchase") ? (["purchases"] as const) : []),
     ...(allowed("report.view_outstanding") ? (["outstanding"] as const) : []),
+    ...(allowed("report.view_profit") ? (["profit", "pnl"] as const) : []),
+    ...(allowed("report.view_sales") ? (["products"] as const) : []),
   ];
   if (!tabs.length) return <ErrorNote error={new ApiError(403, "FORBIDDEN")} />;
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title={t("reports.title")} subtitle={t("reports.subtitle")} />
-      <Tabs.Root defaultValue={tabs[0]} className="flex flex-col gap-4">
+      <Tabs.Root key={initialTab ?? "default"} defaultValue={initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]} className="flex flex-col gap-4">
         <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={t("reports.title")}>
           {tabs.map((k) => (
             <Tabs.Trigger key={k} value={k} className={TAB_TRIGGER}>
@@ -55,6 +60,21 @@ export function ReportsPage() {
         {tabs.includes("outstanding") && (
           <Tabs.Content value="outstanding">
             <OutstandingReport />
+          </Tabs.Content>
+        )}
+        {tabs.includes("profit") && (
+          <Tabs.Content value="profit">
+            <ProfitReport {...(initialGroup ? { initialGroup } : {})} />
+          </Tabs.Content>
+        )}
+        {tabs.includes("pnl") && (
+          <Tabs.Content value="pnl">
+            <PnlReport />
+          </Tabs.Content>
+        )}
+        {tabs.includes("products") && (
+          <Tabs.Content value="products">
+            <ProductsReport />
           </Tabs.Content>
         )}
       </Tabs.Root>

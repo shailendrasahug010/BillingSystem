@@ -19,6 +19,7 @@ import { leaveModule } from "./people/leave.js";
 import { payrollModule } from "./people/payroll.js";
 import { paymentsModule } from "./payments/routes.js";
 import { purchasesModule } from "./purchases/routes.js";
+import { analyticsModule } from "./reports/analytics.js";
 import { dashboardModule } from "./reports/dashboard.js";
 import { reportsModule } from "./reports/reports.js";
 import { searchModule } from "./reports/search.js";
@@ -51,5 +52,6 @@ export const MODULES: ApiModule[] = [
   payrollModule,
   dashboardModule,
   reportsModule,
+  analyticsModule,
   searchModule,
 ];

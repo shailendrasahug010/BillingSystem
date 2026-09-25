@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LocaleCode } from "@vyapaar/i18n";
-import { Printer, Undo2 } from "lucide-react";
+import { Percent, Printer, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
@@ -18,6 +18,7 @@ import { api, ApiError } from "../../lib/api";
 import { InvoiceDocument } from "../invoice/InvoiceDocument";
 import { printableFromNote, type ApiNote } from "../invoice/printable";
 import { invalidateMoney } from "../payments/PaymentDialog";
+import { PriceNoteDialog } from "./PriceNoteDialog";
 import { ReturnDialog } from "./ReturnDialog";
 
 export interface ReturnRow {
@@ -141,19 +142,25 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
 }
 
 /** Returns recorded against an invoice or purchase, with the action to record one. */
-export function ReturnsCard({ kind, documentId, returns, canReturn }: { kind: "sale" | "purchase"; documentId: string; returns: ReturnRow[]; canReturn: boolean }) {
+export function ReturnsCard({ kind, documentId, documentNumber, returns, canReturn }: { kind: "sale" | "purchase"; documentId: string; documentNumber: string; returns: ReturnRow[]; canReturn: boolean }) {
   const { t, money, dateMedium } = useI18n();
   const [open, setOpen] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  const [pricing, setPricing] = useState(false);
   return (
     <Card>
       <CardHeader
         title={t("notes.returns")}
         action={
           canReturn && allowed("note.create") ? (
-            <Button size="sm" icon={<Undo2 size={14} />} onClick={() => setRecording(true)}>
-              {kind === "sale" ? t("notes.salesReturn") : t("notes.purchaseReturn")}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" icon={<Percent size={14} />} onClick={() => setPricing(true)}>
+                {kind === "sale" ? t("notes.priceNote") : t("notes.supplierCreditNote")}
+              </Button>
+              <Button size="sm" icon={<Undo2 size={14} />} onClick={() => setRecording(true)}>
+                {kind === "sale" ? t("notes.salesReturn") : t("notes.purchaseReturn")}
+              </Button>
+            </div>
           ) : undefined
         }
       />
@@ -177,6 +184,7 @@ export function ReturnsCard({ kind, documentId, returns, canReturn }: { kind: "s
       </div>
       <NoteDialog noteId={open} onClose={() => setOpen(null)} />
       <ReturnDialog kind={kind} documentId={documentId} open={recording} onOpenChange={setRecording} />
+      <PriceNoteDialog kind={kind} documentId={documentId} documentNumber={documentNumber} open={pricing} onOpenChange={setPricing} />
     </Card>
   );
 }

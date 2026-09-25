@@ -30,7 +30,7 @@ interface GstSummary {
   b2clThreshold: string;
   outward: Array<Heads & { section: "B2B" | "B2CL" | "B2CS"; gstRate: string; documents: number }>;
   inward: Array<Heads & { itcEligibility: string; reverseCharge: boolean; gstRate: string; documents: number }>;
-  notes: Array<Heads & { kind: "credit_note" | "debit_note"; registered: boolean; gstRate: string; documents: number }>;
+  notes: Array<Heads & { kind: "credit_note" | "debit_note" | "purchase_credit_note"; registered: boolean; gstRate: string; documents: number }>;
   hsnSummary: Array<Heads & { hsnCode: string | null; uqc: string | null; gstRate: string; qty: string }>;
   cancelledDocuments: number;
   estimate: { outputTax: Omit<Heads, "taxable">; eligibleItc: Omit<Heads, "taxable"> };
@@ -202,7 +202,7 @@ function SummaryTab({ period }: { period: string }) {
                   header: t("gstPage.section"),
                   render: (r) => (
                     <Badge tone={r.kind === "credit_note" ? "warn" : "accent"}>
-                      {r.kind === "credit_note" ? (r.registered ? "CDNR" : "CDNUR") : t("notes.debitNote")}
+                      {r.kind === "credit_note" ? (r.registered ? "CDNR" : "CDNUR") : r.kind === "purchase_credit_note" ? t("notes.supplierCreditNote") : t("notes.debitNote")}
                     </Badge>
                   ),
                 },

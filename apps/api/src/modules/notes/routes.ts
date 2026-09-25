@@ -1,7 +1,7 @@
-import { CancelBody, NoteListQuery, ReturnBody } from "@vyapaar/contracts";
-import { applyRoundOff, dec, roundAmount, toAmountString, toQtyString, type Dec } from "@vyapaar/core";
+import { CancelBody, NoteListQuery, PriceNoteBody, ReturnBody } from "@vyapaar/contracts";
+import { applyRoundOff, dec, roundAmount, toAmountString, toQtyString, toRateString, type Dec } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
-import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -25,6 +25,8 @@ type ReturnInput = z.output<typeof ReturnBody>;
 type Side = "customer" | "supplier";
 
 /** Amount columns carried from the original line to the returned share of it. */
+/** Notes that change only the value of a bill, not its goods. */
+const VALUE_ONLY = ["discount", "rate_difference"] as const;
 const AMOUNTS = ["grossAmount", "discountAmount", "documentDiscountShare", "taxableValue", "cgstAmount", "sgstAmount", "igstAmount", "cessAmount"] as const;
 type AmountKey = (typeof AMOUNTS)[number];
 type LineRow = typeof schema.invoiceItems.$inferSelect | typeof schema.purchaseItems.$inferSelect;
@@ -138,7 +140,14 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
     })
     .from(ni)
     .innerJoin(schema.creditDebitNotes, eq(schema.creditDebitNotes.id, ni.noteId))
-    .where(and(inArray(ni.originalLineId, items.map((i) => i.id)), eq(schema.creditDebitNotes.status, "posted")))
+    .where(and(inArray(ni.originalLineId, items.map((i) => i.id)), eq(schema.creditDebitNotes.status, "posted"), notInArray(schema.creditDebitNotes.reason, [...VALUE_ONLY])))
+    .groupBy(ni.originalLineId);
+  // Discounts / rate differences already credited on a line lower what its returned goods are worth.
+  const priceCredits = await tx
+    .select({ lineId: ni.originalLineId, taxable: sql<string>`sum(${ni.taxableValue})` })
+    .from(ni)
+    .innerJoin(schema.creditDebitNotes, eq(schema.creditDebitNotes.id, ni.noteId))
+    .where(and(inArray(ni.originalLineId, items.map((i) => i.id)), eq(schema.creditDebitNotes.status, "posted"), inArray(schema.creditDebitNotes.reason, [...VALUE_ONLY])))
     .groupBy(ni.originalLineId);
 
   const lines = items
@@ -150,6 +159,11 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
       const prev = earlier.find((e) => e.lineId === item.id) as Record<string, string> | undefined;
       const previous = { qty: dec(prev?.qty ?? 0), ...Object.fromEntries(AMOUNTS.map((k) => [k, dec(prev?.[k] ?? 0)])) } as Record<AmountKey, Dec> & { qty: Dec };
       const share = returnedShare(item, qty, previous);
+      const credited = dec(priceCredits.find((p) => p.lineId === item.id)?.taxable ?? 0);
+      if (credited.gt(0) && dec(item.taxableValue).gt(0)) {
+        const factor = dec(item.taxableValue).minus(credited).dividedBy(item.taxableValue);
+        for (const k of AMOUNTS) share[k] = roundAmount(share[k].times(factor));
+      }
       const total = share.taxableValue.plus(share.cgstAmount).plus(share.sgstAmount).plus(share.igstAmount).plus(share.cessAmount);
       return { item, qty, qtyBase: qty.times(item.conversionFactor), share, total, index };
     })
@@ -361,11 +375,249 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
   return { ...(await noteDetail(tx, ctx, id)), warnings };
 }
 
+type PriceNoteInput = z.output<typeof PriceNoteBody>;
+
+/**
+ * Posts a value-only note: a credit note for a discount or rate difference
+ * after the sale, or a supplier's credit note on a purchase. The amount is
+ * spread over the bill's lines (or given per line), taxed at each line's
+ * rates, capped by what the line still carries after earlier notes. No stock
+ * moves; the bill's balance, the party ledger and the GST register follow
+ * exactly like a return.
+ */
+async function postPriceNote(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1], side: Side, documentId: string, body: PriceNoteInput, clientId: string | null) {
+  const given = [body.amount, body.percent, body.lines].filter((x) => x !== undefined).length;
+  if (given !== 1) throw badRequest("NOTE_AMOUNT_REQUIRED", {}, "amount");
+  const today = deps.clock.today(ctx.timeZone);
+  const noteDate = body.noteDate ?? today;
+  if (noteDate > today) throw badRequest("FUTURE_DATE_NOT_ALLOWED", {}, "noteDate");
+  if (await periodLocked(tx, ctx.businessId, noteDate)) throw conflict("GST_PERIOD_LOCKED");
+
+  const isSale = side === "customer";
+  const docTable = isSale ? schema.invoices : schema.purchases;
+  const [doc] = await tx.select().from(docTable).where(and(eq(docTable.id, documentId), eq(docTable.businessId, ctx.businessId))).for("update");
+  if (!doc) throw notFound(isSale ? "invoice" : "purchase");
+  if (doc.status !== "posted") throw conflict("INVOICE_NOT_POSTED", { status: doc.status });
+  const docDate = "invoiceDate" in doc ? doc.invoiceDate : doc.supplierInvoiceDate;
+  const docNumber = ("invoiceNumber" in doc ? doc.invoiceNumber : doc.supplierInvoiceNumber) ?? "";
+  if (noteDate < docDate) throw badRequest("NOTE_BEFORE_DOCUMENT", { date: docDate }, "noteDate");
+  if (!isSale && doc.isReverseCharge) throw conflict("RETURN_NOT_SUPPORTED_RCM");
+
+  const itemTable = isSale ? schema.invoiceItems : schema.purchaseItems;
+  const parentColumn = isSale ? schema.invoiceItems.invoiceId : schema.purchaseItems.purchaseId;
+  const items: LineRow[] = await tx.select().from(itemTable).where(eq(parentColumn, doc.id)).orderBy(asc(itemTable.lineNo)).for("update");
+  // Taxable value each line still carries after earlier posted notes (returns and price notes).
+  const ni = schema.creditDebitNoteItems;
+  const earlier = await tx
+    .select({ lineId: ni.originalLineId, taxable: sql<string>`sum(${ni.taxableValue})` })
+    .from(ni)
+    .innerJoin(schema.creditDebitNotes, eq(schema.creditDebitNotes.id, ni.noteId))
+    .where(and(inArray(ni.originalLineId, items.map((i) => i.id)), eq(schema.creditDebitNotes.status, "posted")))
+    .groupBy(ni.originalLineId);
+  const left = new Map(items.map((i) => [i.id, dec(i.taxableValue).minus(earlier.find((e) => e.lineId === i.id)?.taxable ?? 0)]));
+
+  // Taxable amount per line.
+  const wanted = new Map<string, Dec>();
+  if (body.lines) {
+    body.lines.forEach((l, i) => {
+      if (!left.has(l.lineId)) throw badRequest("RETURN_LINE_NOT_ON_DOCUMENT", {}, `lines[${i}].lineId`);
+      wanted.set(l.lineId, (wanted.get(l.lineId) ?? dec(0)).plus(l.amount));
+    });
+  } else {
+    const base = [...left.values()].reduce((a, v) => a.plus(v.gt(0) ? v : 0), dec(0));
+    const target = body.amount !== undefined ? dec(body.amount) : roundAmount(base.times(body.percent!).dividedBy(100));
+    if (target.gt(base)) throw badRequest("NOTE_EXCEEDS_BILL", { max: toAmountString(base) }, "amount");
+    let given = dec(0);
+    const open = items.filter((i) => left.get(i.id)!.gt(0));
+    open.forEach((i, n) => {
+      const share = n === open.length - 1 ? target.minus(given) : roundAmount(target.times(left.get(i.id)!).dividedBy(base));
+      given = given.plus(share);
+      wanted.set(i.id, share);
+    });
+  }
+  const lines = items
+    .filter((i) => wanted.get(i.id)?.gt(0))
+    .map((item) => {
+      const taxable = wanted.get(item.id)!;
+      if (taxable.gt(left.get(item.id)!)) throw badRequest("NOTE_EXCEEDS_LINE", { product: item.productName, max: toAmountString(left.get(item.id)!) }, "lines");
+      const pct = (r: string) => roundAmount(taxable.times(r).dividedBy(100));
+      const share = { taxable, cgst: pct(item.cgstRate), sgst: pct(item.sgstRate), igst: pct(item.igstRate), cess: pct(item.cessRate) };
+      return { item, share, total: taxable.plus(share.cgst).plus(share.sgst).plus(share.igst).plus(share.cess) };
+    });
+  if (!lines.length) throw badRequest("NOTE_AMOUNT_REQUIRED", {}, "amount");
+
+  const sum = (k: "taxable" | "cgst" | "sgst" | "igst" | "cess") => lines.reduce((acc, l) => acc.plus(l.share[k]), dec(0));
+  const settings = await getSettings(tx, ctx.businessId, ["invoice.round_off"] as const);
+  const { rounded: grandTotal, roundOff } = applyRoundOff(lines.reduce((acc, l) => acc.plus(l.total), dec(0)), settings["invoice.round_off"]);
+  if (body.clientTotals && !dec(body.clientTotals.grandTotal).eq(grandTotal)) {
+    throw new ApiError(422, "TOTALS_MISMATCH", { field: "grandTotal", expected: grandTotal.toFixed(2), received: dec(body.clientTotals.grandTotal).toFixed(2) });
+  }
+
+  const [business] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
+  const numbering = isSale
+    ? await nextDocumentNumber(tx, ctx.businessId, "credit_note", noteDate, business!.financialYearStartMonth)
+    : await nextDocumentNumber(tx, ctx.businessId, "supplier_credit_note", noteDate, business!.financialYearStartMonth, { name: "Supplier credit note", pattern: "SCN/{FYS}/{SEQ:5}" });
+  const partyId = "customerId" in doc ? doc.customerId : doc.supplierId;
+  const [party] = isSale
+    ? await tx.select({ registration: schema.customers.gstRegistration }).from(schema.customers).where(eq(schema.customers.id, partyId))
+    : await tx.select({ registration: schema.suppliers.gstRegistration }).from(schema.suppliers).where(eq(schema.suppliers.id, partyId));
+  const id = uuidv7();
+  const settle = dec(doc.balanceDue).lt(grandTotal) ? dec(doc.balanceDue) : grandTotal;
+
+  await tx.insert(schema.creditDebitNotes).values({
+    id,
+    businessId: ctx.businessId,
+    noteType: "credit",
+    partyType: side,
+    ...(isSale ? { customerId: partyId } : { supplierId: partyId }),
+    noteNumber: numbering.number,
+    partyNoteNumber: body.partyNoteNumber ?? null,
+    seriesId: numbering.seriesId,
+    financialYear: numbering.financialYear,
+    noteDate,
+    reason: body.reason,
+    ...(isSale ? { invoiceId: doc.id } : { purchaseId: doc.id }),
+    affectsStock: false,
+    warehouseId: doc.warehouseId,
+    partyName: doc.partyName,
+    partyGstin: doc.partyGstin,
+    partyStateCode: doc.partyStateCode,
+    billingAddress: doc.billingAddress,
+    placeOfSupply: doc.placeOfSupply,
+    supplyType: doc.supplyType,
+    isReverseCharge: false,
+    taxEngineVersion: doc.taxEngineVersion,
+    status: "posted",
+    grossTotal: toAmountString(sum("taxable")),
+    discountTotal: "0",
+    taxableTotal: toAmountString(sum("taxable")),
+    cgstTotal: toAmountString(sum("cgst")),
+    sgstTotal: toAmountString(sum("sgst")),
+    igstTotal: toAmountString(sum("igst")),
+    cessTotal: toAmountString(sum("cess")),
+    roundOff: toAmountString(roundOff),
+    grandTotal: toAmountString(grandTotal),
+    amountSettled: toAmountString(settle),
+    settlementStatus: settle.eq(grandTotal) ? "paid" : settle.gt(0) ? "partial" : "unpaid",
+    notes: body.notes ?? null,
+    postedAt: deps.clock.now().toISOString(),
+    clientId,
+    createdBy: ctx.userId,
+    updatedBy: ctx.userId,
+  });
+  const itemIds = lines.map(() => uuidv7());
+  await tx.insert(schema.creditDebitNoteItems).values(
+    lines.map((l, i) => {
+      const it = l.item;
+      return {
+        id: itemIds[i]!,
+        businessId: ctx.businessId,
+        noteId: id,
+        lineNo: i + 1,
+        productId: it.productId,
+        productName: it.productName,
+        hsnCode: it.hsnCode,
+        uqc: it.uqc,
+        unitId: it.unitId,
+        conversionFactor: it.conversionFactor,
+        // The value changes, not the goods: the line's quantity is kept for reference only.
+        qty: it.qty,
+        freeQty: "0",
+        qtyBase: it.qtyBase,
+        rate: toRateString(l.share.taxable.dividedBy(it.qty)),
+        rateIncludesTax: false,
+        discountPercent: "0",
+        grossAmount: toAmountString(l.share.taxable),
+        discountAmount: "0",
+        documentDiscountShare: "0",
+        taxableValue: toAmountString(l.share.taxable),
+        cgstAmount: toAmountString(l.share.cgst),
+        sgstAmount: toAmountString(l.share.sgst),
+        igstAmount: toAmountString(l.share.igst),
+        cessAmount: toAmountString(l.share.cess),
+        taxability: it.taxability,
+        taxCategoryId: it.taxCategoryId,
+        taxRateId: it.taxRateId,
+        gstRate: it.gstRate,
+        cgstRate: it.cgstRate,
+        sgstRate: it.sgstRate,
+        igstRate: it.igstRate,
+        cessRate: it.cessRate,
+        lineTotal: toAmountString(l.total),
+        batchId: it.batchId,
+        unitCost: "0",
+        originalLineId: it.id,
+      };
+    }),
+  );
+  if (settle.gt(0)) await applyToDocument(tx, side, doc.id, toAmountString(settle), toAmountString(dec(doc.balanceDue).minus(settle)));
+  const label = body.reason === "rate_difference" ? "Rate difference" : body.reason === "discount" ? "Discount" : "Adjustment";
+  await postPartyEntry(tx, {
+    businessId: ctx.businessId,
+    party: isSale ? { type: "customer", id: partyId } : { type: "supplier", id: partyId },
+    date: noteDate,
+    docType: isSale ? "credit_note" : "supplier_credit_note",
+    docId: id,
+    docNumber: numbering.number,
+    ...(isSale ? { credit: toAmountString(grandTotal) } : { debit: toAmountString(grandTotal) }),
+    narration: `${label} on ${docNumber}`,
+    userId: ctx.userId,
+  });
+  await tx.insert(schema.gstTransactions).values(
+    lines.map((l, i) => ({
+      businessId: ctx.businessId,
+      direction: isSale ? ("outward" as const) : ("inward" as const),
+      docType: isSale ? ("credit_note" as const) : ("purchase_credit_note" as const),
+      docId: id,
+      docLineId: itemIds[i]!,
+      // A supplier's note is reported under their number.
+      docNumber: isSale ? numbering.number : (body.partyNoteNumber ?? numbering.number),
+      docDate: noteDate,
+      originalDocNumber: docNumber,
+      originalDocDate: docDate,
+      returnPeriod: noteDate.slice(0, 7),
+      partyName: doc.partyName,
+      partyGstin: doc.partyGstin,
+      partyRegistration: party!.registration,
+      partyStateCode: doc.partyStateCode,
+      placeOfSupply: doc.placeOfSupply,
+      supplyType: doc.supplyType,
+      taxability: l.item.taxability,
+      hsnCode: l.item.hsnCode,
+      uqc: l.item.uqc,
+      qty: "0",
+      taxableValue: toAmountString(l.share.taxable),
+      gstRate: l.item.gstRate,
+      cgstAmount: toAmountString(l.share.cgst),
+      sgstAmount: toAmountString(l.share.sgst),
+      igstAmount: toAmountString(l.share.igst),
+      cessAmount: toAmountString(l.share.cess),
+      documentValue: toAmountString(grandTotal),
+      ...(isSale ? {} : { itcEligibility: (doc as typeof schema.purchases.$inferSelect).itcEligibility }),
+    })),
+  );
+  await audit(tx, ctx, {
+    action: isSale ? "credit_note.posted" : "supplier_credit_note.posted",
+    entityType: "note",
+    entityId: id,
+    entityLabel: `${numbering.number} (${docNumber})`,
+    changes: { reason: body.reason, taxable: toAmountString(sum("taxable")), grandTotal: toAmountString(grandTotal) },
+  });
+  await tx.insert(schema.outboxEvents).values({
+    businessId: ctx.businessId,
+    eventType: isSale ? "credit_note.posted" : "supplier_credit_note.posted",
+    aggregateType: "note",
+    aggregateId: id,
+    payload: { [isSale ? "invoiceId" : "purchaseId"]: doc.id, grandTotal: toAmountString(grandTotal) },
+  });
+  return { ...(await noteDetail(tx, ctx, id)), warnings: [] };
+}
+
 export const notesModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
 
-  const create = async (side: Side, ctx: RequestCtx, documentId: string, body: ReturnInput, key: unknown, reply: FastifyReply) => {
+  const create = async <B>(side: Side, ctx: RequestCtx, documentId: string, body: B, key: unknown, reply: FastifyReply, post: (tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1], side: Side, documentId: string, body: B, clientId: string | null) => Promise<unknown>) => {
     const clientId = typeof key === "string" && z.uuid().safeParse(key).success ? key : null;
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
@@ -376,7 +628,7 @@ export const notesModule: ApiModule = async (app, deps) => {
           .where(and(eq(schema.creditDebitNotes.businessId, ctx.businessId), eq(schema.creditDebitNotes.clientId, clientId)));
         if (existing) return { replay: true, detail: await noteDetail(tx, ctx, existing.id) };
       }
-      return { replay: false, detail: await postReturn(tx, ctx, deps, side, documentId, body, clientId) };
+      return { replay: false, detail: await post(tx, ctx, deps, side, documentId, body, clientId) };
     });
     if (result.replay) reply.header("idempotent-replay", "true");
     return reply.code(result.replay ? 200 : 201).send(result.detail);
@@ -384,12 +636,22 @@ export const notesModule: ApiModule = async (app, deps) => {
 
   /** Sales return: a credit note against the invoice. */
   r.post("/invoices/:id/returns", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, body: ReturnBody } }, (request, reply) =>
-    create("customer", request.ctx, request.params.id, request.body, request.headers["idempotency-key"], reply),
+    create("customer", request.ctx, request.params.id, request.body, request.headers["idempotency-key"], reply, postReturn),
+  );
+
+  /** Discount or rate difference after the sale: a value-only credit note against the invoice. */
+  r.post("/invoices/:id/price-notes", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, body: PriceNoteBody } }, (request, reply) =>
+    create("customer", request.ctx, request.params.id, request.body, request.headers["idempotency-key"], reply, postPriceNote),
+  );
+
+  /** A supplier's credit note (discount / rate difference) on their bill. */
+  r.post("/purchases/:id/price-notes", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, body: PriceNoteBody } }, (request, reply) =>
+    create("supplier", request.ctx, request.params.id, request.body, request.headers["idempotency-key"], reply, postPriceNote),
   );
 
   /** Purchase return: a debit note to the supplier against their bill. */
   r.post("/purchases/:id/returns", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, body: ReturnBody } }, (request, reply) =>
-    create("supplier", request.ctx, request.params.id, request.body, request.headers["idempotency-key"], reply),
+    create("supplier", request.ctx, request.params.id, request.body, request.headers["idempotency-key"], reply, postReturn),
   );
 
   r.get("/notes", { preHandler: guard(deps, "note.view"), schema: { tags: ["notes"], querystring: NoteListQuery } }, async (request) => {
@@ -457,7 +719,9 @@ export const notesModule: ApiModule = async (app, deps) => {
       const policy = (await getSettings(tx, ctx.businessId, ["stock.negative_policy"] as const))["stock.negative_policy"];
       const items = await tx.select().from(schema.creditDebitNoteItems).where(eq(schema.creditDebitNoteItems.noteId, note.id));
       const itemTable = isSale ? schema.invoiceItems : schema.purchaseItems;
-      for (const it of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
+      // Discounts and rate differences changed only the value: no quantities or stock to give back.
+      const valueOnly = (VALUE_ONLY as readonly string[]).includes(note.reason);
+      for (const it of valueOnly ? [] : [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
         await tx
           .update(itemTable)
           .set({ returnedQty: sql`${itemTable.returnedQty} - ${it.qty}` })
@@ -489,15 +753,17 @@ export const notesModule: ApiModule = async (app, deps) => {
       if (doc && dec(note.amountSettled).gt(0)) {
         await applyToDocument(tx, isSale ? "customer" : "supplier", doc.id, `-${note.amountSettled}`, toAmountString(dec(doc.balanceDue).plus(note.amountSettled)));
       }
+      // Returns: credit note (sale) / debit note (purchase); value-only on a purchase: the supplier's credit note.
+      const ledgerType = isSale ? "credit_note" : valueOnly ? "supplier_credit_note" : "debit_note";
       const [original] = await tx
         .select({ id: schema.partyLedgerEntries.id })
         .from(schema.partyLedgerEntries)
-        .where(and(eq(schema.partyLedgerEntries.docId, note.id), eq(schema.partyLedgerEntries.docType, isSale ? "credit_note" : "debit_note")));
+        .where(and(eq(schema.partyLedgerEntries.docId, note.id), eq(schema.partyLedgerEntries.docType, ledgerType)));
       await postPartyEntry(tx, {
         businessId: ctx.businessId,
         party: isSale ? { type: "customer", id: note.customerId! } : { type: "supplier", id: note.supplierId! },
         date: today,
-        docType: isSale ? "credit_note_cancel" : "debit_note_cancel",
+        docType: `${ledgerType}_cancel`,
         docId: note.id,
         docNumber: note.noteNumber,
         ...(isSale ? { debit: note.grandTotal } : { credit: note.grandTotal }),
@@ -508,7 +774,7 @@ export const notesModule: ApiModule = async (app, deps) => {
       await tx
         .update(schema.gstTransactions)
         .set({ isCancelled: true })
-        .where(and(eq(schema.gstTransactions.docType, isSale ? "credit_note" : "debit_note"), eq(schema.gstTransactions.docId, note.id), eq(schema.gstTransactions.businessId, ctx.businessId)));
+        .where(and(eq(schema.gstTransactions.docType, isSale ? "credit_note" : valueOnly ? "purchase_credit_note" : "debit_note"), eq(schema.gstTransactions.docId, note.id), eq(schema.gstTransactions.businessId, ctx.businessId)));
       await tx
         .update(schema.creditDebitNotes)
         .set({ status: "cancelled", cancelledAt: now, cancelReason: request.body.reason, amountSettled: "0", settlementStatus: "unpaid", version: note.version + 1, updatedBy: ctx.userId })

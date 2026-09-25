@@ -860,7 +860,10 @@
     "INVOICE_ALREADY_DISPATCHED": "बिल {{number}} पहले से किसी ट्रिप में है।",
     "DISPATCH_NOT_PLANNED": "यह सिर्फ़ प्लान की गई ट्रिप में हो सकता है (यह {{status}} है)।",
     "DISPATCH_NOT_ON_ROAD": "ट्रिप अभी निकली नहीं या पूरी हो चुकी ({{status}})।",
-    "STOP_ALREADY_CLOSED": "यह डिलीवरी पहले ही दर्ज है ({{status}})।"
+    "STOP_ALREADY_CLOSED": "यह डिलीवरी पहले ही दर्ज है ({{status}})।",
+    "NOTE_AMOUNT_REQUIRED": "प्रतिशत, रकम या हर आइटम की रकम डालें।",
+    "NOTE_EXCEEDS_BILL": "बिल में GST से पहले सिर्फ़ {{max}} बचा है।",
+    "NOTE_EXCEEDS_LINE": "{{product}} में GST से पहले सिर्फ़ {{max}} बचा है।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -1034,7 +1037,10 @@
       "sales": "बिक्री",
       "collections": "वसूली",
       "purchases": "खरीद",
-      "outstanding": "बकाया"
+      "outstanding": "बकाया",
+      "profit": "मुनाफ़ा",
+      "pnl": "लाभ-हानि",
+      "products": "उत्पाद"
     },
     "groups": {
       "day": "दिन",
@@ -1367,7 +1373,15 @@
     },
     "date": "नोट की तारीख",
     "computerGenerated": "यह कंप्यूटर से बना दस्तावेज़ है।",
-    "lessReturns": "घटाएँ: वापसी"
+    "lessReturns": "घटाएँ: वापसी",
+    "priceNote": "छूट / रेट अंतर",
+    "supplierCreditNote": "सप्लायर क्रेडिट नोट",
+    "priceSaved": "क्रेडिट नोट सेव हुआ",
+    "priceHint": "सिर्फ़ रकम बदलती है; माल नहीं हिलता",
+    "priceMode": "कितना",
+    "percentOfBill": "बिल का प्रतिशत",
+    "amountBeforeGst": "GST से पहले रकम",
+    "priceSpread": "बिल के आइटमों में उनकी रकम के हिसाब से बाँटा जाता है; हर आइटम की दर से GST जुड़ता है"
   },
   "imports": {
     "import": "आयात",
@@ -1794,5 +1808,32 @@
     "toCollect": "वसूली",
     "signature": "हस्ताक्षर / मुहर",
     "driverSign": "ड्राइवर"
+  },
+  "analytics": {
+    "netSales": "शुद्ध बिक्री",
+    "cost": "माल की लागत",
+    "margin": "मार्जिन",
+    "noSales": "इस अवधि में कोई बिक्री नहीं",
+    "profitHint": "बिक्री GST से पहले और वापसी, छूट व रेट अंतर घटाकर है; लागत हर आइटम बिकते समय की औसत ख़रीद लागत है।",
+    "grossProfit": "सकल लाभ",
+    "expensesAndSalaries": "खर्चे और वेतन",
+    "netProfit": "शुद्ध लाभ",
+    "pnl": "लाभ-हानि",
+    "pnlHint": "वेतन इस अवधि के फ़ाइनल पेरोल महीनों का गिना जाता है",
+    "cogs": "बिके माल की लागत",
+    "salaries": "वेतन",
+    "movement": "चलन",
+    "movements": {
+      "fast": "तेज़",
+      "slow": "धीमा",
+      "not_moving": "नहीं चल रहा",
+      "no_stock": "न स्टॉक, न बिक्री"
+    },
+    "noProducts": "कोई उत्पाद नहीं",
+    "sold": "बिका",
+    "stockValue": "स्टॉक मूल्य",
+    "daysOfCover": "कितने दिन चलेगा",
+    "lastSold": "आख़िरी बिक्री",
+    "movementHint": "तेज़: बिक्री के पहले 80% वाले उत्पाद। नहीं चल रहा: स्टॉक में है पर इस अवधि में नहीं बिका। कितने दिन चलेगा: इसी रफ़्तार से स्टॉक कितने दिन चलेगा।"
   }
 }

@@ -133,7 +133,8 @@ export const PurchaseListQuery = PageQuery.extend({
 /** Goods coming back against an invoice (credit note) or going back against a purchase bill (debit note). */
 export const ReturnBody = z.strictObject({
   noteDate: IsoDate.optional(),
-  reason: z.enum(["sales_return", "purchase_return", "damage", "rate_difference", "discount", "other"]).optional(),
+  /** Discounts and rate differences are value-only notes (PriceNoteBody), not returns. */
+  reason: z.enum(["sales_return", "purchase_return", "damage", "other"]).optional(),
   /** Sales return: put the goods back into sellable stock. Purchase return: take them out of stock. */
   restock: z.boolean().default(true),
   lines: z
@@ -151,6 +152,25 @@ export const ReturnBody = z.strictObject({
   partyNoteNumber: z.string().trim().max(30).optional(),
   notes: z.string().trim().max(500).optional(),
   clientTotals: ClientTotals.optional(),
+});
+
+/**
+ * A note that changes only the value of a bill, not its goods: a discount or
+ * rate difference given after the sale (credit note), or a supplier's credit
+ * note for the same on a purchase. Give one of amount (spread over the lines
+ * by their value), percent, or amounts per line.
+ */
+export const PriceNoteBody = z.strictObject({
+  noteDate: IsoDate.optional(),
+  reason: z.enum(["discount", "rate_difference"]).default("discount"),
+  /** Taxable amount (before GST). */
+  amount: Money.optional(),
+  percent: Percent.optional(),
+  lines: z.array(z.strictObject({ lineId: Id, amount: Money })).min(1).max(300).optional(),
+  /** The supplier's own credit note number (purchase side). */
+  partyNoteNumber: z.string().trim().max(30).optional(),
+  notes: z.string().trim().max(500).optional(),
+  clientTotals: z.strictObject({ grandTotal: Money }).optional(),
 });
 
 export const NoteListQuery = PageQuery.extend({

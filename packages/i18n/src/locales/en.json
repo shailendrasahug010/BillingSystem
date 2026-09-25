@@ -860,7 +860,10 @@
     "INVOICE_ALREADY_DISPATCHED": "Invoice {{number}} is already on a trip.",
     "DISPATCH_NOT_PLANNED": "Only a planned trip can do this (this one is {{status}}).",
     "DISPATCH_NOT_ON_ROAD": "The trip has not left yet or is finished ({{status}}).",
-    "STOP_ALREADY_CLOSED": "This delivery is already recorded ({{status}})."
+    "STOP_ALREADY_CLOSED": "This delivery is already recorded ({{status}}).",
+    "NOTE_AMOUNT_REQUIRED": "Give a percent, an amount, or amounts per item.",
+    "NOTE_EXCEEDS_BILL": "The bill has only {{max}} left before GST.",
+    "NOTE_EXCEEDS_LINE": "{{product}} has only {{max}} left before GST."
   },
   "validation": {
     "required": "This field is required",
@@ -1034,7 +1037,10 @@
       "sales": "Sales",
       "collections": "Collections",
       "purchases": "Purchases",
-      "outstanding": "Outstanding"
+      "outstanding": "Outstanding",
+      "profit": "Profit",
+      "pnl": "Profit & loss",
+      "products": "Products"
     },
     "groups": {
       "day": "Day",
@@ -1367,7 +1373,15 @@
     },
     "date": "Note date",
     "computerGenerated": "This is a computer-generated document.",
-    "lessReturns": "Less: returns"
+    "lessReturns": "Less: returns",
+    "priceNote": "Discount / rate difference",
+    "supplierCreditNote": "Supplier credit note",
+    "priceSaved": "Credit note saved",
+    "priceHint": "only the value changes; no goods move",
+    "priceMode": "How much",
+    "percentOfBill": "Percent of the bill",
+    "amountBeforeGst": "Amount before GST",
+    "priceSpread": "Spread over the bill's items by value; GST at each item's rate is added"
   },
   "imports": {
     "import": "Import",
@@ -1794,5 +1808,32 @@
     "toCollect": "To collect",
     "signature": "Signature / stamp",
     "driverSign": "Driver"
+  },
+  "analytics": {
+    "netSales": "Net sales",
+    "cost": "Cost of goods",
+    "margin": "Margin",
+    "noSales": "No sales in this period",
+    "profitHint": "Sales are before GST and net of returns, discounts and rate differences; cost is the average purchase cost when each item was sold.",
+    "grossProfit": "Gross profit",
+    "expensesAndSalaries": "Expenses and salaries",
+    "netProfit": "Net profit",
+    "pnl": "Profit and loss",
+    "pnlHint": "Salaries are counted for finalized payroll months in the period",
+    "cogs": "Cost of goods sold",
+    "salaries": "Salaries",
+    "movement": "Movement",
+    "movements": {
+      "fast": "Fast",
+      "slow": "Slow",
+      "not_moving": "Not moving",
+      "no_stock": "No stock, no sales"
+    },
+    "noProducts": "No products",
+    "sold": "Sold",
+    "stockValue": "Stock value",
+    "daysOfCover": "Days of cover",
+    "lastSold": "Last sold",
+    "movementHint": "Fast: the products making the first 80% of sales. Not moving: in stock but not sold in the period. Days of cover: how long the stock lasts at this period's pace."
   }
 }

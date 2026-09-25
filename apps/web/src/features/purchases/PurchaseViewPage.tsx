@@ -258,7 +258,7 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
           </dl>
         </Card>
       </div>
-      <ReturnsCard kind="purchase" documentId={p.id} returns={p.returns ?? []} canReturn={posted && !p.isReverseCharge} />
+      <ReturnsCard kind="purchase" documentId={p.id} documentNumber={p.supplierInvoiceNumber} returns={p.returns ?? []} canReturn={posted && !p.isReverseCharge} />
       <PaymentDialog direction="out" partyId={p.supplierId} open={paying} onOpenChange={setPaying} />
     </div>
   );

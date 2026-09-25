@@ -306,17 +306,17 @@ export const reportsModule: ApiModule = async (app, deps) => {
             select coalesce(itc_eligibility::text, 'eligible') as itc, is_reverse_charge as reverse_charge, gst_rate,
                    count(distinct doc_id)::int as documents, ${heads}
             from gst_transactions
-            where business_id = ${b} and direction = 'inward' and doc_type <> 'debit_note' and return_period = ${period} and not is_cancelled
+            where business_id = ${b} and direction = 'inward' and doc_type not in ('debit_note', 'purchase_credit_note') and return_period = ${period} and not is_cancelled
             group by 1, 2, 3 order by 1, 2, 3`)
         ).rows;
         // Sales returns (credit notes, CDNR / CDNUR) and purchase returns (our debit notes to suppliers).
         const notes = (
-          await tx.execute<{ direction: string; registered: boolean; itc: string | null; gst_rate: string; taxable: string; cgst: string; sgst: string; igst: string; cess: string; documents: number }>(sql`
-            select direction::text, party_gstin is not null as registered, itc_eligibility::text as itc, gst_rate,
+          await tx.execute<{ direction: string; doc_type: string; registered: boolean; itc: string | null; gst_rate: string; taxable: string; cgst: string; sgst: string; igst: string; cess: string; documents: number }>(sql`
+            select direction::text, doc_type::text, party_gstin is not null as registered, itc_eligibility::text as itc, gst_rate,
                    count(distinct doc_id)::int as documents, ${heads}
             from gst_transactions
-            where business_id = ${b} and doc_type in ('credit_note', 'debit_note') and return_period = ${period} and not is_cancelled
-            group by 1, 2, 3, 4 order by 1, 2, 4`)
+            where business_id = ${b} and doc_type in ('credit_note', 'debit_note', 'purchase_credit_note') and return_period = ${period} and not is_cancelled
+            group by 1, 2, 3, 4, 5 order by 1, 2, 3, 5`)
         ).rows;
         const hsn = (
           await tx.execute<{ hsn_code: string | null; uqc: string | null; gst_rate: string; qty: string; taxable: string; cgst: string; sgst: string; igst: string; cess: string }>(sql`
@@ -349,7 +349,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
           outward: outward.map((x) => ({ section: x.section, gstRate: x.gst_rate, documents: x.documents, taxable: m(x.taxable), cgst: m(x.cgst), sgst: m(x.sgst), igst: m(x.igst), cess: m(x.cess) })),
           inward: inward.map((x) => ({ itcEligibility: x.itc, reverseCharge: x.reverse_charge, gstRate: x.gst_rate, documents: x.documents, taxable: m(x.taxable), cgst: m(x.cgst), sgst: m(x.sgst), igst: m(x.igst), cess: m(x.cess) })),
           notes: notes.map((x) => ({
-            kind: x.direction === "outward" ? "credit_note" : "debit_note",
+            kind: x.doc_type as "credit_note" | "debit_note" | "purchase_credit_note",
             registered: x.registered,
             gstRate: x.gst_rate,
             documents: x.documents,

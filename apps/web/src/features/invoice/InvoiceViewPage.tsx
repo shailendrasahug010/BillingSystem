@@ -92,7 +92,7 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
       </div>
       {LIVE && live.data && (
         <div className="no-print">
-          <ReturnsCard kind="sale" documentId={invoice.id} returns={live.data.returns ?? []} canReturn={status !== "cancelled"} />
+          <ReturnsCard kind="sale" documentId={invoice.id} documentNumber={invoice.number} returns={live.data.returns ?? []} canReturn={status !== "cancelled"} />
         </div>
       )}
       <PrintPortal>

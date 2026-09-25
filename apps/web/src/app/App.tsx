@@ -103,6 +103,10 @@ function Screen({ route }: { route: Route }) {
             return <DispatchPage />;
           case "reports":
             return <ReportsPage />;
+          case "productReports":
+            return <ReportsPage initialTab="products" />;
+          case "companyReports":
+            return <ReportsPage initialTab="profit" initialGroup="brand" />;
           case "gst":
             return <GstPage />;
           case "expenses":

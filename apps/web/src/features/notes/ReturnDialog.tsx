@@ -107,7 +107,7 @@ export function ReturnDialog({ kind, documentId, open, onOpenChange }: { kind: "
     }
   };
 
-  const reasons = kind === "sale" ? ["sales_return", "damage", "rate_difference", "other"] : ["purchase_return", "damage", "rate_difference", "other"];
+  const reasons = kind === "sale" ? ["sales_return", "damage", "other"] : ["purchase_return", "damage", "other"];
 
   return (
     <Dialog
