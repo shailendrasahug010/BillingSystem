@@ -34,9 +34,15 @@ async function api(method, path, token, body) {
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 const errors = [];
+let signedIn = false;
 page.on("pageerror", (e) => errors.push(e.message));
-page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-page.on("response", (r) => r.status() >= 400 && errors.push(`${r.status()} ${r.request().method()} ${r.url()}`));
+// Failed requests are caught by the response listener; the browser's own "Failed to load resource" lines repeat them.
+page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(m.text()));
+page.on("response", (r) => {
+  // Before signing in, the app's attempt to restore a session is expected to be refused.
+  if (!signedIn && r.status() === 401 && r.url().endsWith("/auth/refresh")) return;
+  if (r.status() >= 400) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
+});
 
 // 1. Sign up (creates the business) through the UI.
 await page.goto(WEB);
@@ -54,6 +60,7 @@ const code = (await hint.textContent()).match(/\d{6}/)[0];
 await page.fill("#auth-otp", code);
 await page.getByRole("button", { name: "Verify and create account" }).click();
 await page.getByRole("heading", { name: /Ravi/ }).waitFor({ timeout: 15000 });
+signedIn = true;
 log("signed up; dashboard greets", await page.getByRole("heading", { name: /Ravi/ }).textContent());
 await page.screenshot({ path: `${OUT}/e2e-1-dashboard-empty.png` });
 

@@ -84,12 +84,14 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 * Detail: timeline of status changes (who, when, note), fulfilment progress bars (packed / dispatched / delivered / invoiced per line), actions allowed by the workflow (`allowedTransitions`), convert to invoice (full or partial).
 * Workflow steps are configurable (skip confirmation, packing or dispatch).
 
-## 12. Packing — Phase 4
+## 12. Packing — **Built** (live)
+* **Built:** queue of confirmed orders (by expected delivery), pack dialog with scan-to-pack (barcode or product name), quantities per line with what is left, batches split first-expiry-first, box numbers, box count, weight and packer; the order moves to packing / packed; packing slips (print, unpack). *Grouping the queue by route, a scanner-first phone layout:* later.
 * **Queue:** orders to pack, grouped by route / dispatch date, oldest first.
 * **Packing screen:** order number, customer, lines with ordered, packed and remaining qty, batch (suggested first-expiry-first-out) and expiry, weight; scan a barcode to count up; partial packing allowed; box count and weight; *Mark packed*; print packing slip.
 * **Phone/scanner:** one line at a time, huge counters, scan-driven.
 
-## 13. Dispatch — Phase 4
+## 13. Dispatch — **Built** (live)
+* **Built:** posted bills not yet on a trip (by route and city), plan a trip with vehicle, driver (employee or name + mobile), transporter, LR and expected date, delivery order, dispatch now or later, per-stop delivered / returned with the receiver's name, loading list, printable trip sheet with amounts to collect. *E-way bill number, proof-of-delivery photo:* later.
 * Create a dispatch (vehicle trip): vehicle number, driver (employee or name + mobile), transporter, LR number/date, e-way bill number, dispatch date, expected delivery; add packed orders (by route); reorder delivery sequence.
 * Delivery: per order *Delivered / Partly delivered / Returned*, received by, proof of delivery photo, remarks; delivery date recorded; print dispatch note.
 
@@ -113,25 +115,28 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 * **Lists:** receipts and payments with filters (method, date, collected by), cheque status (deposited, cleared, bounced — bounce reverses the allocation and notifies).
 * **Phone:** "Collect" flow for salespeople on a beat: customer → amount → method → save (works offline).
 
-## 17. Employee management — Phase 4
+## 17. Employee management — **Built** (live)
+* **Built:** list (current / all, department, search), add / edit (bank, PAN, Aadhaar encrypted; masked copies shown), detail with salary structure, advances and loans, record leaving; daily attendance marking (present, absent, half day, leave, holiday, weekly off, overtime) and a month register. *Login link, photo:* later.
 * List (status, department, designation), profile with personal, job, bank (encrypted, masked), PAN (masked), optional Aadhaar last 4 only, emergency contact, login link; attendance calendar.
 
-## 18. Salary — Phase 4
+## 18. Salary — **Built** (live)
+* **Built:** payroll runs per month from attendance and unpaid leave, per-slip incentive / bonus / deductions / overtime, recalculate, finalize (advance recovery), pay (one payment per person), salary slip print in English or Hindi. *Payroll register export, statutory PF / ESI / PT tables:* later.
 * Salary structures (basic, allowances, deductions, effective from); monthly payroll run: attendance and leave pulled in, incentive/overtime/bonus/advance and loan recovery entered, net pay computed; review → finalise (frozen) → mark paid (creates payments); salary slips (PDF, Hindi/English); payroll register; employee salary history.
 
-## 19. Leave management — Phase 4
+## 19. Leave management — **Built** (live)
+* **Built:** apply with available balance, approve / reject / withdraw, balances per type and year, leave types (paid, annual quota, half day). *Carry forward at year end:* later.
 * Apply (type, dates, half-day, reason) with live balance; approver inbox (approve / reject with note); balances per type; history; leave type configuration (paid/unpaid, annual quota, carry forward, half-day allowed). Approved unpaid leave flows into payroll.
 
-## 20. GST reports — Phase 4 (monthly summary **Built**)
-* **Built (live):** month picker and period status, outward by section (B2B / B2CL / B2CS) and rate, inward by ITC eligibility and reverse charge, HSN summary (CSV), output tax vs eligible ITC estimate. The rest below is Phase 4.
+## 20. GST reports — **Built** (live)
+* **Built:** Summary tab (outward by section and rate, inward by ITC and reverse charge, notes, HSN summary with CSV, estimate); GSTR-1 tab (tables B2B / B2CL / B2CS / CDNR / CDNUR / nil / HSN B2B and B2C, things to check before filing, documents issued, JSON for the offline tool and CSV per table, files downloaded with their formatter version); GSTR-3B tab (3.1, 3.2, 4, indicative 6.1, CSV); lock / unlock the month and record the filing ARN. *Quarterly returns, exports / SEZ, Excel:* later.
 * Period picker (month / quarter), period status (open, locked, filed).
 * **Summary:** outward (B2B, B2C large, B2C small, exports/SEZ, nil/exempt), credit/debit notes, inward with ITC, tax by rate, net liability view.
 * **HSN summary**, **rate-wise summary**, **sales register**, **purchase register**, **documents issued**.
 * **Validation panel:** B2B invoices without a valid GSTIN, place-of-supply mismatches, missing HSN, HSN shorter than required, cancelled documents.
 * **Export:** GSTR-1 (JSON for the offline tool / portal, Excel, CSV), GSTR-3B summary, HSN CSV — each from a named, versioned formatter; export history. **Lock period** after filing.
 
-## 21. Business reports — Phase 4 (core reports **Built**)
-* **Built (live):** sales (day/week/month, customer, product, brand, category, salesperson), collections (day/week/month, method, customer), purchases (day/month, supplier, product, brand), outstanding receivable and payable with aging, preset or custom periods, CSV export. The rest below is Phase 4.
+## 21. Business reports — **Built** (live; saved views and PDF later)
+* **Built:** sales (day/week/month, customer, product, brand, category, salesperson), collections, purchases, outstanding with aging, profit (margin by product, company, category, customer, salesperson, month), profit & loss (gross profit, expenses, salaries, net profit), products (fast / slow / not moving, stock value, days of cover); Product Reports and Company Reports open the products and company-profit views; preset or custom periods, CSV export.
 * Report catalogue: sales (daily/weekly/monthly/yearly, customer, product, company, category, salesperson), collections (today, yesterday, week, month, year, custom), purchases (supplier, product, company, month, year), outstanding (customer/supplier, aging 0–30/31–60/61–90/90+), expenses, product analytics, company report, BI (gross margin, inventory value and turnover, fast/slow movers, customer and company contribution, period comparison such as Sep 2026 vs Sep 2025).
 * Every report: filters (date, customer, supplier, product, company, employee, payment method, GST type), search, sort, column choice, **export Excel / CSV / PDF**, print, saved views.
 
@@ -146,10 +151,10 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 | Global search (Ctrl+K) | **Built** | Customers, products, invoices and screens; arrow keys + Enter |
 | Design system | **Built** | Live tokens and components |
 | Planned module pages | **Built** | For every not-yet-built module: its tables (already migrated) and API endpoints |
-| Expenses | Phase 4 | Entry (category, amount, GST for ITC, paid by, receipt photo), list, category-wise / monthly / yearly reports |
+| Expenses | **Built** (live) | Entry (category, amount before or including GST, vendor GSTIN for ITC, paid by, bill number), list with totals, cancel, summary by category / month / year / method, category manager. *Receipt photo:* later |
 | Notifications | Phase 5 | Inbox (payment due, low stock, expiring, pending orders, to pack/dispatch, leave, salary due), mark read, reminder rule settings |
 | Users & roles | **Built** (live) | Invite by mobile, assign role, deactivate; role editor (permission matrix by module); all changes audit-logged |
 | Audit log | **Built** (live) | Who, what, record, old → new values, when, IP; filters by record type, user and dates |
 | Import (products, customers) | **Built** (live) | CSV template, header aliases from common exports, check-first with an error table by row and column, then import |
-| Returns (credit / debit notes) | **Built** (live) | From the invoice ("Record return") or the purchase bill ("Return to supplier"): quantities per line, restock or not, reason; printable note; cancel |
+| Returns (credit / debit notes) | **Built** (live) | From the invoice ("Record return") or the purchase bill ("Return to supplier"): quantities per line, restock or not, reason; printable note; cancel. Also value-only notes: "Discount / rate difference" on an invoice and "Supplier credit note" on a purchase (percent or amount) |
 | Backup & restore | Phase 6 | Schedule (daily/weekly), manual backup, list with size and checksum, download, restore with typed confirmation and re-authentication |
