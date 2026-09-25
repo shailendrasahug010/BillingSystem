@@ -1,4 +1,4 @@
-import { readBillFile, type BillFile } from "@vyapaar/core";
+import { billColumnOf, billFieldsFromText, readBillFile, type BillFile } from "@vyapaar/core";
 import { FileDown, FileUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -6,6 +6,7 @@ import { useRouter } from "../../app/router";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { ErrorNote } from "../../components/ui/Page";
+import { BUSINESS } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { downloadText } from "../../lib/download";
@@ -14,8 +15,15 @@ import { draftFromMatch, SAMPLE_BILL, type MatchResponse } from "./billImport";
 
 const MAX_LINES = 300;
 
+/** The header of a bill's item table: an item name and a quantity column. */
+function isBillHeader(cells: string[]): boolean {
+  const cols = cells.map(billColumnOf);
+  return cols.includes("item_name") && cols.includes("qty");
+}
+
 /**
- * Bring in a supplier's bill from the file they sent (Excel or CSV): the
+ * Bring in a supplier's bill from the file they sent (Excel, CSV or the PDF
+ * from their billing software): the
  * sheet is read on this device, its items are matched to our products (and
  * to what this supplier's items were matched to before), and the bill opens
  * in purchase entry to be checked and saved. Nothing is saved here.
@@ -41,7 +49,17 @@ export function BillImportDialog({ open, onOpenChange, supplierId }: { open: boo
     setFile(null);
     setPick(0);
     try {
-      const data = readBillFile(await readSheetFile(f));
+      const sheet = await readSheetFile(f, { isHeader: isBillHeader });
+      const data = readBillFile(sheet.rows);
+      // A printed bill (PDF) has its number, date and the supplier's GSTIN above the table.
+      if (sheet.preamble.length && data.bills.length === 1) {
+        const top = billFieldsFromText(sheet.preamble, BUSINESS.gstin);
+        const b = data.bills[0]!;
+        b.billNumber ??= top.billNumber;
+        b.billDate ??= top.billDate;
+        b.supplierGstin ??= top.supplierGstin;
+        b.supplierName ??= top.supplierName;
+      }
       setFile({ name: f.name, data });
     } catch (e) {
       setError(new ApiError(400, e instanceof SheetError ? e.code : "IMPORT_UNREADABLE"));

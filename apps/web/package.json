@@ -18,6 +18,7 @@
     "@vyapaar/core": "workspace:*",
     "@vyapaar/i18n": "workspace:*",
     "lucide-react": "1.47.0",
+    "pdfjs-dist": "6.3.289",
     "radix-ui": "1.6.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",

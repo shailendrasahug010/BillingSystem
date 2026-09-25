@@ -95,8 +95,8 @@ Open **http://localhost:5173** in Chrome or Edge.
 1. Click **Create account**. Enter your name, mobile number, a password, the business name, state and GSTIN (optional).
 2. Click **Send OTP**. On your own computer no SMS is sent: the code is shown on the screen ("Development code: 123456"). Type it in and create the account.
 3. The business is created with default roles, bill number series, GST rates and a main godown. A typical first day:
-   * **Products → Import** (your product list as an Excel or CSV file) or **Products → Add product**
-   * **Suppliers → Add supplier**, then **Purchases → Import bill** (the supplier's bill file) or **New purchase bill** to bring stock in
+   * **Products → Import** (your product list as an Excel, CSV or PDF file) or **Products → Add product**
+   * **Suppliers → Add supplier**, then **Purchases → Import bill** (the supplier's bill as Excel, CSV or the PDF from their software) or **New purchase bill** to bring stock in
    * **Customers → Import** or **Add customer**
    * **New Invoice** (Ctrl+I) and **Payments → Receive payment** (Alt+C)
 
@@ -157,6 +157,8 @@ Digital Bahi now opens in its own window, without the browser's tabs and address
 * **Linux:** in the applications menu.
 
 **Printing.** Invoices, receipts, credit notes, packing slips, trip sheets and salary slips have a **Print / PDF** button (or press Ctrl+P). For a thermal or dot-matrix printer, set it as the default printer and choose its paper size in the print window once; the browser remembers it.
+
+**PDF files.** Every report has a **PDF** button (with your letterhead and page numbers) next to **Excel (CSV)**. Bills, receipts and slips are saved as PDF from **Print / PDF** (choose "Save as PDF" in the print window).
 
 **Keyboard.** Ctrl+I new invoice, Alt+P purchase bill, Alt+O sales order, Alt+C receive payment, Ctrl+K search. The keyboard icon at the bottom of the left menu lists them all.
 

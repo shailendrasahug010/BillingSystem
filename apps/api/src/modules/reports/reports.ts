@@ -6,13 +6,15 @@ import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
-import type { RequestCtx } from "../../lib/context.js";
+import type { AppDeps, RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { badRequest, forbidden } from "../../lib/errors.js";
 import { assertRange } from "../../lib/period.js";
+import { loadLetterhead } from "../../services/letterhead.js";
+import { pdfDate, renderReportPdf } from "../../services/pdf-report.js";
 import type { ApiModule } from "../types.js";
 
-const Format = { format: z.enum(["json", "csv"]).default("json") };
+export const Format = { format: z.enum(["json", "csv", "pdf"]).default("json") };
 
 /** Date buckets as fixed SQL (never user text). */
 const TRUNC: Record<string, SQL> = {
@@ -37,13 +39,48 @@ export function toCsv(columns: Column[], rows: Array<Record<string, unknown>>): 
   return [columns.map((c) => cell(c.label)).join(","), ...rows.map((r) => columns.map((c) => cell(r[c.key])).join(","))].join("\r\n") + "\r\n";
 }
 
-export function sendReport(reply: FastifyReply, ctx: RequestCtx, format: "json" | "csv", name: string, columns: Column[], body: { rows: Array<Record<string, unknown>> } & Record<string, unknown>) {
+export interface ReportMeta {
+  /** Shown at the top of the PDF, e.g. "Sales by customer". */
+  title: string;
+  from?: string;
+  to?: string;
+  asOf?: string;
+}
+
+/**
+ * A report as JSON (the screen), CSV (Excel) or PDF (letterhead, title,
+ * period, table with totals, page numbers). CSV and PDF need report.export.
+ */
+export async function sendReport(
+  reply: FastifyReply,
+  ctx: RequestCtx,
+  deps: AppDeps,
+  format: "json" | "csv" | "pdf",
+  name: string,
+  columns: Column[],
+  body: { rows: Array<Record<string, unknown>>; totals?: Record<string, unknown> } & Record<string, unknown>,
+  meta: ReportMeta,
+) {
   if (format === "json") return body;
   if (!can(ctx, "report.export")) throw forbidden("report.export");
+  if (format === "pdf") {
+    const pdf = await renderReportPdf({
+      letterhead: await loadLetterhead(deps, ctx),
+      title: meta.title,
+      period: meta.from && meta.to ? `${pdfDate(meta.from)} – ${pdfDate(meta.to)}` : meta.asOf ? `As of ${pdfDate(meta.asOf)}` : null,
+      generatedAt: new Intl.DateTimeFormat("en-IN", { timeZone: ctx.timeZone, day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(deps.clock.now()),
+      columns,
+      rows: body.rows,
+      totals: body.totals ?? null,
+    });
+    reply.header("content-type", "application/pdf");
+    reply.header("content-disposition", `attachment; filename="${name}.pdf"`);
+    return reply.send(pdf);
+  }
   reply.header("content-type", "text/csv; charset=utf-8");
   reply.header("content-disposition", `attachment; filename="${name}.csv"`);
   // UTF-8 BOM so Excel shows Hindi names correctly.
-  return `﻿${toCsv(columns, body.rows)}`;
+  return `\ufeff${toCsv(columns, body.rows)}`;
 }
 
 const moneyCols = (extra: Column[]): Column[] => [...extra, { key: "taxable", label: "Taxable" }, { key: "tax", label: "Tax" }, { key: "total", label: "Total" }];
@@ -111,13 +148,13 @@ export const reportsModule: ApiModule = async (app, deps) => {
       total: dec(x.total).toFixed(2),
     }));
     const totals = out.reduce((acc, x) => ({ taxable: acc.taxable.plus(x.taxable), tax: acc.tax.plus(x.tax), total: acc.total.plus(x.total) }), { taxable: dec(0), tax: dec(0), total: dec(0) });
-    return sendReport(reply, ctx, q.format, `sales-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "invoices", label: "Invoices" }, ...(itemLevel ? [{ key: "qty", label: "Qty" }] : [])]), {
+    return sendReport(reply, ctx, deps, q.format, `sales-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "invoices", label: "Invoices" }, ...(itemLevel ? [{ key: "qty", label: "Qty" }] : [])]), {
       from: q.from,
       to: q.to,
       groupBy: q.groupBy,
       rows: out,
       totals: { taxable: totals.taxable.toFixed(2), tax: totals.tax.toFixed(2), total: totals.total.toFixed(2) },
-    });
+    }, { title: `Sales by ${q.groupBy}`, from: q.from, to: q.to });
   });
 
   // ---------------------------------------------------------------- collections
@@ -145,13 +182,13 @@ export const reportsModule: ApiModule = async (app, deps) => {
       );
       const out = rows.map((x) => ({ key: x.key, label: x.label, count: x.count, amount: dec(x.amount).toFixed(2) }));
       const total = out.reduce((acc, x) => acc.plus(x.amount), dec(0));
-      return sendReport(reply, ctx, q.format, `collections-${q.from}-${q.to}`, [{ key: "label", label: q.groupBy }, { key: "count", label: "Receipts" }, { key: "amount", label: "Amount" }], {
+      return sendReport(reply, ctx, deps, q.format, `collections-${q.from}-${q.to}`, [{ key: "label", label: q.groupBy }, { key: "count", label: "Receipts" }, { key: "amount", label: "Amount" }], {
         from: q.from,
         to: q.to,
         groupBy: q.groupBy,
         rows: out,
         totals: { amount: total.toFixed(2) },
-      });
+      }, { title: `Collections by ${q.groupBy}`, from: q.from, to: q.to });
     },
   );
 
@@ -191,13 +228,13 @@ export const reportsModule: ApiModule = async (app, deps) => {
       });
       const out = rows.map((x) => ({ key: x.key, label: x.label, bills: x.bills, taxable: dec(x.taxable).toFixed(2), tax: dec(x.tax).toFixed(2), total: dec(x.total).toFixed(2) }));
       const total = out.reduce((acc, x) => acc.plus(x.total), dec(0));
-      return sendReport(reply, ctx, q.format, `purchases-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "bills", label: "Bills" }]), {
+      return sendReport(reply, ctx, deps, q.format, `purchases-${q.from}-${q.to}`, moneyCols([{ key: "label", label: q.groupBy }, { key: "bills", label: "Bills" }]), {
         from: q.from,
         to: q.to,
         groupBy: q.groupBy,
         rows: out,
         totals: { total: total.toFixed(2) },
-      });
+      }, { title: `Purchases by ${q.groupBy}`, from: q.from, to: q.to });
     },
   );
 
@@ -257,6 +294,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
       return sendReport(
         reply,
         ctx,
+        deps,
         q.format,
         `outstanding-${q.party}-${asOf}`,
         [
@@ -268,6 +306,7 @@ export const reportsModule: ApiModule = async (app, deps) => {
           { key: "total", label: "Total" },
         ],
         { party: q.party, asOf, basis: q.basis, bucketLabels: labels, rows, totals },
+        { title: q.party === "customer" ? "Customer outstanding" : "Supplier outstanding", asOf },
       );
     },
   );

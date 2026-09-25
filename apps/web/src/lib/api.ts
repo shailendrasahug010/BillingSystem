@@ -91,6 +91,8 @@ interface RequestOptions {
   /** Makes a POST safe to retry: the server returns the first result for the same key. */
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /** Return the response as a Blob (PDF and other files). */
+  raw?: boolean;
 }
 
 async function request<T>(method: string, path: string, options: RequestOptions = {}, retried = false): Promise<T> {
@@ -111,6 +113,7 @@ async function request<T>(method: string, path: string, options: RequestOptions 
     if ((e as Error).name === "AbortError") throw e;
     throw new ApiError(0, "network");
   }
+  if (options.raw && res.ok) return (await res.blob()) as T;
   const body = await parse(res);
   if (res.status === 401 && !retried && !path.startsWith("/auth/")) {
     const session = await refreshSession();
@@ -122,6 +125,8 @@ async function request<T>(method: string, path: string, options: RequestOptions 
 
 export const api = {
   get: <T>(path: string, query?: Query, signal?: AbortSignal) => request<T>("GET", path, { ...(query ? { query } : {}), ...(signal ? { signal } : {}) }),
+  /** A file from the API (PDF exports). */
+  blob: (path: string, query?: Query) => request<Blob>("GET", path, { ...(query ? { query } : {}), raw: true }),
   post: <T>(path: string, body?: unknown, options: Omit<RequestOptions, "body"> = {}) => request<T>("POST", path, { ...options, body: body ?? {} }),
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, { body }),
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, { body }),

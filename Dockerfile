@@ -22,7 +22,8 @@ COPY . .
 RUN pnpm --filter @vyapaar/api build \
  && pnpm --filter @vyapaar/web build \
  && pnpm --filter @vyapaar/api deploy --legacy --prod /out/api \
- && cp -r packages/db/migrations /out/api/migrations
+ && cp -r packages/db/migrations /out/api/migrations \
+ && rm -rf /out/api/assets && cp -r apps/api/assets /out/api/assets
 
 # ---- api: bundled server + production node_modules only
 FROM node:22-slim AS api
@@ -32,6 +33,8 @@ COPY --from=build --chown=node:node /out/api/node_modules ./node_modules
 COPY --from=build --chown=node:node /out/api/package.json ./package.json
 COPY --from=build --chown=node:node /out/api/dist ./dist
 COPY --from=build --chown=node:node /out/api/migrations ./migrations
+# Fonts for PDF reports (English, Hindi and the rupee sign).
+COPY --from=build --chown=node:node /out/api/assets ./assets
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \

@@ -27,6 +27,8 @@ function serviceWorker(): Plugin {
     generateBundle(_options, bundle) {
       const built = Object.keys(bundle)
         .filter((f) => f !== "index.html" && !f.endsWith(".map"))
+        // The PDF reader (about 1.8 MB) loads only when a PDF is imported; installs skip it.
+        .filter((f) => !/^assets\/pdf[.-]/.test(f))
         .map((f) => `/${f}`);
       const precache = ["/", ...built, ...publicFiles()].sort();
       const version = createHash("sha256").update(precache.join("\n")).digest("hex").slice(0, 12);
@@ -46,6 +48,9 @@ export default defineConfig(({ mode }) => ({
     // The prototype ships as one bundle; production code-splits each module route (React.lazy).
     chunkSizeWarningLimit: 800,
   },
+  // The Excel and PDF readers load only when a file is picked; prepare them at start so the
+  // dev server does not reload the page the first time one is used.
+  optimizeDeps: { include: ["read-excel-file/browser", "pdfjs-dist/legacy/build/pdf.mjs"] },
   // Same-origin /api in development too, so the refresh-token cookie behaves as in production.
   server: { port: 5173, proxy: { "/api": { target: process.env.API_URL ?? "http://localhost:3000", changeOrigin: false } } },
 }));

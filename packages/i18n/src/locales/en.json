@@ -882,7 +882,9 @@
     "IMPORT_OLD_EXCEL": "This is an old Excel file (.xls). Open it in Excel and save it as .xlsx or CSV, then upload again.",
     "IMPORT_UNREADABLE": "This file could not be read. Upload an Excel (.xlsx) or CSV file.",
     "IMAGE_TOO_LARGE": "The logo is too large (at most {{maxKb}} KB). Use a smaller image.",
-    "INVALID_IMAGE": "This file is not a PNG, JPEG or WebP image."
+    "INVALID_IMAGE": "This file is not a PNG, JPEG or WebP image.",
+    "IMPORT_PDF_SCANNED": "This PDF is a scanned or photographed page, so its text can't be read. Ask for the Excel file, or the PDF made by the supplier's billing software.",
+    "IMPORT_PDF_LOCKED": "This PDF is locked with a password. Ask for an unlocked copy."
   },
   "validation": {
     "required": "This field is required",
@@ -1088,7 +1090,10 @@
     "notDue": "Not due",
     "bucket": "{{label}} days",
     "oldestDue": "oldest due",
-    "asOf": "as of {{date}}"
+    "asOf": "as of {{date}}",
+    "exportPdf": "PDF",
+    "exportCsv": "Excel (CSV)",
+    "preparing": "Preparing…"
   },
   "gstPage": {
     "title": "GST summary",
@@ -1406,9 +1411,9 @@
     "import": "Import",
     "products": "Import products",
     "customers": "Import customers",
-    "hint": "From Excel or another billing software: upload the Excel file (.xlsx) or a CSV. Everything is checked first; nothing is saved until every row is right.",
+    "hint": "From Excel or another billing software: upload the Excel file (.xlsx), a CSV, or a PDF made by the software. Everything is checked first; nothing is saved until every row is right.",
     "template": "Download template",
-    "chooseFile": "Choose Excel or CSV file",
+    "chooseFile": "Choose Excel, CSV or PDF file",
     "otherFile": "Choose another file",
     "columns": "Columns: {{columns}}. Only name is required (and GST for products).",
     "noNameColumn": "No name column found. Use the template's headers.",
@@ -1858,7 +1863,7 @@
   "billImport": {
     "button": "Import bill",
     "title": "Import supplier bill",
-    "hint": "Upload the bill file your supplier sent (Excel or CSV). Items, quantities, rates, GST, batch and expiry are read and matched to your products; you check everything before saving.",
+    "hint": "Upload the bill your supplier sent: Excel, CSV or the PDF from their billing software. Items, quantities, rates, GST, batch and expiry are read and matched to your products; you check everything before saving.",
     "chooseFile": "Choose bill file",
     "sample": "Download sample",
     "columnsHelp": "Columns it understands (any usual name): bill no, bill date, supplier GSTIN or name, item name, item code, barcode, HSN, unit, qty, free qty, rate / PTR, disc %, GST % (or CGST % + SGST %, IGST %), batch, expiry, MRP, taxable value.",

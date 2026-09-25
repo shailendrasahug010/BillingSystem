@@ -2,7 +2,12 @@ import { api } from "./api";
 
 /** Saves text as a file (CSV exports, reports). */
 export function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8"): void {
-  const url = URL.createObjectURL(new Blob([text], { type }));
+  downloadBlob(filename, new Blob([text], { type }));
+}
+
+/** Saves a file the app has in memory (a PDF from the server, a CSV made here). */
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
@@ -25,8 +30,13 @@ export function downloadCsv<T>(filename: string, columns: Array<{ label: string;
   downloadText(filename, `﻿${lines.join("\r\n")}\r\n`);
 }
 
-/** Server-side CSV export of a report (needs report.export). */
-export async function downloadReport(path: string, query: Record<string, string>, filename: string): Promise<void> {
+/** A report from the server as CSV (Excel) or PDF (letterhead, totals, page numbers); needs report.export. */
+export async function downloadReport(path: string, query: Record<string, string>, filename: string, format: "csv" | "pdf" = "csv"): Promise<void> {
+  const name = filename.replace(/\.(csv|pdf)$/i, "") + `.${format}`;
+  if (format === "pdf") {
+    downloadBlob(name, await api.blob(path, { ...query, format: "pdf" }));
+    return;
+  }
   const text = await api.get<string>(path, { ...query, format: "csv" });
-  downloadText(filename, text);
+  downloadText(name, text);
 }

@@ -1,8 +1,8 @@
 /**
  * Prepares a picked image as the firm's logo: shrunk on this device to at
- * most 512 px on its longer side (keeping transparency), then encoded as
- * WebP where the browser can, else PNG, getting smaller until it fits the
- * server's limit.
+ * most 512 px on its longer side, saved as PNG (keeps a clear background),
+ * or as JPEG on white when a PNG would be too big, getting smaller until it
+ * fits the server's limit. PNG and JPEG also go into PDF letterheads.
  */
 const MAX_BYTES = 290 * 1024;
 
@@ -35,14 +35,17 @@ export async function prepareLogo(file: File): Promise<string> {
     const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    for (const [type, quality] of [
-      ["image/webp", 0.9],
-      ["image/png", undefined],
-    ] as const) {
-      const url = canvas.toDataURL(type, quality);
-      // Safari cannot encode WebP and hands back PNG: accept whatever came out.
-      if (/^data:image\/(png|webp);base64,/.test(url) && bytesOf(url) <= MAX_BYTES) return url;
-    }
+    const png = canvas.toDataURL("image/png");
+    if (bytesOf(png) <= MAX_BYTES) return png;
+    const flat = document.createElement("canvas");
+    flat.width = canvas.width;
+    flat.height = canvas.height;
+    const fctx = flat.getContext("2d")!;
+    fctx.fillStyle = "#ffffff";
+    fctx.fillRect(0, 0, flat.width, flat.height);
+    fctx.drawImage(canvas, 0, 0);
+    const jpeg = flat.toDataURL("image/jpeg", 0.9);
+    if (bytesOf(jpeg) <= MAX_BYTES) return jpeg;
   }
   throw new Error("IMAGE_TOO_LARGE");
 }

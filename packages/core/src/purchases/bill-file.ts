@@ -342,3 +342,36 @@ export function supplierItemKeys(item: { code?: string | null; name?: string | n
 export function compactName(name: string): string {
   return normalizeSearchText(name).replace(/ /g, "");
 }
+
+const GSTIN_IN_TEXT = /\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/g;
+const HAS_GSTIN = new RegExp(GSTIN_IN_TEXT.source);
+const BILL_NO_IN_TEXT = /\b(?:tax\s+)?(?:invoice|bill|inv|voucher|vch)\s*(?:no|number|#)\.?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9/\-]{0,29})/i;
+const DATE_IN_TEXT = /\b(?:invoice|bill|inv|voucher|vch)?\s*date[d]?\s*[:.\-]?\s*(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{1,2}[\s\-]+[A-Za-z]{3,9}[\s\-,]+\d{2,4}|\d{4}-\d{2}-\d{2})/i;
+
+export interface BillHeaderFields {
+  billNumber: string | null;
+  billDate: string | null;
+  supplierGstin: string | null;
+  supplierName: string | null;
+}
+
+/**
+ * The bill's number, date and the supplier's GSTIN and name from the text
+ * above a printed bill's item table (a PDF from the supplier's software):
+ * "Invoice No. : SG/1021", "Date : 20-09-2026", the first GSTIN that is not
+ * our own, and the first line (the seller's name heads a bill).
+ */
+export function billFieldsFromText(lines: readonly string[], ownGstin?: string | null): BillHeaderFields {
+  const text = lines.join("\n");
+  const own = ownGstin ? normalizeGstin(ownGstin) : null;
+  const gstins = [...text.toUpperCase().matchAll(GSTIN_IN_TEXT)].map((m) => m[0]).filter((g) => g !== own);
+  const number = lines.map((l) => BILL_NO_IN_TEXT.exec(l)?.[1]).find(Boolean) ?? null;
+  const dateText = lines.map((l) => DATE_IN_TEXT.exec(l)?.[1]).find(Boolean);
+  const firstLine = lines.map((l) => l.trim()).find((l) => l && !HAS_GSTIN.test(l.toUpperCase()) && !/^(tax\s+)?invoice$|^bill\s+of\s+supply$|^original|^duplicate/i.test(l));
+  return {
+    billNumber: number ? number.replace(/[.,:;]+$/, "") : null,
+    billDate: dateText ? parseBillDate(dateText.replace(/\s+/g, "-").replace(/,/g, "")) : null,
+    supplierGstin: gstins[0] ?? null,
+    supplierName: firstLine ?? null,
+  };
+}

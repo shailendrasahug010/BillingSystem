@@ -308,6 +308,7 @@ export const expensesModule: ApiModule = async (app, deps) => {
     return sendReport(
       reply,
       ctx,
+      deps,
       q.format,
       `expenses-${q.from}-${q.to}`,
       [
@@ -325,6 +326,7 @@ export const expensesModule: ApiModule = async (app, deps) => {
         rows: rows.map((x) => ({ key: x.key, label: x.label, labelHi: x.label_hi, count: x.count, amount: x.amount, gst: x.gst, itc: x.itc, total: x.total })),
         totals,
       },
+      { title: `Expenses by ${q.groupBy}`, from: q.from, to: q.to },
     );
   });
 };

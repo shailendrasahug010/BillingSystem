@@ -10,7 +10,7 @@ import { assertRange } from "../../lib/period.js";
 import type { ApiModule } from "../types.js";
 import { sendReport } from "./reports.js";
 
-const Range = { from: z.iso.date(), to: z.iso.date(), format: z.enum(["json", "csv"]).default("json") };
+const Range = { from: z.iso.date(), to: z.iso.date(), format: z.enum(["json", "csv", "pdf"]).default("json") };
 const ProfitQuery = z.object({ ...Range, groupBy: z.enum(["product", "brand", "category", "customer", "salesperson", "month"]).default("product") });
 
 /**
@@ -78,6 +78,7 @@ export const analyticsModule: ApiModule = async (app, deps) => {
     return sendReport(
       reply,
       ctx,
+      deps,
       q.format,
       `profit-${q.groupBy}-${q.from}-${q.to}`,
       [
@@ -89,6 +90,7 @@ export const analyticsModule: ApiModule = async (app, deps) => {
         { key: "marginPercent", label: "Margin %" },
       ],
       { from: q.from, to: q.to, groupBy: q.groupBy, rows, totals },
+      { title: `Profit by ${q.groupBy}`, from: q.from, to: q.to },
     );
   });
 
@@ -196,6 +198,7 @@ export const analyticsModule: ApiModule = async (app, deps) => {
     return sendReport(
       reply,
       ctx,
+      deps,
       q.format,
       `products-${q.from}-${q.to}`,
       [
@@ -210,6 +213,7 @@ export const analyticsModule: ApiModule = async (app, deps) => {
         { key: "movement", label: "Movement" },
       ],
       { from: q.from, to: q.to, rows: data },
+      { title: "Product movement", from: q.from, to: q.to },
     );
   });
 };

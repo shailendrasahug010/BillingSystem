@@ -8,7 +8,7 @@ import { ErrorNote } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { refreshCatalog, refreshCustomers } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
-import { sheetRecords } from "../../lib/csv";
+import { headerKey, sheetRecords } from "../../lib/csv";
 import { downloadText } from "../../lib/download";
 import { readSheetFile, SHEET_ACCEPT, SheetError } from "../../lib/sheet";
 
@@ -125,7 +125,7 @@ export function ImportDialog({ kind, open, onOpenChange }: { kind: Kind; open: b
     setCheck(null);
     let sheet: string[][];
     try {
-      sheet = await readSheetFile(f);
+      sheet = (await readSheetFile(f, { isHeader: (cells) => cells.some((c) => headerKey(c, ALIASES[kind]) === "name") })).rows;
     } catch (e) {
       setFile(null);
       setError(new ApiError(400, e instanceof SheetError ? e.code : "IMPORT_UNREADABLE"));

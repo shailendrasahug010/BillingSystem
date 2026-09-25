@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billColumnOf, compactName, parseBillDate, parseBillNumber, parseExpiry, readBillFile, supplierItemKeys } from "../src/index.js";
+import { billColumnOf, billFieldsFromText, compactName, parseBillDate, parseBillNumber, parseExpiry, readBillFile, supplierItemKeys } from "../src/index.js";
 
 describe("supplier bill files", () => {
   it("understands the column names bills and billing software use", () => {
@@ -108,5 +108,16 @@ describe("supplier bill files", () => {
     expect(supplierItemKeys({ name: "नमक 1 किलो" })).toEqual(["n:नमक1किलो"]);
     expect(supplierItemKeys({})).toEqual([]);
     expect(compactName("Surf Excel 1 KG")).toBe(compactName("surf-excel 1kg"));
+  });
+
+  it("reads the bill number, date and supplier from the top of a printed bill", () => {
+    expect(
+      billFieldsFromText(
+        ["SHREE GANESH AGENCIES", "12 Siyaganj, Indore · GSTIN: 23AAACM1234M1ZR", "TAX INVOICE", "Invoice No. : SG/1021 Date : 20-09-2026", "Bill to: Laxmi Traders GSTIN 23AAGFL4321K1Z5"],
+        "23aagfl4321k1z5",
+      ),
+    ).toEqual({ billNumber: "SG/1021", billDate: "2026-09-20", supplierGstin: "23AAACM1234M1ZR", supplierName: "SHREE GANESH AGENCIES" });
+    expect(billFieldsFromText(["Tax Invoice", "Malwa Foods", "Bill No: 4471", "Dated 5 Sep 2026"])).toMatchObject({ billNumber: "4471", billDate: "2026-09-05", supplierName: "Malwa Foods", supplierGstin: null });
+    expect(billFieldsFromText([])).toEqual({ billNumber: null, billDate: null, supplierGstin: null, supplierName: null });
   });
 });
