@@ -50,6 +50,9 @@ importers:
       '@vyapaar/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vyapaar/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/pg@8.23.1)(pg@8.23.0)

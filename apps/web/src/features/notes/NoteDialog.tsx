@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocaleCode } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
 import { Percent, Printer, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -10,9 +10,10 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
 import { ErrorNote } from "../../components/ui/Page";
+import { PdfActions } from "../../components/ui/PdfActions";
 import { PrintPortal } from "../../components/ui/PrintPortal";
 import { useToast } from "../../components/ui/Toast";
-import { allowed, WORKSPACE } from "../../data/db";
+import { allowed, BUSINESS, customerById, supplierById, WORKSPACE } from "../../data/db";
 import { refreshCatalog, refreshCustomer, refreshSupplier } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { InvoiceDocument } from "../invoice/InvoiceDocument";
@@ -118,6 +119,21 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
             <Button size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
               {t("share.printPdf")}
             </Button>
+            <PdfActions
+              size="sm"
+              path={`/notes/${note.id}/pdf`}
+              locale={printLocale}
+              number={note.noteNumber}
+              shareText={createTranslator(printLocale).t("share.note", {
+                party: note.partyName,
+                kind: createTranslator(printLocale).t(note.noteType === "credit" ? "notes.creditNote" : "notes.debitNote"),
+                number: note.noteNumber,
+                date: formatDate(note.noteDate),
+                amount: formatCurrency(note.grandTotal, printLocale),
+                business: BUSINESS.name,
+              })}
+              mobile={note.customerId ? customerById.get(note.customerId)?.mobile : note.supplierId ? supplierById.get(note.supplierId)?.mobile : null}
+            />
           </div>
           {note.cancelReason && (
             <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger">

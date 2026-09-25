@@ -31,7 +31,7 @@ const AccountBody = z.strictObject({
 
 type PaymentRow = typeof schema.payments.$inferSelect;
 
-async function paymentDetail(tx: Tx, ctx: RequestCtx, id: string) {
+export async function paymentDetail(tx: Tx, ctx: RequestCtx, id: string) {
   const [p] = await tx.select().from(schema.payments).where(and(eq(schema.payments.id, id), eq(schema.payments.businessId, ctx.businessId)));
   if (!p) throw notFound("payment");
   const allocations = await tx.execute<{ id: string; document_id: string; document_number: string | null; amount: string; reversed_at: string | null }>(sql`

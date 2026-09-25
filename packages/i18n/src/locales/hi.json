@@ -1343,7 +1343,13 @@
     "invoice": "नमस्ते {{party}}, बिल {{number}} दिनांक {{date}}, राशि {{amount}}। धन्यवाद। – {{business}}",
     "invoiceDue": "नमस्ते {{party}}, बिल {{number}} दिनांक {{date}}, राशि {{amount}}। बकाया {{balance}}, देय तिथि {{due}}। – {{business}}",
     "receipt": "{{party}} से {{date}} को {{method}} द्वारा {{amount}} धन्यवाद सहित प्राप्त। रसीद {{number}}, बिल {{bills}}। – {{business}}",
-    "payment": "{{party}} को {{date}} को {{method}} द्वारा {{amount}} का भुगतान, बिल {{bills}}। रेफ़ {{number}}। – {{business}}"
+    "payment": "{{party}} को {{date}} को {{method}} द्वारा {{amount}} का भुगतान, बिल {{bills}}। रेफ़ {{number}}। – {{business}}",
+    "downloadPdf": "PDF डाउनलोड करें",
+    "sharePdf": "PDF शेयर करें",
+    "pdfFailed": "PDF नहीं बन सका। इंटरनेट देखकर फिर से कोशिश करें।",
+    "pdfReady": "PDF डाउनलोड हुआ: {{name}}",
+    "tapAgain": "PDF तैयार है। भेजने के लिए व्हाट्सऐप फिर से दबाएँ।",
+    "note": "नमस्ते {{party}}, {{kind}} {{number}} दिनांक {{date}}, राशि {{amount}}। – {{business}}"
   },
   "audit": {
     "title": "ऑडिट लॉग",
@@ -1941,5 +1947,8 @@
       "removeConfirm": "{{name}} (सीरीज़ {{code}}) हटाएँ? जो बिल इसने अभी तक नहीं भेजे, वे स्वीकार नहीं होंगे।",
       "removedToast": "डिवाइस हटा दिया गया"
     }
+  },
+  "pdf": {
+    "page": "पृष्ठ {{page}} / {{count}}"
   }
 }

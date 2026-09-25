@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@vyapaar/core";
 import type { LocaleCode } from "@vyapaar/i18n";
-import { ArrowDownLeft, ArrowUpRight, Download, MessageCircle, Printer, Search } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Download, Printer, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -18,9 +18,9 @@ import { allowed, BUSINESS, customerById, supplierById, WORKSPACE } from "../../
 import { refreshCustomer, refreshSupplier } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
-import { shareOnWhatsApp } from "../../lib/share";
 import { usePaged } from "../../lib/usePaged";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
+import { PdfActions } from "../../components/ui/PdfActions";
 import { ReceiptDocument, type PrintablePayment } from "./ReceiptDocument";
 
 interface PaymentRow {
@@ -251,8 +251,8 @@ function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null;
   };
 
   const printable: PrintablePayment | null = p ? { ...p, partyName: p.party?.name ?? p.partyName ?? "" } : null;
-  const share = () => {
-    if (!p || !printable) return;
+  const shareMessage = () => {
+    if (!p || !printable) return { text: "", mobile: null };
     const tr = createTranslator(printLocale).t;
     const bills = p.allocations.filter((a) => !a.reversedAt).map((a) => a.documentNumber).filter(Boolean).join(", ");
     const params = {
@@ -265,8 +265,9 @@ function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null;
       business: BUSINESS.name,
     };
     const mobile = p.customerId ? customerById.get(p.customerId)?.mobile : p.supplierId ? supplierById.get(p.supplierId)?.mobile : null;
-    shareOnWhatsApp(tr(p.direction === "in" ? "share.receipt" : "share.payment", params), mobile);
+    return { text: tr(p.direction === "in" ? "share.receipt" : "share.payment", params), mobile: mobile ?? null };
   };
+  const message = shareMessage();
 
   const posted = p?.status === "posted";
   const chequeOpen = posted && p?.method === "cheque" && (p.chequeStatus === "pending" || p.chequeStatus === "deposited");
@@ -348,9 +349,7 @@ function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null;
             <Button size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
               {p.direction === "in" ? t("receipt.print") : t("receipt.printVoucher")}
             </Button>
-            <Button size="sm" icon={<MessageCircle size={14} />} onClick={share}>
-              {t("common.whatsapp")}
-            </Button>
+            <PdfActions size="sm" path={`/payments/${p.id}/pdf`} locale={printLocale} number={p.paymentNumber ?? ""} shareText={message.text} mobile={message.mobile} />
           </div>
           {printable && (
             <PrintPortal>

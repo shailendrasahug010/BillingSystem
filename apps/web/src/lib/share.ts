@@ -16,3 +16,33 @@ export function shareOnWhatsApp(text: string, mobile?: string | null): void {
   const url = `https://wa.me/${to ?? ""}?text=${encodeURIComponent(text)}`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
+
+/** The phone can hand a file to WhatsApp, email and other apps (Android Chrome, iPhone Safari). */
+export function canShareFiles(): boolean {
+  try {
+    return typeof navigator !== "undefined" && typeof navigator.canShare === "function" && navigator.canShare({ files: [new File(["%PDF"], "x.pdf", { type: "application/pdf" })] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Opens the phone's share sheet with the file (the user picks WhatsApp and
+ * the chat). Returns false where files cannot be shared; a closed sheet is
+ * not an error.
+ */
+export async function shareFile(blob: Blob, filename: string, text?: string): Promise<boolean> {
+  const file = new File([blob], filename, { type: blob.type || "application/pdf" });
+  if (typeof navigator.canShare !== "function" || !navigator.canShare({ files: [file] })) return false;
+  try {
+    await navigator.share({ files: [file], ...(text ? { text } : {}) });
+  } catch (e) {
+    if ((e as Error).name !== "AbortError") throw e;
+  }
+  return true;
+}
+
+/** "INV/26-27/00001" -> "INV-26-27-00001.pdf" (the name the server gives the file too). */
+export function pdfFileName(number: string): string {
+  return `${number.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "document"}.pdf`;
+}

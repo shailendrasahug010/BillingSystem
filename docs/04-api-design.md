@@ -106,7 +106,7 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 | `GET /invoices` ★ · `GET /invoices/:id` ★ | List (filters: customer, date, status, payment status, salesperson) and detail |
 | `PATCH /invoices/:id` [invoice.update] | Edit a posted invoice within the configured window; stores a revision, writes reversing + new ledger rows; blocked if the GST period is locked |
 | `POST /invoices/:id/cancel` ★ [invoice.cancel] | Void with reason; reverses stock, ledger and GST register |
-| `GET /invoices/:id/pdf?lang=hi&template=a4` ★ | PDF (A4 / A5 / 80 mm thermal templates) |
+| `GET /invoices/:id/pdf?locale=hi` ★ · `GET /notes/:id/pdf` · `GET /payments/:id/pdf` | A4 PDF file made on the server (letterhead, GST table, HSN summary, totals, amount in words; `locale` defaults to the invoice's print language). A5 and 80 mm thermal templates later |
 | `POST /invoices/:id/share` | Send via WhatsApp / email / SMS adapter (template + signed PDF link) |
 | `POST /invoices/:id/e-invoice` | Generate IRN through the configured IRP adapter; stores IRN, ack and signed QR |
 | `GET/POST /sales-orders` · `POST /sales-orders/:id/transitions {to, note}` | Orders and their workflow (`assertTransition`); history in `status_history` |

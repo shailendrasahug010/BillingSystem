@@ -158,7 +158,7 @@ Digital Bahi now opens in its own window, without the browser's tabs and address
 
 **Printing.** Invoices, receipts, credit notes, packing slips, trip sheets and salary slips have a **Print / PDF** button (or press Ctrl+P). For a thermal or dot-matrix printer, set it as the default printer and choose its paper size in the print window once; the browser remembers it.
 
-**PDF files.** Every report has a **PDF** button (with your letterhead and page numbers) next to **Excel (CSV)**. Bills, receipts and slips are saved as PDF from **Print / PDF** (choose "Save as PDF" in the print window).
+**PDF files.** Every report has a **PDF** button (with your letterhead and page numbers) next to **Excel (CSV)**. Invoices, credit / debit notes and receipts have **Download PDF**: a proper A4 file made on the server with your logo, GST table, tax summary and amount in words, in English or Hindi (the language switch next to it). Packing slips, trip sheets and salary slips are saved as PDF from **Print / PDF** (choose "Save as PDF" in the print window).
 
 **Keyboard.** Ctrl+I new invoice, Alt+P purchase bill, Alt+O sales order, Alt+C receive payment, Ctrl+K search. The keyboard icon at the bottom of the left menu lists them all.
 
@@ -188,7 +188,7 @@ The phone needs the **https** address of your server (section 5).
 
 * The bottom bar has **Home, Customers, + (create), Products, More**; everything else is under **More**.
 * Barcode entry works with a Bluetooth scanner, which types like a keyboard.
-* Invoices and receipts can be sent from their **Share on WhatsApp** button.
+* Invoices, notes and receipts go out from their **WhatsApp** button: on a phone it shares the **PDF file** with the message (pick WhatsApp and the chat); on a computer it opens WhatsApp with the message, and you attach the file from **Download PDF**.
 * **Billing without internet.** Open the app once with internet on each phone or PC: it keeps a copy of your products, prices and customers and gets its own bill series (A1, A2 …, see **Settings → Devices for offline billing**). Without internet the app still opens (a yellow strip says so) and bills are saved on the device with numbers like `A1/26-27/0001`, ready to print or share. When the internet is back they are sent by themselves; the cloud button at the top shows how many are waiting and has **Sync now**. Payments, purchases and reports still need internet. Sign out only when everything is synced (the app warns you).
 
 ---

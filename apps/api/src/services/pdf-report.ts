@@ -1,28 +1,16 @@
-import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import PDFDocument from "pdfkit";
+import { BLUE, drawFirm, drawFooters, HEAD_BG, INK, INK_2, LINE, newPdf, type Letterhead } from "./pdf-kit.js";
+
+export type { Letterhead } from "./pdf-kit.js";
 
 /**
  * Reports as PDF files: the firm's letterhead (logo, name, address, contact,
  * GSTIN), the report's title and period, the table with its totals, and page
- * numbers. IBM Plex Sans Devanagari covers English, Hindi and the rupee sign,
- * and PDFKit shapes Devanagari through fontkit, so Hindi names print as they
- * are written. Built on the server, so every device gets the same file.
+ * numbers. Built on the server, so every device gets the same file.
  */
 
 export interface PdfColumn {
   key: string;
   label: string;
-}
-
-export interface Letterhead {
-  name: string;
-  address: string[];
-  contact: string | null;
-  gstin: string | null;
-  /** PNG or JPEG bytes (other types are left out). */
-  logo: Buffer | null;
 }
 
 export interface ReportPdfInput {
@@ -33,25 +21,6 @@ export interface ReportPdfInput {
   columns: PdfColumn[];
   rows: Array<Record<string, unknown>>;
   totals?: Record<string, unknown> | null;
-}
-
-const NAVY = "#0b2d72";
-const BLUE = "#1450b4";
-const INK = "#0e1a33";
-const INK_2 = "#47536c";
-const LINE = "#d6ddea";
-const HEAD_BG = "#eef2f9";
-const GREEN = "#2f8f1f";
-
-let fontsDir: string | null = null;
-/** assets/fonts next to the package, from source (src/services) or the bundle (dist). */
-function fonts(): string {
-  if (fontsDir) return fontsDir;
-  const here = dirname(fileURLToPath(import.meta.url));
-  const candidates = [process.env.PDF_FONTS_DIR, resolve(process.cwd(), "assets/fonts"), join(here, "../assets/fonts"), join(here, "../../assets/fonts")].filter(Boolean) as string[];
-  fontsDir = candidates.find((d) => existsSync(join(d, "IBMPlexSansDevanagari-Regular.ttf"))) ?? null;
-  if (!fontsDir) throw new Error("PDF fonts not found (assets/fonts)");
-  return fontsDir;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -82,16 +51,7 @@ const titleCase = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : s);
 
 export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
   const landscape = input.columns.length > 7;
-  const doc = new PDFDocument({ size: "A4", layout: landscape ? "landscape" : "portrait", margins: { top: 36, bottom: 44, left: 36, right: 36 }, bufferPages: true, info: { Title: input.title, Producer: "Digital Bahi", Creator: "Digital Bahi" } });
-  const chunks: Buffer[] = [];
-  doc.on("data", (c: Buffer) => chunks.push(c));
-  const done = new Promise<Buffer>((res, rej) => {
-    doc.on("end", () => res(Buffer.concat(chunks)));
-    doc.on("error", rej);
-  });
-  doc.registerFont("r", join(fonts(), "IBMPlexSansDevanagari-Regular.ttf"));
-  doc.registerFont("b", join(fonts(), "IBMPlexSansDevanagari-SemiBold.ttf"));
-
+  const { doc, done } = newPdf(input.title, { landscape });
   const left = doc.page.margins.left;
   const width = doc.page.width - left - doc.page.margins.right;
   const bottom = doc.page.height - doc.page.margins.bottom;
@@ -99,21 +59,8 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
 
   // ---- letterhead (first page)
   let y = doc.page.margins.top;
-  let textLeft = left;
-  if (lh.logo) {
-    try {
-      doc.image(lh.logo, left, y, { fit: [58, 58] });
-      textLeft = left + 68;
-    } catch {
-      // An image PDFKit cannot read is left out rather than failing the report.
-    }
-  }
   const headRight = 210;
-  const firmWidth = width - (textLeft - left) - headRight - 12;
-  doc.font("b").fontSize(15).fillColor(NAVY).text(lh.name, textLeft, y, { width: firmWidth });
-  doc.font("r").fontSize(8.5).fillColor(INK_2);
-  for (const line of [...lh.address, lh.contact, lh.gstin ? `GSTIN: ${lh.gstin}` : null].filter(Boolean) as string[]) doc.text(line, { width: firmWidth });
-  const leftEnd = Math.max(doc.y, y + (lh.logo ? 58 : 0));
+  const leftEnd = drawFirm(doc, lh, left, y, width - headRight - 12);
   doc.font("b").fontSize(13).fillColor(BLUE).text(input.title, left + width - headRight, y, { width: headRight, align: "right" });
   doc.font("r").fontSize(8.5).fillColor(INK_2);
   if (input.period) doc.text(input.period, { width: headRight, align: "right" });
@@ -194,20 +141,7 @@ export async function renderReportPdf(input: ReportPdfInput): Promise<Buffer> {
     drawRow(totals, "b", { topRule: true });
   }
 
-  // ---- footer on every page
-  const range = doc.bufferedPageRange();
-  for (let i = range.start; i < range.start + range.count; i++) {
-    doc.switchToPage(i);
-    const fy = doc.page.height - doc.page.margins.bottom + 16;
-    // Writing below the bottom margin would start a new page; lift it for the footer.
-    const saved = doc.page.margins.bottom;
-    doc.page.margins.bottom = 0;
-    doc.font("r").fontSize(7.5).fillColor(INK_2).text(`${lh.name} · ${input.title}`, left, fy, { width: width / 2, lineBreak: false });
-    const made = "Made with ";
-    doc.text(made, left + width / 2 - 45, fy, { continued: true, lineBreak: false }).font("b").fillColor(NAVY).text("Digital", { continued: true, lineBreak: false }).fillColor(GREEN).text("Bahi", { lineBreak: false });
-    doc.font("r").fillColor(INK_2).text(`Page ${i - range.start + 1} of ${range.count}`, left, fy, { width, align: "right", lineBreak: false });
-    doc.page.margins.bottom = saved;
-  }
+  drawFooters(doc, `${lh.name} · ${input.title}`);
   doc.end();
   return done;
 }

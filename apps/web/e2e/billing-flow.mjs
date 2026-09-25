@@ -107,6 +107,28 @@ await page.getByRole("heading", { name: /INV\/\d\d-\d\d\/00001/ }).waitFor({ tim
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/e2e-3-invoice-view.png`, fullPage: true });
 log("invoice view opened");
+
+// 5b. The invoice as a PDF from the server, and shared as a file from a phone.
+const download = page.waitForEvent("download");
+await page.getByRole("button", { name: "Download PDF" }).click();
+const pdf = await download;
+const pdfPath = `${OUT}/${pdf.suggestedFilename()}`;
+await pdf.saveAs(pdfPath);
+const head = (await import("node:fs")).readFileSync(pdfPath).subarray(0, 5).toString();
+if (pdf.suggestedFilename() !== "INV-26-27-00001.pdf" || head !== "%PDF-") throw new Error(`bad PDF download ${pdf.suggestedFilename()} ${head}`);
+log("PDF downloaded:", pdf.suggestedFilename());
+await page.evaluate(() => {
+  // A phone's share sheet: record what would be handed to WhatsApp.
+  navigator.canShare = (data) => Boolean(data?.files?.length);
+  navigator.share = async (data) => {
+    window.__shared = { files: data.files.map((f) => [f.name, f.type, f.size]), text: data.text };
+  };
+});
+await page.getByRole("button", { name: "WhatsApp" }).click();
+await page.waitForFunction(() => window.__shared, null, { timeout: 15000 });
+const shared = await page.evaluate(() => window.__shared);
+if (shared.files[0][0] !== "INV-26-27-00001.pdf" || shared.files[0][1] !== "application/pdf" || shared.files[0][2] < 1000 || !shared.text.includes("INV/26-27/00001")) throw new Error(`bad share ${JSON.stringify(shared)}`);
+log("shared as a file:", shared.files[0][0], `${shared.files[0][2]} bytes`, "with the message");
 await page.goto(`${WEB}/#dashboard`);
 await page.getByText("Today's Sales").waitFor({ timeout: 15000 });
 await page.waitForTimeout(800);

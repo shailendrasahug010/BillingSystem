@@ -7,6 +7,7 @@ import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState, Segmented } from "../../components/ui/misc";
+import { PdfActions } from "../../components/ui/PdfActions";
 import { PrintPortal } from "../../components/ui/PrintPortal";
 import { BUSINESS, customerById, INVOICES, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
@@ -42,20 +43,18 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   if (LIVE && !offlineKey && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
   if (!invoice) return <EmptyState title={t("empty.generic")} />;
   const status = invoice.status;
-  const share = () => {
-    const tr = createTranslator(printLocale).t;
-    const m = (v: number) => formatCurrency(v, printLocale);
-    const text = tr(invoice.balance > 0 && status !== "cancelled" ? "share.invoiceDue" : "share.invoice", {
-      party: invoice.buyer.businessName,
-      number: invoice.number,
-      date: formatDate(invoice.date),
-      amount: m(invoice.grandTotal),
-      balance: m(invoice.balance),
-      due: formatDate(invoice.dueDate),
-      business: BUSINESS.name,
-    });
-    shareOnWhatsApp(text, customerById.get(invoice.customerId)?.mobile);
-  };
+  const tr = createTranslator(printLocale).t;
+  const m = (v: number) => formatCurrency(v, printLocale);
+  const shareText = tr(invoice.balance > 0 && status !== "cancelled" ? "share.invoiceDue" : "share.invoice", {
+    party: invoice.buyer.businessName,
+    number: invoice.number,
+    date: formatDate(invoice.date),
+    amount: m(invoice.grandTotal),
+    balance: m(invoice.balance),
+    due: formatDate(invoice.dueDate),
+    business: BUSINESS.name,
+  });
+  const mobile = customerById.get(invoice.customerId)?.mobile;
 
   return (
     <div className="flex flex-col gap-5">
@@ -96,9 +95,14 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
               {t("share.printPdf")}
             </Button>
           )}
-          <Button variant="primary" icon={<MessageCircle size={16} />} onClick={share}>
-            {t("common.whatsapp")}
-          </Button>
+          {/* The PDF is made on the server; a bill still waiting on this device shares as text. */}
+          {LIVE && !offlineKey ? (
+            <PdfActions path={`/invoices/${invoice.id}/pdf`} locale={printLocale} number={invoice.number} shareText={shareText} mobile={mobile} primaryShare />
+          ) : (
+            <Button variant="primary" icon={<MessageCircle size={16} />} onClick={() => shareOnWhatsApp(shareText, mobile)}>
+              {t("common.whatsapp")}
+            </Button>
+          )}
         </div>
       </div>
       <div className="-mx-4 overflow-x-auto bg-surface-2 px-4 py-6 sm:mx-0 sm:rounded-[var(--radius-card)] sm:px-6">

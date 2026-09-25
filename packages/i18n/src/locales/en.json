@@ -1343,7 +1343,13 @@
     "invoice": "Namaste {{party}}, invoice {{number}} dated {{date}} for {{amount}}. Thank you. – {{business}}",
     "invoiceDue": "Namaste {{party}}, invoice {{number}} dated {{date}} for {{amount}}. Balance due {{balance}} by {{due}}. – {{business}}",
     "receipt": "Received with thanks {{amount}} from {{party}} by {{method}} on {{date}}. Receipt {{number}}, against bills {{bills}}. – {{business}}",
-    "payment": "Paid {{amount}} to {{party}} by {{method}} on {{date}} against bills {{bills}}. Ref {{number}}. – {{business}}"
+    "payment": "Paid {{amount}} to {{party}} by {{method}} on {{date}} against bills {{bills}}. Ref {{number}}. – {{business}}",
+    "downloadPdf": "Download PDF",
+    "sharePdf": "Share PDF",
+    "pdfFailed": "The PDF could not be made. Check the connection and try again.",
+    "pdfReady": "PDF downloaded: {{name}}",
+    "tapAgain": "The PDF is ready. Tap WhatsApp again to send it.",
+    "note": "Namaste {{party}}, {{kind}} {{number}} dated {{date}} for {{amount}}. – {{business}}"
   },
   "audit": {
     "title": "Audit log",
@@ -1941,5 +1947,8 @@
       "removeConfirm": "Remove {{name}} (series {{code}})? Bills it has not sent yet will be refused.",
       "removedToast": "Device removed"
     }
+  },
+  "pdf": {
+    "page": "Page {{page}} of {{count}}"
   }
 }
