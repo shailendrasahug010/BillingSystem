@@ -5,6 +5,7 @@ import { createFieldCipher } from "./lib/crypto.js";
 import { loadConfig } from "./config.js";
 import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
+import { LiveMessenger, LogMessenger } from "./services/messaging/transport.js";
 
 const config = loadConfig();
 let log: ((msg: string, err: Error) => void) | null = null;
@@ -21,6 +22,8 @@ const app = await buildApp({
   otp: config.otpWebhook ? new WebhookOtpSender(config.otpWebhook) : new ConsoleOtpSender((msg) => app.log.info(msg)),
   clock: { now: () => new Date(), today: (tz) => todayIn(tz ?? "Asia/Kolkata") },
   cipher: createFieldCipher(config.dataEncryptionKey, config.env),
+  // "log" (development) records messages instead of sending them.
+  messenger: config.messaging.driver === "live" ? new LiveMessenger(config.messaging.whatsappApiBase) : new LogMessenger((msg) => app.log.info(`message (not sent): ${msg}`)),
 });
 
 log = (msg, err) => app.log.warn({ err: err.message }, msg);

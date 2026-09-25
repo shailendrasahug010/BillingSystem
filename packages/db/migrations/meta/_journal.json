@@ -71,6 +71,13 @@
       "when": 1790310532636,
       "tag": "0009_file_content",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790331287842,
+      "tag": "0010_messaging",
+      "breakpoints": true
     }
   ]
 }

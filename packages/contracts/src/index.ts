@@ -7,3 +7,4 @@ export * from "./settings.js";
 export * from "./finance.js";
 export * from "./people.js";
 export * from "./logistics.js";
+export * from "./messaging.js";

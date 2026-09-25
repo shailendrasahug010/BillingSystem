@@ -107,7 +107,9 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 | `PATCH /invoices/:id` [invoice.update] | Edit a posted invoice within the configured window; stores a revision, writes reversing + new ledger rows; blocked if the GST period is locked |
 | `POST /invoices/:id/cancel` ★ [invoice.cancel] | Void with reason; reverses stock, ledger and GST register |
 | `GET /invoices/:id/pdf?locale=hi` ★ · `GET /notes/:id/pdf` · `GET /payments/:id/pdf` | A4 PDF file made on the server (letterhead, GST table, HSN summary, totals, amount in words; `locale` defaults to the invoice's print language). A5 and 80 mm thermal templates later |
-| `POST /invoices/:id/share` | Send via WhatsApp / email / SMS adapter (template + signed PDF link) |
+| `POST /messages/send` · `GET /messages` · `POST /messages/:id/retry` | Send an invoice, note or receipt with its PDF by WhatsApp Business (Meta Cloud API: media upload + approved template with a document header; or a signed provider webhook) or email (SMTP); every send is logged with status and error. `message.send` / `message.view` |
+| `GET /messages/reminders` · `POST /messages/reminders` | Customers with a balance (overdue part, oldest due date) / queue payment reminders, sent one after another in the background |
+| `GET /messaging/channels` · `GET/PUT /messaging/settings` · `POST /messaging/test` | Which channels work / the firm's WhatsApp and email set-up (secrets write-only, encrypted) / a test message |
 | `POST /invoices/:id/e-invoice` | Generate IRN through the configured IRP adapter; stores IRN, ack and signed QR |
 | `GET/POST /sales-orders` · `POST /sales-orders/:id/transitions {to, note}` | Orders and their workflow (`assertTransition`); history in `status_history` |
 | `POST /sales-orders/:id/invoice` | Invoice all or part of an order |

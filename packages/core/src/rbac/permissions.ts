@@ -36,6 +36,8 @@ export const PERMISSION_CATALOG = {
   gst: ["view", "export", "lock_period", "file"],
   report: ["view_sales", "view_purchase", "view_collection", "view_outstanding", "view_profit", "view_bi", "export"],
   notification: ["view", "configure"],
+  /** WhatsApp and email to customers and suppliers: bills, receipts, payment reminders. */
+  message: ["view", "send"],
   settings: ["view", "update"],
   user: ["view", "invite", "update", "deactivate", "manage_roles"],
   audit: ["view"],
@@ -103,6 +105,7 @@ export const DEFAULT_ROLES: readonly RoleTemplate[] = [
       "expense.*",
       "report.*",
       "notification.view",
+      "message.*",
       "gst.view",
     ],
   },
@@ -128,6 +131,7 @@ export const DEFAULT_ROLES: readonly RoleTemplate[] = [
       "payment.view",
       "payment.collect",
       "notification.view",
+      "message.send",
     ],
   },
   {
@@ -152,6 +156,7 @@ export const DEFAULT_ROLES: readonly RoleTemplate[] = [
       "gst.*",
       "report.*",
       "notification.view",
+      "message.*",
       "audit.view",
     ],
   },

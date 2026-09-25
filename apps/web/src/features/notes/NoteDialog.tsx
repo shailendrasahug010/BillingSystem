@@ -10,6 +10,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
 import { ErrorNote } from "../../components/ui/Page";
+import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
 import { PrintPortal } from "../../components/ui/PrintPortal";
 import { useToast } from "../../components/ui/Toast";
@@ -133,6 +134,14 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
                 business: BUSINESS.name,
               })}
               mobile={note.customerId ? customerById.get(note.customerId)?.mobile : note.supplierId ? supplierById.get(note.supplierId)?.mobile : null}
+            />
+            <SendButton
+              size="sm"
+              documentType="note"
+              documentId={note.id}
+              number={note.noteNumber}
+              party={{ name: note.partyName, mobile: note.customerId ? customerById.get(note.customerId)?.mobile : note.supplierId ? supplierById.get(note.supplierId)?.mobile : null}}
+              locale={printLocale}
             />
           </div>
           {note.cancelReason && (

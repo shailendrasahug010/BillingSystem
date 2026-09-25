@@ -188,7 +188,8 @@ The phone needs the **https** address of your server (section 5).
 
 * The bottom bar has **Home, Customers, + (create), Products, More**; everything else is under **More**.
 * Barcode entry works with a Bluetooth scanner, which types like a keyboard.
-* Invoices, notes and receipts go out from their **WhatsApp** button: on a phone it shares the **PDF file** with the message (pick WhatsApp and the chat); on a computer it opens WhatsApp with the message, and you attach the file from **Download PDF**.
+* **Send** on an invoice, note or receipt sends it from the firm's WhatsApp Business number or by email, with the PDF, without opening WhatsApp on the phone (set up once in **Settings → WhatsApp & email**, see section 5). **Messages** lists everything sent and sends **payment reminders** to customers with overdue bills.
+* Invoices, notes and receipts also go out from their **WhatsApp** button: on a phone it shares the **PDF file** with the message (pick WhatsApp and the chat); on a computer it opens WhatsApp with the message, and you attach the file from **Download PDF**.
 * **Billing without internet.** Open the app once with internet on each phone or PC: it keeps a copy of your products, prices and customers and gets its own bill series (A1, A2 …, see **Settings → Devices for offline billing**). Without internet the app still opens (a yellow strip says so) and bills are saved on the device with numbers like `A1/26-27/0001`, ready to print or share. When the internet is back they are sent by themselves; the cloud button at the top shows how many are waiting and has **Sync now**. Payments, purchases and reports still need internet. Sign out only when everything is synced (the app warns you).
 
 ---
@@ -234,6 +235,7 @@ console.log(`DATA_ENCRYPTION_KEY="${c.randomBytes(32).toString("base64")}"`);'
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | two different long random passwords |
 | `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `DATA_ENCRYPTION_KEY` | the three printed lines |
 | `OTP_WEBHOOK_URL`, `OTP_WEBHOOK_TOKEN` | your OTP gateway adapter (below) |
+| `SMTP_URL`, `MAIL_FROM` (optional) | a mail server for firms that do not use their own, e.g. `smtps://bills%40yourdomain.in:password@smtp.yourmail.in:465` and `bills@yourdomain.in` (below) |
 
 **Keep a copy of `.env` somewhere safe** (not on the same server). Without `DATA_ENCRYPTION_KEY`, the encrypted bank account numbers cannot be read back.
 
@@ -248,6 +250,23 @@ This starts PostgreSQL, sets up the database (migrations, the restricted databas
 ### OTP messages
 
 Sign-up, OTP login and password reset send a 6-digit code. The server does not talk to an SMS company directly: it sends `POST {"mobile": "98xxxxxxxx", "code": "123456", "purpose": "login"}` to `OTP_WEBHOOK_URL`, with `Authorization: Bearer <OTP_WEBHOOK_TOKEN>` when a token is set. Point it at a small adapter for your provider (MSG91, Gupshup, Twilio, a WhatsApp Business API provider, …) that sends the code as a DLT-approved template.
+
+### WhatsApp Business and email to customers
+
+Bills, credit notes, receipts and payment reminders go out from **each firm's own WhatsApp Business number** and email. The owner sets this up in the app: **Settings → WhatsApp & email**. Tokens and passwords are stored encrypted and never shown again. On a development computer nothing is sent (`MESSAGING_DRIVER=log`): messages are only listed under **Messages**, marked as test mode.
+
+**WhatsApp Business (Meta Cloud API)**
+
+1. In [Meta Business Suite](https://business.facebook.com) create a WhatsApp Business account and add your business phone number (it must not be in use on the WhatsApp app).
+2. In the Meta developer app (WhatsApp → API Setup) copy the **Phone number ID** and create a **permanent access token** (a system user with the `whatsapp_business_messaging` permission).
+3. Create two message templates and wait for approval:
+   * bills, category *Utility*, header *Document*, body with four values, e.g. `Namaste {{1}}, your bill {{2}} for {{3}} from {{4}} is attached.`
+   * payment reminders, category *Utility*, body e.g. `Namaste {{1}}, your balance with {{4}} is {{2}}, of which {{3}} is overdue. Please pay at the earliest.`
+4. In Digital Bahi choose *WhatsApp Business (Meta Cloud API)*, fill in the number, phone number ID, token and the two template names (and the template language code, e.g. `en` or `hi`), save, and **Send test** to your own mobile.
+
+Without approved templates WhatsApp only delivers to customers who wrote to you in the last 24 hours. Another provider (Interakt, Wati, Gupshup …) can be connected with *Another provider (webhook)*: the server posts `{"channel": "whatsapp", "to": "+9198…", "text", "template": {name, language, params}, "document": {filename, contentType, base64}}` to its address, signed with `X-DigitalBahi-Signature: sha256=HMAC(secret, timestamp + "." + body)` and `X-DigitalBahi-Timestamp`.
+
+**Email**: either the server's mail server (`SMTP_URL`, `MAIL_FROM`; mail goes out as "Your Firm via Digital Bahi" with replies to the firm's email), or the firm's own SMTP (for Gmail use `smtp.gmail.com`, port 465 with SSL, and an app password).
 
 ### Everyday operation
 

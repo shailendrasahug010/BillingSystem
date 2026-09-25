@@ -25,6 +25,17 @@ const Env = z.object({
   /** Where OTPs are delivered: an SMS/WhatsApp gateway adapter that accepts {mobile, code, purpose}. */
   OTP_WEBHOOK_URL: z.url().optional(),
   OTP_WEBHOOK_TOKEN: z.string().optional(),
+  /**
+   * WhatsApp and email to customers: "live" sends through each business's
+   * WhatsApp Business account and the mail server; "log" records messages
+   * without sending (development, demos, tests).
+   */
+  MESSAGING_DRIVER: z.enum(["live", "log"]).optional(),
+  /** The platform's mail server for businesses without their own SMTP (smtp://user:pass@host:587 or smtps://…). */
+  SMTP_URL: z.string().optional(),
+  /** Sender address for the platform's mail server, e.g. bills@digitalbahi.in. */
+  MAIL_FROM: z.string().optional(),
+  WHATSAPP_API_BASE: z.url().default("https://graph.facebook.com/v21.0"),
   /** Days a new SaaS business stays in trial. */
   TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),
@@ -45,6 +56,7 @@ export interface Config {
   otpDevEcho: boolean;
   dataEncryptionKey?: string;
   otpWebhook?: { url: string; token?: string };
+  messaging: { driver: "live" | "log"; smtpUrl?: string; mailFrom?: string; whatsappApiBase: string };
   trialDays: number;
   rateLimit: { max: number; authMax: number };
   logLevel: string;
@@ -81,6 +93,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     otpDevEcho: e.OTP_DEV_ECHO,
     ...(e.DATA_ENCRYPTION_KEY ? { dataEncryptionKey: e.DATA_ENCRYPTION_KEY } : {}),
     ...(e.OTP_WEBHOOK_URL ? { otpWebhook: { url: e.OTP_WEBHOOK_URL, ...(e.OTP_WEBHOOK_TOKEN ? { token: e.OTP_WEBHOOK_TOKEN } : {}) } } : {}),
+    messaging: {
+      driver: e.MESSAGING_DRIVER ?? (e.NODE_ENV === "production" ? "live" : "log"),
+      ...(e.SMTP_URL ? { smtpUrl: e.SMTP_URL } : {}),
+      ...(e.MAIL_FROM ? { mailFrom: e.MAIL_FROM } : {}),
+      whatsappApiBase: e.WHATSAPP_API_BASE.replace(/\/+$/, ""),
+    },
     trialDays: e.TRIAL_DAYS,
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },
     logLevel: e.LOG_LEVEL,

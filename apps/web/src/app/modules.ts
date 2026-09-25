@@ -25,6 +25,7 @@ import {
   ChartPie,
   Factory,
   History,
+  MessagesSquare,
 } from "lucide-react";
 import type { Permission } from "@vyapaar/core";
 import type { TranslationKey } from "@vyapaar/i18n";
@@ -52,7 +53,7 @@ const planned = (module: PlannedModule): Route => ({ name: "planned", module });
 
 /** Modules whose screens exist in live mode (the demo preview keeps showing their plan). */
 export const LIVE_MODULES: ReadonlySet<PlannedModule> = new Set<PlannedModule>(
-  LIVE ? ["orders", "payments", "purchases", "suppliers", "inventory", "packing", "dispatch", "reports", "gst", "expenses", "employees", "payroll", "leave", "productReports", "companyReports", "users", "audit"] : [],
+  LIVE ? ["orders", "payments", "purchases", "suppliers", "inventory", "packing", "dispatch", "reports", "gst", "expenses", "employees", "payroll", "leave", "productReports", "companyReports", "users", "audit", "messages"] : [],
 );
 
 /** Roadmap badge for the menu: hidden once the screen exists. */
@@ -67,6 +68,7 @@ export const MODULES: ModuleDef[] = [
   { key: "orders", label: "nav.orders", icon: ClipboardList, group: "daily", route: planned("orders"), permission: "order.view", phase: 3 },
   { key: "customers", label: "nav.customers", icon: Users, group: "daily", route: { name: "customers" }, permission: "customer.view" },
   { key: "payments", label: "nav.payments", icon: Wallet, group: "daily", route: planned("payments"), permission: "payment.view", phase: 3 },
+  { key: "messages", label: "nav.messages", icon: MessagesSquare, group: "daily", route: planned("messages"), permission: "message.send", phase: 5 },
 
   { key: "products", label: "nav.products", icon: Package, group: "stock", route: { name: "products" }, permission: "product.view" },
   { key: "inventory", label: "nav.inventory", icon: Boxes, group: "stock", route: planned("inventory"), permission: "inventory.view", phase: 3 },

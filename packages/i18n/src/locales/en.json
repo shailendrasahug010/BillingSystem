@@ -129,7 +129,8 @@
     "sales": "Sales",
     "more": "More",
     "create": "Create",
-    "auditLog": "Audit Log"
+    "auditLog": "Audit Log",
+    "messages": "Messages"
   },
   "auth": {
     "welcome": "Welcome back",
@@ -887,7 +888,14 @@
     "IMPORT_PDF_LOCKED": "This PDF is locked with a password. Ask for an unlocked copy.",
     "DEVICE_LIMIT_REACHED": "This business has used every device code. Remove old devices in Settings.",
     "DEVICE_REVOKED": "This device was removed from the business, so its offline bills can't be saved. Ask the owner.",
-    "OFFLINE_NUMBER_INVALID": "Bill number {{number}} does not belong to this device's series."
+    "OFFLINE_NUMBER_INVALID": "Bill number {{number}} does not belong to this device's series.",
+    "MESSAGING_NOT_CONFIGURED": "This channel is not set up yet. The owner can set up WhatsApp and email in Settings → WhatsApp & email.",
+    "MESSAGE_NO_RECIPIENT": "There is no mobile number or email for {{party}}. Add it to the party, or type one.",
+    "MESSAGE_RECIPIENT_INVALID": "“{{to}}” is not a valid mobile number or email address.",
+    "MESSAGE_SEND_FAILED": "The message could not be sent: {{reason}}",
+    "MESSAGE_NOT_RETRYABLE": "Only failed reminders and test messages can be tried again. Send documents again from the document.",
+    "PRIVATE_HOST_NOT_ALLOWED": "{{host}} is not a public address. Use your provider's internet address.",
+    "WEBHOOK_NOT_HTTPS": "The provider's address must start with https://."
   },
   "validation": {
     "required": "This field is required",
@@ -1273,7 +1281,8 @@
       "settings": "Settings",
       "user": "Users and roles",
       "audit": "Audit log",
-      "backup": "Backup"
+      "backup": "Backup",
+      "message": "Messages (WhatsApp, email)"
     },
     "actions": {
       "view": "View",
@@ -1320,7 +1329,8 @@
       "deactivate": "Deactivate",
       "manage_roles": "Manage roles",
       "download": "Download",
-      "restore": "Restore"
+      "restore": "Restore",
+      "send": "Send"
     }
   },
   "receipt": {
@@ -1950,5 +1960,113 @@
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"
+  },
+  "messages": {
+    "subject": {
+      "invoice": "Invoice {{number}} from {{business}}",
+      "note": "{{kind}} {{number}} from {{business}}",
+      "receipt": "Receipt {{number}} from {{business}}",
+      "payment": "Payment {{number}} from {{business}}",
+      "reminder": "Payment reminder from {{business}}",
+      "test": "Test message from {{business}}"
+    },
+    "reminder": "Namaste {{party}}, a reminder from {{business}}: {{balance}} is due, of which {{overdue}} is overdue since {{since}}. Please pay at the earliest. Thank you.",
+    "reminderBalance": "Namaste {{party}}, a reminder from {{business}}: your balance is {{balance}}. Thank you.",
+    "test": "This is a test message from {{business}} on Digital Bahi. WhatsApp and email are set up.",
+    "title": "WhatsApp & email",
+    "subtitle": "Bills, receipts and payment reminders sent to customers from your own WhatsApp Business number and email",
+    "tabs": {
+      "sent": "Sent",
+      "reminders": "Payment reminders"
+    },
+    "send": "Send",
+    "sendTitle": "Send {{number}}",
+    "sendNow": "Send now",
+    "sentTo": "Sent to {{to}}",
+    "channel": "Send by",
+    "whatsapp": "WhatsApp Business",
+    "email": "Email",
+    "to": "To",
+    "toHintWhatsapp": "Mobile number (10 digits)",
+    "toHintEmail": "Email address",
+    "toOnFile": "The one saved for the party",
+    "attachment": "The PDF {{name}} goes with the message.",
+    "notReady": "Not set up yet. The owner can set it up in Settings → WhatsApp & email.",
+    "testMode": "Test mode: messages are recorded here but not sent (the server runs with MESSAGING_DRIVER=log).",
+    "history": "Sent earlier",
+    "noHistory": "Not sent yet.",
+    "empty": "Nothing sent yet.",
+    "searchHint": "Party, number or mobile",
+    "kind": "Type",
+    "kinds": {
+      "invoice": "Invoice",
+      "note": "Credit / debit note",
+      "receipt": "Receipt",
+      "reminder": "Payment reminder",
+      "test": "Test"
+    },
+    "status": {
+      "queued": "Waiting",
+      "sent": "Sent",
+      "delivered": "Delivered",
+      "read": "Read",
+      "failed": "Not sent"
+    },
+    "retry": "Try again",
+    "retrying": "Sending again…",
+    "remindersHint": "Customers who owe you money. Tick whom to remind; the messages go out one after another from your WhatsApp Business number or email.",
+    "onlyOverdue": "Only overdue",
+    "balance": "Balance",
+    "overdue": "Overdue",
+    "since": "Overdue since",
+    "noContact": "No contact",
+    "selectAll": "Select all",
+    "sendReminders_one": "Send {{count}} reminder",
+    "sendReminders_other": "Send {{count}} reminders",
+    "remindersQueued_one": "{{count}} reminder on its way",
+    "remindersQueued_other": "{{count}} reminders on their way",
+    "skipped_one": "{{count}} skipped (no balance or contact)",
+    "skipped_other": "{{count}} skipped (no balance or contact)",
+    "noCandidates": "No customer owes you money right now.",
+    "settings": {
+      "title": "WhatsApp & email",
+      "hint": "Send bills, receipts and reminders from your own WhatsApp Business number and email. Tokens and passwords are stored encrypted and never shown again.",
+      "ready": "Ready",
+      "off": "Off",
+      "provider": "WhatsApp provider",
+      "providers": {
+        "none": "Off",
+        "meta": "WhatsApp Business (Meta Cloud API)",
+        "webhook": "Another provider (webhook)"
+      },
+      "number": "Your WhatsApp Business number",
+      "phoneNumberId": "Phone number ID (from Meta)",
+      "accessToken": "Access token",
+      "webhookUrl": "Provider's address (URL)",
+      "webhookSecret": "Signing secret",
+      "secretSet": "Saved. Leave empty to keep it.",
+      "documentTemplate": "Template for bills (with a document header)",
+      "reminderTemplate": "Template for payment reminders",
+      "templateLanguage": "Template language code",
+      "templateHelp": "WhatsApp only lets businesses start a chat with an approved template. Bills template: {{1}} party, {{2}} number, {{3}} amount, {{4}} your firm, with a document header. Reminder template: {{1}} party, {{2}} balance, {{3}} overdue, {{4}} your firm. Without templates, messages reach only customers who wrote to you in the last 24 hours.",
+      "emailMode": "Send email through",
+      "emailModes": {
+        "none": "Off",
+        "platform": "Digital Bahi's mail server",
+        "smtp": "Our own mail server (SMTP)"
+      },
+      "platformMissing": "This server has no mail server set up (SMTP_URL and MAIL_FROM). Use your own SMTP instead.",
+      "smtpHost": "SMTP server",
+      "smtpPort": "Port",
+      "smtpSecure": "SSL/TLS (usually port 465)",
+      "smtpUser": "User name",
+      "smtpPassword": "Password",
+      "fromName": "Sender name",
+      "fromAddress": "Sender email",
+      "replyTo": "Replies go to",
+      "testTo": "Mobile or email for a test",
+      "sendTest": "Send test",
+      "testSent": "Test message sent"
+    }
   }
 }

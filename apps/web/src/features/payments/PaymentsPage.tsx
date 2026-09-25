@@ -20,6 +20,7 @@ import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
+import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
 import { ReceiptDocument, type PrintablePayment } from "./ReceiptDocument";
 
@@ -350,6 +351,7 @@ function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null;
               {p.direction === "in" ? t("receipt.print") : t("receipt.printVoucher")}
             </Button>
             <PdfActions size="sm" path={`/payments/${p.id}/pdf`} locale={printLocale} number={p.paymentNumber ?? ""} shareText={message.text} mobile={message.mobile} />
+            <SendButton size="sm" documentType="receipt" documentId={p.id} number={p.paymentNumber ?? ""} party={{ name: printable?.partyName ?? "", mobile: message.mobile}} locale={printLocale} />
           </div>
           {printable && (
             <PrintPortal>

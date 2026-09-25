@@ -7,6 +7,7 @@ import { loadConfig } from "../src/config.js";
 import { createFieldCipher } from "../src/lib/crypto.js";
 import { MemoryOtpSender } from "../src/lib/otp.js";
 import { createTokenService } from "../src/lib/security.js";
+import { LogMessenger } from "../src/services/messaging/transport.js";
 
 export const ADMIN_URL = process.env.DATABASE_URL;
 export const hasDatabase = Boolean(ADMIN_URL);
@@ -43,6 +44,8 @@ export interface TestApp {
   otp: MemoryOtpSender;
   /** Moves the API clock forward (token expiry, OTP expiry, rotation grace). */
   advance(ms: number): void;
+  /** Messages "sent" (recorded, not delivered). */
+  messenger: LogMessenger;
   /** Superuser/owner access to the test database, for assertions that bypass RLS. */
   owner: pg.Pool;
   close(): Promise<void>;
@@ -78,6 +81,7 @@ export async function createTestApp(): Promise<TestApp> {
   });
   const { db, pool } = createDb(config.databaseUrl, { max: 8 });
   const otp = new MemoryOtpSender();
+  const messenger = new LogMessenger();
   let offsetMs = 0;
   const app = await buildApp({
     config,
@@ -86,6 +90,7 @@ export async function createTestApp(): Promise<TestApp> {
     otp,
     clock: { now: () => new Date(Date.now() + offsetMs), today: () => TEST_TODAY },
     cipher: createFieldCipher(undefined, "test"),
+    messenger,
   });
   await app.ready();
   const owner = new pg.Pool({ connectionString: ownerUrl, max: 2 });
@@ -93,6 +98,7 @@ export async function createTestApp(): Promise<TestApp> {
   return {
     app,
     otp,
+    messenger,
     owner,
     advance(ms) {
       offsetMs += ms;

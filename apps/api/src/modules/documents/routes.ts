@@ -1,6 +1,6 @@
 import type { Permission } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
-import { isLocaleCode, type LocaleCode } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@vyapaar/i18n";
 import { inArray, eq } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -26,6 +26,8 @@ export interface PdfFile {
   balance: string | null;
   locale: LocaleCode;
   party: { type: "customer" | "supplier" | "employee"; id: string; name: string; mobile: string | null; email: string | null } | null;
+  /** The message that goes with the file (WhatsApp text, email subject and body) and the template parameters: party, number, amount, business. */
+  message: { text: string; subject: string; params: string[] };
 }
 
 const IdParams = z.object({ id: z.uuid() });
@@ -138,7 +140,21 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     reason: null,
     terms: (data.settings["invoice.terms"] as string) || null,
   });
-  return { pdf, filename: fileName(inv.invoiceNumber!), number: inv.invoiceNumber!, date: inv.invoiceDate, amount: inv.grandTotal, balance: inv.status === "cancelled" ? null : inv.balanceDue, locale, party: data.party };
+  const { t } = createTranslator(locale);
+  const money = (v: string) => formatCurrency(v, locale);
+  const number = inv.invoiceNumber!;
+  const due = inv.status !== "cancelled" && Number(inv.balanceDue) > 0;
+  const text = t(due ? "share.invoiceDue" : "share.invoice", {
+    party: inv.partyName,
+    number,
+    date: formatDate(inv.invoiceDate),
+    amount: money(inv.grandTotal),
+    balance: money(inv.balanceDue),
+    due: formatDate(inv.dueDate ?? inv.invoiceDate),
+    business: letterhead.name,
+  });
+  const message = { text, subject: t("messages.subject.invoice", { number, business: letterhead.name }), params: [inv.partyName, number, money(inv.grandTotal), letterhead.name] };
+  return { pdf, filename: fileName(number), number, date: inv.invoiceDate, amount: inv.grandTotal, balance: inv.status === "cancelled" ? null : inv.balanceDue, locale, party: data.party, message };
 }
 
 export async function notePdfFile(deps: AppDeps, ctx: RequestCtx, id: string, asked?: string): Promise<PdfFile> {
@@ -175,7 +191,15 @@ export async function notePdfFile(deps: AppDeps, ctx: RequestCtx, id: string, as
     reason: note.notes ?? null,
     terms: null,
   });
-  return { pdf, filename: fileName(number), number, date: note.noteDate, amount: note.grandTotal, balance: null, locale, party: data.party };
+  const { t } = createTranslator(locale);
+  const kind = t(note.noteType === "credit" ? "notes.creditNote" : "notes.debitNote");
+  const amount = formatCurrency(note.grandTotal, locale);
+  const message = {
+    text: t("share.note", { party: note.partyName, kind, number, date: formatDate(note.noteDate), amount, business: letterhead.name }),
+    subject: t("messages.subject.note", { kind, number, business: letterhead.name }),
+    params: [note.partyName, number, amount, letterhead.name],
+  };
+  return { pdf, filename: fileName(number), number, date: note.noteDate, amount: note.grandTotal, balance: null, locale, party: data.party, message };
 }
 
 export async function receiptPdfFile(deps: AppDeps, ctx: RequestCtx, id: string, asked?: string): Promise<PdfFile> {
@@ -207,7 +231,24 @@ export async function receiptPdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     onAccount: p.unallocatedAmount,
     notes: p.notes,
   });
-  return { pdf, filename: fileName(number), number, date: p.paymentDate, amount: p.amount, balance: null, locale, party: data.party };
+  const { t } = createTranslator(locale);
+  const partyName = p.party?.name ?? data.party?.name ?? "";
+  const amount = formatCurrency(p.amount, locale);
+  const bills = p.allocations.filter((a) => !a.reversedAt).map((a) => a.documentNumber).filter(Boolean).join(", ");
+  const message = {
+    text: t(p.direction === "in" ? "share.receipt" : "share.payment", {
+      party: partyName,
+      amount,
+      method: t(`paymentMethod.${p.method}` as "paymentMethod.cash") + (p.referenceNumber ? ` (${p.referenceNumber})` : ""),
+      date: formatDate(p.paymentDate),
+      number,
+      bills: bills || "—",
+      business: letterhead.name,
+    }),
+    subject: t(p.direction === "in" ? "messages.subject.receipt" : "messages.subject.payment", { number, business: letterhead.name }),
+    params: [partyName, number, amount, letterhead.name],
+  };
+  return { pdf, filename: fileName(number), number, date: p.paymentDate, amount: p.amount, balance: null, locale, party: data.party, message };
 }
 
 function sendPdf(reply: FastifyReply, file: PdfFile) {
