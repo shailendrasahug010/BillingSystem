@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   calculateDocument,
+  compactName,
   DomainError,
   determineSupplyType,
   resolveTax,
@@ -11,10 +12,11 @@ import {
   type ResolvedTax,
 } from "@vyapaar/core";
 import { translateError } from "@vyapaar/i18n";
-import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
+import { Badge } from "../../components/ui/Badge";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
@@ -22,14 +24,16 @@ import { EmptyState } from "../../components/ui/misc";
 import { BackButton, ErrorNote, PageHeader, useFieldError } from "../../components/ui/Page";
 import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useToast } from "../../components/ui/Toast";
-import { BUSINESS, productById, supplierById, TODAY, WORKSPACE } from "../../data/db";
+import { allowed, BUSINESS, productById, supplierById, TODAY, WORKSPACE } from "../../data/db";
 import { useSearchableProducts } from "../../data/hooks";
 import { refreshCatalog, refreshSupplier } from "../../data/live";
 import { useStoreVersion } from "../../data/store";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { invalidateMoney, METHODS } from "../payments/PaymentDialog";
+import { ProductEditor, type ProductPrefill } from "../products/ProductEditor";
 import { searchSuppliers, supplierLabel } from "../suppliers/search";
+import { lineFromItem, sameUnit, type ImportedItem, type PurchaseDraft } from "./billImport";
 
 interface Line {
   key: string;
@@ -42,6 +46,11 @@ interface Line {
   gstRate: string;
   batchNumber: string;
   expiryDate: string;
+  mfgDate: string;
+  mrp: string;
+  /** From an imported bill: how the supplier names the item, and its row in their file. */
+  supplierItem?: { code?: string; name?: string };
+  fileRow?: number;
 }
 
 interface Charge {
@@ -58,6 +67,29 @@ const MONEY = /^\d{1,13}(\.\d{1,2})?$/;
 /** Suppliers whose bills carry GST (composition / unregistered suppliers charge none). */
 const CHARGES_GST = new Set(["regular", "sez", "deemed_export"]);
 const trim = (n: number, d = 4) => String(Math.round(n * 10 ** d) / 10 ** d);
+const compactDiffers = (a: string, b: string) => compactName(a) !== compactName(b);
+/** Imported lines stay in the bill's order; lines added by hand go after them. */
+const byFileRow = (a: Line, b: Line) => (a.fileRow ?? Infinity) - (b.fileRow ?? Infinity);
+
+/** A new product's details from the supplier's bill line. */
+function prefillFrom(item: ImportedItem): ProductPrefill {
+  const f = item.file;
+  const tax = f.gstRate !== null ? WORKSPACE.taxCategories.find((c) => c.kind === "taxable" && c.rate === Number(f.gstRate)) : undefined;
+  const unit = f.unit ? WORKSPACE.unitList.find((u) => sameUnit(u.symbol, f.unit!)) : undefined;
+  // Bills print names in capitals; a product name reads better in title case.
+  const name = /\p{Ll}/u.test(f.itemName) ? f.itemName : f.itemName.toLowerCase().replace(/(^|[\s(/-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+  return {
+    name,
+    ...(f.hsnCode ? { hsnCode: f.hsnCode } : {}),
+    ...(tax ? { taxCategoryId: tax.id } : {}),
+    ...(unit ? { baseUnitId: unit.id } : {}),
+    ...(f.rate ? { purchasePrice: f.rate } : {}),
+    ...(f.mrp ? { mrp: f.mrp } : {}),
+    ...(f.barcode ? { barcodes: f.barcode } : {}),
+    trackBatches: Boolean(f.batchNumber),
+    trackExpiry: Boolean(f.expiryDate),
+  };
+}
 
 /**
  * Purchase bill entry: copy the supplier's bill line by line. Stock comes in
@@ -66,7 +98,7 @@ const trim = (n: number, d = 4) => String(Math.round(n * 10 ** d) / 10 ** d);
  * recorded for ITC. Totals use the same calculator as the server, so what is
  * shown is what gets posted.
  */
-export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?: string }) {
+export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supplierId?: string; draft?: PurchaseDraft }) {
   const i18n = useI18n();
   const { t, money, number } = i18n;
   const { navigate } = useRouter();
@@ -74,9 +106,25 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
   const qc = useQueryClient();
   useStoreVersion();
   const searchable = useSearchableProducts();
-  const [supplierId, setSupplierId] = useState<string | null>(initialSupplier ?? null);
-  const [head, setHead] = useState({ billNumber: "", billDate: TODAY, receivedDate: TODAY, itc: "eligible", reverseCharge: false, notes: "" });
-  const [lines, setLines] = useState<Line[]>([]);
+  const [supplierId, setSupplierId] = useState<string | null>(draft?.supplierId ?? initialSupplier ?? null);
+  const [head, setHead] = useState(() => ({
+    billNumber: draft?.billNumber.slice(0, 30) ?? "",
+    billDate: draft?.billDate && draft.billDate <= TODAY ? draft.billDate : TODAY,
+    receivedDate: TODAY,
+    itc: "eligible",
+    reverseCharge: false,
+    notes: "",
+  }));
+  // An imported bill: lines whose product was found go straight in; the rest wait to be matched.
+  const [lines, setLines] = useState<Line[]>(() =>
+    (draft?.items ?? []).flatMap((item) => {
+      const p = item.productId ? productById.get(item.productId) : undefined;
+      return p ? [{ key: item.key, ...lineFromItem(item, p) }] : [];
+    }),
+  );
+  const [pending, setPending] = useState<ImportedItem[]>(() => (draft?.items ?? []).filter((item) => !item.productId || !productById.has(item.productId)));
+  const matchedAtOpen = useRef(draft ? draft.items.length - pending.length : 0);
+  const [creating, setCreating] = useState<ImportedItem | null>(null);
   const [charges, setCharges] = useState<Charge[]>([]);
   const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
   const [warehouseId, setWarehouseId] = useState(() => godowns.find((w) => w.isDefault)?.id ?? "");
@@ -113,8 +161,18 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
         gstRate: "",
         batchNumber: "",
         expiryDate: "",
+        mfgDate: "",
+        mrp: "",
       },
     ]);
+  };
+
+  /** Match a waiting bill line to one of our products. */
+  const matchItem = (item: ImportedItem, productId: string) => {
+    const p = productById.get(productId);
+    if (!p) return;
+    setPending((ps) => ps.filter((x) => x.key !== item.key));
+    setLines((ls) => [...ls, { key: item.key, ...lineFromItem(item, p) }].sort(byFileRow));
   };
 
   const supplyType = supplier ? determineSupplyType({ supplierStateCode: supplier.stateCode, placeOfSupplyStateCode: BUSINESS.stateCode, recipientRegistration: "regular" }) : "intra_state";
@@ -175,7 +233,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
     supplierInvoiceNumber: head.billNumber.trim() ? null : t("validation.required"),
     supplierInvoiceDate: head.billDate > TODAY ? t("errors.FUTURE_DATE_NOT_ALLOWED") : head.billDate > head.receivedDate ? t("errors.BILL_AFTER_RECEIPT") : null,
     receivedDate: head.receivedDate > TODAY ? t("errors.FUTURE_DATE_NOT_ALLOWED") : null,
-    lines: lines.length ? null : t("purchase.noLines"),
+    lines: pending.length ? t("billImport.unmatchedLeft", { count: pending.length }) : lines.length ? null : t("purchase.noLines"),
     payment: paid.amount && !MONEY.test(paid.amount) ? t("validation.amount") : null,
   };
   const showHead = (k: keyof typeof headProblems) => (touched ? headProblems[k] : null) ?? fieldError(k);
@@ -209,6 +267,9 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
               ...(l.gstRate ? { gstRate: l.gstRate } : {}),
               ...(l.batchNumber.trim() ? { batchNumber: l.batchNumber.trim() } : {}),
               ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
+              ...(l.mfgDate && l.batchNumber.trim() ? { mfgDate: l.mfgDate } : {}),
+              ...(l.mrp && RATE.test(l.mrp) ? { mrp: l.mrp } : {}),
+              ...(l.supplierItem ? { supplierItem: l.supplierItem } : {}),
             };
           }),
           charges: charges
@@ -233,12 +294,31 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
   };
 
   const tot = calc.totals;
+  const draftMatch = useMemo(() => new Map((draft?.items ?? []).filter((i) => i.matchedBy).map((i) => [i.key, i.matchedBy!])), [draft]);
   const lineResult = (k: string) => tot?.lines.find((x) => x.key === k);
 
   return (
     <div className="flex flex-col gap-5 pb-24 lg:pb-0">
       <PageHeader back={<BackButton onClick={() => navigate({ name: "planned", module: "purchases" })} />} title={t("purchase.new")} subtitle={t("purchase.newHint")} />
       {error instanceof ApiError && !error.field?.startsWith("supplier") ? <ErrorNote error={error} /> : null}
+
+      {draft && (
+        <div className="flex gap-3 rounded-xl border border-info/30 bg-info-soft px-4 py-3 text-[13.5px]" role="status">
+          <FileSpreadsheet size={18} className="mt-0.5 shrink-0 text-info" />
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className="font-medium text-ink">
+              {t("billImport.importedFrom", { file: draft.fileName })} · {t("billImport.matchedCount", { matched: matchedAtOpen.current, count: draft.items.length })}
+            </p>
+            <p className="text-ink-2">{t("billImport.reviewHint")}</p>
+            {!draft.supplierId && draft.supplierHint && <p className="text-warn">{t("billImport.supplierNotFound", { value: draft.supplierHint })}</p>}
+            {draft.duplicate && (
+              <p className="font-medium text-danger" role="alert">
+                {t("billImport.duplicate", { number: draft.billNumber, ours: draft.duplicate.purchaseNumber ?? "" })}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <Card className="p-4 sm:p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -256,6 +336,17 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
                 selectedLabel={supplier ? `${supplierLabel(supplier)} · ${supplier.code}` : null}
                 search={(q) => searchSuppliers(q).map((s) => ({ id: s.id, label: supplierLabel(s), sub: [s.code, s.city, s.gstin].filter(Boolean).join(" · ") }))}
               />
+              {!supplier && draft && draft.supplierCandidates.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-ink-3">
+                  {t("billImport.closeMatches")}
+                  {draft.supplierCandidates.map((c) => (
+                    <Button key={c.id} size="sm" variant="soft" onClick={() => setSupplierId(c.id)}>
+                      {c.name}
+                      {c.city ? ` · ${c.city}` : ""}
+                    </Button>
+                  ))}
+                </div>
+              )}
               {supplier && (
                 <p className="text-[12.5px] text-ink-3">
                   {supplyType === "inter_state" ? t("gst.interState") : t("gst.intraState")} · {chargesGst ? (supplier.gstin ?? "") : t(`supplier.registration.${supplier.gstRegistration === "composition" ? "composition" : "unregistered"}`)}
@@ -297,6 +388,71 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
           </div>
         </div>
       </Card>
+
+      {pending.length > 0 && (
+        <Card className="border-warn/40">
+          <CardHeader title={t("billImport.toMatch", { count: pending.length })} subtitle={t("billImport.toMatchHint")} />
+          <ul className="flex flex-col divide-y divide-line">
+            {pending.map((item) => {
+              const f = item.file;
+              return (
+                <li key={item.key} className="grid grid-cols-1 gap-3 px-4 py-3 sm:px-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-start">
+                  <div className="min-w-0">
+                    <p className="font-medium break-words text-ink">{f.itemName}</p>
+                    <p className="num text-[12.5px] text-ink-3">
+                      {[f.itemCode, f.barcode, f.hsnCode && `HSN ${f.hsnCode}`].filter(Boolean).join(" · ")}
+                      {(f.itemCode || f.barcode || f.hsnCode) && " · "}
+                      {number(f.qty)} {f.unit ?? ""}
+                      {f.rate && ` × ${money(Number(f.rate))}`}
+                      {f.gstRate !== null && ` · GST ${f.gstRate}%`}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <SearchSelect
+                          value={null}
+                          onChange={(id) => id && matchItem(item, id)}
+                          placeholder={t("billImport.pickProduct")}
+                          clearLabel={t("common.clear")}
+                          emptyText={t("empty.products")}
+                          search={(q) =>
+                            (q.trim() ? searchProducts(q, searchable, { limit: 8 }).map((h) => h.product) : []).map((p) => ({
+                              id: p.id,
+                              label: p.name,
+                              sub: [p.code, p.brand, p.packSize].filter(Boolean).join(" · "),
+                            }))
+                          }
+                        />
+                      </div>
+                      {allowed("product.create") && (
+                        <Button size="sm" icon={<Plus size={14} />} onClick={() => setCreating(item)}>
+                          {t("billImport.newProduct")}
+                        </Button>
+                      )}
+                      <IconButton label={t("billImport.leaveOut", { item: f.itemName })} onClick={() => setPending((ps) => ps.filter((x) => x.key !== item.key))}>
+                        <X size={16} />
+                      </IconButton>
+                    </div>
+                    {item.candidates.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-ink-3">
+                        {t("billImport.closeMatches")}
+                        {item.candidates
+                          .filter((c) => productById.has(c.productId))
+                          .map((c) => (
+                            <Button key={c.productId} size="sm" variant="soft" onClick={() => matchItem(item, c.productId)}>
+                              {c.name}
+                            </Button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       <Card>
         <CardHeader title={t("invoice.items")} subtitle={lines.length ? t("common.items", { count: lines.length }) : undefined} />
@@ -347,6 +503,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
                   const problem = touched ? lineProblems(l) : null;
                   const r = lineResult(l.key);
                   const resolved = calc.taxes.get(l.key);
+                  const matchedBy = draftMatch.get(l.key);
                   const units = [{ unitId: p.unitId ?? "", symbol: p.unit, factor: 1 }, ...(p.packUnits ?? [])];
                   return (
                     <tr key={l.key} className={cn("border-b border-line align-top", problem && "bg-danger-soft/40")}>
@@ -356,6 +513,12 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
                           {p.code}
                           {p.hsn && ` · HSN ${p.hsn}`}
                         </p>
+                        {l.supplierItem?.name && compactDiffers(l.supplierItem.name, p.name) && (
+                          <p className="max-w-64 truncate text-[12px] text-ink-3" title={l.supplierItem.name}>
+                            {t("billImport.onBill")}: {l.supplierItem.name}
+                          </p>
+                        )}
+                        {matchedBy && <Badge tone="neutral">{t(`billImport.matchedBy.${matchedBy}`)}</Badge>}
                         {problem && (
                           <p className="text-[12px] text-danger" role="alert">
                             {problem}
@@ -514,6 +677,19 @@ export function PurchaseEntryPage({ supplierId: initialSupplier }: { supplierId?
           </Button>
         </Card>
       </div>
+      {creating && (
+        <ProductEditor
+          productId={null}
+          open
+          prefill={prefillFrom(creating)}
+          onOpenChange={(v) => !v && setCreating(null)}
+          onSaved={(id) => {
+            const item = creating;
+            setCreating(null);
+            matchItem(item, id);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -56,7 +56,8 @@ export const WORKSPACE = {
   units: new Map<string, string>(),
   /** Live catalogue masters used by editors. */
   unitList: [] as Array<{ id: string; symbol: string; name: string }>,
-  taxCategories: [] as Array<{ id: string; name: string; kind: string }>,
+  /** `rate`: the GST % in force today (null when it cannot be resolved). */
+  taxCategories: [] as Array<{ id: string; name: string; kind: string; rate?: number | null }>,
   categories: [] as Array<{ id: string; name: string }>,
   /** Godowns (live). */
   warehouses: [] as Array<{ id: string; name: string; code: string; city: string | null; isDefault: boolean; isActive: boolean }>,

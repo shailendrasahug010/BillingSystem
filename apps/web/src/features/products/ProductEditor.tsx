@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
@@ -88,6 +88,9 @@ function emptyForm() {
 
 type Form = ReturnType<typeof emptyForm>;
 
+/** Details known before the form opens (a new product from a supplier's bill line). */
+export type ProductPrefill = Partial<Pick<Form, "name" | "hsnCode" | "taxCategoryId" | "baseUnitId" | "purchasePrice" | "mrp" | "barcodes" | "trackBatches" | "trackExpiry">>;
+
 function formFrom(p: ProductDetail): Form {
   const alt = p.units[0];
   return {
@@ -124,7 +127,19 @@ function formFrom(p: ProductDetail): Form {
  * per rate list, minimum stock and opening stock. The server validates again
  * and assigns the code; on edit only the changed fields are sent.
  */
-export function ProductEditor({ productId, open, onOpenChange }: { productId: string | null; open: boolean; onOpenChange(v: boolean): void }) {
+export function ProductEditor({
+  productId,
+  open,
+  onOpenChange,
+  prefill,
+  onSaved,
+}: {
+  productId: string | null;
+  open: boolean;
+  onOpenChange(v: boolean): void;
+  prefill?: ProductPrefill;
+  onSaved?(id: string): void;
+}) {
   const { t } = useI18n();
   const toast = useToast();
   const [form, setForm] = useState<Form>(emptyForm);
@@ -135,6 +150,7 @@ export function ProductEditor({ productId, open, onOpenChange }: { productId: st
   const canPrice = allowed("product.update_price") || !productId;
   const canCost = allowed("product.view_cost");
   const levels = WORKSPACE.priceLevels.filter((l) => !l.isDefault);
+  const prefillRef = useRef(prefill);
 
   const detail = useQuery({
     queryKey: ["product", productId],
@@ -147,7 +163,7 @@ export function ProductEditor({ productId, open, onOpenChange }: { productId: st
     if (!open) return;
     setError(null);
     setTouched(false);
-    if (!productId) setForm(emptyForm());
+    if (!productId) setForm({ ...emptyForm(), ...prefillRef.current });
     else if (detail.data) setForm(formFrom(detail.data));
   }, [open, productId, detail.data]);
 
@@ -263,7 +279,8 @@ export function ProductEditor({ productId, open, onOpenChange }: { productId: st
       }
       await refreshCatalog();
       toast({ tone: "success", title: t("product.saved"), body: `${saved.code} · ${saved.name}` });
-      onOpenChange(false);
+      if (onSaved) onSaved(saved.id);
+      else onOpenChange(false);
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {

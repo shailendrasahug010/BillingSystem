@@ -51,10 +51,15 @@ export function headerKey(header: string, aliases: Record<string, string> = {}):
   return aliases[key] ?? key;
 }
 
-/** Rows as objects keyed by canonical header. */
-export function csvRecords(text: string, aliases: Record<string, string> = {}): { columns: string[]; records: Array<Record<string, string>> } {
-  const [head, ...body] = parseCsv(text);
+/** Sheet rows (first row = headers) as objects keyed by canonical header. */
+export function sheetRecords(rows: string[][], aliases: Record<string, string> = {}): { columns: string[]; records: Array<Record<string, string>> } {
+  const [head, ...body] = rows;
   if (!head) return { columns: [], records: [] };
   const columns = head.map((h) => headerKey(h, aliases));
   return { columns, records: body.map((r) => Object.fromEntries(columns.map((c, i) => [c, (r[i] ?? "").trim()]))) };
+}
+
+/** CSV text as objects keyed by canonical header. */
+export function csvRecords(text: string, aliases: Record<string, string> = {}): { columns: string[]; records: Array<Record<string, string>> } {
+  return sheetRecords(parseCsv(text), aliases);
 }

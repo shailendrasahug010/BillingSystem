@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import type { PurchaseDraft } from "../features/purchases/billImport";
 
 /**
  * Minimal screen router for the prototype. The production app uses TanStack
@@ -15,7 +16,7 @@ export type Route =
   | { name: "products" }
   | { name: "settings" }
   | { name: "design-system" }
-  | { name: "purchase-new"; supplierId?: string }
+  | { name: "purchase-new"; supplierId?: string; draft?: PurchaseDraft }
   | { name: "purchase-view"; purchaseId: string }
   | { name: "supplier"; supplierId: string }
   | { name: "order-view"; orderId: string }

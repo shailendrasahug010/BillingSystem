@@ -155,6 +155,7 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 | Notifications | Phase 5 | Inbox (payment due, low stock, expiring, pending orders, to pack/dispatch, leave, salary due), mark read, reminder rule settings |
 | Users & roles | **Built** (live) | Invite by mobile, assign role, deactivate; role editor (permission matrix by module); all changes audit-logged |
 | Audit log | **Built** (live) | Who, what, record, old → new values, when, IP; filters by record type, user and dates |
-| Import (products, customers) | **Built** (live) | CSV template, header aliases from common exports, check-first with an error table by row and column, then import |
+| Import (products, customers) | **Built** (live) | Excel (.xlsx) or CSV, template, header aliases from common exports, check-first with an error table by row and column, then import |
+| Import supplier bill | **Built** (live) | Purchases → Import bill: Excel / CSV bill from the supplier, pick the bill if the file has several, match and open in purchase entry with the unmatched items to pick (close matches, new product prefilled from the bill, or leave out); matches remembered per supplier; duplicate bill flagged |
 | Returns (credit / debit notes) | **Built** (live) | From the invoice ("Record return") or the purchase bill ("Return to supplier"): quantities per line, restock or not, reason; printable note; cancel. Also value-only notes: "Discount / rate difference" on an invoice and "Supplier credit note" on a purchase (percent or amount) |
 | Backup & restore | Phase 6 | Schedule (daily/weekly), manual backup, list with size and checksum, download, restore with typed confirmation and re-authentication |

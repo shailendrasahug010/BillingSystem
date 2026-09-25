@@ -93,3 +93,32 @@ export const purchaseItems = pgTable(
     check("purchase_items_qty_chk", sql`${t.qty} > 0 and ${t.freeQty} >= 0`),
   ],
 );
+
+/**
+ * How a supplier names our products on their bills ("SURF EXL 1KG", item code
+ * "HU-1102"). Written when a bill imported from the supplier's file is saved,
+ * so the next bill from the same supplier matches line by line on its own.
+ * `itemKey` is "c:" + the normalised item code, or "n:" + the normalised name.
+ */
+export const supplierItems = pgTable(
+  "supplier_items",
+  {
+    id: pk(),
+    businessId: businessId(),
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    itemKey: varchar({ length: 210 }).notNull(),
+    itemCode: varchar({ length: 60 }),
+    itemName: text(),
+    /** The unit this supplier bills the item in (a case), when not the stock unit. */
+    unitId: uuid().references(() => units.id),
+    lastRate: rate(),
+    lastSeenAt: tstz().notNull().defaultNow(),
+    ...auditColumns,
+  },
+  (t) => [unique("supplier_items_uq").on(t.businessId, t.supplierId, t.itemKey), index("supplier_items_product_idx").on(t.businessId, t.productId)],
+);

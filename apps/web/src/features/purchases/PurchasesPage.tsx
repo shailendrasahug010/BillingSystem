@@ -1,4 +1,4 @@
-import { Download, Plus, Search } from "lucide-react";
+import { Download, FileSpreadsheet, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -10,6 +10,7 @@ import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, type Column } fr
 import { allowed } from "../../data/db";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
+import { BillImportDialog } from "./BillImportDialog";
 
 export interface PurchaseRow {
   id: string;
@@ -38,6 +39,7 @@ export function PurchasesPage() {
   const [status, setStatus] = useState<"all" | "posted" | "cancelled">("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [importing, setImporting] = useState(false);
   const list = usePaged<PurchaseRow>("purchases", "/purchases", { status, from, to, q: q.trim().length >= 2 ? q.trim() : undefined });
 
   const columns: Column<PurchaseRow>[] = [
@@ -94,6 +96,11 @@ export function PurchasesPage() {
               {t("common.export")}
             </Button>
             {allowed("purchase.create") && (
+              <Button icon={<FileSpreadsheet size={16} />} onClick={() => setImporting(true)}>
+                {t("billImport.button")}
+              </Button>
+            )}
+            {allowed("purchase.create") && (
               <Button variant="primary" icon={<Plus size={16} />} onClick={() => navigate({ name: "purchase-new" })}>
                 {t("purchase.new")}
               </Button>
@@ -141,6 +148,7 @@ export function PurchasesPage() {
         }
       />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
+      <BillImportDialog open={importing} onOpenChange={setImporting} />
     </div>
   );
 }

@@ -106,6 +106,13 @@ export const PurchaseLineInput = z.strictObject({
   mfgDate: IsoDate.optional(),
   expiryDate: IsoDate.optional(),
   mrp: Rate.optional(),
+  /** How the supplier's bill names this item (from an imported bill file); remembered for their next bill. */
+  supplierItem: z
+    .strictObject({
+      code: z.string().trim().max(60).optional(),
+      name: z.string().trim().max(200).optional(),
+    })
+    .optional(),
 });
 
 export const PurchaseBody = z.strictObject({
@@ -121,6 +128,25 @@ export const PurchaseBody = z.strictObject({
   payment: PaymentAtDocument.optional(),
   notes: z.string().trim().max(1000).optional(),
   clientTotals: ClientTotals.optional(),
+});
+
+/** Lines of a supplier's bill file, to match against suppliers and products before review. */
+export const PurchaseImportMatchBody = z.strictObject({
+  supplierId: Id.optional(),
+  supplierGstin: z.string().trim().max(20).optional(),
+  supplierName: z.string().trim().max(200).optional(),
+  billNumber: z.string().trim().max(30).optional(),
+  billDate: IsoDate.optional(),
+  lines: z
+    .array(
+      z.strictObject({
+        itemName: z.string().trim().min(1).max(200),
+        itemCode: z.string().trim().max(60).optional(),
+        barcode: z.string().trim().max(64).optional(),
+      }),
+    )
+    .min(1)
+    .max(300),
 });
 
 export const PurchaseListQuery = PageQuery.extend({

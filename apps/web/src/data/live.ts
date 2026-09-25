@@ -212,7 +212,15 @@ function applyCatalog(catalog: Catalog): void {
   replaceAll(BRANDS, catalog.brands.map((b) => ({ id: b.id, name: b.name })));
   replaceMap(WORKSPACE.units, catalog.units.map((u) => [u.id, u.symbol]));
   WORKSPACE.unitList = catalog.units.map((u) => ({ id: u.id, symbol: u.symbol, name: u.name }));
-  WORKSPACE.taxCategories = catalog.taxCategories.map((c) => ({ id: c.id, name: c.name, kind: c.kind }));
+  WORKSPACE.taxCategories = catalog.taxCategories.map((c) => {
+    let rate: number | null = null;
+    try {
+      rate = resolveTax(taxById.get(c.id)!, { date: TODAY }).gstRate.toNumber();
+    } catch {
+      // A category with no rule in force today cannot be picked by rate.
+    }
+    return { id: c.id, name: c.name, kind: c.kind, rate };
+  });
   WORKSPACE.categories = catalog.categories.map((c) => ({ id: c.id, name: c.name }));
 }
 

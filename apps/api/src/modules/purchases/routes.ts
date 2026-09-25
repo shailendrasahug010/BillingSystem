@@ -7,6 +7,7 @@ import {
   determineSupplyType,
   financialYearOf,
   resolveTax,
+  supplierItemKeys,
   taxAt,
   toAmountString,
   toQtyString,
@@ -352,6 +353,54 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           .update(schema.products)
           .set({ purchasePrice: toRateString(dec(it.line.rate).dividedBy(it.meta.factor)) })
           .where(eq(schema.products.id, it.meta.product.id));
+      }
+
+      // Remember how this supplier names the items (a bill imported from their file), for their next bill.
+      const remembered = new Map<string, { productId: string; code: string | null; name: string | null; unitId: string | null; rate: string }>();
+      for (const [i, line] of body.lines.entries()) {
+        if (!line.supplierItem) continue;
+        const meta = lineMeta[i]!;
+        for (const itemKey of supplierItemKeys(line.supplierItem)) {
+          remembered.set(itemKey, {
+            productId: meta.product.id,
+            code: line.supplierItem.code || null,
+            name: line.supplierItem.name || null,
+            unitId: meta.unitId === meta.product.baseUnitId ? null : meta.unitId,
+            rate: line.rate,
+          });
+        }
+      }
+      if (remembered.size) {
+        const si = schema.supplierItems;
+        await tx
+          .insert(si)
+          .values(
+            [...remembered].map(([itemKey, v]) => ({
+              businessId: ctx.businessId,
+              supplierId: supplier.id,
+              productId: v.productId,
+              itemKey,
+              itemCode: v.code,
+              itemName: v.name,
+              unitId: v.unitId,
+              lastRate: v.rate,
+              createdBy: ctx.userId,
+              updatedBy: ctx.userId,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [si.businessId, si.supplierId, si.itemKey],
+            set: {
+              productId: sql`excluded.product_id`,
+              itemCode: sql`excluded.item_code`,
+              itemName: sql`excluded.item_name`,
+              unitId: sql`excluded.unit_id`,
+              lastRate: sql`excluded.last_rate`,
+              lastSeenAt: sql`now()`,
+              updatedAt: sql`now()`,
+              updatedBy: ctx.userId,
+            },
+          });
       }
 
       await postPartyEntry(tx, {
