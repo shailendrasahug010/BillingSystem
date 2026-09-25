@@ -1,38 +1,41 @@
 @import "tailwindcss";
 
 /*
- * VYAPAAR DESIGN TOKENS
+ * DIGITAL BAHI DESIGN TOKENS
  * ---------------------
  * Every colour in the app comes from these tokens. Components never use raw
  * hex values, so light/dark themes (and a future white-label brand) are a
  * change in this file only.
  *
- * Accent: peacock teal. Status colours (paid / due / overdue / stock) are
+ * Accent: the royal blue of the Digital Bahi logo. Status colours (paid / due / overdue / stock) are
  * reserved for state and never used as decoration.
  */
 :root {
   color-scheme: light;
 
-  /* Surfaces: neutrals carry a slight teal bias toward the accent. */
-  --bg: #f3f6f6;
+  /* Surfaces: neutrals carry a slight blue bias toward the accent. */
+  --bg: #f3f5fa;
   --surface: #ffffff;
-  --surface-2: #eef3f3;
-  --surface-3: #e3eaeb;
-  --border: #d7e0e1;
-  --border-strong: #b9c7c9;
+  --surface-2: #eef2f9;
+  --surface-3: #e2e8f3;
+  --border: #d6ddea;
+  --border-strong: #b6c2d6;
 
   /* Ink */
-  --ink: #0f2629;
-  --ink-2: #4a5f62;
-  --ink-3: #6f8487;
+  --ink: #0e1a33;
+  --ink-2: #47536c;
+  --ink-3: #6a7690;
   --ink-inverse: #ffffff;
 
   /* Brand */
-  --accent: #0b6e82;
-  --accent-hover: #085a6a;
-  --accent-soft: #dcf0f3;
-  --accent-ink: #065262;
+  --accent: #1450b4;
+  --accent-hover: #0e3f93;
+  --accent-soft: #e3ecfb;
+  --accent-ink: #0b3a8c;
   --marigold: #e29a0c;
+  /* Digital Bahi wordmark: "Digital" navy, "Bahi" green (from the logo). */
+  --brand-navy: #0b2d72;
+  --brand-green: #2f8f1f;
 
   /* Status (text on soft background) */
   --good: #0b7a3e;
@@ -41,8 +44,8 @@
   --warn-soft: #fcefd2;
   --danger: #b42318;
   --danger-soft: #fde7e4;
-  --info: #0b6e82;
-  --info-soft: #dcf0f3;
+  --info: #1450b4;
+  --info-soft: #e3ecfb;
 
   /* Chart series (validated categorical order) + ordinal ramp */
   --series-1: #2a78d6;
@@ -52,9 +55,9 @@
   --ordinal-2: #5598e7;
   --ordinal-3: #256abf;
   --ordinal-4: #184f95;
-  --grid: #e3eaeb;
+  --grid: #e2e8f3;
 
-  --focus: #0b6e82;
+  --focus: #1450b4;
   --shadow-1: 0 1px 2px rgb(15 38 41 / 0.06), 0 1px 1px rgb(15 38 41 / 0.04);
   --shadow-2: 0 10px 30px -12px rgb(15 38 41 / 0.28), 0 2px 6px rgb(15 38 41 / 0.08);
 
@@ -67,29 +70,31 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0c1618;
-    --surface: #122023;
-    --surface-2: #172a2e;
-    --surface-3: #1f363a;
-    --border: #25393d;
-    --border-strong: #37525a;
-    --ink: #e6eff0;
-    --ink-2: #a8babd;
-    --ink-3: #7f9497;
-    --ink-inverse: #0c1618;
-    --accent: #3cb4ca;
-    --accent-hover: #5cc4d6;
-    --accent-soft: #113840;
-    --accent-ink: #8fd7e4;
+    --bg: #0b1220;
+    --surface: #111a2c;
+    --surface-2: #162238;
+    --surface-3: #1e2c46;
+    --border: #243350;
+    --border-strong: #35496e;
+    --ink: #e7ecf6;
+    --ink-2: #a9b4c9;
+    --ink-3: #8090ab;
+    --ink-inverse: #0b1220;
+    --accent: #7aa7ff;
+    --accent-hover: #9bbdff;
+    --accent-soft: #16264a;
+    --accent-ink: #b7cffc;
     --marigold: #f0b23a;
+    --brand-navy: #c7d7ff;
+    --brand-green: #7fd46a;
     --good: #4cc987;
     --good-soft: #12301f;
     --warn: #f2bd4f;
     --warn-soft: #36290c;
     --danger: #f2837a;
     --danger-soft: #3d1714;
-    --info: #3cb4ca;
-    --info-soft: #113840;
+    --info: #7aa7ff;
+    --info-soft: #16264a;
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
@@ -97,8 +102,8 @@
     --ordinal-2: #2a78d6;
     --ordinal-3: #5598e7;
     --ordinal-4: #86b6ef;
-    --grid: #1f363a;
-    --focus: #5cc4d6;
+    --grid: #1e2c46;
+    --focus: #9bbdff;
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-2: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.4);
   }
@@ -106,29 +111,31 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0c1618;
-  --surface: #122023;
-  --surface-2: #172a2e;
-  --surface-3: #1f363a;
-  --border: #25393d;
-  --border-strong: #37525a;
-  --ink: #e6eff0;
-  --ink-2: #a8babd;
-  --ink-3: #7f9497;
-  --ink-inverse: #0c1618;
-  --accent: #3cb4ca;
-  --accent-hover: #5cc4d6;
-  --accent-soft: #113840;
-  --accent-ink: #8fd7e4;
+  --bg: #0b1220;
+  --surface: #111a2c;
+  --surface-2: #162238;
+  --surface-3: #1e2c46;
+  --border: #243350;
+  --border-strong: #35496e;
+  --ink: #e7ecf6;
+  --ink-2: #a9b4c9;
+  --ink-3: #8090ab;
+  --ink-inverse: #0b1220;
+  --accent: #7aa7ff;
+  --accent-hover: #9bbdff;
+  --accent-soft: #16264a;
+  --accent-ink: #b7cffc;
   --marigold: #f0b23a;
+  --brand-navy: #c7d7ff;
+  --brand-green: #7fd46a;
   --good: #4cc987;
   --good-soft: #12301f;
   --warn: #f2bd4f;
   --warn-soft: #36290c;
   --danger: #f2837a;
   --danger-soft: #3d1714;
-  --info: #3cb4ca;
-  --info-soft: #113840;
+  --info: #7aa7ff;
+  --info-soft: #16264a;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -136,8 +143,8 @@
   --ordinal-2: #2a78d6;
   --ordinal-3: #5598e7;
   --ordinal-4: #86b6ef;
-  --grid: #1f363a;
-  --focus: #5cc4d6;
+  --grid: #1e2c46;
+  --focus: #9bbdff;
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-2: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.4);
 }
@@ -163,6 +170,8 @@
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
   --color-marigold: var(--marigold);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-green: var(--brand-green);
   --color-good: var(--good);
   --color-good-soft: var(--good-soft);
   --color-warn: var(--warn);

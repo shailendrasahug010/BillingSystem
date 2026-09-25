@@ -354,6 +354,7 @@ export const identityModule: ApiModule = async (app, deps) => {
           pincode: b!.pincode,
           phone: b!.phone,
           email: b!.email,
+          logoFileId: b!.logoFileId,
         },
         permissions: expandGrants(access.grants as Grant[]),
         settings: Object.fromEntries(settings.map((s) => [s.key, s.value])),

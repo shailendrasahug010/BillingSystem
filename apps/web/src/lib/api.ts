@@ -1,7 +1,7 @@
 import type { SessionResponse } from "@vyapaar/contracts";
 
 /**
- * HTTP client for the Vyapaar API. The access token lives only in memory; the
+ * HTTP client for the Digital Bahi API. The access token lives only in memory; the
  * refresh token is an HttpOnly cookie the browser sends to /api/v1/auth, so no
  * script can read either from storage. A 401 triggers one shared refresh and
  * a retry; concurrent requests wait for the same refresh.

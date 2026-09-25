@@ -4,7 +4,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { UpdateBanner } from "../../components/layout/UpdateBanner";
 import { useI18n } from "../../app/i18n";
 import { useSession } from "../../app/session";
-import { BrandMark, LanguageToggle } from "../../components/layout/AppShell";
+import { DIGITAL_BAHI_LOGO } from "../../components/brand/Brand";
+import { LanguageToggle } from "../../components/layout/AppShell";
 import { Button } from "../../components/ui/Button";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { ApiError } from "../../lib/api";
@@ -12,32 +13,40 @@ import { translateError } from "@vyapaar/i18n";
 
 type Mode = "password" | "otp" | "signup" | "reset";
 
+/** The Digital Bahi side of the sign-in screen: the full logo with its tagline, and what the app does. */
+export function AuthHero() {
+  const { t } = useI18n();
+  return (
+    <section className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-accent-soft via-surface to-good-soft p-10 text-ink lg:flex">
+      <div className="pointer-events-none absolute -top-28 -right-28 size-[380px] rounded-full border-[36px] border-accent/10" aria-hidden />
+      <div className="pointer-events-none absolute -bottom-24 -left-20 size-72 rounded-full bg-brand-green/10" aria-hidden />
+      <div className="relative flex justify-center pt-4">
+        <img src={DIGITAL_BAHI_LOGO} alt={`Digital Bahi · ${t("app.brandTagline")}`} width={480} height={431} className="w-full max-w-[340px] rounded-3xl bg-white p-4 shadow-card" />
+      </div>
+      <div className="relative max-w-md">
+        <p className="font-display text-[34px] leading-[1.1] font-semibold text-brand-navy">{t("app.tagline")}</p>
+        <ul className="mt-5 flex flex-col gap-2 text-[15px] text-ink-2">
+          <li>GST · CGST / SGST / IGST · HSN</li>
+          <li>English · हिन्दी</li>
+          <li>Web · Windows · Mac · Android · iPhone</li>
+        </ul>
+      </div>
+      <p className="relative text-[12.5px] text-ink-3">{t("auth.secureNote")}</p>
+    </section>
+  );
+}
+
 export function AuthLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   return (
     <div className="grid min-h-full grid-cols-1 bg-bg lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden flex-col justify-between overflow-hidden bg-accent p-10 text-ink-inverse lg:flex">
-        <BrandMark inverse />
-        <div className="max-w-md">
-          <p className="font-display text-[40px] leading-[1.05] font-semibold">{t("app.tagline")}</p>
-          <ul className="mt-6 flex flex-col gap-2 text-[15px] opacity-90">
-            <li>GST · CGST / SGST / IGST · HSN</li>
-            <li>English · हिन्दी</li>
-            <li>Web · Windows · Mac · Android · iPhone</li>
-          </ul>
-        </div>
-        <p className="text-[12.5px] opacity-75">{t("auth.secureNote")}</p>
-        <div className="pointer-events-none absolute -right-24 -bottom-24 size-[420px] rounded-full border-[40px] border-white/10" aria-hidden />
-        <div className="pointer-events-none absolute right-20 bottom-44 size-28 rounded-full bg-marigold/90" aria-hidden />
-      </section>
+      <AuthHero />
       <section className="flex flex-col justify-center px-4 py-10 sm:px-10">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
           <UpdateBanner className="rounded-lg" />
           <div className="flex items-center justify-between">
-            <span className="lg:hidden">
-              <BrandMark />
-            </span>
-            <LanguageToggle className="ml-auto" />
+            <img src={DIGITAL_BAHI_LOGO} alt="Digital Bahi" width={480} height={431} className="w-36 lg:hidden" />
+            <LanguageToggle className="ml-auto self-start" />
           </div>
           {children}
         </div>

@@ -69,6 +69,14 @@ export const BusinessProfilePatch = z.strictObject({
   financialYearStartMonth: z.number().int().min(1).max(12).optional(),
 });
 
+/** The firm's logo as a data URL (PNG, JPEG or WebP; the app shrinks it before upload). */
+export const BusinessLogoBody = z.strictObject({
+  image: z
+    .string()
+    .max(450_000)
+    .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/),
+});
+
 export const SeriesPatch = z.strictObject({
   name: z.string().trim().min(1).max(60).optional(),
   pattern: z.string().trim().min(3).max(40).optional(),

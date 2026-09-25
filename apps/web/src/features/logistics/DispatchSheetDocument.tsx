@@ -1,5 +1,5 @@
 import { useI18n } from "../../app/i18n";
-import { BUSINESS } from "../../data/db";
+import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import type { TripStatus } from "./DispatchPage";
 
 export interface PrintableTrip {
@@ -39,18 +39,13 @@ export interface PrintableTrip {
 /** Trip sheet for the driver: stops in order with amounts to collect and a signature column, then the loading list. */
 export function DispatchSheetDocument({ trip }: { trip: PrintableTrip }) {
   const { t, money, number, dateMedium } = useI18n();
-  const cell = "border border-[#c9d2d3] px-2 py-1 align-top";
+  const cell = "border border-[#c8d1e0] px-2 py-1 align-top";
   return (
-    <article className="mx-auto w-full max-w-[820px] bg-white p-6 text-[12.5px] leading-snug text-[#10201f] sm:p-8" style={{ fontFamily: "var(--font-sans)" }}>
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#0b6e82] pb-3">
-        <div>
-          <h2 className="text-[20px] leading-tight font-bold text-[#0b3b44]" style={{ fontFamily: "var(--font-display)" }}>
-            {BUSINESS.name}
-          </h2>
-          {BUSINESS.city && <p>{BUSINESS.city}</p>}
-        </div>
+    <article className="mx-auto w-full max-w-[820px] bg-white p-6 text-[12.5px] leading-snug text-[#0e1a33] sm:p-8" style={{ fontFamily: "var(--font-sans)" }}>
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#1450b4] pb-3">
+        <FirmHeader detail="short" />
         <div className="text-right">
-          <p className="text-[17px] font-bold tracking-wide text-[#0b6e82]">{t("dispatch.sheet").toUpperCase()}</p>
+          <p className="text-[17px] font-bold tracking-wide text-[#1450b4]">{t("dispatch.sheet").toUpperCase()}</p>
           <p className="font-mono font-semibold">{trip.dispatchNumber}</p>
           <p>{dateMedium(trip.dispatchDate)}</p>
         </div>
@@ -66,7 +61,7 @@ export function DispatchSheetDocument({ trip }: { trip: PrintableTrip }) {
       </p>
       <table className="num mt-3 w-full border-collapse">
         <thead>
-          <tr className="bg-[#eef4f5] text-left">
+          <tr className="bg-[#eef2f9] text-left">
             <th className={cell}>#</th>
             <th className={cell}>{t("customer.name")}</th>
             <th className={cell}>{t("dispatch.invoice")}</th>
@@ -111,9 +106,10 @@ export function DispatchSheetDocument({ trip }: { trip: PrintableTrip }) {
         </>
       )}
       <footer className="mt-10 flex items-end justify-between gap-4 text-[12px]">
-        <p className="border-t border-[#10201f] pt-1">{t("dispatch.driverSign")}</p>
-        <p className="border-t border-[#10201f] pt-1">{t("invoice.print.signatory")}</p>
+        <p className="border-t border-[#0e1a33] pt-1">{t("dispatch.driverSign")}</p>
+        <p className="border-t border-[#0e1a33] pt-1">{t("invoice.print.signatory")}</p>
       </footer>
+      <MadeWithDigitalBahi />
     </article>
   );
 }

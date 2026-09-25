@@ -15,9 +15,10 @@ The design system is implemented, not just described: tokens in `apps/web/src/st
 
 | Element | Choice | Reason |
 |---|---|---|
-| Accent | **Peacock teal** `#0B6E82` (dark theme `#3CB4CA`) | Distinct from the status colours (green = paid, red = overdue), calm for an all-day tool, and not the default blue of every SaaS app |
-| Brand mark | Devanagari "व" (from *vyapaar*, trade) in a teal tile with a **marigold** dot | Marigold is used only in the brand mark and the "smart suggestions" sparkle, never for state |
-| Neutrals | Cool greys with a slight teal bias (`--bg #F3F6F6`, `--ink #0F2629`) | Look deliberate next to the accent |
+| Accent | **Royal blue** `#1450B4` from the Digital Bahi logo (dark theme `#7AA7FF`) | Matches the brand; distinct from the status colours (green = paid, red = overdue) |
+| Brand | The **Digital Bahi** logo (open ledger with the rupee sign and a green swoosh), wordmark "Digital" in navy `#0B2D72` and "Bahi" in green `#2F8F1F`, tagline *Aapke Business ka Digital Hisab* | The software's identity: sign-in screen, top of the menu, installed-app icon, and a small "Made with Digital Bahi" line on printouts |
+| Firm identity | The business's own uploaded logo, name, address, mobile, email and GSTIN | The user's identity: the firm card in the menu and the letterhead of every printed document |
+| Neutrals | Cool greys with a slight blue bias (`--bg #F3F5FA`, `--ink #0E1A33`) | Look deliberate next to the accent |
 | Display type | **Anek Latin / Anek Devanagari** (Ek Type, Indian foundry) | One design across both scripts; confident headings and big numbers |
 | UI type | **IBM Plex Sans / IBM Plex Sans Devanagari** | Highly legible at 13–15 px, true tabular figures, matching Devanagari companion |
 | Identifiers | **IBM Plex Mono** | GSTINs, invoice numbers, HSN codes, barcodes are read character by character |

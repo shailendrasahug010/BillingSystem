@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MeResponse } from "@vyapaar/contracts";
 import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validatePincode } from "@vyapaar/core";
-import { useEffect, useState, type ReactNode } from "react";
+import { ImageUp, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
+import { FirmHeader } from "../../components/brand/Brand";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Field, Input, Select } from "../../components/ui/Field";
@@ -10,10 +12,11 @@ import { Segmented, Skeleton } from "../../components/ui/misc";
 import { DataTable, ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { Badge } from "../../components/ui/Badge";
-import { allowed, WORKSPACE } from "../../data/db";
+import { allowed, BUSINESS, WORKSPACE } from "../../data/db";
 import { applyMe, refreshWarehouses } from "../../data/live";
 import { touch, useStoreVersion } from "../../data/store";
 import { api, ApiError } from "../../lib/api";
+import { prepareLogo } from "./firmLogo";
 
 interface BusinessRow {
   legalName: string;
@@ -57,6 +60,85 @@ export function LiveSettings() {
       <WarehousesCard />
       <SeriesCard />
     </>
+  );
+}
+
+/** The firm's logo: preview as it prints (logo, name, address, contact), upload, change or remove. */
+function LogoField({ canEdit }: { canEdit: boolean }) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const hasLogo = Boolean(BUSINESS.logoFileId);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const image = await prepareLogo(file).catch((e: Error) => {
+        throw new ApiError(400, e.message === "IMAGE_TOO_LARGE" ? "IMAGE_TOO_LARGE" : "INVALID_IMAGE", { maxKb: 300 });
+      });
+      await api.put("/business/logo", { image });
+      await reloadMe();
+      toast({ tone: "success", title: t("settings.logoSaved") });
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.delete("/business/logo");
+      await reloadMe();
+      toast({ tone: "success", title: t("settings.logoRemoved") });
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-line p-3 sm:p-4">
+      <div>
+        <p className="text-[14px] font-semibold text-ink">{t("settings.logo")}</p>
+        <p className="text-[12.5px] text-ink-3">{t("settings.logoHint")}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="min-w-0 flex-1 rounded-lg border border-dashed border-line-strong bg-white p-3 text-[12px] text-[#0e1a33]" aria-label={t("settings.logoPreview")}>
+          <FirmHeader />
+        </div>
+        {canEdit && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="soft" icon={<ImageUp size={16} />} disabled={busy} onClick={() => input.current?.click()}>
+              {hasLogo ? t("settings.changeLogo") : t("settings.uploadLogo")}
+            </Button>
+            {hasLogo && (
+              <Button variant="ghost" icon={<Trash2 size={16} />} disabled={busy} onClick={() => void remove()}>
+                {t("settings.removeLogo")}
+              </Button>
+            )}
+            <input
+              ref={input}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              aria-label={t("settings.uploadLogo")}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void upload(f);
+              }}
+            />
+          </div>
+        )}
+      </div>
+      {error ? <ErrorNote error={error} /> : null}
+    </div>
   );
 }
 
@@ -147,6 +229,7 @@ function BusinessProfileCard() {
     <Card>
       <CardHeader title={t("settings.business")} subtitle={t("settings.businessHint")} />
       <div className="flex flex-col gap-4 p-4 sm:p-5">
+        <LogoField canEdit={canEdit} />
         {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {input("legalName", t("settings.legalName"))}

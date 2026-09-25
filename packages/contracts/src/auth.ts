@@ -104,6 +104,8 @@ export interface MeResponse {
         pincode: string | null;
         phone: string | null;
         email: string | null;
+        /** Changes whenever a new logo is uploaded (GET /business/logo). */
+        logoFileId: string | null;
       })
     | null;
   permissions: string[];

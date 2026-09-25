@@ -1,6 +1,7 @@
-import { BusinessProfilePatch, patchOf, SeriesPatch, SETTING_SCHEMAS, SettingBody, WarehouseBody } from "@vyapaar/contracts";
+import { BusinessLogoBody, BusinessProfilePatch, patchOf, SeriesPatch, SETTING_SCHEMAS, SettingBody, WarehouseBody } from "@vyapaar/contracts";
 import { stateCodeFromGstin, validateGstin, validatePan, validateSeriesPattern } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
+import { createHash } from "node:crypto";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -14,6 +15,19 @@ import { getSettings, isSettingKey, SETTING_DEFAULTS } from "../../services/sett
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
+
+const MAX_LOGO_BYTES = 300 * 1024;
+/** First bytes of each accepted image type, so the declared type is what the file really is. */
+const IMAGE_SIGNATURES: Record<string, (b: Buffer) => boolean> = {
+  "image/png": (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  "image/jpeg": (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  "image/webp": (b) => b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP",
+};
+
+/** Retires a logo file: hidden from reads and its bytes dropped (the row stays for the audit trail). */
+async function retireFile(tx: Tx, ctx: RequestCtx, fileId: string, now: string) {
+  await tx.update(schema.files).set({ deletedAt: now, deletedBy: ctx.userId, content: null }).where(and(eq(schema.files.id, fileId), eq(schema.files.businessId, ctx.businessId)));
+}
 const KeyParams = z.object({ key: z.string().max(60) });
 
 export const businessModule: ApiModule = async (app, deps) => {
@@ -55,6 +69,67 @@ export const businessModule: ApiModule = async (app, deps) => {
       invalidateAccess(ctx.businessId);
       return updated!;
     });
+  });
+
+  // ---------------------------------------------------------------- firm logo
+  /** The firm's logo, printed on bills and shown in the app. Anyone in the business can read it. */
+  r.get("/business/logo", { preHandler: guard(deps), schema: { tags: ["business"] } }, async (request) =>
+    tenant(request.ctx, async (tx) => {
+      const [row] = await tx
+        .select({ id: schema.files.id, mimeType: schema.files.mimeType, content: schema.files.content })
+        .from(schema.files)
+        .innerJoin(schema.businesses, eq(schema.businesses.logoFileId, schema.files.id))
+        .where(and(eq(schema.businesses.id, request.ctx.businessId), isNull(schema.files.deletedAt)));
+      if (!row?.content) throw notFound("logo");
+      return { id: row.id, mimeType: row.mimeType, dataUrl: `data:${row.mimeType};base64,${row.content.toString("base64")}` };
+    }),
+  );
+
+  r.put("/business/logo", { preHandler: guard(deps, "settings.update"), bodyLimit: 600_000, schema: { tags: ["business"], body: BusinessLogoBody } }, async (request) => {
+    const ctx = request.ctx;
+    const [, mimeType, data] = /^data:(image\/[a-z]+);base64,(.*)$/.exec(request.body.image)!;
+    const bytes = Buffer.from(data!, "base64");
+    if (bytes.length > MAX_LOGO_BYTES) throw badRequest("IMAGE_TOO_LARGE", { maxKb: MAX_LOGO_BYTES / 1024 }, "image");
+    if (!IMAGE_SIGNATURES[mimeType!]?.(bytes)) throw badRequest("INVALID_IMAGE", {}, "image");
+    return tenant(ctx, async (tx) => {
+      const [b] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId)).for("update");
+      const now = deps.clock.now().toISOString();
+      const id = uuidv7();
+      await tx.insert(schema.files).values({
+        id,
+        businessId: ctx.businessId,
+        storageKey: `db/${id}`,
+        content: bytes,
+        originalName: "logo",
+        mimeType: mimeType!,
+        sizeBytes: bytes.length,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        purpose: "business_logo",
+        uploadedBy: ctx.userId,
+      });
+      if (b!.logoFileId) await retireFile(tx, ctx, b!.logoFileId, now);
+      await tx
+        .update(schema.businesses)
+        .set({ logoFileId: id, updatedBy: ctx.userId, version: b!.version + 1 })
+        .where(eq(schema.businesses.id, ctx.businessId));
+      await audit(tx, ctx, { action: "business.logo_updated", entityType: "business", entityId: ctx.businessId, entityLabel: b!.legalName, changes: { sizeKb: Math.ceil(bytes.length / 1024), mimeType } });
+      return { logoFileId: id };
+    });
+  });
+
+  r.delete("/business/logo", { preHandler: guard(deps, "settings.update"), schema: { tags: ["business"] } }, async (request, reply) => {
+    const ctx = request.ctx;
+    await tenant(ctx, async (tx) => {
+      const [b] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId)).for("update");
+      if (!b!.logoFileId) return;
+      await retireFile(tx, ctx, b!.logoFileId, deps.clock.now().toISOString());
+      await tx
+        .update(schema.businesses)
+        .set({ logoFileId: null, updatedBy: ctx.userId, version: b!.version + 1 })
+        .where(eq(schema.businesses.id, ctx.businessId));
+      await audit(tx, ctx, { action: "business.logo_removed", entityType: "business", entityId: ctx.businessId, entityLabel: b!.legalName });
+    });
+    return reply.code(204).send();
   });
 
   // ---------------------------------------------------------------- settings (typed business rules)

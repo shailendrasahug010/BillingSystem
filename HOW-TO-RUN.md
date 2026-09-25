@@ -1,8 +1,10 @@
-# How to run Vyapaar CRM
+# How to run Digital Bahi
+
+*Aapke Business ka Digital Hisab*
 
 On a computer, on a phone, and on your own server.
 
-Vyapaar CRM has two parts:
+Digital Bahi has two parts:
 
 * **The server** (the API and the PostgreSQL database). It keeps all the data: bills, stock, ledgers, GST. It runs in one place: your laptop while you try it out, or a rented server with a web address once the business uses it.
 * **The app** that people use. The same app runs in a browser and is **installed as an app** on Windows, Mac and Linux computers and on Android phones and iPhones. Once installed, it has its own icon and window, opens from the Start menu, taskbar, Dock or home screen, and updates itself.
@@ -98,6 +100,8 @@ Open **http://localhost:5173** in Chrome or Edge.
    * **Customers → Import** or **Add customer**
    * **New Invoice** (Ctrl+I) and **Payments → Receive payment** (Alt+C)
 
+**Your firm's name, logo and details.** Open **Settings → Business profile**. Fill in the address, mobile and email, click **Save**, then **Upload logo** (a PNG, JPG or WebP file of your firm's logo; it is shrunk automatically). The preview shows how the top of your bills will look. The firm's logo, name, address, mobile, email and GSTIN are printed on every invoice, credit note, receipt, salary slip, packing slip and trip sheet, and the logo appears in the menu under the Digital Bahi logo.
+
 `OTP_DEV_ECHO=true` (codes on screen) is only for your own computer. The server refuses to start with it in production.
 
 ---
@@ -139,16 +143,16 @@ Then open **http://localhost:4173** and install it (section 3). The server from 
 
 Works in **Google Chrome** and **Microsoft Edge** on Windows 10/11, macOS and Linux.
 
-1. Open your Vyapaar address (http://localhost:5173 or :4173 on your own computer, or `https://your-domain` once it is on a server).
+1. Open your Digital Bahi address (http://localhost:5173 or :4173 on your own computer, or `https://your-domain` once it is on a server).
 2. Install it, any one of:
    * click **Install app** at the bottom of the left menu, or
    * click the install icon (a screen with a down arrow) at the right end of the address bar, or
    * Chrome: menu **⋮ → Cast, save and share → Install page as app**; Edge: menu **⋯ → Apps → Install this site as an app**.
 3. Click **Install**.
 
-Vyapaar now opens in its own window, without the browser's tabs and address bar:
+Digital Bahi now opens in its own window, without the browser's tabs and address bar:
 
-* **Windows:** in the Start menu (search "Vyapaar") and on the desktop; right-click it in the taskbar and choose **Pin to taskbar**. Right-clicking the taskbar icon also offers **New invoice**, **Customers** and **Products**.
+* **Windows:** in the Start menu (search "Digital Bahi") and on the desktop; right-click it in the taskbar and choose **Pin to taskbar**. Right-clicking the taskbar icon also offers **New invoice**, **Customers** and **Products**.
 * **Mac:** in Launchpad and the Applications folder (Chrome Apps); drag it to the Dock.
 * **Linux:** in the applications menu.
 
@@ -156,9 +160,9 @@ Vyapaar now opens in its own window, without the browser's tabs and address bar:
 
 **Keyboard.** Ctrl+I new invoice, Alt+P purchase bill, Alt+O sales order, Alt+C receive payment, Ctrl+K search. The keyboard icon at the bottom of the left menu lists them all.
 
-**Updates.** New versions download by themselves. When one is ready, a line at the top says **A new version of Vyapaar CRM is ready · Reload now**. Click it when you are not in the middle of a bill (nothing changes until you do).
+**Updates.** New versions download by themselves. When one is ready, a line at the top says **A new version of Digital Bahi is ready · Reload now**. Click it when you are not in the middle of a bill (nothing changes until you do).
 
-**Uninstall.** Open the app, then the menu at the top right of its window (**⋮** or **⋯**) → **Uninstall Vyapaar CRM**. Your data is on the server and is not affected.
+**Uninstall.** Open the app, then the menu at the top right of its window (**⋮** or **⋯**) → **Uninstall Digital Bahi**. Your data is on the server and is not affected.
 
 ---
 
@@ -170,13 +174,13 @@ The phone needs the **https** address of your server (section 5).
 
 1. Open `https://your-domain` in **Chrome**.
 2. Tap **Install** when Chrome offers it, or tap the menu **⋮ → Install app** (on some phones **Add to Home screen → Install**). Inside the app, **More → Install app** does the same.
-3. Vyapaar appears on the home screen and in the app drawer, and opens full screen like any other app. Long-press the icon for **New invoice**, **Customers** and **Products**.
+3. Digital Bahi appears on the home screen and in the app drawer, and opens full screen like any other app. Long-press the icon for **New invoice**, **Customers** and **Products**.
 
 ### iPhone and iPad (Safari)
 
 1. Open `https://your-domain` in **Safari**.
 2. Tap the **Share** button (the square with an up arrow) → **Add to Home Screen** → **Add**.
-3. Open Vyapaar from the home screen. It runs full screen, without Safari's bars.
+3. Open Digital Bahi from the home screen. It runs full screen, without Safari's bars.
 
 ### On the phone
 
@@ -264,7 +268,7 @@ A daily backup with cron (`crontab -e`):
 
 ## 6. App stores (optional)
 
-Installing from the browser (sections 3 and 4) needs no store. If you also want Vyapaar listed in a store:
+Installing from the browser (sections 3 and 4) needs no store. If you also want Digital Bahi listed in a store:
 
 * **Google Play Store (Android).** Package the installed app as a Trusted Web Activity with Google's Bubblewrap tool. It needs Node.js and asks to download the Java and Android tools on first use:
 

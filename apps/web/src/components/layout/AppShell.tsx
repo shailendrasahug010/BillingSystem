@@ -30,28 +30,12 @@ import { installApp, useCanInstall } from "../../lib/pwa";
 import { Dialog } from "../ui/Dialog";
 import { Kbd } from "../ui/misc";
 import { UpdateBanner } from "./UpdateBanner";
+import { BrandMark, FirmLogo } from "../brand/Brand";
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
   if (a.name === "planned" && b.name === "planned") return a.module === b.module;
   return true;
-}
-
-/** The "व" mark and name; `inverse` for use on the brand colour. */
-export function BrandMark({ compact, inverse }: { compact?: boolean; inverse?: boolean }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className={cn("relative flex size-8 items-center justify-center rounded-lg font-display text-[17px] font-bold", inverse ? "bg-white text-accent" : "bg-accent text-ink-inverse")}>
-        व
-        <span className={cn("absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 bg-marigold", inverse ? "border-accent" : "border-surface")} aria-hidden />
-      </span>
-      {!compact && (
-        <span className={cn("font-display text-[18px] leading-none font-semibold tracking-tight", inverse ? "text-white" : "text-ink")}>
-          Vyapaar<span className={inverse ? "text-white/70" : "text-ink-3"}> CRM</span>
-        </span>
-      )}
-    </div>
-  );
 }
 
 export function LanguageToggle({ className }: { className?: string }) {
@@ -243,12 +227,21 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
     <div className="min-h-full lg:grid lg:grid-cols-[248px_1fr]">
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-surface lg:flex">
-        <div className="flex h-16 items-center px-5">
-          <BrandMark />
+        <div className="flex h-16 items-center px-3">
+          <BrandMark tagline />
         </div>
-        <div className="mx-3 mb-3 rounded-xl border border-line bg-surface-2 px-3 py-2.5">
-          <p className="truncate text-[13px] font-semibold text-ink">{BUSINESS.name}</p>
-          {BUSINESS.gstin && <p className="truncate font-mono text-[11px] text-ink-3">GSTIN {BUSINESS.gstin}</p>}
+        <div className="mx-3 mb-3 flex items-center gap-2.5 rounded-xl border border-line bg-surface-2 px-2.5 py-2">
+          <FirmLogo size={38} />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold text-ink" title={BUSINESS.name}>
+              {BUSINESS.name}
+            </p>
+            {BUSINESS.gstin ? (
+              <p className="truncate font-mono text-[11px] text-ink-3">GSTIN {BUSINESS.gstin}</p>
+            ) : (
+              BUSINESS.city && <p className="truncate text-[11px] text-ink-3">{BUSINESS.city}</p>
+            )}
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           <NavList />
@@ -365,6 +358,13 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
       </nav>
 
       <Dialog open={moreOpen} onOpenChange={setMoreOpen} title={BUSINESS.name} {...(BUSINESS.gstin ? { description: `GSTIN ${BUSINESS.gstin}` } : {})} closeLabel={t("common.close")}>
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-2.5">
+          <FirmLogo size={44} />
+          <div className="min-w-0 flex-1 text-[12.5px] text-ink-2">
+            {[BUSINESS.address, BUSINESS.city].filter(Boolean).join(", ") && <p className="truncate">{[BUSINESS.address, BUSINESS.city].filter(Boolean).join(", ")}</p>}
+            {[BUSINESS.phone, BUSINESS.email].filter(Boolean).length > 0 && <p className="truncate">{[BUSINESS.phone, BUSINESS.email].filter(Boolean).join(" · ")}</p>}
+          </div>
+        </div>
         <div className="mb-4 sm:hidden">
           <LanguageToggle />
         </div>

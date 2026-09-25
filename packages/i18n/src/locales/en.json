@@ -1,12 +1,14 @@
 {
   "app": {
-    "name": "Vyapaar CRM",
+    "name": "Digital Bahi",
     "tagline": "Billing, stock and collections for distributors",
     "prototypeBanner": "Design prototype · sample data · nothing is saved",
     "install": "Install app",
     "installHint": "Opens in its own window from the desktop, taskbar or home screen",
-    "updateReady": "A new version of Vyapaar CRM is ready.",
-    "reload": "Reload now"
+    "updateReady": "A new version of Digital Bahi is ready.",
+    "reload": "Reload now",
+    "brandTagline": "Aapke Business ka Digital Hisab",
+    "madeWith": "Made with {{brand}}"
   },
   "common": {
     "save": "Save",
@@ -145,7 +147,7 @@
     "signUpTitle": "Start your free trial",
     "signUpSubtitle": "Set up your business in two minutes. No card needed.",
     "haveAccount": "Already have an account?",
-    "noAccount": "New to Vyapaar?",
+    "noAccount": "New to Digital Bahi?",
     "yourName": "Your name",
     "mobile": "Mobile number",
     "email": "Email",
@@ -679,7 +681,15 @@
     "pattern": "Pattern",
     "nextNumber": "Next number",
     "patternHint": "Use {SEQ:4} for the running number and {FY} for the year, e.g. INV/{FY}/{SEQ:4}. GST allows up to 16 characters.",
-    "termsHint": "Printed at the foot of every invoice, e.g. return policy, interest on late payment, jurisdiction. Saved when you leave the box."
+    "termsHint": "Printed at the foot of every invoice, e.g. return policy, interest on late payment, jurisdiction. Saved when you leave the box.",
+    "logo": "Firm logo",
+    "logoHint": "Printed at the top of bills, receipts, notes and slips, and shown in the menu. PNG, JPG or WebP; a logo on a white or clear background looks best.",
+    "uploadLogo": "Upload logo",
+    "changeLogo": "Change logo",
+    "removeLogo": "Remove logo",
+    "logoSaved": "Logo saved",
+    "logoRemoved": "Logo removed",
+    "logoPreview": "How bills will show your firm"
   },
   "gst": {
     "b2b": "B2B",
@@ -870,7 +880,9 @@
     "NOTE_EXCEEDS_BILL": "The bill has only {{max}} left before GST.",
     "NOTE_EXCEEDS_LINE": "{{product}} has only {{max}} left before GST.",
     "IMPORT_OLD_EXCEL": "This is an old Excel file (.xls). Open it in Excel and save it as .xlsx or CSV, then upload again.",
-    "IMPORT_UNREADABLE": "This file could not be read. Upload an Excel (.xlsx) or CSV file."
+    "IMPORT_UNREADABLE": "This file could not be read. Upload an Excel (.xlsx) or CSV file.",
+    "IMAGE_TOO_LARGE": "The logo is too large (at most {{maxKb}} KB). Use a smaller image.",
+    "INVALID_IMAGE": "This file is not a PNG, JPEG or WebP image."
   },
   "validation": {
     "required": "This field is required",
@@ -1100,7 +1112,7 @@
     "section": "Section",
     "noOutward": "No sales in this month",
     "noInward": "No purchases in this month",
-    "disclaimer": "Prepared from the bills in Vyapaar. Check it with your CA before filing; e-invoicing and direct filing come later.",
+    "disclaimer": "Prepared from the bills in Digital Bahi. Check it with your CA before filing; e-invoicing and direct filing come later.",
     "notes": "Returns (credit and debit notes)",
     "notesHint": "Sales returns reduce output tax; purchase returns reduce ITC. Both are already netted in the figures above.",
     "hsnNet": "Net of sales returns",

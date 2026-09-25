@@ -1,5 +1,6 @@
 import { amountInWords, type PaymentMethod } from "@vyapaar/core";
 import { createTranslator, formatCurrency, formatDate, formatNumber, type LocaleCode } from "@vyapaar/i18n";
+import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import { BUSINESS } from "../../data/db";
 
 export interface PrintableSlip {
@@ -29,19 +30,13 @@ export function SalarySlipDocument({ slip: s, locale }: { slip: PrintableSlip; l
   const earnings = s.lines.filter((l) => l.type === "earning");
   const deductions = s.lines.filter((l) => l.type === "deduction");
   const rows = Math.max(earnings.length, deductions.length);
-  const cell = "border border-[#c9d2d3] px-2 py-1";
+  const cell = "border border-[#c8d1e0] px-2 py-1";
   return (
-    <article className="mx-auto w-full max-w-[820px] bg-white p-6 text-[13px] leading-snug text-[#10201f] shadow-pop sm:p-8" style={{ fontFamily: "var(--font-sans)" }} lang={locale}>
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#0b6e82] pb-3">
-        <div className="min-w-0">
-          <h2 className="text-[20px] leading-tight font-bold text-[#0b3b44]" style={{ fontFamily: "var(--font-display)" }}>
-            {BUSINESS.name}
-          </h2>
-          {BUSINESS.address && <p>{BUSINESS.address}</p>}
-          {BUSINESS.city && <p>{BUSINESS.city}</p>}
-        </div>
+    <article className="mx-auto w-full max-w-[820px] bg-white p-6 text-[13px] leading-snug text-[#0e1a33] shadow-pop sm:p-8" style={{ fontFamily: "var(--font-sans)" }} lang={locale}>
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-[#1450b4] pb-3">
+        <FirmHeader />
         <div className="text-right">
-          <p className="text-[17px] font-bold tracking-wide text-[#0b6e82]">{t("payroll.slip.title").toUpperCase()}</p>
+          <p className="text-[17px] font-bold tracking-wide text-[#1450b4]">{t("payroll.slip.title").toUpperCase()}</p>
           <p className="font-semibold">{month}</p>
         </div>
       </header>
@@ -59,7 +54,7 @@ export function SalarySlipDocument({ slip: s, locale }: { slip: PrintableSlip; l
           ...(s.employee.panMasked ? [["PAN", s.employee.panMasked]] : []),
         ].map(([k, v]) => (
           <div key={k}>
-            <dt className="text-[11.5px] text-[#4a5f62]">{k}</dt>
+            <dt className="text-[11.5px] text-[#4a5570]">{k}</dt>
             <dd className="font-medium">{v}</dd>
           </div>
         ))}
@@ -67,7 +62,7 @@ export function SalarySlipDocument({ slip: s, locale }: { slip: PrintableSlip; l
 
       <table className="num mt-4 w-full border-collapse text-[12.5px]">
         <thead>
-          <tr className="bg-[#eef4f5] text-left">
+          <tr className="bg-[#eef2f9] text-left">
             <th className={cell}>{t("payroll.slip.earnings")}</th>
             <th className={`${cell} text-right`}>{t("common.amount")}</th>
             <th className={cell}>{t("payroll.slip.deductions")}</th>
@@ -92,26 +87,27 @@ export function SalarySlipDocument({ slip: s, locale }: { slip: PrintableSlip; l
         </tbody>
       </table>
 
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded bg-[#eef4f5] px-3 py-2">
+      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded bg-[#eef2f9] px-3 py-2">
         <span className="font-semibold">{t("payroll.slip.net")}</span>
         <span className="text-[17px] font-bold">{m(s.netPay)}</span>
-        <span className="w-full text-[12px] text-[#4a5f62]">{amountInWords(s.netPay, locale)}</span>
+        <span className="w-full text-[12px] text-[#4a5570]">{amountInWords(s.netPay, locale)}</span>
       </div>
       {s.payment && (
-        <p className="mt-2 text-[12px] text-[#4a5f62]">
+        <p className="mt-2 text-[12px] text-[#4a5570]">
           {t("payroll.slip.paidOn", { date: formatDate(s.payment.date), method: t(`paymentMethod.${s.payment.method}`), number: s.payment.number ?? "" })}
         </p>
       )}
 
       <footer className="mt-10 flex items-end justify-between gap-4 text-[12px]">
         <div>
-          <p className="mt-8 border-t border-[#10201f] pt-1">{t("payroll.slip.employeeSign")}</p>
+          <p className="mt-8 border-t border-[#0e1a33] pt-1">{t("payroll.slip.employeeSign")}</p>
         </div>
         <div className="text-right">
           <p>{t("invoice.print.for", { business: BUSINESS.name })}</p>
-          <p className="mt-8 border-t border-[#10201f] pt-1">{t("invoice.print.signatory")}</p>
+          <p className="mt-8 border-t border-[#0e1a33] pt-1">{t("invoice.print.signatory")}</p>
         </div>
       </footer>
+      <MadeWithDigitalBahi />
     </article>
   );
 }

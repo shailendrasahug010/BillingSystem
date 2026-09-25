@@ -185,6 +185,7 @@ export function applyMe(me: MeResponse): void {
     city: [b.city, b.pincode].filter(Boolean).join(" "),
     phone: b.phone ?? "",
     email: b.email ?? "",
+    logoFileId: b.logoFileId,
   });
   const roundOff = me.settings["invoice.round_off"] as typeof WORKSPACE.roundOff | undefined;
   const creditPolicy = me.settings["credit.policy"] as typeof WORKSPACE.creditPolicy | undefined;

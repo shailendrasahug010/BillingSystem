@@ -4,6 +4,7 @@ import {
   boolean,
   char,
   check,
+  customType,
   index,
   integer,
   jsonb,
@@ -143,13 +144,22 @@ export const warehouses = pgTable(
   ],
 );
 
-/** Uploaded files (product images, receipts, logos, proof of delivery, backups). Bytes live in object storage. */
+/** Raw bytes in PostgreSQL (small files only). */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/**
+ * Uploaded files (product images, receipts, logos, proof of delivery, backups).
+ * Small files such as the firm's logo keep their bytes in `content`, so they
+ * are part of the ordinary database backup; larger ones go to object storage
+ * under `storageKey`.
+ */
 export const files = pgTable(
   "files",
   {
     id: pk(),
     businessId: businessId(),
     storageKey: text().notNull(),
+    content: bytea(),
     originalName: text().notNull(),
     mimeType: text().notNull(),
     sizeBytes: bigint({ mode: "number" }).notNull(),

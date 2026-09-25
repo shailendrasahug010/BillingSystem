@@ -1,6 +1,10 @@
-# Vyapaar CRM
+# Digital Bahi
 
-Distributor & supplier CRM, billing, inventory, GST and collections for Indian FMCG distributors, wholesalers and suppliers. Web, Windows and Android from one code base, in English and Hindi.
+*Aapke Business ka Digital Hisab*
+
+Distributor & supplier CRM, billing, inventory, GST and collections for Indian FMCG distributors, wholesalers and suppliers. Web, Windows, Mac, Android and iPhone from one code base (installable app), in English and Hindi. Each firm using it gets its own letterhead: its logo, name, address, mobile, email and GSTIN on every printed document, with Digital Bahi as the app around it.
+
+(The code still uses the working name `vyapaar` for packages, the database and its roles; users never see it.)
 
 > **Status:** Phases 1–2 (architecture, UI/UX) are done, the **Phase 3 MVP is built as a multi-tenant SaaS** (a Fastify API over PostgreSQL with web screens for billing, customers, products, suppliers, purchases, payments, inventory, godowns and transfers, sales orders, returns, CSV import, printing and WhatsApp share, reports, GST summary, audit log, users & roles and settings), and **Phase 4 is built**: expenses with GST input credit, GSTR-1 files (JSON for the offline tool, CSV per table) and the GSTR-3B working with month lock and filing record, employees, attendance, leave and payroll with printable salary slips, packing (scan-to-pack, first-expiry-first batches, packing slips) and dispatch (trips, delivery updates, trip sheets), discount / rate-difference credit notes and supplier credit notes, and profit, P&L and product-movement reports. The next step is a pilot with a real distributor. E-invoicing (IRN) is intentionally not included yet. See [docs/11-roadmap.md](docs/11-roadmap.md).
 
@@ -27,7 +31,7 @@ apps/
   api/            Fastify REST API, multi-tenant (148 integration tests against PostgreSQL)
   web/            React 19 + Vite + Tailwind 4 — live on the API; demo mode for previews
 packages/
-  core/           Pure TypeScript business logic shared by server and clients (78 tests)
+  core/           Pure TypeScript business logic shared by server and clients (84 tests)
   contracts/      Zod request schemas and response types shared by API and clients
   i18n/           English + Hindi catalogues, Indian number/date/currency formatting (14 tests)
   db/             PostgreSQL schema (Drizzle), SQL migrations, roles, seeds (9 tests)
@@ -70,7 +74,7 @@ pnpm dev:web                                          # http://localhost:5173, p
 
 Open the web app, choose **Create account**, and the business is created with default roles, number series, GST rate buckets and a main godown. A typical first day: **Products → Add product**, **Suppliers → Add supplier**, **Purchases → New purchase bill** (Alt+P) to bring stock in, **Customers → Add customer**, then **New Invoice** (Ctrl+I) and **Payments → Receive payment** (Alt+C).
 
-Five browser end-to-end scripts run against a real API and database (see the header of each file): `apps/web/e2e/billing-flow.mjs` (sign-up, bill, server total, session restore), `apps/web/e2e/operations-flow.mjs` (product editor, supplier, purchase bill with the server agreeing on the total, supplier payment, stock adjustment, collection, reports, GST summary, team and roles, settings), `apps/web/e2e/onboarding-orders-flow.mjs` (CSV import, second godown and transfer, sales order to part invoice, sales return with a printable credit note, receipt print, audit log, GST netting of returns) `apps/web/e2e/phase4-flow.mjs` (order, packing, invoice, discount note, dispatch and delivery, expense with GST, employee, attendance, leave, payroll to a printed slip, GSTR-1 file, GSTR-3B, month lock, profit and P&L) and `apps/web/e2e/bill-import-flow.mjs` (products from an Excel sheet, a supplier's Excel bill matched, reviewed and saved, then the same bill again: remembered and flagged as a duplicate).
+Six browser end-to-end scripts run against a real API and database (see the header of each file): `apps/web/e2e/billing-flow.mjs` (sign-up, bill, server total, session restore), `apps/web/e2e/operations-flow.mjs` (product editor, supplier, purchase bill with the server agreeing on the total, supplier payment, stock adjustment, collection, reports, GST summary, team and roles, settings), `apps/web/e2e/onboarding-orders-flow.mjs` (CSV import, second godown and transfer, sales order to part invoice, sales return with a printable credit note, receipt print, audit log, GST netting of returns) `apps/web/e2e/phase4-flow.mjs` (order, packing, invoice, discount note, dispatch and delivery, expense with GST, employee, attendance, leave, payroll to a printed slip, GSTR-1 file, GSTR-3B, month lock, profit and P&L) and `apps/web/e2e/bill-import-flow.mjs` (products from an Excel sheet, a supplier's Excel bill matched, reviewed and saved, then the same bill again: remembered and flagged as a duplicate) and `apps/web/e2e/branding-flow.mjs` (Digital Bahi on the sign-in screen, the firm's address, mobile, email and logo, the menu, a printed invoice with the firm's letterhead, the phone menu).
 
 To bring an existing business in, use **Products → Import** and **Customers → Import**: download the template or upload the Excel file (.xlsx) or CSV exported from other billing software (common header names are recognised); every row is checked first and nothing is saved until the whole file is right.
 

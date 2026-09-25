@@ -10,6 +10,8 @@ export interface Business {
   phone: string;
   email: string;
   bank: { name: string; account: string; ifsc: string; upi: string };
+  /** The firm's own logo (live data: GET /business/logo); changes when a new one is uploaded. */
+  logoFileId?: string | null;
 }
 
 export interface Brand {
