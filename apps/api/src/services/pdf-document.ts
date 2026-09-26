@@ -72,9 +72,10 @@ export interface ReceiptPdfInput {
 const num = (v: string | number) => Number(v);
 const trimQty = (q: string) => String(Number(q));
 
+/** "Madhya Pradesh (State code 23)": the name first, the code after it, as bills usually print it. */
 function stateName(code: string, locale: LocaleCode): string {
   const s = findState(code);
-  return s ? `${s.code} – ${locale === "hi" ? s.nameHi : s.name}` : code;
+  return s ? createTranslator(locale).t("common.stateWithCode", { name: locale === "hi" ? s.nameHi : s.name, code: s.code }) : code;
 }
 
 interface Column {

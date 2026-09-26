@@ -10,6 +10,7 @@ import { translateError } from "@vyapaar/i18n";
 import { upsertCustomer, type CustomerRow } from "../../data/live";
 import { LIVE } from "../../data/source";
 import { api, ApiError } from "../../lib/api";
+import { stateOptions } from "../../lib/states";
 
 /**
  * Only the fields a counter clerk needs to start billing; everything else
@@ -147,9 +148,9 @@ export function AddCustomerDialog({ open, onOpenChange, onCreated }: { open: boo
         )}
         <Field label={t("common.state")} htmlFor="c-state">
           <Select id="c-state" value={form.stateCode} onChange={(e) => set("stateCode", e.target.value)}>
-            {GST_STATES.filter((s) => !s.legacy).map((s) => (
+            {stateOptions(locale).map((s) => (
               <option key={s.code} value={s.code}>
-                {s.code} – {locale === "hi" ? s.nameHi : s.name}
+                {s.name}
               </option>
             ))}
           </Select>

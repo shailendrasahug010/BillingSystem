@@ -91,7 +91,8 @@
     "balance": "बकाया",
     "method": "तरीका",
     "open": "खोलें",
-    "cancelled": "रद्द"
+    "cancelled": "रद्द",
+    "stateWithCode": "{{name}} (राज्य कोड {{code}})"
   },
   "nav": {
     "groupDaily": "रोज़ का काम",

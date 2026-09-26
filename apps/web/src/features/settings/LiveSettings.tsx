@@ -17,6 +17,7 @@ import { applyMe, refreshWarehouses } from "../../data/live";
 import { touch, useStoreVersion } from "../../data/store";
 import { api, ApiError } from "../../lib/api";
 import { prepareLogo } from "./firmLogo";
+import { stateOptions } from "../../lib/states";
 
 interface BusinessRow {
   legalName: string;
@@ -263,9 +264,9 @@ function BusinessProfileCard() {
           )}
           <Field label={t("common.state")} htmlFor="b-state" error={fieldError("stateCode")}>
             <Select id="b-state" disabled={!canEdit} value={form.stateCode ?? ""} onChange={(e) => set("stateCode", e.target.value)}>
-              {GST_STATES.filter((x) => !x.legacy).map((x) => (
+              {stateOptions(locale).map((x) => (
                 <option key={x.code} value={x.code}>
-                  {x.code} – {locale === "hi" ? x.nameHi : x.name}
+                  {x.name}
                 </option>
               ))}
             </Select>

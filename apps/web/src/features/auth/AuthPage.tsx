@@ -1,4 +1,3 @@
-import { GST_STATES } from "@vyapaar/core";
 import { Building2, KeyRound, LockKeyhole, Smartphone, UserRound } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { UpdateBanner } from "../../components/layout/UpdateBanner";
@@ -10,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { ApiError } from "../../lib/api";
 import { translateError } from "@vyapaar/i18n";
+import { stateOptions } from "../../lib/states";
 
 type Mode = "password" | "otp" | "signup" | "reset";
 
@@ -55,7 +55,6 @@ export function AuthLayout({ children }: { children: ReactNode }) {
   );
 }
 
-const STATES = GST_STATES.filter((s) => !s.legacy && s.code !== "97" && s.code !== "96");
 
 /** Field-level message for an API error, if it names this field. */
 function fieldError(error: ApiError | null, field: string, message: (e: ApiError) => string): string | null {
@@ -197,9 +196,9 @@ export function AuthPage() {
             </Field>
             <Field label={t("auth.state")} htmlFor="su-state" error={fieldError(error, "stateCode", message)}>
               <Select id="su-state" value={form.stateCode} onChange={set("stateCode")}>
-                {STATES.map((s) => (
+                {stateOptions(locale, { special: false }).map((s) => (
                   <option key={s.code} value={s.code}>
-                    {locale === "hi" ? s.nameHi : s.name}
+                    {s.name}
                   </option>
                 ))}
               </Select>

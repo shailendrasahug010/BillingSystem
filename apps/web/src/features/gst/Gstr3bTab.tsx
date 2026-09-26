@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { findState } from "@vyapaar/core";
 import { Download } from "lucide-react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
@@ -8,6 +7,7 @@ import { DataTable, ErrorNote, Tile } from "../../components/ui/Page";
 import { allowed } from "../../data/db";
 import { api } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
+import { stateName } from "../../lib/states";
 
 interface Tax {
   igst: string;
@@ -122,7 +122,7 @@ export function Gstr3bTab({ period }: { period: string }) {
               rows={d.interStateUnregistered}
               rowKey={(r) => r.placeOfSupply}
               columns={[
-                { key: "pos", header: t("invoice.placeOfSupply"), render: (r) => `${r.placeOfSupply} · ${(locale === "hi" ? findState(r.placeOfSupply)?.nameHi : findState(r.placeOfSupply)?.name) ?? ""}` },
+                { key: "pos", header: t("invoice.placeOfSupply"), render: (r) => stateName(r.placeOfSupply, locale) },
                 { key: "taxable", header: t("invoice.taxableValue"), align: "right", render: (r) => money(r.taxable) },
                 { key: "igst", header: t("invoice.igst"), align: "right", render: (r) => money(r.igst) },
               ]}

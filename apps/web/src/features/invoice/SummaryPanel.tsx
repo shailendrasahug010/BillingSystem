@@ -7,6 +7,7 @@ import { Kbd } from "../../components/ui/misc";
 import { BUSINESS } from "../../data/db";
 import { cn } from "../../lib/cn";
 import type { DraftView } from "./useInvoiceDraft";
+import { stateName } from "../../lib/states";
 
 function Row({ label, value, strong, muted, negative }: { label: ReactNode; value: string; strong?: boolean; muted?: boolean; negative?: boolean }) {
   return (
@@ -78,7 +79,7 @@ export function SummaryPanel({
       <div className="rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">
         <p className="font-medium text-ink">{intra ? t("invoice.supplyIntra", { state: stateComponent }) : t("invoice.supplyInter")}</p>
         <p>
-          {t("invoice.placeOfSupply")}: {pos ? `${pos.code} – ${locale === "hi" ? pos.nameHi : pos.name}` : "—"}
+          {t("invoice.placeOfSupply")}: {pos ? stateName(pos.code, locale) : "—"}
         </p>
       </div>
 

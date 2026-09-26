@@ -1,4 +1,3 @@
-import { GST_STATES } from "@vyapaar/core";
 import { translateError } from "@vyapaar/i18n";
 import { Building2, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -9,8 +8,8 @@ import { Button } from "../../components/ui/Button";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { ApiError } from "../../lib/api";
 import { AuthLayout } from "./AuthPage";
+import { stateOptions } from "../../lib/states";
 
-const STATES = GST_STATES.filter((s) => !s.legacy && s.code !== "97" && s.code !== "96");
 
 /** Shown when the signed-in user has no active business selected (or all are suspended). */
 export function BusinessPicker() {
@@ -82,9 +81,9 @@ export function BusinessPicker() {
           </Field>
           <Field label={t("auth.state")} htmlFor="nb-state">
             <Select id="nb-state" value={form.stateCode} onChange={(e) => setForm((f) => ({ ...f, stateCode: e.target.value }))}>
-              {STATES.map((s) => (
+              {stateOptions(locale, { special: false }).map((s) => (
                 <option key={s.code} value={s.code}>
-                  {locale === "hi" ? s.nameHi : s.name}
+                  {s.name}
                 </option>
               ))}
             </Select>

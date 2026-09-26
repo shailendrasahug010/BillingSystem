@@ -18,7 +18,8 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
   const pos = findState(invoice.placeOfSupply);
   const stateName = (code: string) => {
     const s = findState(code);
-    return s ? `${s.code} – ${locale === "hi" ? s.nameHi : s.name}` : code;
+    // Printed GST documents give the state code after the name, as bills usually do.
+    return s ? t("common.stateWithCode", { name: locale === "hi" ? s.nameHi : s.name, code: s.code }) : code;
   };
   const m = (v: number) => formatCurrency(v, locale);
   const n = (v: number) => formatAmount(v, locale);

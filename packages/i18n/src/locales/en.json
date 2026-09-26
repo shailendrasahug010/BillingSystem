@@ -91,7 +91,8 @@
     "balance": "Balance",
     "method": "Method",
     "open": "Open",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "stateWithCode": "{{name}} (State code {{code}})"
   },
   "nav": {
     "groupDaily": "Daily work",

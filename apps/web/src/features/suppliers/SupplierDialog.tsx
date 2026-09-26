@@ -11,6 +11,7 @@ import { useToast } from "../../components/ui/Toast";
 import { BUSINESS } from "../../data/db";
 import { upsertSupplier, type SupplierRow } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
+import { stateOptions } from "../../lib/states";
 
 export interface SupplierDetail extends SupplierRow {
   email: string | null;
@@ -218,9 +219,9 @@ export function SupplierDialog({ supplierId, open, onOpenChange, onSaved }: { su
             )}
             <Field label={t("common.state")} htmlFor="s-state" error={show("stateCode")}>
               <Select id="s-state" value={form.stateCode} onChange={(e) => set("stateCode", e.target.value)}>
-                {GST_STATES.filter((x) => !x.legacy).map((x) => (
+                {stateOptions(locale).map((x) => (
                   <option key={x.code} value={x.code}>
-                    {x.code} – {locale === "hi" ? x.nameHi : x.name}
+                    {x.name}
                   </option>
                 ))}
               </Select>
