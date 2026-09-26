@@ -17,12 +17,12 @@ import {
   Users,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { GROUP_LABELS, MODULES, moduleForRoute, phaseBadge, type ModuleDef } from "../../app/modules";
+import { GROUP_LABELS, homeRoute, moduleForRoute, phaseBadge, visibleModules, type ModuleDef } from "../../app/modules";
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
 import { applyTheme, readTheme, type ThemeChoice } from "../../app/theme";
 import { useSession } from "../../app/session";
-import { BUSINESS, ORDERS, WORKSPACE } from "../../data/db";
+import { allowed, BUSINESS, ORDERS, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { getSyncState, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
@@ -136,13 +136,15 @@ function NavList({ onNavigate }: { onNavigate?(): void }) {
   const { route, navigate } = useRouter();
   const { t } = useI18n();
   const current = moduleForRoute(route);
-  const groups = Object.keys(GROUP_LABELS) as ModuleDef["group"][];
+  // Only what this person's role opens; a group with nothing left is not shown.
+  const modules = visibleModules();
+  const groups = (Object.keys(GROUP_LABELS) as ModuleDef["group"][]).filter((g) => modules.some((m) => m.group === g));
   return (
     <nav className="flex flex-col gap-5" aria-label="Main">
       {groups.map((g) => (
         <div key={g} className="flex flex-col gap-0.5">
           <p className="eyebrow px-2.5 pb-1">{t(GROUP_LABELS[g])}</p>
-          {MODULES.filter((m) => m.group === g).map((m) => (
+          {modules.filter((m) => m.group === g).map((m) => (
             <NavItem
               key={m.key}
               mod={m}
@@ -220,22 +222,26 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
     </div>
   ) : null;
 
-  const quickActions: Array<{ label: string; route: Route; icon: ReactNode }> = [
-    { label: t("dashboard.actions.createInvoice"), route: { name: "invoice-new" }, icon: <Receipt size={18} /> },
-    { label: t("dashboard.actions.newOrder"), route: { name: "planned", module: "orders" }, icon: <Plus size={18} /> },
-    { label: t("dashboard.actions.receivePayment"), route: { name: "planned", module: "payments" }, icon: <Plus size={18} /> },
-    { label: t("dashboard.actions.addCustomer"), route: { name: "customers" }, icon: <Users size={18} /> },
-    { label: t("dashboard.actions.purchaseEntry"), route: { name: "planned", module: "purchases" }, icon: <Plus size={18} /> },
-    { label: t("dashboard.actions.addProduct"), route: { name: "products" }, icon: <Package size={18} /> },
-  ];
+  const quickActions = (
+    [
+      { label: t("dashboard.actions.createInvoice"), route: { name: "invoice-new" }, icon: <Receipt size={18} />, permission: "invoice.create" },
+      { label: t("dashboard.actions.newOrder"), route: { name: "planned", module: "orders" }, icon: <Plus size={18} />, permission: "order.create" },
+      { label: t("dashboard.actions.receivePayment"), route: { name: "planned", module: "payments" }, icon: <Plus size={18} />, permission: "payment.collect" },
+      { label: t("dashboard.actions.addCustomer"), route: { name: "customers" }, icon: <Users size={18} />, permission: "customer.create" },
+      { label: t("dashboard.actions.purchaseEntry"), route: { name: "planned", module: "purchases" }, icon: <Plus size={18} />, permission: "purchase.create" },
+      { label: t("dashboard.actions.addProduct"), route: { name: "products" }, icon: <Package size={18} />, permission: "product.create" },
+    ] satisfies Array<{ label: string; route: Route; icon: ReactNode; permission: string }>
+  ).filter((a) => allowed(a.permission));
 
-  const bottomItems: Array<{ key: string; label: string; icon: ReactNode; route?: Route; onClick?(): void }> = [
-    { key: "home", label: t("nav.home"), icon: <House size={20} />, route: { name: "dashboard" } },
-    { key: "customers", label: t("nav.customers"), icon: <Users size={20} />, route: { name: "customers" } },
-    { key: "create", label: t("nav.create"), icon: <Plus size={22} />, onClick: () => setCreateOpen(true) },
-    { key: "products", label: t("nav.products"), icon: <Package size={20} />, route: { name: "products" } },
-    { key: "more", label: t("nav.more"), icon: <LayoutGrid size={20} />, onClick: () => setMoreOpen(true) },
-  ];
+  const bottomItems = (
+    [
+      { key: "home", label: t("nav.home"), icon: <House size={20} />, route: homeRoute() },
+      { key: "customers", label: t("nav.customers"), icon: <Users size={20} />, route: { name: "customers" }, permission: "customer.view" },
+      { key: "create", label: t("nav.create"), icon: <Plus size={22} />, onClick: () => setCreateOpen(true), hidden: quickActions.length === 0 },
+      { key: "products", label: t("nav.products"), icon: <Package size={20} />, route: { name: "products" }, permission: "product.view" },
+      { key: "more", label: t("nav.more"), icon: <LayoutGrid size={20} />, onClick: () => setMoreOpen(true) },
+    ] as Array<{ key: string; label: string; icon: ReactNode; route?: Route; onClick?(): void; permission?: string; hidden?: boolean }>
+  ).filter((b) => !b.hidden && (!b.permission || allowed(b.permission)));
 
   return (
     <div className="min-h-full lg:grid lg:grid-cols-[248px_1fr]">
@@ -308,7 +314,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             {LIVE ? <OfflineChip /> : <SyncChip />}
             <LanguageToggle />
             <ThemeToggle />
-            <button
+            {allowed("notification.view") && <button
               type="button"
               className="relative inline-flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2"
               aria-label={t("nav.notifications")}
@@ -316,8 +322,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             >
               <Bell size={18} />
               {pendingOrders > 0 && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-danger" aria-hidden />}
-            </button>
-            {route.name !== "invoice-new" && (
+            </button>}
+            {route.name !== "invoice-new" && allowed("invoice.create") && (
               <button
                 type="button"
                 onClick={() => navigate({ name: "invoice-new" })}

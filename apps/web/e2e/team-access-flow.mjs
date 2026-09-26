@@ -2,7 +2,10 @@
  * End-to-end check of staff sign-in and of what a role shows: the owner adds
  * a salesperson with a user ID and password -> the member list shows the user
  * ID -> the salesperson signs in with that user ID and password straight away
- * (no OTP) -> sees only what the Sales role allows.
+ * (no OTP) -> sees only what the Sales role allows: the menu, the dashboard's
+ * actions, no product editing or exports, the rate-list rate fixed on the
+ * bill, a clear message on a screen outside the role -> a warehouse worker
+ * (no dashboard in the role) lands on their first screen, Sales orders.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/team-access-flow.mjs
@@ -102,6 +105,53 @@ await staffPage.getByRole("heading", { name: /Raju/ }).waitFor({ timeout: 15000 
 staffState.signedIn = true;
 await staffPage.screenshot({ path: `${OUT}/team-3-staff-dashboard.png` });
 log("salesperson signed in with the user ID");
+
+// 4. Only what the Sales role allows: the menu, the dashboard's actions, the buttons on each screen.
+const menu = (await staffPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
+const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Messages", "Products", "Notifications"];
+if (JSON.stringify(menu) !== JSON.stringify(expectedMenu)) errors.push(`sales menu: ${menu.join(", ")}`);
+const quick = (await staffPage.getByRole("region", { name: "Quick actions" }).getByRole("button").allTextContents()).map((s) => s.replace(/(Ctrl|Alt).*$/, "").trim());
+if (JSON.stringify(quick) !== JSON.stringify(["Create Invoice", "New Order", "Receive Payment", "Add Customer"])) errors.push(`sales quick actions: ${quick.join(", ")}`);
+await nav(staffPage, "Products");
+await staffPage.getByRole("cell", { name: /Tata Tea Gold/ }).waitFor();
+for (const name of ["Add product", "Import", "Export"]) if (await staffPage.getByRole("button", { name, exact: true }).count()) errors.push(`products: ${name} shown to sales`);
+await nav(staffPage, "Customers");
+await staffPage.getByRole("button", { name: "Add customer" }).first().waitFor();
+if (await staffPage.getByRole("button", { name: "Export", exact: true }).count()) errors.push("customers: Export shown to sales");
+// The rate is the rate list's: shown, not editable, without the price-override permission.
+await nav(staffPage, "New Invoice");
+await staffPage.getByRole("combobox", { name: /Search customer/ }).fill("verma");
+await staffPage.getByRole("option", { name: /Verma Kirana/ }).click();
+await staffPage.getByPlaceholder("Search product, code or scan barcode").fill("tata tea");
+await staffPage.getByRole("option", { name: /Tata Tea Gold/ }).click();
+await staffPage.getByLabel("Qty Tata Tea Gold 250g").waitFor();
+if (await staffPage.getByRole("textbox", { name: "Rate Tata Tea Gold 250g" }).count()) errors.push("invoice: rate editable for sales");
+await staffPage.screenshot({ path: `${OUT}/team-4-staff-invoice.png` });
+await staffPage.keyboard.press("Control+Enter");
+await staffPage.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 15000 });
+// A screen outside the role, opened from a link: a clear message, no failed calls.
+await staffPage.goto(`${WEB}/#settings`);
+await staffPage.getByText("Not part of your role").waitFor({ timeout: 15000 });
+await staffPage.screenshot({ path: `${OUT}/team-5-no-access.png` });
+log("sales sees its eight screens, its four actions, no product editing or exports, a fixed rate; Settings says no access");
+
+// 5. A warehouse worker has no dashboard: they land on their first screen.
+const packer = await api("POST", "/members", token, { name: "Pappu Packer", mobile: `98778${run}`, roleId: (await api("GET", "/roles", token)).data.find((r) => r.key === "warehouse").id, username: `pappu${run}`, password: "Pappu-pass-2026" });
+if (packer.username !== `pappu${run}`) errors.push("packer user ID");
+const packerPage = await browser.newPage({ viewport: { width: 1360, height: 900 } });
+const packerState = { signedIn: false };
+watch(packerPage, packerState);
+await packerPage.goto(WEB);
+await packerPage.fill("#auth-id", `pappu${run}`);
+await packerPage.fill("#auth-password", "Pappu-pass-2026");
+await packerPage.getByRole("button", { name: "Sign in", exact: true }).click();
+await packerPage.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
+packerState.signedIn = true;
+await packerPage.getByRole("heading", { name: "Sales orders", exact: true }).waitFor({ timeout: 15000 });
+const packerMenu = (await packerPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
+if (packerMenu.includes("Dashboard") || !packerMenu.includes("Packing") || packerMenu.includes("New Invoice")) errors.push(`warehouse menu: ${packerMenu.join(", ")}`);
+await packerPage.screenshot({ path: `${OUT}/team-6-warehouse.png` });
+log("warehouse worker lands on Sales orders; menu:", packerMenu.join(", "));
 
 console.log(errors.length ? `ERRORS:\n${errors.join("\n")}` : "no errors");
 await browser.close();

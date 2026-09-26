@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Kbd } from "../../components/ui/misc";
-import { BUSINESS } from "../../data/db";
+import { allowed, BUSINESS } from "../../data/db";
 import { cn } from "../../lib/cn";
 import type { DraftView } from "./useInvoiceDraft";
 import { stateName } from "../../lib/states";
@@ -156,14 +156,20 @@ export function SummaryPanel({
           {t("invoice.save")}
           <Kbd keys="mod+enter" className="ml-1 [&_kbd]:border-white/30 [&_kbd]:bg-white/15 [&_kbd]:text-white" />
         </Button>
-        <div className="grid grid-cols-2 gap-2">
-          <Button icon={<Printer size={16} />} disabled={!totals || !customer || blocked} onClick={() => onSave("print")}>
-            {t("invoice.saveAndPrint")}
-          </Button>
-          <Button icon={<MessageCircle size={16} />} disabled={!totals || !customer || blocked} onClick={() => onSave("share")}>
-            {t("common.whatsapp")}
-          </Button>
-        </div>
+        {(allowed("invoice.print") || allowed("invoice.share")) && (
+          <div className="grid grid-cols-2 gap-2">
+            {allowed("invoice.print") && (
+              <Button icon={<Printer size={16} />} disabled={!totals || !customer || blocked} onClick={() => onSave("print")}>
+                {t("invoice.saveAndPrint")}
+              </Button>
+            )}
+            {allowed("invoice.share") && (
+              <Button icon={<MessageCircle size={16} />} disabled={!totals || !customer || blocked} onClick={() => onSave("share")}>
+                {t("common.whatsapp")}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );

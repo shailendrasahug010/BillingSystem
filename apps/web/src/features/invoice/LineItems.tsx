@@ -3,7 +3,7 @@ import { Minus, Plus, ShoppingBasket, Trash, TriangleAlert } from "lucide-react"
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useI18n } from "../../app/i18n";
 import { EmptyState } from "../../components/ui/misc";
-import { productById } from "../../data/db";
+import { allowed, productById } from "../../data/db";
 import { cn } from "../../lib/cn";
 import type { Product } from "../../data/types";
 import { factorOf, type DraftLine } from "./useInvoiceDraft";
@@ -138,6 +138,7 @@ export function LineItems({
 }) {
   const { t, money, locale } = useI18n();
   const qtyRefs = useRef(new Map<string, HTMLInputElement>());
+  const canChangeRate = allowed("invoice.override_price");
 
   useEffect(() => {
     if (!focusKey) return;
@@ -261,7 +262,14 @@ export function LineItems({
                   </div>
                 </td>
                 <td className="py-1.5 pr-2">
-                  <NumberCell value={line.rate} label={`${t("invoice.rate")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { rate: v })} onEnter={onBackToSearch} />
+                  {/* The rate-list price; only roles allowed to change prices can type another. */}
+                  {canChangeRate ? (
+                    <NumberCell value={line.rate} label={`${t("invoice.rate")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { rate: v })} onEnter={onBackToSearch} />
+                  ) : (
+                    <p className="num h-9 px-2 text-right text-[14px] leading-9 text-ink" aria-label={`${t("invoice.rate")} ${p.name}`}>
+                      {line.rate}
+                    </p>
+                  )}
                 </td>
                 <td className="py-1.5 pr-2">
                   <NumberCell value={line.discountPercent} label={`${t("invoice.discount")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { discountPercent: Math.min(100, v) })} onEnter={onBackToSearch} />

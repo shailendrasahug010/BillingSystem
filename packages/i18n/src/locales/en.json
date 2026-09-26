@@ -92,7 +92,10 @@
     "method": "Method",
     "open": "Open",
     "cancelled": "Cancelled",
-    "stateWithCode": "{{name}} (State code {{code}})"
+    "stateWithCode": "{{name}} (State code {{code}})",
+    "noAccess": "Not part of your role",
+    "noAccessHint": "Your role does not include this screen. Ask the owner to add it if you need it.",
+    "goHome": "Go to my screens"
   },
   "nav": {
     "groupDaily": "Daily work",

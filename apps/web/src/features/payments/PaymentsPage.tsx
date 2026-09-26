@@ -128,27 +128,29 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         }
         actions={
           <>
-            <Button
-              icon={<Download size={16} />}
-              onClick={() =>
-                downloadCsv(
-                  "payments.csv",
-                  [
-                    { label: t("common.date"), value: (p) => p.paymentDate },
-                    { label: t("common.number"), value: (p) => p.paymentNumber },
-                    { label: t("common.party"), value: (p) => p.partyName },
-                    { label: t("common.type"), value: (p) => (p.direction === "in" ? t("payment.in") : t("payment.out")) },
-                    { label: t("common.method"), value: (p) => t(`paymentMethod.${p.method}`) },
-                    { label: t("common.reference"), value: (p) => p.referenceNumber },
-                    { label: t("common.status"), value: (p) => p.status },
-                    { label: t("common.amount"), value: (p) => p.amount },
-                  ],
-                  list.rows,
-                )
-              }
-            >
-              {t("common.export")}
-            </Button>
+            {allowed("report.export") && (
+              <Button
+                icon={<Download size={16} />}
+                onClick={() =>
+                  downloadCsv(
+                    "payments.csv",
+                    [
+                      { label: t("common.date"), value: (p) => p.paymentDate },
+                      { label: t("common.number"), value: (p) => p.paymentNumber },
+                      { label: t("common.party"), value: (p) => p.partyName },
+                      { label: t("common.type"), value: (p) => (p.direction === "in" ? t("payment.in") : t("payment.out")) },
+                      { label: t("common.method"), value: (p) => t(`paymentMethod.${p.method}`) },
+                      { label: t("common.reference"), value: (p) => p.referenceNumber },
+                      { label: t("common.status"), value: (p) => p.status },
+                      { label: t("common.amount"), value: (p) => p.amount },
+                    ],
+                    list.rows,
+                  )
+                }
+              >
+                {t("common.export")}
+              </Button>
+            )}
             {allowed("payment.pay") && (
               <Button icon={<ArrowUpRight size={16} />} onClick={() => setDialog({ direction: "out", partyId: null })}>
                 {t("payment.pay")}

@@ -52,28 +52,30 @@ export function ProductsPage() {
               {t("imports.import")}
             </Button>
           )}
-          <Button
-            icon={<Download size={16} />}
-            onClick={() =>
-              downloadCsv(
-                "products.csv",
-                [
-                  { label: t("product.code"), value: (p) => p.code },
-                  { label: t("product.name"), value: (p) => p.name },
-                  { label: t("product.brand"), value: (p) => p.brand },
-                  { label: t("product.hsn"), value: (p) => p.hsn },
-                  { label: t("product.gstRate"), value: (p) => p.gstRate },
-                  { label: t("product.mrp"), value: (p) => p.mrp },
-                  { label: t("product.sellingPrice"), value: (p) => p.rate },
-                  { label: t("product.currentStock"), value: (p) => p.stock },
-                  { label: t("product.unit"), value: (p) => p.unit },
-                ],
-                rows,
-              )
-            }
-          >
-            {t("common.export")}
-          </Button>
+          {allowed("product.export") && (
+            <Button
+              icon={<Download size={16} />}
+              onClick={() =>
+                downloadCsv(
+                  "products.csv",
+                  [
+                    { label: t("product.code"), value: (p) => p.code },
+                    { label: t("product.name"), value: (p) => p.name },
+                    { label: t("product.brand"), value: (p) => p.brand },
+                    { label: t("product.hsn"), value: (p) => p.hsn },
+                    { label: t("product.gstRate"), value: (p) => p.gstRate },
+                    { label: t("product.mrp"), value: (p) => p.mrp },
+                    { label: t("product.sellingPrice"), value: (p) => p.rate },
+                    { label: t("product.currentStock"), value: (p) => p.stock },
+                    { label: t("product.unit"), value: (p) => p.unit },
+                  ],
+                  rows,
+                )
+              }
+            >
+              {t("common.export")}
+            </Button>
+          )}
           {(!LIVE || allowed("product.create")) && (
             <Button
               variant="primary"

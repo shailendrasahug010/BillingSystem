@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import type { Permission } from "@vyapaar/core";
 import type { TranslationKey } from "@vyapaar/i18n";
+import { allowed } from "../data/db";
 import { LIVE } from "../data/source";
 import type { PlannedModule, Route } from "./router";
 
@@ -104,6 +105,43 @@ export const GROUP_LABELS: Record<ModuleDef["group"], TranslationKey> = {
   insights: "nav.groupInsights",
   admin: "nav.groupAdmin",
 };
+
+/** Menu entries this person's role opens. */
+export function visibleModules(): ModuleDef[] {
+  return MODULES.filter((m) => allowed(m.permission));
+}
+
+/** The permission a screen needs: what it shows, or for a create screen, what it saves. */
+export function routePermission(route: Route): Permission | null {
+  switch (route.name) {
+    case "login":
+      return null;
+    case "invoice-view":
+      return "invoice.view";
+    case "customer":
+      return "customer.view";
+    case "purchase-new":
+      return "purchase.create";
+    case "purchase-view":
+      return "purchase.view";
+    case "supplier":
+      return "supplier.view";
+    case "order-view":
+      return "order.view";
+    case "planned":
+      if (route.module === "payments" && route.action === "collect") return "payment.collect";
+      if (route.module === "payments" && route.action === "pay") return "payment.pay";
+      if (route.module === "orders" && route.action === "new") return "order.create";
+      return moduleForRoute(route)?.permission ?? null;
+    default:
+      return moduleForRoute(route)?.permission ?? null;
+  }
+}
+
+/** Where to land when the dashboard is not part of the role (warehouse, HR). */
+export function homeRoute(): Route {
+  return visibleModules()[0]?.route ?? { name: "dashboard" };
+}
 
 export function moduleForRoute(route: Route): ModuleDef | undefined {
   if (route.name === "planned") return MODULES.find((m) => m.route.name === "planned" && m.route.module === route.module);

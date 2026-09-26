@@ -10,7 +10,7 @@ import { EmptyState, Segmented } from "../../components/ui/misc";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
 import { PrintPortal } from "../../components/ui/PrintPortal";
-import { BUSINESS, customerById, INVOICES, WORKSPACE } from "../../data/db";
+import { allowed, BUSINESS, customerById, INVOICES, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { api } from "../../lib/api";
@@ -91,7 +91,7 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
             ]}
           />
           {/* Embedded previews cannot print or download; the installed app and the web app can. */}
-          {!EMBEDDED && (
+          {!EMBEDDED && allowed("invoice.print") && (
             <Button icon={<Printer size={16} />} title={t("share.pdfHint")} onClick={() => window.print()}>
               {t("share.printPdf")}
             </Button>
@@ -99,13 +99,15 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
           {/* The PDF is made on the server; a bill still waiting on this device shares as text. */}
           {LIVE && !offlineKey ? (
             <>
-              <PdfActions path={`/invoices/${invoice.id}/pdf`} locale={printLocale} number={invoice.number} shareText={shareText} mobile={mobile} primaryShare />
+              {(allowed("invoice.print") || allowed("invoice.share")) && <PdfActions path={`/invoices/${invoice.id}/pdf`} locale={printLocale} number={invoice.number} shareText={shareText} mobile={mobile} primaryShare />}
               <SendButton documentType="invoice" documentId={invoice.id} number={invoice.number} party={{ name: invoice.buyer.businessName, mobile}} locale={printLocale} />
             </>
           ) : (
-            <Button variant="primary" icon={<MessageCircle size={16} />} onClick={() => shareOnWhatsApp(shareText, mobile)}>
-              {t("common.whatsapp")}
-            </Button>
+            allowed("invoice.share") && (
+              <Button variant="primary" icon={<MessageCircle size={16} />} onClick={() => shareOnWhatsApp(shareText, mobile)}>
+                {t("common.whatsapp")}
+              </Button>
+            )
           )}
         </div>
       </div>

@@ -3,7 +3,7 @@ import { CornerDownLeft, FileText, Package, Search, Users, Zap } from "lucide-re
 import { Dialog as D } from "radix-ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { MODULES } from "../../app/modules";
+import { visibleModules } from "../../app/modules";
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
 import { customerById, INVOICES, PRODUCTS } from "../../data/db";
@@ -61,7 +61,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const items = useMemo<Item[]>(() => {
     const q = normalizeSearchText(query);
-    const actions: Item[] = MODULES.filter((m) => !q || normalizeSearchText(t(m.label)).includes(q) || m.key.includes(q)).map((m) => ({
+    const actions: Item[] = visibleModules().filter((m) => !q || normalizeSearchText(t(m.label)).includes(q) || m.key.includes(q)).map((m) => ({
       id: `m-${m.key}`,
       group: "actions",
       title: t(m.label),

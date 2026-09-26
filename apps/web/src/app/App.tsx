@@ -15,7 +15,10 @@ import { PlannedPage } from "../features/planned/PlannedPage";
 import { ProductsPage } from "../features/products/ProductsPage";
 import { CommandPalette } from "../features/search/CommandPalette";
 import { SettingsPage } from "../features/settings/SettingsPage";
-import { LIVE_MODULES } from "./modules";
+import { homeRoute, LIVE_MODULES, routePermission } from "./modules";
+import { ShieldX } from "lucide-react";
+import { EmptyState } from "../components/ui/misc";
+import { allowed } from "../data/db";
 import { Button } from "../components/ui/Button";
 import { useStoreVersion } from "../data/store";
 import { LIVE } from "../data/source";
@@ -196,27 +199,52 @@ function SessionGate() {
   );
 }
 
+/** A screen the role does not include (opened from a link, a bookmark or the address bar). */
+function NoAccess({ onHome }: { onHome(): void }) {
+  const { t } = useI18n();
+  return (
+    <EmptyState
+      icon={<ShieldX size={22} />}
+      title={t("common.noAccess")}
+      hint={t("common.noAccessHint")}
+      action={<Button onClick={onHome}>{t("common.goHome")}</Button>}
+      className="py-20"
+    />
+  );
+}
+
 function Root() {
   const { route, navigate } = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // A shortcut only for what the role may do (the screen would refuse it anyway).
+  const go = (to: Route) => {
+    const need = routePermission(to);
+    if (!need || allowed(need)) navigate(to);
+  };
   useShortcuts([
     { id: "search", keys: GLOBAL_SHORTCUTS.search, allowInInputs: true, handler: () => setSearchOpen(true) },
-    { id: "invoice", keys: GLOBAL_SHORTCUTS.newInvoice, allowInInputs: true, handler: () => navigate({ name: "invoice-new" }) },
-    { id: "order", keys: GLOBAL_SHORTCUTS.newOrder, handler: () => navigate(LIVE ? { name: "planned", module: "orders", action: "new" } : { name: "planned", module: "orders" }) },
-    { id: "purchase", keys: GLOBAL_SHORTCUTS.purchase, handler: () => navigate(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
-    { id: "collection", keys: GLOBAL_SHORTCUTS.collection, handler: () => navigate(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
+    { id: "invoice", keys: GLOBAL_SHORTCUTS.newInvoice, allowInInputs: true, handler: () => go({ name: "invoice-new" }) },
+    { id: "order", keys: GLOBAL_SHORTCUTS.newOrder, handler: () => go(LIVE ? { name: "planned", module: "orders", action: "new" } : { name: "planned", module: "orders" }) },
+    { id: "purchase", keys: GLOBAL_SHORTCUTS.purchase, handler: () => go(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
+    { id: "collection", keys: GLOBAL_SHORTCUTS.collection, handler: () => go(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
     { id: "help", keys: "shift+?", handler: () => setHelpOpen(true) },
   ]);
+
+  // Roles without the dashboard (warehouse, HR) start on their first screen.
+  const needed = routePermission(route);
+  const home = homeRoute();
+  const blocked = LIVE && needed !== null && !allowed(needed);
+  useEffect(() => {
+    if (blocked && route.name === "dashboard" && home.name !== "dashboard") navigate(home);
+  }, [blocked, route.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (route.name === "login") return LIVE ? null : <LoginPage />;
 
   return (
     <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
-      <Suspense fallback={<ScreenLoading />}>
-        <Screen route={route} />
-      </Suspense>
+      <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </AppShell>

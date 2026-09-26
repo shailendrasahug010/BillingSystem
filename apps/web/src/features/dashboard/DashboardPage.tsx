@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
+import { routePermission } from "../../app/modules";
 import { useRouter, type Route } from "../../app/router";
 import { AgingColumns, BarList } from "../../components/charts/BarList";
 import { Legend, TrendChart } from "../../components/charts/TrendChart";
@@ -28,7 +29,7 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Field";
 import { Kbd, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
-import { PRODUCTS, TODAY } from "../../data/db";
+import { PRODUCTS, TODAY, allowed } from "../../data/db";
 import { useStoreVersion, type RangeKey } from "../../data/store";
 import { useSession } from "../../app/session";
 import { useDashboardView, type Grain } from "./data";
@@ -125,18 +126,25 @@ export function DashboardPage() {
     };
   }, [view, grain, locale, dateMedium]);
 
-  const actions: Array<{ label: string; icon: ReactNode; route: Route; keys?: string; primary?: boolean }> = [
-    { label: t("dashboard.actions.createInvoice"), icon: <Receipt size={16} />, route: { name: "invoice-new" }, keys: "mod+i", primary: true },
-    { label: t("dashboard.actions.newOrder"), icon: <ClipboardList size={16} />, route: { name: "planned", module: "orders" }, keys: "alt+o" },
-    { label: t("dashboard.actions.receivePayment"), icon: <Wallet size={16} />, route: { name: "planned", module: "payments" }, keys: "alt+c" },
-    { label: t("dashboard.actions.purchaseEntry"), icon: <ShoppingCart size={16} />, route: { name: "planned", module: "purchases" }, keys: "alt+p" },
-    { label: t("dashboard.actions.addCustomer"), icon: <UserPlus size={16} />, route: { name: "customers" } },
-    { label: t("dashboard.actions.addSupplier"), icon: <Users size={16} />, route: { name: "planned", module: "suppliers" } },
-    { label: t("dashboard.actions.paySupplier"), icon: <CreditCard size={16} />, route: { name: "planned", module: "payments" } },
-    { label: t("dashboard.actions.stockAdjustment"), icon: <Boxes size={16} />, route: { name: "planned", module: "inventory" } },
-    { label: t("dashboard.actions.addProduct"), icon: <Package size={16} />, route: { name: "products" } },
-    { label: t("dashboard.actions.addExpense"), icon: <BadgeIndianRupee size={16} />, route: { name: "planned", module: "expenses" } },
-  ];
+  const canOpen = (r: Route) => {
+    const need = routePermission(r);
+    return !need || allowed(need);
+  };
+  // Only the actions this person's role can carry out.
+  const actions = (
+    [
+      { label: t("dashboard.actions.createInvoice"), icon: <Receipt size={16} />, route: { name: "invoice-new" }, keys: "mod+i", primary: true, permission: "invoice.create" },
+      { label: t("dashboard.actions.newOrder"), icon: <ClipboardList size={16} />, route: { name: "planned", module: "orders" }, keys: "alt+o", permission: "order.create" },
+      { label: t("dashboard.actions.receivePayment"), icon: <Wallet size={16} />, route: { name: "planned", module: "payments" }, keys: "alt+c", permission: "payment.collect" },
+      { label: t("dashboard.actions.purchaseEntry"), icon: <ShoppingCart size={16} />, route: { name: "planned", module: "purchases" }, keys: "alt+p", permission: "purchase.create" },
+      { label: t("dashboard.actions.addCustomer"), icon: <UserPlus size={16} />, route: { name: "customers" }, permission: "customer.create" },
+      { label: t("dashboard.actions.addSupplier"), icon: <Users size={16} />, route: { name: "planned", module: "suppliers" }, permission: "supplier.create" },
+      { label: t("dashboard.actions.paySupplier"), icon: <CreditCard size={16} />, route: { name: "planned", module: "payments" }, permission: "payment.pay" },
+      { label: t("dashboard.actions.stockAdjustment"), icon: <Boxes size={16} />, route: { name: "planned", module: "inventory" }, permission: "inventory.adjust" },
+      { label: t("dashboard.actions.addProduct"), icon: <Package size={16} />, route: { name: "products" }, permission: "product.create" },
+      { label: t("dashboard.actions.addExpense"), icon: <BadgeIndianRupee size={16} />, route: { name: "planned", module: "expenses" }, permission: "expense.create" },
+    ] as Array<{ label: string; icon: ReactNode; route: Route; keys?: string; primary?: boolean; permission: string }>
+  ).filter((a) => allowed(a.permission));
 
   const agingLabels: Record<string, string> = {
     notDue: t("dashboard.charts.notDue"),
@@ -280,7 +288,7 @@ export function DashboardPage() {
               onClick={() => navigate({ name: "customers" })}
             />
             {view?.payable !== null && (
-              <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={15} />} value={compact(view?.payable ?? 0)} onClick={() => navigate({ name: "planned", module: "suppliers" })} />
+              <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={15} />} value={compact(view?.payable ?? 0)} {...(allowed("supplier.view") ? { onClick: () => navigate({ name: "planned", module: "suppliers" }) } : {})} />
             )}
           </div>
           <Card className="p-2">
@@ -294,7 +302,9 @@ export function DashboardPage() {
                 key={row.label}
                 type="button"
                 onClick={() => navigate(row.route)}
-                className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-[14px] text-ink hover:bg-surface-2"
+                // A count the role may see, but a screen it may not open (packing, dispatch).
+                disabled={!canOpen(row.route)}
+                className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-[14px] text-ink enabled:hover:bg-surface-2"
               >
                 <span className="text-ink-3">{row.icon}</span>
                 <span className="flex-1">{row.label}</span>
@@ -386,7 +396,7 @@ export function DashboardPage() {
                   </p>
                 </button>
                 <span className="num hidden text-[14px] font-semibold text-danger sm:block">{money(c.overdue, 0)}</span>
-                <Button size="sm" variant="ghost" icon={<Phone size={14} />} aria-label={`${t("common.call")} ${c.name}`} title={c.mobile}>
+                <Button size="sm" variant="ghost" icon={<Phone size={14} />} aria-label={`${t("common.call")} ${c.name}`} title={c.mobile} disabled={!c.mobile} onClick={() => (window.location.href = `tel:${c.mobile}`)}>
                   <span className="hidden sm:inline">{t("common.call")}</span>
                 </Button>
               </li>

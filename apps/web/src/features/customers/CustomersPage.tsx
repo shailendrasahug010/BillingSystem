@@ -72,26 +72,28 @@ export function CustomersPage() {
               {t("imports.import")}
             </Button>
           )}
-          <Button
-            icon={<Download size={16} />}
-            onClick={() =>
-              downloadCsv(
-                "customers.csv",
-                [
-                  { label: t("common.code"), value: (c) => c.code },
-                  { label: t("customer.businessName"), value: (c) => c.businessName },
-                  { label: t("customer.name"), value: (c) => c.name },
-                  { label: t("common.mobile"), value: (c) => c.mobile },
-                  { label: t("customer.gstin"), value: (c) => c.gstin },
-                  { label: t("common.city"), value: (c) => c.city },
-                  { label: t("customer.outstanding"), value: (c) => c.balance ?? "" },
-                ],
-                CUSTOMERS,
-              )
-            }
-          >
-            {t("common.export")}
-          </Button>
+          {allowed("customer.export") && (
+            <Button
+              icon={<Download size={16} />}
+              onClick={() =>
+                downloadCsv(
+                  "customers.csv",
+                  [
+                    { label: t("common.code"), value: (c) => c.code },
+                    { label: t("customer.businessName"), value: (c) => c.businessName },
+                    { label: t("customer.name"), value: (c) => c.name },
+                    { label: t("common.mobile"), value: (c) => c.mobile },
+                    { label: t("customer.gstin"), value: (c) => c.gstin },
+                    { label: t("common.city"), value: (c) => c.city },
+                    { label: t("customer.outstanding"), value: (c) => c.balance ?? "" },
+                  ],
+                  CUSTOMERS,
+                )
+              }
+            >
+              {t("common.export")}
+            </Button>
+          )}
           <Button variant="primary" icon={<UserPlus size={16} />} onClick={() => setAdding(true)}>
             {t("customer.add")}
           </Button>

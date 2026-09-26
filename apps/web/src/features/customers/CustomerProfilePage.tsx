@@ -15,6 +15,10 @@ import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { useCustomerHistory } from "./useCustomerHistory";
 import { cn } from "../../lib/cn";
+import { shareOnWhatsApp } from "../../lib/share";
+
+/** What each tab shows, and the permission it needs. */
+const TAB_PERMISSION = { overview: "customer.view", invoices: "invoice.view", payments: "payment.view", ledger: "customer.view_ledger", products: "customer.view" } as const;
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 
 
@@ -83,21 +87,31 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button icon={<Phone size={16} />} title={customer.mobile}>
-            {t("common.call")}
-          </Button>
-          <Button icon={<MessageCircle size={16} />}>{t("common.whatsapp")}</Button>
-          <Button icon={<Wallet size={16} />} onClick={() => navigate(LIVE ? { name: "planned", module: "payments", action: "collect", partyId: customer.id } : { name: "planned", module: "payments" })}>
-            {t("dashboard.actions.receivePayment")}
-          </Button>
+          {customer.mobile && (
+            <>
+              <Button icon={<Phone size={16} />} title={customer.mobile} onClick={() => (window.location.href = `tel:${customer.mobile.replace(/\s/g, "")}`)}>
+                {t("common.call")}
+              </Button>
+              <Button icon={<MessageCircle size={16} />} onClick={() => shareOnWhatsApp("", customer.mobile)}>
+                {t("common.whatsapp")}
+              </Button>
+            </>
+          )}
+          {allowed("payment.collect") && (
+            <Button icon={<Wallet size={16} />} onClick={() => navigate(LIVE ? { name: "planned", module: "payments", action: "collect", partyId: customer.id } : { name: "planned", module: "payments" })}>
+              {t("dashboard.actions.receivePayment")}
+            </Button>
+          )}
           {LIVE && allowed("order.create") && (
             <Button icon={<ClipboardPlus size={16} />} onClick={() => navigate({ name: "planned", module: "orders", action: "new", partyId: customer.id })}>
               {t("orders.new")}
             </Button>
           )}
-          <Button variant="primary" icon={<Receipt size={16} />} onClick={() => navigate({ name: "invoice-new", customerId: customer.id })}>
-            {t("invoice.new")}
-          </Button>
+          {allowed("invoice.create") && (
+            <Button variant="primary" icon={<Receipt size={16} />} onClick={() => navigate({ name: "invoice-new", customerId: customer.id })}>
+              {t("invoice.new")}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -119,7 +133,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
 
       <Tabs.Root defaultValue="overview" className="flex flex-col gap-4">
         <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={customer.businessName}>
-          {(["overview", "invoices", "payments", "ledger", "products"] as const).map((k) => (
+          {(["overview", "invoices", "payments", "ledger", "products"] as const).filter((k) => allowed(TAB_PERMISSION[k])).map((k) => (
             <Tabs.Trigger key={k} value={k} className={tabCls}>
               {t(`customer.tabs.${k}`)}
             </Tabs.Trigger>

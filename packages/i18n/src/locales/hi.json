@@ -92,7 +92,10 @@
     "method": "तरीका",
     "open": "खोलें",
     "cancelled": "रद्द",
-    "stateWithCode": "{{name}} (राज्य कोड {{code}})"
+    "stateWithCode": "{{name}} (राज्य कोड {{code}})",
+    "noAccess": "यह आपके रोल में नहीं है",
+    "noAccessHint": "आपके रोल में यह स्क्रीन शामिल नहीं है। ज़रूरत हो तो मालिक से जुड़वाएं।",
+    "goHome": "मेरी स्क्रीन पर जाएं"
   },
   "nav": {
     "groupDaily": "रोज़ का काम",
