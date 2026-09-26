@@ -85,6 +85,13 @@
       "when": 1790408874782,
       "tag": "0011_strip_unit",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790409897096,
+      "tag": "0012_usernames",
+      "breakpoints": true
     }
   ]
 }

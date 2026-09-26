@@ -136,7 +136,7 @@
   "auth": {
     "welcome": "Welcome back",
     "subtitle": "Sign in to manage billing, stock and collections",
-    "mobileOrEmail": "Mobile number or email",
+    "mobileOrEmail": "Mobile number, email or user ID",
     "password": "Password",
     "rememberDevice": "Keep me signed in on this device",
     "signIn": "Sign in",
@@ -909,7 +909,9 @@
     "BACKUP_PASSWORD_REQUIRED": "This backup is protected with a password. Type the password.",
     "BACKUP_PASSWORD_WRONG": "The password does not open this backup.",
     "BACKUP_INCONSISTENT": "The backup has entries that do not fit together ({{table}}). It cannot be restored.",
-    "BACKUP_TOO_LARGE_FOR_EMAIL": "The backup is {{mb}} MB, too large for email. Download it instead."
+    "BACKUP_TOO_LARGE_FOR_EMAIL": "The backup is {{mb}} MB, too large for email. Download it instead.",
+    "USERNAME_TAKEN": "This user ID is already in use. Choose another.",
+    "MEMBER_ACCOUNT_SHARED": "This person also uses Digital Bahi in another business, so only they can change their user ID or password."
   },
   "validation": {
     "required": "This field is required",
@@ -1251,7 +1253,7 @@
     "lastLogin": "Last sign-in",
     "never": "Never",
     "invite": "Add member",
-    "inviteHint": "They sign in with this mobile number (OTP) and see only what the role allows.",
+    "inviteHint": "Give them a user ID and password to sign in at once, or leave these blank and they sign in with an OTP on this mobile. They see only what the role allows.",
     "invited": "Member added",
     "invitedHint": "{{name}} can now sign in with {{mobile}}",
     "activate": "Activate",
@@ -1270,7 +1272,21 @@
     "roleHint": "Tick what this role may do. You can only give access you have yourself.",
     "ownerRoleHint": "The owner role has every permission and cannot be changed.",
     "roleSaved": "Role saved",
-    "roleDeleted": "Role deleted"
+    "roleDeleted": "Role deleted",
+    "username": "User ID",
+    "usernameHint": "Letters, digits, dot or dash; starts with a letter",
+    "password": "Password",
+    "passwordHint": "At least 8 characters. Tell it to them yourself.",
+    "invitedWithLogin": "{{name}} can sign in now as {{username}} with the password you set",
+    "invitedWithPassword": "{{name}} can sign in now with {{mobile}} and the password you set",
+    "existingAccount": "{{name}} already has a Digital Bahi account and signs in with their own password",
+    "signIn": "Sign-in",
+    "signInWith": "Signs in with: {{ways}}",
+    "otpOnly": "an OTP on {{mobile}}",
+    "newPassword": "New password",
+    "saveSignIn": "Save sign-in",
+    "signInSaved": "Sign-in details saved",
+    "signInHint": "For staff who use Digital Bahi only in this business. Setting a new password signs them out everywhere."
   },
   "perm": {
     "modules": {

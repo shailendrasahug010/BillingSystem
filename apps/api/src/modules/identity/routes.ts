@@ -141,11 +141,13 @@ export const identityModule: ApiModule = async (app, deps) => {
   r.post("/auth/login", { config: authLimit, schema: { tags: ["auth"], security: [], body: LoginBody } }, async (request, reply) => {
     const { identifier, password, businessId } = request.body;
     let user: UserRow | undefined;
+    // Mobile number, email, or the user ID a business gave its staff (it starts with a letter).
     if (identifier.includes("@")) {
       user = (await deps.db.select().from(schema.users).where(eq(schema.users.email, identifier.toLowerCase())))[0];
     } else {
       const mobile = normalizeIndianMobile(identifier);
-      user = mobile ? await findUserByMobile(mobile) : undefined;
+      if (mobile) user = await findUserByMobile(mobile);
+      else if (/^[a-z]/i.test(identifier)) user = (await deps.db.select().from(schema.users).where(eq(schema.users.username, identifier.toLowerCase())))[0];
     }
     const at = now();
     if (user?.lockedUntil && Date.parse(user.lockedUntil) > at.getTime()) {

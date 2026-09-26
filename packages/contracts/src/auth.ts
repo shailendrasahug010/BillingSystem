@@ -31,7 +31,7 @@ export const SignupBody = z.strictObject({
 });
 
 export const LoginBody = z.strictObject({
-  /** Mobile number or email. */
+  /** Mobile number, email or user ID. */
   identifier: z.string().trim().min(3).max(200),
   password: z.string().min(1).max(128),
   businessId: z.uuid().optional(),

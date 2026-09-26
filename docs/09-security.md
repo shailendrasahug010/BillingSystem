@@ -8,7 +8,7 @@ The system holds a business's customers, prices, margins, receivables, employees
 
 | Control | Design |
 |---|---|
-| Identity | Mobile number is the primary login (many staff have no work email); email optional |
+| Identity | Mobile number is the primary login (many staff have no work email); email optional. A business may give a **new** staff account a user ID (unique, lower case, starts with a letter so it never looks like a mobile number) and a password; it can never set or reset the user ID or password of an account that already existed or that is also a member of another business (checked by a `SECURITY DEFINER` function that answers only that question, since row-level security hides other businesses' memberships), and a reset revokes all that user's sessions |
 | Passwords | **argon2id** (memory-hard; parameters tuned to ~100 ms on the server), minimum length 8, checked against a breached-password list, never logged, never returned by the API (`password_hash` is excluded from every select) |
 | OTP | 6-digit codes for mobile login, password reset and new-device confirmation; only a SHA-256 hash is stored (`otp_challenges`), 5-minute expiry, max 5 attempts, per-number send rate limit |
 | Access token | JWT signed with an asymmetric key (EdDSA/ES256), **15-minute** lifetime, claims: user, business, role version, device; kept in memory on the client (not in `localStorage`) |

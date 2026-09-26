@@ -1,12 +1,30 @@
 import { z } from "zod";
 import { Id, Mobile } from "./common.js";
 
+/** A user ID to sign in with: starts with a letter, then letters, digits, ".", "_" or "-" (3-30, kept in lower case). */
+export const Username = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z][a-z0-9._-]{2,29}$/);
+
 export const InviteMemberBody = z.strictObject({
   name: z.string().trim().min(2).max(100),
   mobile: Mobile,
   email: z.email().optional(),
   roleId: Id,
+  /** For a new account: a user ID and password to sign in with at once. An existing account keeps its own. */
+  username: Username.optional(),
+  password: z.string().min(8).max(128).optional(),
 });
+
+/** Sets a staff member's user ID and / or password (only for accounts used in this business alone). */
+export const MemberCredentialsBody = z
+  .strictObject({
+    username: Username.nullable().optional(),
+    password: z.string().min(8).max(128).optional(),
+  })
+  .refine((b) => b.username !== undefined || b.password !== undefined, { message: "Nothing to change" });
 
 export const UpdateMemberBody = z.strictObject({
   roleId: Id.optional(),

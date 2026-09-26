@@ -1,4 +1,4 @@
-import { InviteMemberBody, RoleBody, RolePermissionsBody, UpdateMemberBody, UpdateRoleBody } from "@vyapaar/contracts";
+import { InviteMemberBody, MemberCredentialsBody, RoleBody, RolePermissionsBody, UpdateMemberBody, UpdateRoleBody } from "@vyapaar/contracts";
 import { ALL_PERMISSIONS, expandGrants, hasPermission, normalizeIndianMobile, PERMISSION_CATALOG, type Grant } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
 import { and, eq, sql } from "drizzle-orm";
@@ -10,6 +10,7 @@ import { audit, diff } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
+import { hashPassword } from "../../lib/security.js";
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
@@ -43,6 +44,12 @@ async function findRole(tx: Tx, businessId: string, roleId: string) {
   return role;
 }
 
+/** User IDs are unique across Digital Bahi. */
+async function assertUsernameFree(tx: Tx, username: string, exceptUserId?: string): Promise<void> {
+  const [taken] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.username, username));
+  if (taken && taken.id !== exceptUserId) throw conflict("USERNAME_TAKEN", {}, "username");
+}
+
 async function listMembers(tx: Tx, businessId: string, memberId?: string) {
   const res = await tx.execute<{
     id: string;
@@ -50,6 +57,8 @@ async function listMembers(tx: Tx, businessId: string, memberId?: string) {
     name: string;
     mobile: string;
     email: string | null;
+    username: string | null;
+    has_password: boolean;
     last_login_at: string | null;
     role_id: string;
     role_key: string;
@@ -58,7 +67,7 @@ async function listMembers(tx: Tx, businessId: string, memberId?: string) {
     is_active: boolean;
     created_at: string;
   }>(sql`
-    select bm.id, bm.user_id, u.name, u.mobile, u.email, u.last_login_at, bm.role_id, r.key as role_key, r.name as role_name,
+    select bm.id, bm.user_id, u.name, u.mobile, u.email, u.username, u.password_hash is not null as has_password, u.last_login_at, bm.role_id, r.key as role_key, r.name as role_name,
            bm.is_owner, bm.is_active, bm.created_at
     from business_members bm
     join users u on u.id = bm.user_id
@@ -71,6 +80,8 @@ async function listMembers(tx: Tx, businessId: string, memberId?: string) {
     name: m.name,
     mobile: m.mobile,
     email: m.email,
+    username: m.username,
+    hasPassword: m.has_password,
     lastLoginAt: m.last_login_at,
     role: { id: m.role_id, key: m.role_key, name: m.role_name },
     isOwner: m.is_owner,
@@ -103,21 +114,95 @@ export const teamModule: ApiModule = async (app, deps) => {
       if (!role) throw badRequest("ROLE_NOT_FOUND", {}, "roleId");
       assertCanGrant(ctx, await roleGrants(tx, role.id));
 
-      // People are global identities: an existing account simply joins this business.
+      // People are global identities: an existing account simply joins this business,
+      // keeping its own user ID and password (a business never sets those for someone
+      // who already has an account).
       let [user] = await tx.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(eq(schema.users.mobile, mobile));
+      const existingAccount = Boolean(user);
       if (!user) {
+        if (body.username) await assertUsernameFree(tx, body.username);
         [user] = await tx
           .insert(schema.users)
-          .values({ id: uuidv7(), name: body.name, mobile, email: body.email?.toLowerCase() ?? null })
+          .values({
+            id: uuidv7(),
+            name: body.name,
+            mobile,
+            email: body.email?.toLowerCase() ?? null,
+            username: body.username ?? null,
+            ...(body.password ? { passwordHash: await hashPassword(body.password), passwordChangedAt: deps.clock.now().toISOString() } : {}),
+          })
           .returning({ id: schema.users.id, name: schema.users.name });
       }
       const id = uuidv7();
       await tx.insert(schema.businessMembers).values({ id, businessId: ctx.businessId, userId: user!.id, roleId: role.id, invitedBy: ctx.userId });
-      await audit(tx, ctx, { action: "member.invited", entityType: "member", entityId: id, entityLabel: user!.name, changes: { role: role.key } });
-      return (await listMembers(tx, ctx.businessId, id))[0]!;
+      await audit(tx, ctx, {
+        action: "member.invited",
+        entityType: "member",
+        entityId: id,
+        entityLabel: user!.name,
+        changes: { role: role.key, ...(!existingAccount && body.username ? { username: body.username } : {}), ...(!existingAccount && body.password ? { password: "set" } : {}) },
+      });
+      return { ...(await listMembers(tx, ctx.businessId, id))[0]!, existingAccount };
     });
     return reply.code(201).send(member);
   });
+
+  /**
+   * A staff member's user ID and password, set by the business. Only for an
+   * account used in this business alone: someone who also works for (or owns)
+   * another business keeps sole control of their sign-in. Their sessions end
+   * when the password changes.
+   */
+  r.put(
+    "/members/:id/credentials",
+    { preHandler: guard(deps, "user.update"), schema: { tags: ["team"], params: IdParams, body: MemberCredentialsBody } },
+    async (request) => {
+      const ctx = request.ctx;
+      const body = request.body;
+      const result = await tenant(ctx, async (tx) => {
+        const [m] = await tx
+          .select()
+          .from(schema.businessMembers)
+          .where(and(eq(schema.businessMembers.id, request.params.id), eq(schema.businessMembers.businessId, ctx.businessId)))
+          .for("update");
+        if (!m) throw notFound("member");
+        if (m.isOwner) throw conflict("OWNER_MEMBERSHIP_LOCKED");
+        if (m.userId === ctx.userId) throw conflict("CANNOT_CHANGE_OWN_MEMBERSHIP");
+        assertCanGrant(ctx, await roleGrants(tx, m.roleId));
+        const shared = await tx.execute<{ shared: boolean }>(sql`select user_in_other_business(${m.userId}::uuid, ${ctx.businessId}::uuid) as shared`);
+        if (shared.rows[0]?.shared) throw conflict("MEMBER_ACCOUNT_SHARED");
+        const [u] = await tx.select({ username: schema.users.username }).from(schema.users).where(eq(schema.users.id, m.userId)).for("update");
+        const changes: { username?: string | null; passwordHash?: string; passwordChangedAt?: string; failedLoginCount?: number; lockedUntil?: null } = {};
+        if (body.username !== undefined && body.username !== u?.username) {
+          if (body.username) await assertUsernameFree(tx, body.username, m.userId);
+          changes.username = body.username;
+        }
+        if (body.password) {
+          changes.passwordHash = await hashPassword(body.password);
+          changes.passwordChangedAt = deps.clock.now().toISOString();
+          changes.failedLoginCount = 0;
+          changes.lockedUntil = null;
+        }
+        if (Object.keys(changes).length) {
+          await tx.update(schema.users).set(changes).where(eq(schema.users.id, m.userId));
+          if (body.password) {
+            await tx
+              .update(schema.refreshTokens)
+              .set({ revokedAt: deps.clock.now().toISOString() })
+              .where(and(eq(schema.refreshTokens.userId, m.userId), sql`${schema.refreshTokens.revokedAt} is null`));
+          }
+          await audit(tx, ctx, {
+            action: "member.credentials_set",
+            entityType: "member",
+            entityId: m.id,
+            changes: { ...(changes.username !== undefined ? { username: changes.username } : {}), ...(body.password ? { password: "changed" } : {}) },
+          });
+        }
+        return (await listMembers(tx, ctx.businessId, m.id))[0]!;
+      });
+      return result;
+    },
+  );
 
   r.patch(
     "/members/:id",

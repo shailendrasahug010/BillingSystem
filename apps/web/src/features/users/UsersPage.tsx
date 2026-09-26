@@ -21,6 +21,9 @@ interface Member {
   name: string;
   mobile: string;
   email: string | null;
+  /** User ID to sign in with, if the business gave one. */
+  username: string | null;
+  hasPassword: boolean;
   lastLoginAt: string | null;
   role: { id: string; key: string; name: string };
   isOwner: boolean;
@@ -46,9 +49,12 @@ function useTeam() {
   return { members, roles };
 }
 
+const USERNAME = /^[a-z][a-z0-9._-]{2,29}$/;
+
 /**
- * Team and access. People sign in with their own mobile number; the owner
- * (or anyone allowed) invites them with a role. Roles are lists of
+ * Team and access. People sign in with their mobile number (OTP), or with a
+ * user ID and password the owner gives them when adding them; the owner
+ * (or anyone allowed) adds them with a role. Roles are lists of
  * permissions the business can edit; no one can hand out access they do not
  * hold themselves, and the owner's membership cannot be changed.
  */
@@ -107,6 +113,7 @@ export function UsersPage() {
                       <p className="font-medium text-ink">{m.name}</p>
                       <p className="text-[12px] text-ink-3">
                         {m.mobile}
+                        {m.username ? <span className="font-mono"> · {m.username}</span> : ""}
                         {m.email ? ` · ${m.email}` : ""}
                       </p>
                     </div>
@@ -156,27 +163,44 @@ function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChan
   const { t } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: "", mobile: "", email: "", roleId: "" });
+  const [form, setForm] = useState({ name: "", mobile: "", email: "", roleId: "", username: "", password: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const fieldError = useFieldError(error);
   const assignable = roles.filter((r) => !r.grants.includes("*"));
   useEffect(() => {
     if (open) {
-      setForm({ name: "", mobile: "", email: "", roleId: assignable.find((r) => r.key === "salesperson")?.id ?? assignable[0]?.id ?? "" });
+      setForm({ name: "", mobile: "", email: "", roleId: assignable.find((r) => r.key === "sales")?.id ?? assignable[0]?.id ?? "", username: "", password: "" });
       setError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const mobileBad = form.mobile !== "" && validateMobile(form.mobile).length > 0;
-  const ok = form.name.trim().length >= 2 && form.mobile && !mobileBad && form.roleId;
+  const username = form.username.trim().toLowerCase();
+  const usernameBad = username !== "" && !USERNAME.test(username);
+  const passwordBad = form.password !== "" && form.password.length < 8;
+  const ok = form.name.trim().length >= 2 && form.mobile && !mobileBad && form.roleId && !usernameBad && !passwordBad && !(username && !form.password);
   const save = async () => {
     setBusy(true);
     setError(null);
     try {
-      const m = await api.post<Member>("/members", { name: form.name.trim(), mobile: form.mobile, ...(form.email.trim() ? { email: form.email.trim() } : {}), roleId: form.roleId });
+      const m = await api.post<Member & { existingAccount: boolean }>("/members", {
+        name: form.name.trim(),
+        mobile: form.mobile,
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
+        roleId: form.roleId,
+        ...(username ? { username } : {}),
+        ...(form.password ? { password: form.password } : {}),
+      });
       void qc.invalidateQueries({ queryKey: ["team"] });
-      toast({ tone: "success", title: t("users.invited"), body: t("users.invitedHint", { name: m.name, mobile: m.mobile }) });
+      const body = m.existingAccount
+        ? t("users.existingAccount", { name: m.name })
+        : m.username && form.password
+          ? t("users.invitedWithLogin", { name: m.name, username: m.username })
+          : form.password
+            ? t("users.invitedWithPassword", { name: m.name, mobile: m.mobile })
+            : t("users.invitedHint", { name: m.name, mobile: m.mobile });
+      toast({ tone: "success", title: t("users.invited"), body });
       onOpenChange(false);
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
@@ -211,6 +235,14 @@ function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChan
         <Field label={t("auth.email")} htmlFor="inv-email" hint={t("common.optional")} error={fieldError("email")}>
           <Input id="inv-email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
         </Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label={t("users.username")} htmlFor="inv-username" hint={t("users.usernameHint")} error={usernameBad ? t("users.usernameHint") : fieldError("username")}>
+            <Input id="inv-username" autoComplete="off" autoCapitalize="none" spellCheck={false} className="[&_input]:font-mono" value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value.replace(/\s/g, "") }))} />
+          </Field>
+          <Field label={t("users.password")} htmlFor="inv-password" hint={t("users.passwordHint")} error={passwordBad || (username && !form.password) ? t("users.passwordHint") : fieldError("password")}>
+            <Input id="inv-password" type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+          </Field>
+        </div>
         <Field label={t("users.role")} htmlFor="inv-role" error={fieldError("roleId")}>
           <Select id="inv-role" value={form.roleId} onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}>
             {assignable.map((r) => (
@@ -232,10 +264,33 @@ function MemberDialog({ member, onClose, roles }: { member: Member | null; onClo
   const [roleId, setRoleId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [login, setLogin] = useState({ username: "", password: "" });
   useEffect(() => {
     setRoleId(member?.role.id ?? "");
+    setLogin({ username: member?.username ?? "", password: "" });
     setError(null);
   }, [member]);
+  const username = login.username.trim().toLowerCase();
+  const loginChanged = Boolean(member) && (username !== (member?.username ?? "") || login.password !== "");
+  const loginBad = (username !== "" && !USERNAME.test(username)) || (login.password !== "" && login.password.length < 8);
+  const saveLogin = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.put(`/members/${member!.id}/credentials`, {
+        ...(username !== (member!.username ?? "") ? { username: username || null } : {}),
+        ...(login.password ? { password: login.password } : {}),
+      });
+      void qc.invalidateQueries({ queryKey: ["team"] });
+      toast({ tone: "success", title: t("users.signInSaved"), body: member!.name });
+      onClose();
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const ways = member ? [member.username, member.hasPassword ? `${member.mobile} + ${t("users.password").toLowerCase()}` : null, t("users.otpOnly", { mobile: member.mobile })].filter(Boolean).join(" · ") : "";
   const patch = async (body: { roleId?: string; isActive?: boolean }, done: string) => {
     setBusy(true);
     setError(null);
@@ -287,6 +342,30 @@ function MemberDialog({ member, onClose, roles }: { member: Member | null; onClo
               ))}
           </Select>
         </Field>
+        <section className="flex flex-col gap-3 border-t border-line pt-4">
+          <div>
+            <h3 className="text-[13px] font-semibold text-ink">{t("users.signIn")}</h3>
+            <p className="text-[12.5px] text-ink-3">{t("users.signInWith", { ways })}</p>
+          </div>
+          {allowed("user.update") && (
+            <>
+              <p className="text-[12px] text-ink-3">{t("users.signInHint")}</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label={t("users.username")} htmlFor="m-username" hint={t("common.optional")}>
+                  <Input id="m-username" autoComplete="off" autoCapitalize="none" spellCheck={false} className="[&_input]:font-mono" value={login.username} onChange={(e) => setLogin((l) => ({ ...l, username: e.target.value.replace(/\s/g, "") }))} />
+                </Field>
+                <Field label={t("users.newPassword")} htmlFor="m-password" hint={t("users.passwordHint")}>
+                  <Input id="m-password" type="password" autoComplete="new-password" value={login.password} onChange={(e) => setLogin((l) => ({ ...l, password: e.target.value }))} />
+                </Field>
+              </div>
+              <div>
+                <Button disabled={busy || !loginChanged || loginBad} onClick={() => void saveLogin()}>
+                  {t("users.saveSignIn")}
+                </Button>
+              </div>
+            </>
+          )}
+        </section>
       </div>
     </Dialog>
   );

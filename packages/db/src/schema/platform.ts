@@ -39,6 +39,8 @@ export const users = pgTable(
     name: text().notNull(),
     mobile: varchar({ length: 15 }).notNull(),
     email: text(),
+    /** Optional user ID to sign in with (lower case), set when a business adds its staff. */
+    username: varchar({ length: 30 }),
     /** argon2id hash. Never selected by default in API queries. */
     passwordHash: text(),
     preferredLocale: varchar({ length: 10 }).notNull().default("en"),
@@ -52,7 +54,7 @@ export const users = pgTable(
     passwordChangedAt: tstz(),
     ...timestamps,
   },
-  (t) => [uniqueIndex("users_mobile_uq").on(t.mobile), uniqueIndex("users_email_uq").on(t.email)],
+  (t) => [uniqueIndex("users_mobile_uq").on(t.mobile), uniqueIndex("users_email_uq").on(t.email), uniqueIndex("users_username_uq").on(t.username)],
 );
 
 /**

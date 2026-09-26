@@ -53,6 +53,57 @@ describe.skipIf(!hasDatabase)("members, roles and audit", () => {
     expect(members.body.data.map((m: { name: string }) => m.name)).toEqual(expect.arrayContaining(["Owner", "Sunil"]));
   });
 
+  it("gives a new member a user ID and password to sign in with at once, and never touches an existing account", async () => {
+    const mobile = nextMobile();
+    const add = await call(t.app, "POST", "/members", {
+      token: owner.token,
+      body: { name: "Ravi", mobile, roleId: roles.sales, username: "Ravi.Sales", password: "Ravi-pass-123" },
+    });
+    expect(add.status).toBe(201);
+    expect(add.body).toMatchObject({ name: "Ravi", username: "ravi.sales", hasPassword: true, existingAccount: false });
+    // The user ID in any case, or the mobile number, with the password.
+    for (const identifier of ["RAVI.SALES", mobile]) {
+      const login = await call(t.app, "POST", "/auth/login", { body: { identifier, password: "Ravi-pass-123" } });
+      expect(login.status).toBe(200);
+      expect(login.body.business.role).toBe("sales");
+    }
+    expect((await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi.sales", password: "wrong-pass-1" } })).status).toBe(401);
+
+    const taken = await call(t.app, "POST", "/members", { token: owner.token, body: { name: "Ravi Two", mobile: nextMobile(), roleId: roles.sales, username: "ravi.sales", password: "Other-pass-123" } });
+    expect(taken.status).toBe(409);
+    expect(taken.body.error).toMatchObject({ code: "USERNAME_TAKEN", field: "username" });
+    const bad = await call(t.app, "POST", "/members", { token: owner.token, body: { name: "Bad Id", mobile: nextMobile(), roleId: roles.sales, username: "9826012345" } });
+    expect(bad.status).toBe(400);
+
+    // Someone with an account of their own joins with it: their user ID and password stay theirs.
+    const elsewhere = await signup(t, { name: "Kiran", legalName: "Kiran Stores" });
+    const joined = await call(t.app, "POST", "/members", {
+      token: owner.token,
+      body: { name: "Kiran", mobile: elsewhere.mobile, roleId: roles.sales, username: "kiran.new", password: "Owner-chosen-1" },
+    });
+    expect(joined.status).toBe(201);
+    expect(joined.body).toMatchObject({ existingAccount: true, username: null });
+    expect((await call(t.app, "POST", "/auth/login", { body: { identifier: elsewhere.mobile, password: "Owner-chosen-1" } })).status).toBe(401);
+    expect((await call(t.app, "POST", "/auth/login", { body: { identifier: elsewhere.mobile, password: elsewhere.password } })).status).toBe(200);
+    // ... and the business cannot set them later either.
+    const shared = await call(t.app, "PUT", `/members/${joined.body.id}/credentials`, { token: owner.token, body: { password: "Owner-chosen-2" } });
+    expect(shared.status).toBe(409);
+    expect(shared.body.error.code).toBe("MEMBER_ACCOUNT_SHARED");
+
+    // Staff who forgot their password get a new one from the business; old sessions end.
+    const before = await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi.sales", password: "Ravi-pass-123" } });
+    const reset = await call(t.app, "PUT", `/members/${add.body.id}/credentials`, { token: owner.token, body: { username: "ravi", password: "Ravi-new-456" } });
+    expect(reset.status).toBe(200);
+    expect(reset.body.username).toBe("ravi");
+    expect((await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi", password: "Ravi-pass-123" } })).status).toBe(401);
+    expect((await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi", password: "Ravi-new-456" } })).status).toBe(200);
+    const refresh = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: before.cookies.find((c) => c.name === "vy_rt")!.value } });
+    expect(refresh.status).toBe(401);
+    // Only with user.update.
+    const sales = await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi", password: "Ravi-new-456" } });
+    expect((await call(t.app, "PUT", `/members/${joined.body.id}/credentials`, { token: sales.body.accessToken, body: { password: "Sneaky-pass-1" } })).status).toBe(403);
+  });
+
   it("refuses duplicate members and roles from another business", async () => {
     const other = await signup(t, { legalName: "Other Co" });
     const otherRoles = await call(t.app, "GET", "/roles", { token: other.token });
