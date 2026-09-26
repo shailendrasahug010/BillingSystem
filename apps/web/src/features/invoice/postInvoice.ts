@@ -42,6 +42,7 @@ export async function postInvoice(view: DraftView, idempotencyKey: string): Prom
       invoiceDate: draft.date,
       lines: draft.lines.map((l) => ({
         productId: l.productId,
+        ...(l.unitId ? { unitId: l.unitId } : {}),
         qty: l.qty.toFixed(3),
         rate: l.rate.toFixed(4),
         discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),

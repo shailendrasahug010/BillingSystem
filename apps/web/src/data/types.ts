@@ -56,6 +56,9 @@ export interface Product {
   /** Live data: base unit and the pack units it can be bought / sold in. */
   unitId?: string;
   packUnits?: Array<{ unitId: string; symbol: string; factor: number }>;
+  /** Rate-list prices set for a pack unit, keyed "priceLevelId|unitId" (else the stock unit's price times the pack). */
+  unitPrices?: Record<string, number>;
+  unitDiscounts?: Record<string, number>;
   trackBatches?: boolean;
   trackExpiry?: boolean;
 }

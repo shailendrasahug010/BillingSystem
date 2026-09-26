@@ -192,11 +192,13 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
       const batch = batches.find((b) => b.id === line.batchId);
       if (!batch || batch.productId !== product.id) throw badRequest("REFERENCE_NOT_FOUND", {}, `lines[${i}].batchId`);
     }
+    // A pack without its own price on the customer's rate list is that list's price for the stock unit times the pack.
     const listPrice = prices.find((p) => p.productId === product.id && p.unitId === unitId);
-    const listRate = listPrice ? dec(listPrice.price) : roundRate(dec(product.sellingPrice).times(factor));
+    const basePrice = listPrice ?? prices.find((p) => p.productId === product.id && p.unitId === product.baseUnitId);
+    const listRate = listPrice ? dec(listPrice.price) : roundRate(dec(basePrice?.price ?? product.sellingPrice).times(factor));
     const rate = line.rate !== undefined ? dec(line.rate) : listRate;
     if (!rate.eq(listRate)) rateOverridden = true;
-    const discountPercent = line.discountPercent ?? listPrice?.discountPercent ?? "0";
+    const discountPercent = line.discountPercent ?? basePrice?.discountPercent ?? "0";
 
     const category = categoryById.get(product.taxCategoryId);
     if (!category) throw badRequest("REFERENCE_NOT_FOUND", {}, `lines[${i}].productId`);

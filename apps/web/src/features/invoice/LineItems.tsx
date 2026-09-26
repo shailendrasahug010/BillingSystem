@@ -5,7 +5,8 @@ import { useI18n } from "../../app/i18n";
 import { EmptyState } from "../../components/ui/misc";
 import { productById } from "../../data/db";
 import { cn } from "../../lib/cn";
-import type { DraftLine } from "./useInvoiceDraft";
+import type { Product } from "../../data/types";
+import { factorOf, type DraftLine } from "./useInvoiceDraft";
 
 /** Numeric input that keeps the typed text (e.g. "12.") and commits valid numbers. */
 function NumberCell({
@@ -64,17 +65,45 @@ function NumberCell({
   );
 }
 
+/**
+ * The unit a line is sold in: the stock unit or one of the product's packs
+ * (box of 24, strip of 10). Changing it re-prices the line for that unit.
+ */
+function UnitSelect({ product, line, onUnit, className }: { product: Product; line: DraftLine; onUnit(unitId: string | null): void; className?: string }) {
+  const { t } = useI18n();
+  const packs = product.packUnits ?? [];
+  if (packs.length === 0) return <span className={cn("text-[11px] text-ink-3", className)}>{product.unit}</span>;
+  return (
+    <select
+      aria-label={`${t("invoice.unit")} ${product.name}`}
+      value={line.unitId ?? ""}
+      onChange={(e) => onUnit(e.target.value || null)}
+      className={cn("rounded-md border border-line bg-surface px-1.5 text-ink-2 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none", className)}
+    >
+      <option value="">{product.unit}</option>
+      {[...packs]
+        .sort((a, b) => a.factor - b.factor)
+        .map((u) => (
+          <option key={u.unitId} value={u.unitId}>
+            {u.symbol} ({u.factor} {product.unit})
+          </option>
+        ))}
+    </select>
+  );
+}
+
 function LineWarnings({ line }: { line: DraftLine }) {
   const { t } = useI18n();
   const p = productById.get(line.productId)!;
-  const short = line.qty > p.stock;
-  const belowCost = line.rate * (1 - line.discountPercent / 100) < p.purchasePrice;
+  const factor = factorOf(p, line.unitId);
+  const short = line.qty * factor > p.stock;
+  const belowCost = line.rate * (1 - line.discountPercent / 100) < p.purchasePrice * factor;
   if (!short && !belowCost) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
       {short && (
         <span className="inline-flex items-center gap-1 text-warn">
-          <TriangleAlert size={12} /> {p.stock <= 0 ? t("status.stock.out_of_stock") : t("invoice.stockShort", { qty: p.stock })}
+          <TriangleAlert size={12} /> {p.stock <= 0 ? t("status.stock.out_of_stock") : t("invoice.stockShort", { qty: `${p.stock} ${p.unit}` })}
         </span>
       )}
       {belowCost && (
@@ -92,6 +121,7 @@ export function LineItems({
   focusKey,
   onFocused,
   onUpdate,
+  onUnit,
   onRemove,
   onBackToSearch,
   variant = "desktop",
@@ -101,6 +131,7 @@ export function LineItems({
   focusKey: string | null;
   onFocused(): void;
   onUpdate(key: string, patch: Partial<Pick<DraftLine, "qty" | "rate" | "discountPercent">>): void;
+  onUnit(key: string, unitId: string | null): void;
   onRemove(key: string): void;
   onBackToSearch(): void;
   variant?: "desktop" | "mobile";
@@ -138,6 +169,7 @@ export function LineItems({
                   <p className="num text-[12.5px] text-ink-3">
                     {money(line.rate)} × {line.qty} · GST {p.gstRate}%
                   </p>
+                  {(p.packUnits?.length ?? 0) > 0 && <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} className="mt-1 h-9 text-[13.5px]" />}
                   <LineWarnings line={line} />
                 </div>
                 <span className="num text-[15px] font-semibold text-ink">{r ? money(r.total.toNumber()) : "—"}</span>
@@ -224,7 +256,9 @@ export function LineItems({
                       <Plus size={14} />
                     </button>
                   </div>
-                  <p className="text-center text-[11px] text-ink-3">{p.unit}</p>
+                  <div className="flex justify-center">
+                    <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} className="h-7 text-[11.5px]" />
+                  </div>
                 </td>
                 <td className="py-1.5 pr-2">
                   <NumberCell value={line.rate} label={`${t("invoice.rate")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { rate: v })} onEnter={onBackToSearch} />

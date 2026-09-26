@@ -133,6 +133,9 @@ function mapProduct(p: CatalogProduct, cat: Catalog, taxById: Map<string, TaxCat
   const base = p.prices.filter((x) => x.unitId === p.baseUnitId);
   const prices = Object.fromEntries(base.map((x) => [x.priceLevelId, Number(x.price)]));
   const discounts = Object.fromEntries(base.map((x) => [x.priceLevelId, Number(x.discountPercent)]));
+  const packs = p.prices.filter((x) => x.unitId !== p.baseUnitId);
+  const unitPrices = Object.fromEntries(packs.map((x) => [`${x.priceLevelId}|${x.unitId}`, Number(x.price)]));
+  const unitDiscounts = Object.fromEntries(packs.map((x) => [`${x.priceLevelId}|${x.unitId}`, Number(x.discountPercent)]));
   const wholesale = WORKSPACE.priceLevels.find((l) => l.name.toLowerCase() === "wholesale");
   const saleUnit = p.units.find((u) => u.isDefaultSale) ?? p.units[0];
   return {
@@ -161,6 +164,8 @@ function mapProduct(p: CatalogProduct, cat: Catalog, taxById: Map<string, TaxCat
     barcodes: p.barcodes.map((b) => b.barcode),
     prices,
     discounts,
+    unitPrices,
+    unitDiscounts,
     pricesIncludeTax: p.pricesIncludeTax,
     active: p.isActive,
     unitId: p.baseUnitId,

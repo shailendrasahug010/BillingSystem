@@ -3,7 +3,7 @@ import { takeOfflineNumber } from "../../offline/device";
 import { getOfflineState, queueBill, refreshDevice, type OutboxEntry } from "../../offline/sync";
 import type { SavedInvoice } from "./postInvoice";
 import type { PrintableInvoice } from "./printable";
-import type { DraftView } from "./useInvoiceDraft";
+import { factorOf, unitSymbolOf, type DraftView } from "./useInvoiceDraft";
 
 export class OfflineNotReady extends Error {
   constructor() {
@@ -25,7 +25,7 @@ function printable(view: DraftView, id: string, number: string): PrintableInvoic
       batch: null,
       hsn: p.hsn,
       qty: l.qty,
-      unit: p.unit,
+      unit: unitSymbolOf(p, l.unitId),
       rate: l.rate,
       discountPercent: l.discountPercent,
       taxable: r.taxable.toNumber(),
@@ -96,6 +96,7 @@ export async function saveOffline(view: DraftView, idempotencyKey: string): Prom
       invoiceDate: draft.date,
       lines: draft.lines.map((l) => ({
         productId: l.productId,
+        ...(l.unitId ? { unitId: l.unitId } : {}),
         qty: l.qty.toFixed(3),
         rate: l.rate.toFixed(4),
         discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),
@@ -104,7 +105,7 @@ export async function saveOffline(view: DraftView, idempotencyKey: string): Prom
       offline: { deviceId: taken.device.id, invoiceNumber: taken.number, savedAt },
     },
     printable: doc,
-    stock: draft.lines.map((l) => ({ productId: l.productId, qty: l.qty })),
+    stock: draft.lines.map((l) => ({ productId: l.productId, qty: l.qty * factorOf(productById.get(l.productId)!, l.unitId) })),
     status: "pending",
     error: null,
   };

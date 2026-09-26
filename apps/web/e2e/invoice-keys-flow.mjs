@@ -3,8 +3,8 @@
  * while billing: Ctrl+I opens a new invoice -> a shop that is not a customer
  * yet is typed in the customer search -> arrow down to "Add … as a new
  * customer", Enter -> the form opens with the name filled in -> saved, the
- * bill has the new customer -> product search, Enter, F2 back to search,
- * Ctrl+Enter saves. Then at tablet width (900 px): the full invoice screen
+ * bill has the new customer -> product search, Enter, the line switched to
+ * boxes (re-priced for the box), F2 back to search, Ctrl+Enter saves. Then at tablet width (900 px): the full invoice screen
  * with the same keys (F3, F2, Ctrl+Enter). Then on a phone: "Add customer"
  * from the search by tap.
  *
@@ -71,10 +71,10 @@ signedIn = true;
 const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
 const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
 const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).data.map((c) => [c.name, c.id]));
-await api("POST", "/products", token, { name: "Fortune Oil 1L", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "150", openingStock: "100" });
+const oil = await api("POST", "/products", token, { name: "Fortune Oil 1L", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "150", openingStock: "100", units: [{ unitId: units.BOX, conversionFactor: "12" }] });
 await page.reload();
 await page.getByRole("heading", { name: /Kishan/ }).waitFor({ timeout: 15000 });
-log("signed up; one product");
+log("signed up; one product, sold by the piece or in boxes of 12");
 
 // 2. Ctrl+I, a new shop added from the customer search with the keyboard.
 await page.keyboard.press("Control+i");
@@ -101,13 +101,22 @@ await page.keyboard.type("fortune");
 await page.getByRole("option", { name: /Fortune Oil 1L/ }).waitFor();
 await page.keyboard.press("Enter");
 await expectFocus("Qty", "after adding the product");
+// Sold by the box: the rate becomes the box's (12 x 150) and the qty stays 1.
+await page.getByLabel("Unit Fortune Oil 1L").selectOption({ label: "BOX (12 PCS)" });
+if ((await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800") errors.push(`box rate ${await page.getByLabel("Rate Fortune Oil 1L").inputValue()}`);
+await page.getByLabel("Qty Fortune Oil 1L").fill("2");
+await page.screenshot({ path: `${OUT}/keys-1b-box.png` });
 await page.keyboard.press("F2");
 await expectFocus("Search product", "F2");
 await page.keyboard.press("Control+Enter");
 await toast(/Invoice INV\/.* saved/);
 let list = await bills();
-if (list.length !== 1 || !list[0].partyName?.includes("Sharma")) errors.push(`bills: ${JSON.stringify(list.map((b) => [b.invoiceNumber, b.partyName]))}`);
-log("saved with Ctrl+Enter:", list.map((b) => `${b.invoiceNumber} ${b.partyName} ${b.grandTotal}`).join(", "));
+if (list.length !== 1 || !list[0].partyName?.includes("Sharma") || list[0].grandTotal !== "3780.00") errors.push(`bills: ${JSON.stringify(list.map((b) => [b.invoiceNumber, b.partyName, b.grandTotal]))}`);
+const first = await api("GET", `/invoices/${list[0].id}`, token);
+if (first.items[0].unitId !== units.BOX || first.items[0].qtyBase !== "24.000") errors.push(`item: ${JSON.stringify(first.items[0])}`);
+const stock = (await api("GET", "/catalog", token)).products.find((p) => p.id === oil.id)?.stock;
+if (stock !== "76.000") errors.push(`stock ${stock}, expected 76 after 2 boxes of 12`);
+log("2 boxes billed at 1,800 a box and saved with Ctrl+Enter:", list.map((b) => `${b.invoiceNumber} ${b.partyName} ${b.grandTotal}`).join(", "), "· stock", stock);
 
 // 4. Tablet / small laptop width: the full screen and the same keys.
 await page.setViewportSize({ width: 900, height: 800 });

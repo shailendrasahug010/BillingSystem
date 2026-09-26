@@ -26,7 +26,7 @@ import { ProductSearch } from "./ProductSearch";
 import { SuggestionsPanel } from "./SuggestionsPanel";
 import { SummaryPanel } from "./SummaryPanel";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
-import { useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
+import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
 
 function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChange(v: boolean): void; onFound(productId: string): void }) {
   const { t } = useI18n();
@@ -324,6 +324,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
               focusKey={draft.focusKey}
               onFocused={onFocused}
               onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
+              onUnit={(key, unitId) => dispatch({ type: "unit", key, unitId })}
               onRemove={(key) => dispatch({ type: "remove", key })}
               onBackToSearch={() => productRef.current?.focus()}
             />
@@ -485,6 +486,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
               focusKey={draft.focusKey}
               onFocused={onFocused}
               onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
+              onUnit={(key, unitId) => dispatch({ type: "unit", key, unitId })}
               onRemove={(key) => dispatch({ type: "remove", key })}
               onBackToSearch={() => undefined}
             />
@@ -516,7 +518,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
                 return (
                   <li key={l.key} className="flex items-center justify-between gap-3 py-2.5 text-[14px]">
                     <span className="min-w-0 truncate text-ink">
-                      {locale === "hi" ? p.nameHi : p.name} <span className="num text-ink-3">× {l.qty}</span>
+                      {locale === "hi" ? p.nameHi : p.name} <span className="num text-ink-3">× {l.qty} {unitSymbolOf(p, l.unitId)}</span>
                     </span>
                     <span className="num font-medium text-ink">{r ? money(r.total.toNumber()) : ""}</span>
                   </li>

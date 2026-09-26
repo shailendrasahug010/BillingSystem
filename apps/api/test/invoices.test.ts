@@ -132,6 +132,29 @@ describe.skipIf(!hasDatabase)("invoicing", () => {
       expect(res.body.partyGstin).toBe(gstin("27", "AABCP1234C"));
     });
 
+    it("prices a pack without its own list price from the customer's price for one piece", async () => {
+      const units = Object.fromEntries((await get("/units")).body.data.map((u: { symbol: string; id: string }) => [u.symbol, u.id]));
+      const taxes = Object.fromEntries((await get("/tax-categories")).body.data.map((c: { name: string; id: string }) => [c.name, c.id]));
+      const levels = Object.fromEntries((await get("/price-levels")).body.data.map((l: { name: string; id: string }) => [l.name, l.id]));
+      const vim = await post("/products", {
+        name: "Vim Bar 200g",
+        hsnCode: "3402",
+        taxCategoryId: taxes["GST 18%"],
+        baseUnitId: units.PCS,
+        sellingPrice: "10",
+        units: [{ unitId: units.STRIP, conversionFactor: "10" }],
+        prices: [{ priceLevelId: levels.Wholesale, unitId: units.PCS, price: "9" }],
+        openingStock: "100",
+      });
+      // Wholesale: 9 a piece, so 90 a strip of 10 (not the selling price of 10 x 10).
+      const res = await post("/invoices", { customerId: ids.b2b, lines: [{ productId: vim.body.id, unitId: units.STRIP, qty: "2" }] });
+      expect(res.status).toBe(201);
+      expect(res.body.items[0]).toMatchObject({ qty: "2.000", qtyBase: "20.000", rate: "90.0000", taxableValue: "180.00" });
+      // A retail customer on the default list pays the selling price times the strip.
+      const retail = await post("/invoices", { customerId: ids.retail, lines: [{ productId: vim.body.id, unitId: units.STRIP, qty: "1" }] });
+      expect(retail.body.items[0]).toMatchObject({ rate: "100.0000", taxableValue: "100.00" });
+    });
+
     it("back-calculates tax on MRP-style inclusive prices", async () => {
       const res = await post("/invoices", { customerId: ids.retail, lines: [{ productId: ids.coke, qty: "1" }] });
       expect(res.body).toMatchObject({ taxableTotal: "32.14", cgstTotal: "6.43", sgstTotal: "6.43", grandTotal: "45.00" });

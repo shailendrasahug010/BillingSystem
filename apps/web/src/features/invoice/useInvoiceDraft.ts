@@ -5,7 +5,9 @@ import {
   DomainError,
   evaluateCredit,
   NO_TAX,
+  dec,
   resolveTax,
+  roundRate,
   stateTaxComponent,
   suggestProducts,
   buildReorderList,
@@ -26,6 +28,8 @@ import type { Customer, Product } from "../../data/types";
 export interface DraftLine {
   key: string;
   productId: string;
+  /** The unit sold in: null for the stock unit, else one of the product's packs (box, strip). */
+  unitId: string | null;
   qty: number;
   rate: number;
   discountPercent: number;
@@ -44,7 +48,8 @@ export interface Draft {
 type Action =
   | { type: "customer"; customerId: string | null }
   | { type: "add"; productId: string; qty?: number }
-  | { type: "update"; key: string; patch: Partial<Omit<DraftLine, "key" | "productId">> }
+  | { type: "update"; key: string; patch: Partial<Omit<DraftLine, "key" | "productId" | "unitId">> }
+  | { type: "unit"; key: string; unitId: string | null }
   | { type: "remove"; key: string }
   | { type: "received"; value: string }
   | { type: "method"; value: PaymentMethod }
@@ -58,20 +63,38 @@ let lineSeq = 0;
  * for the customer's rate list (else the default list), else the product's
  * selling price.
  */
-export function rateFor(product: Product, customer: Customer | null): number {
+export function rateFor(product: Product, customer: Customer | null, unitId: string | null = null): number {
+  const factor = factorOf(product, unitId);
+  const level = customer?.priceLevelId ?? WORKSPACE.defaultPriceLevelId;
+  let base: number;
   if (product.prices) {
-    const level = customer?.priceLevelId ?? WORKSPACE.defaultPriceLevelId;
-    return (level ? product.prices[level] : undefined) ?? product.rate;
-  }
-  return customer?.priceLevel === "wholesale" ? product.wholesaleRate : product.rate;
+    // A pack's own price on the rate list, else the list's price for the stock unit times the pack.
+    const own = unitId && level ? product.unitPrices?.[`${level}|${unitId}`] : undefined;
+    if (own !== undefined) return own;
+    base = (level ? product.prices[level] : undefined) ?? product.rate;
+  } else base = customer?.priceLevel === "wholesale" ? product.wholesaleRate : product.rate;
+  return factor === 1 ? base : roundRate(dec(base).times(factor)).toNumber();
 }
 
-function discountFor(product: Product, customer: Customer | null): number {
+function discountFor(product: Product, customer: Customer | null, unitId: string | null = null): number {
   if (product.discounts) {
     const level = customer?.priceLevelId ?? WORKSPACE.defaultPriceLevelId;
-    return (level ? product.discounts[level] : undefined) ?? 0;
+    const own = unitId && level ? product.unitDiscounts?.[`${level}|${unitId}`] : undefined;
+    return own ?? (level ? product.discounts[level] : undefined) ?? 0;
   }
   return customer?.priceLevel === "wholesale" ? 2 : 0;
+}
+
+/** How many stock units the line's unit holds (1 for the stock unit). */
+export function factorOf(product: Product, unitId: string | null): number {
+  if (!unitId || unitId === product.unitId) return 1;
+  return product.packUnits?.find((u) => u.unitId === unitId)?.factor ?? 1;
+}
+
+/** The symbol of the line's unit (PCS, BOX, STRIP). */
+export function unitSymbolOf(product: Product, unitId: string | null): string {
+  if (!unitId || unitId === product.unitId) return product.unit;
+  return product.packUnits?.find((u) => u.unitId === unitId)?.symbol ?? product.unit;
 }
 
 function reducer(state: Draft, action: Action): Draft {
@@ -79,11 +102,12 @@ function reducer(state: Draft, action: Action): Draft {
     case "customer": {
       const customer = action.customerId ? customerById.get(action.customerId) ?? null : null;
       // Re-price existing lines to the new customer's rate list.
-      const lines = state.lines.map((l) => ({ ...l, rate: rateFor(productById.get(l.productId)!, customer) }));
+      const lines = state.lines.map((l) => ({ ...l, rate: rateFor(productById.get(l.productId)!, customer, l.unitId) }));
       return { ...state, customerId: action.customerId, lines };
     }
     case "add": {
-      const existing = state.lines.find((l) => l.productId === action.productId);
+      // Another scan or suggestion of the same product adds to its line in the stock unit.
+      const existing = state.lines.find((l) => l.productId === action.productId && l.unitId === null);
       const qty = action.qty ?? 1;
       if (existing) {
         return {
@@ -98,12 +122,25 @@ function reducer(state: Draft, action: Action): Draft {
       const key = `l${lineSeq}`;
       return {
         ...state,
-        lines: [...state.lines, { key, productId: product.id, qty, rate: rateFor(product, customer), discountPercent: discountFor(product, customer) }],
+        lines: [...state.lines, { key, productId: product.id, unitId: null, qty, rate: rateFor(product, customer), discountPercent: discountFor(product, customer) }],
         focusKey: key,
       };
     }
     case "update":
       return { ...state, lines: state.lines.map((l) => (l.key === action.key ? { ...l, ...action.patch } : l)) };
+    case "unit": {
+      // Another unit: the same count in that unit, at that unit's price for this customer.
+      const customer = state.customerId ? customerById.get(state.customerId) ?? null : null;
+      return {
+        ...state,
+        lines: state.lines.map((l) => {
+          if (l.key !== action.key) return l;
+          const p = productById.get(l.productId)!;
+          const unitId = action.unitId && action.unitId !== p.unitId ? action.unitId : null;
+          return { ...l, unitId, rate: rateFor(p, customer, unitId), discountPercent: discountFor(p, customer, unitId) };
+        }),
+      };
+    }
     case "remove":
       return { ...state, lines: state.lines.filter((l) => l.key !== action.key) };
     case "received":
@@ -165,9 +202,11 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
         amountPaid: draft.received.trim() === "" ? 0 : Number(draft.received) || 0,
         lines: draft.lines.map((l) => {
           const p = productById.get(l.productId)!;
+          const factor = factorOf(p, l.unitId);
+          // Value-based GST slabs look at the price of one stock unit, as the server does.
           const tax =
             p.taxCategory.kind === "taxable"
-              ? resolveTax(p.taxCategory, { date: draft.date, unitValue: l.rate, unitValueIncludesTax: Boolean(p.pricesIncludeTax) })
+              ? resolveTax(p.taxCategory, { date: draft.date, unitValue: dec(l.rate).dividedBy(factor), unitValueIncludesTax: Boolean(p.pricesIncludeTax) })
               : { ...NO_TAX, kind: p.taxCategory.kind };
           return {
             key: l.key,
@@ -175,6 +214,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
             rate: l.rate >= 0 ? l.rate : 0,
             rateIncludesTax: Boolean(p.pricesIncludeTax),
             discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)),
+            conversionFactor: factor,
             tax,
             hsnCode: p.hsn,
             uqc: p.uqc,
