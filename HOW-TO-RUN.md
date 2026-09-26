@@ -160,7 +160,7 @@ Digital Bahi now opens in its own window, without the browser's tabs and address
 
 **PDF and Excel files.** Every report has **PDF** (with your letterhead and page numbers), **Excel** (an .xlsx workbook: real numbers and dates, totals, the heading row stays in view) and **CSV**. Invoices, credit / debit notes and receipts have **Download PDF**: a proper A4 file made on the server with your logo, GST table, tax summary and amount in words, in English or Hindi (the language switch next to it). Packing slips, trip sheets and salary slips are saved as PDF from **Print / PDF** (choose "Save as PDF" in the print window).
 
-**Keyboard.** Ctrl+I new invoice, Alt+P purchase bill, Alt+O sales order, Alt+C receive payment, Ctrl+K search. The keyboard icon at the bottom of the left menu lists them all.
+**Keyboard.** Ctrl+I new invoice, Alt+P purchase bill, Alt+O sales order, Alt+C receive payment, Ctrl+K search. On the invoice: F3 customer, F2 product search, Alt+1…9 add a suggestion, Ctrl+Enter save; they work on any screen 768 px or wider (a small laptop or a tablet with a keyboard as well). On many laptops the F-keys control brightness and volume unless **Fn** is held (or Fn-Lock is on). A shop that is not a customer yet can be added from the invoice's customer search: type its name or mobile number and choose **Add “…” as a new customer**. The keyboard icon at the bottom of the left menu lists every shortcut.
 
 **Updates.** New versions download by themselves. When one is ready, a line at the top says **A new version of Digital Bahi is ready · Reload now**. Click it when you are not in the middle of a bill (nothing changes until you do).
 

@@ -442,7 +442,8 @@
       "credit": "जमा",
       "runningBalance": "बैलेंस",
       "particulars": "विवरण"
-    }
+    },
+    "addNamed": "“{{name}}” को नया ग्राहक जोड़ें"
   },
   "supplier": {
     "title": "सप्लायर",

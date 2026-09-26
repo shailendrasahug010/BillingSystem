@@ -442,7 +442,8 @@
       "credit": "Credit",
       "runningBalance": "Balance",
       "particulars": "Particulars"
-    }
+    },
+    "addNamed": "Add “{{name}}” as a new customer"
   },
   "supplier": {
     "title": "Suppliers",

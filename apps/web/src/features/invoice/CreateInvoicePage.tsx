@@ -25,6 +25,7 @@ import { LineItems } from "./LineItems";
 import { ProductSearch } from "./ProductSearch";
 import { SuggestionsPanel } from "./SuggestionsPanel";
 import { SummaryPanel } from "./SummaryPanel";
+import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
 
 function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChange(v: boolean): void; onFound(productId: string): void }) {
@@ -234,6 +235,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
   const productRef = useRef<HTMLInputElement>(null);
   const customerRef = useRef<HTMLInputElement>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
   const { save, shareText, closeShare } = useSave(view);
   const { draft, dispatch, customer, insight, totals, error, credit } = view;
   const numberLabel = useNextNumberLabel(draft.date);
@@ -282,10 +284,15 @@ function DesktopInvoice({ view }: { view: DraftView }) {
               <label className="text-[13px] font-medium text-ink-2" htmlFor="customer-search">
                 {t("invoice.customer")}
               </label>
-              <CustomerPicker ref={customerRef} autoFocus onSelect={(id) => {
-                dispatch({ type: "customer", customerId: id });
-                setTimeout(() => productRef.current?.focus(), 0);
-              }} />
+              <CustomerPicker
+                ref={customerRef}
+                autoFocus
+                onSelect={(id) => {
+                  dispatch({ type: "customer", customerId: id });
+                  setTimeout(() => productRef.current?.focus(), 0);
+                }}
+                onAdd={canAddCustomer() ? setAdding : undefined}
+              />
             </div>
           )}
 
@@ -329,6 +336,15 @@ function DesktopInvoice({ view }: { view: DraftView }) {
       </div>
 
       <ScanDialog open={scanOpen} onOpenChange={setScanOpen} onFound={(id) => dispatch({ type: "add", productId: id })} />
+      <AddCustomerDialog
+        open={adding !== null}
+        onOpenChange={(v) => !v && setAdding(null)}
+        initial={adding ?? ""}
+        onCreated={(id) => {
+          dispatch({ type: "customer", customerId: id });
+          setTimeout(() => productRef.current?.focus(), 0);
+        }}
+      />
       <ShareDialog text={shareText} onClose={closeShare} />
     </div>
   );
@@ -340,9 +356,31 @@ function MobileInvoice({ view }: { view: DraftView }) {
   const { save, shareText, closeShare } = useSave(view);
   const [step, setStep] = useState(view.customer ? 1 : 0);
   const [scanOpen, setScanOpen] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
+  const productRef = useRef<HTMLInputElement>(null);
+  const customerRef = useRef<HTMLInputElement>(null);
   const { draft, dispatch, customer, insight, totals, credit } = view;
   const numberLabel = useNextNumberLabel(draft.date);
   const onFocused = useCallback(() => dispatch({ type: "focused" }), [dispatch]);
+  const toProducts = () => {
+    setStep(1);
+    setTimeout(() => productRef.current?.focus(), 0);
+  };
+
+  // The same keys as the full screen, for tablets and small laptops with a keyboard.
+  useShortcuts([
+    { id: "focus-product", keys: INVOICE_SHORTCUTS.focusProduct, allowInInputs: true, handler: () => customer && toProducts() },
+    {
+      id: "focus-customer",
+      keys: INVOICE_SHORTCUTS.focusCustomer,
+      allowInInputs: true,
+      handler: () => {
+        setStep(0);
+        setTimeout(() => customerRef.current?.focus(), 0);
+      },
+    },
+    { id: "save", keys: INVOICE_SHORTCUTS.save, allowInInputs: true, handler: () => totals && (step === 2 ? save("save") : setStep(2)) },
+  ]);
 
   const recent = useMemo(
     () =>
@@ -380,11 +418,13 @@ function MobileInvoice({ view }: { view: DraftView }) {
       {step === 0 && (
         <div className="flex flex-col gap-4">
           <CustomerPicker
+            ref={customerRef}
             large
             onSelect={(id) => {
               dispatch({ type: "customer", customerId: id });
-              setStep(1);
+              toProducts();
             }}
+            onAdd={canAddCustomer() ? setAdding : undefined}
           />
           <div>
             <p className="eyebrow mb-2">{t("invoice.customerCard.lastPurchase")}</p>
@@ -425,7 +465,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
             </span>
             <span className="text-[13px] font-medium text-accent">{t("invoice.changeCustomer")}</span>
           </button>
-          <ProductSearch large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
+          <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
           <SuggestionsPanel
             variant="mobile"
             hasCustomer
@@ -492,13 +532,26 @@ function MobileInvoice({ view }: { view: DraftView }) {
       )}
 
       <ScanDialog open={scanOpen} onOpenChange={setScanOpen} onFound={(id) => dispatch({ type: "add", productId: id })} />
+      <AddCustomerDialog
+        open={adding !== null}
+        onOpenChange={(v) => !v && setAdding(null)}
+        initial={adding ?? ""}
+        onCreated={(id) => {
+          dispatch({ type: "customer", customerId: id });
+          toProducts();
+        }}
+      />
       <ShareDialog text={shareText} onClose={closeShare} />
     </div>
   );
 }
 
+/** Customers can be added while billing by anyone allowed to add them, when online. */
+const canAddCustomer = () => LIVE && allowed("customer.create") && getOfflineState().online && !getOfflineState().offlineMode;
+
 export function CreateInvoicePage({ customerId }: { customerId?: string }) {
   const view = useInvoiceDraft(customerId ?? null);
-  const desktop = useMediaQuery("(min-width: 1024px)");
+  // The full screen (with its keyboard shortcuts) from tablet width up; the step-by-step one on phones.
+  const desktop = useMediaQuery("(min-width: 768px)");
   return desktop ? <DesktopInvoice view={view} /> : <MobileInvoice view={view} />;
 }

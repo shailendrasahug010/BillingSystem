@@ -34,8 +34,8 @@ export function searchCustomers(query: string, limit = 8): Customer[] {
  * Enter selects. Outstanding is shown in the results so the salesperson sees
  * risk before starting the bill.
  */
-export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string): void; autoFocus?: boolean; large?: boolean }>(function CustomerPicker(
-  { onSelect, autoFocus, large },
+export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string): void; onAdd?(typed: string): void; autoFocus?: boolean; large?: boolean }>(function CustomerPicker(
+  { onSelect, onAdd, autoFocus, large },
   ref,
 ) {
   const { t, money } = useI18n();
@@ -50,6 +50,12 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
     setQuery("");
     setOpen(false);
   };
+  const add = () => {
+    setOpen(false);
+    onAdd?.(query);
+  };
+  // "Add customer" is the row after the results (arrow down to it, Enter).
+  const last = onAdd ? results.length : results.length - 1;
 
   return (
     <div className="relative">
@@ -61,7 +67,7 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
-          aria-activedescendant={open && results[active] ? `${listId}-${active}` : undefined}
+          aria-activedescendant={open && (results[active] || (onAdd && active === results.length)) ? `${listId}-${active}` : undefined}
           aria-label={t("invoice.searchCustomer")}
           placeholder={t("invoice.searchCustomer")}
           value={query}
@@ -76,13 +82,16 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
             if (e.key === "ArrowDown") {
               e.preventDefault();
               setOpen(true);
-              setActive((a) => Math.min(results.length - 1, a + 1));
+              setActive((a) => Math.min(last, a + 1));
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
               setActive((a) => Math.max(0, a - 1));
             } else if (e.key === "Enter" && open && results[active]) {
               e.preventDefault();
               choose(results[active]);
+            } else if (e.key === "Enter" && open && onAdd && active === results.length) {
+              e.preventDefault();
+              add();
             } else if (e.key === "Escape") {
               setOpen(false);
             }
@@ -132,11 +141,22 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
             );
           })}
           {results.length === 0 && <li className="px-3 py-4 text-center text-[13px] text-ink-3">{t("search.noResults", { query })}</li>}
-          <li className="mt-1 border-t border-line pt-1">
-            <button type="button" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium text-accent hover:bg-surface-2">
-              <UserPlus size={15} /> {t("customer.add")}
-            </button>
-          </li>
+          {onAdd && (
+            <li
+              id={`${listId}-${results.length}`}
+              role="option"
+              aria-selected={active === results.length}
+              onMouseDown={(e) => {
+                // Keep the focus in the search until the click lands.
+                e.preventDefault();
+                add();
+              }}
+              onMouseEnter={() => setActive(results.length)}
+              className={cn("mt-1 flex cursor-pointer items-center gap-2 rounded-lg border-t border-line px-3 py-2 text-[13px] font-medium text-accent", active === results.length && "bg-surface-2")}
+            >
+              <UserPlus size={15} /> {query.trim() ? t("customer.addNamed", { name: query.trim() }) : t("customer.add")}
+            </li>
+          )}
         </ul>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validateMobile, validatePincode, type IssueCode } from "@vyapaar/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
@@ -8,6 +8,7 @@ import { Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { translateError } from "@vyapaar/i18n";
 import { upsertCustomer, type CustomerRow } from "../../data/live";
+import { BUSINESS } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { api, ApiError } from "../../lib/api";
 import { stateOptions } from "../../lib/states";
@@ -18,16 +19,42 @@ import { stateOptions } from "../../lib/states";
  * full profile. Validation runs as you type, with specific messages: a GSTIN
  * typo is caught by its check digit, and a GSTIN from another state is flagged.
  */
-export function AddCustomerDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange(v: boolean): void; onCreated?(id: string): void }) {
+export function AddCustomerDialog({
+  open,
+  onOpenChange,
+  onCreated,
+  initial,
+}: {
+  open: boolean;
+  onOpenChange(v: boolean): void;
+  onCreated?(id: string): void;
+  /** What was typed in a search that found nobody: a mobile number, a GSTIN or the shop's name. */
+  initial?: string;
+}) {
   const i18n = useI18n();
   const { t, locale } = i18n;
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<ApiError | null>(null);
   const toast = useToast();
   const [type, setType] = useState<"b2b" | "b2c">("b2b");
-  const [form, setForm] = useState({ businessName: "", name: "", mobile: "", gstin: "", stateCode: "23", pincode: "", creditLimit: "" });
+  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "" });
+  const [form, setForm] = useState(blank);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Opened from a search: start from what was typed.
+  useEffect(() => {
+    if (!open || !initial?.trim()) return;
+    const typed = initial.trim();
+    const digits = typed.replace(/\D/g, "");
+    const gstin = normalizeGstin(typed);
+    if (/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+      setType("b2b");
+      setForm({ ...blank(), gstin, stateCode: GST_STATES.some((x) => x.code === stateCodeFromGstin(gstin)) ? stateCodeFromGstin(gstin) : blank().stateCode });
+    } else if (digits.length >= 10 && digits.length === typed.replace(/[\s+-]/g, "").length) setForm({ ...blank(), mobile: digits.slice(-10) });
+    else setForm({ ...blank(), businessName: typed });
+    setTouched({});
+  }, [open, initial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const issueText = (issues: IssueCode[], field: "mobile" | "pincode" | "gstin"): string | null => {
     const first = issues[0];
