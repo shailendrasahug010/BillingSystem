@@ -1,7 +1,7 @@
 import type { BillFileLine } from "@vyapaar/core";
 import { describe, expect, it } from "vitest";
 import type { Product } from "../../data/types";
-import { lineFromItem, sameUnit, unitFor } from "./billImport";
+import { lineFromItem, sameUnit, unitFor, unitNamed } from "./billImport";
 
 const surf = {
   id: "p-surf",
@@ -39,6 +39,9 @@ describe("bill import lines", () => {
     expect(sameUnit("Nos", "PCS")).toBe(true);
     expect(sameUnit("cs", "CASE")).toBe(true);
     expect(sameUnit("BOX", "CASE")).toBe(false);
+    // "Piece" is PCS even where NOS comes first in the list; "Nos" is still NOS.
+    const list = [{ symbol: "BAG" }, { symbol: "NOS" }, { symbol: "PCS" }, { symbol: "CTN" }];
+    expect(["Piece", "Nos", "Bag", "Carton", "Strip"].map((w) => unitNamed(list, w)?.symbol)).toEqual(["PCS", "NOS", "BAG", "CTN", undefined]);
   });
 
   it("picks the remembered unit, else the unit on the bill, else the pack nearest the rate", () => {
@@ -50,7 +53,7 @@ describe("bill import lines", () => {
     expect(unitFor(surf, { unitId: null, file: line({ rate: "400" }) })).toBe("u-pcs");
   });
 
-  it("builds the entry line: GST only as an override, batch only for batch products, supplier item kept", () => {
+  it("builds the entry line: GST as the bill charged it, batch only for batch products, supplier item kept", () => {
     expect(lineFromItem({ unitId: null, file: line() }, surf)).toEqual({
       productId: "p-surf",
       unitId: "u-case",
@@ -58,7 +61,7 @@ describe("bill import lines", () => {
       freeQty: "",
       rate: "1380",
       discountPercent: "2.5",
-      gstRate: "",
+      gstRate: "18",
       batchNumber: "",
       expiryDate: "",
       mfgDate: "",

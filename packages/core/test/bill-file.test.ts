@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billColumnOf, billFieldsFromText, compactName, parseBillDate, parseBillNumber, parseExpiry, readBillFile, supplierItemKeys } from "../src/index.js";
+import { billColumnOf, billFieldsFromText, compactName, parseBillDate, parseBillNumber, parseExpiry, parseGstRate, readBillFile, supplierItemKeys } from "../src/index.js";
 
 describe("supplier bill files", () => {
   it("understands the column names bills and billing software use", () => {
@@ -99,6 +99,22 @@ describe("supplier bill files", () => {
     ]);
   });
 
+  it("reads GST written as its halves in one cell and the net value as the taxable value", () => {
+    expect(["CGST@6 + SGST@6", "CGST@9+SGST@9", "IGST@18", "IGST @ 5%", "GST 18%", "CGST@2.5", "18%", "12.00 %", "5"].map(parseGstRate)).toEqual(["12", "18", "18", "5", "18", "5", "18", "12", "5"]);
+    expect(parseGstRate("VAT")).toBeNull();
+    expect(["Net Value", "Tax %", "Unit Price", "UOM", "SR. No"].map(billColumnOf)).toEqual(["taxable", "gst_rate", "rate", "unit", null]);
+    const file = readBillFile([
+      ["SR. No", "Description", "HSN /SAC", "Qty", "UOM", "Unit Price", "Tax %", "Net Value", "CGST", "SGST", "IGST", "Total"],
+      ["1", "AVDH Namkeen Moon Chips Tomato 11 gm 96 Pkt Rs 5", "21069099", "20.00", "Bag", "314.0300", "CGST@6 + SGST@6", "6280.60", "376.84", "376.84", "0.00", "7034.28"],
+      ["2", "Adhesive Tape", "39199090", "1.00", "Piece", "40.0000", "CGST@9 + SGST@9", "40.00", "3.60", "3.60", "0.00", "47.20"],
+    ]);
+    expect(file.problems).toEqual([]);
+    expect(file.bills[0]!.lines.map((l) => [l.itemName, l.hsnCode, l.unit, l.qty, l.rate, l.discountPercent, l.gstRate])).toEqual([
+      ["AVDH Namkeen Moon Chips Tomato 11 gm 96 Pkt Rs 5", "21069099", "BAG", "20", "314.03", null, "12"],
+      ["Adhesive Tape", "39199090", "PIECE", "1", "40", null, "18"],
+    ]);
+  });
+
   it("reports a sheet without an item and quantity header", () => {
     expect(readBillFile([["Name", "Mobile"], ["Ramesh", "98260"]])).toMatchObject({ headerRow: 0, bills: [] });
   });
@@ -118,6 +134,9 @@ describe("supplier bill files", () => {
       ),
     ).toEqual({ billNumber: "SG/1021", billDate: "2026-09-20", supplierGstin: "23AAACM1234M1ZR", supplierName: "SHREE GANESH AGENCIES" });
     expect(billFieldsFromText(["Tax Invoice", "Malwa Foods", "Bill No: 4471", "Dated 5 Sep 2026"])).toMatchObject({ billNumber: "4471", billDate: "2026-09-05", supplierName: "Malwa Foods", supplierGstin: null });
+    // Copy marks and the "Tax Invoice" title come before the seller's name on many bills.
+    expect(billFieldsFromText(["Org/Dup/Trip", "TAX INVOICE", "Malwa Snacks Limited", "Invoice No. : 2500108676", "Invoice Date 24/08/2025"])).toMatchObject({ billNumber: "2500108676", billDate: "2025-08-24", supplierName: "Malwa Snacks Limited" });
+    expect(billFieldsFromText(["Original for Recipient", "Malwa Foods"]).supplierName).toBe("Malwa Foods");
     expect(billFieldsFromText([])).toEqual({ billNumber: null, billDate: null, supplierGstin: null, supplierName: null });
   });
 });

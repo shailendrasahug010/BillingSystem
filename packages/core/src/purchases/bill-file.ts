@@ -73,7 +73,7 @@ alias("batch", "batch", "batch_no", "batch_number", "batchno", "lot", "lot_no");
 alias("expiry", "exp", "expiry", "expiry_date", "exp_date", "exp_dt", "expdt", "best_before", "use_before", "use_by");
 alias("mfg", "mfg", "mfg_date", "mfd", "mfg_dt", "manufacturing_date", "pkd", "pkd_date", "packed_on");
 alias("mrp", "mrp", "mrp_rate", "m_r_p");
-alias("taxable", "taxable", "taxable_value", "taxable_amount", "taxable_amt", "taxable_val", "assessable_value", "basic_amount");
+alias("taxable", "taxable", "taxable_value", "taxable_amount", "taxable_amt", "taxable_val", "assessable_value", "basic_amount", "net_value");
 
 /** GST rates a bill can carry (the half rates appear as CGST / SGST). */
 const GST_RATES = new Set([0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40]);
@@ -153,6 +153,23 @@ export function parseBillNumber(raw: string, decimals: number): string | null {
   const n = Number(v);
   if (!Number.isFinite(n) || n >= 1e12) return null;
   return String(Math.round(n * 10 ** decimals) / 10 ** decimals);
+}
+
+/**
+ * A GST rate as bills print it: "18", "18%", "18.00 %", or split into its
+ * halves in one cell ("CGST@6 + SGST@6" is 12, "IGST@18" is 18); null when
+ * it is none of these.
+ */
+export function parseGstRate(raw: string): string | null {
+  const parts = [...raw.matchAll(/\b(c|s|ut|i)?gst\s*[@:-]?\s*(\d+(?:\.\d+)?)\s*%?/gi)];
+  if (parts.length) {
+    // IGST, or "GST 18%", is the whole rate; CGST and SGST add up, one half alone ("CGST@9") stands for both.
+    const whole = parts.find((m) => !m[1] || m[1].toLowerCase() === "i");
+    const halves = parts.reduce((sum, m) => sum + Number(m[2]), 0);
+    const rate = whole ? Number(whole[2]) : parts.length === 1 ? 2 * halves : halves;
+    return String(Math.round(rate * 1000) / 1000);
+  }
+  return parseBillNumber(raw.replace(/%\s*$/, ""), 3);
 }
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -282,11 +299,19 @@ export function readBillFile(sheet: string[][]): BillFile {
       }
     }
 
-    let gstRate = num("gst_rate", 3);
+    const rateOf = (c: BillColumn) => {
+      const v = get(c);
+      if (!v) return null;
+      // A CGST column holds its own half ("6%"); only a GST column may spell out both halves.
+      const n = c === "gst_rate" ? parseGstRate(v) : parseBillNumber(v.replace(/%\s*$/, ""), 3);
+      if (n === null) problems.push({ row: rowNo, column: c, code: "INVALID_NUMBER", value: v });
+      return n;
+    };
+    let gstRate = rateOf("gst_rate");
     if (gstRate === null) {
-      const igst = num("igst_rate", 3);
-      const cgst = num("cgst_rate", 3);
-      const sgst = num("sgst_rate", 3);
+      const igst = rateOf("igst_rate");
+      const cgst = rateOf("cgst_rate");
+      const sgst = rateOf("sgst_rate");
       if (igst !== null && Number(igst) > 0) gstRate = igst;
       else if (cgst !== null || sgst !== null) gstRate = String(Math.round((Number(cgst ?? 0) + Number(sgst ?? cgst ?? 0)) * 1000) / 1000);
       else if (igst !== null) gstRate = igst;
@@ -367,7 +392,7 @@ export function billFieldsFromText(lines: readonly string[], ownGstin?: string |
   const gstins = [...text.toUpperCase().matchAll(GSTIN_IN_TEXT)].map((m) => m[0]).filter((g) => g !== own);
   const number = lines.map((l) => BILL_NO_IN_TEXT.exec(l)?.[1]).find(Boolean) ?? null;
   const dateText = lines.map((l) => DATE_IN_TEXT.exec(l)?.[1]).find(Boolean);
-  const firstLine = lines.map((l) => l.trim()).find((l) => l && !HAS_GSTIN.test(l.toUpperCase()) && !/^(tax\s+)?invoice$|^bill\s+of\s+supply$|^original|^duplicate/i.test(l));
+  const firstLine = lines.map((l) => l.trim()).find((l) => l && !HAS_GSTIN.test(l.toUpperCase()) && !/^(tax\s+)?invoice$|^bill\s+of\s+supply$|^(org|orig|original|dup|duplicate|trip|triplicate)\b|^page\s+\d/i.test(l));
   return {
     billNumber: number ? number.replace(/[.,:;]+$/, "") : null,
     billDate: dateText ? parseBillDate(dateText.replace(/\s+/g, "-").replace(/,/g, "")) : null,

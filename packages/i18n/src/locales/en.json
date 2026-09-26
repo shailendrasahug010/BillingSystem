@@ -1944,7 +1944,10 @@
     "addProducts_other": "Add {{count}} products",
     "productsAdded_one": "{{count}} new product added",
     "productsAdded_other": "{{count}} new products added",
-    "packAboveMrp": "Billed per {{unit}} above its MRP, so the MRP is probably per piece. Check the unit and price."
+    "packAboveMrp": "Billed per {{unit}} above its MRP, so the MRP is probably per piece. Check the unit and price.",
+    "gstForRest": "GST for the items without one",
+    "rateNotListed": "The bill charges GST {{rates}}, which is not in your GST list (rates changed on 22 Sep 2025). Choose the rate that applies now; this purchase keeps the GST the bill charged.",
+    "billRate": "Bill: GST {{rate}}%, not in your list"
   },
   "offline": {
     "notReady": "This device is not ready for offline bills yet. Open Digital Bahi once while connected to the internet.",

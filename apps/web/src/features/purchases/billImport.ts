@@ -85,13 +85,31 @@ const UNIT_WORDS = [
   ["GM", "G", "GMS", "GRAM"],
   ["MTR", "M", "METER", "METRE"],
   ["STRIP", "STRIPS", "STP"],
+  ["BAG", "BAGS"],
 ];
 
 export function sameUnit(a: string, b: string): boolean {
-  const x = a.trim().toUpperCase();
-  const y = b.trim().toUpperCase();
-  if (x === y) return true;
-  return UNIT_WORDS.some((g) => g.includes(x) && g.includes(y));
+  return unitRank(a, b) < Infinity;
+}
+
+/** 0 for the same symbol, then by how usual the symbol is for the word ("PIECE" is PCS before NOS). */
+function unitRank(symbol: string, written: string): number {
+  const x = symbol.trim().toUpperCase();
+  const y = written.trim().toUpperCase();
+  if (x === y) return 0;
+  const group = UNIT_WORDS.find((g) => g.includes(x) && g.includes(y));
+  return group ? 1 + group.indexOf(x) : Infinity;
+}
+
+/** The unit a word on a bill means, among these units. */
+export function unitNamed<T extends { symbol: string }>(units: readonly T[], written: string): T | undefined {
+  let best: T | undefined;
+  let rank = Infinity;
+  for (const u of units) {
+    const r = unitRank(u.symbol, written);
+    if (r < rank) [best, rank] = [u, r];
+  }
+  return best;
 }
 
 /**
@@ -102,7 +120,7 @@ export function sameUnit(a: string, b: string): boolean {
 export function unitFor(product: Product, item: Pick<ImportedItem, "unitId" | "file">): string {
   const units = [{ unitId: product.unitId ?? "", symbol: product.unit, factor: 1 }, ...(product.packUnits ?? [])];
   if (item.unitId && units.some((u) => u.unitId === item.unitId)) return item.unitId;
-  const written = item.file.unit ? units.find((u) => sameUnit(u.symbol, item.file.unit!)) : undefined;
+  const written = item.file.unit ? unitNamed(units, item.file.unit) : undefined;
   if (written) return written.unitId;
   const rate = Number(item.file.rate ?? 0);
   if (rate > 0 && product.purchasePrice > 0 && units.length > 1) {
@@ -126,8 +144,8 @@ export function lineFromItem(item: Pick<ImportedItem, "unitId" | "file">, produc
     freeQty: f.freeQty ?? "",
     rate: f.rate ?? (product.purchasePrice ? trim(product.purchasePrice * factor) : ""),
     discountPercent: f.discountPercent ?? "",
-    // Only an override when the bill's rate differs from the product's.
-    gstRate: f.gstRate !== null && Number(f.gstRate) !== product.gstRate ? f.gstRate : "",
+    // The GST the supplier charged, as printed: it may be from before a rate change.
+    gstRate: f.gstRate ?? "",
     batchNumber: product.trackBatches ? (f.batchNumber ?? "") : "",
     expiryDate: product.trackExpiry || product.trackBatches ? (f.expiryDate ?? "") : "",
     mfgDate: product.trackBatches ? (f.mfgDate ?? "") : "",
@@ -175,7 +193,7 @@ export function taxCategoryForRate(gstRate: string | null): string | null {
 
 export function newProductFrom(item: ImportedItem): NewProductGuess {
   const f = item.file;
-  const unit = f.unit ? WORKSPACE.unitList.find((u) => sameUnit(u.symbol, f.unit!)) : undefined;
+  const unit = f.unit ? unitNamed(WORKSPACE.unitList, f.unit) : undefined;
   // Without a unit on the bill, pieces (or numbers) are the usual stock unit.
   const fallback = WORKSPACE.unitList.find((u) => u.symbol === "PCS") ?? WORKSPACE.unitList.find((u) => u.symbol === "NOS") ?? WORKSPACE.unitList[0];
   return {

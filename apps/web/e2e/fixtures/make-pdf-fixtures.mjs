@@ -2,7 +2,7 @@
  * Builds the PDF files the PDF flow uploads, the way billing software prints
  * them: a supplier's tax invoice (seller's name and GSTIN on top, bill number
  * and date above the table, a wrapped item name, totals and amount in words
- * below) and a company price list. Chromium prints them to real PDFs.
+ * below), a company price list, and a big company's two-page tax invoice. Chromium prints them to real PDFs.
  *   PLAYWRIGHT_PATH=/path/to/node_modules node apps/web/e2e/fixtures/make-pdf-fixtures.mjs
  */
 import { createRequire } from "node:module";
@@ -57,14 +57,80 @@ const priceList = `<html><head><style>${css}</style></head><body>
   </table>
 </body></html>`;
 
+// A company's tax invoice (made-up firm and brands) laid out the way big FMCG makers print
+// theirs: headings over three lines, each item's name above and below its numbers, the tax
+// written as "CGST@6 + SGST@6", the table running on to page 2 without the heading, and
+// "Page 1 of 2" footers.
+const snacks = [
+  ["MALWA Namkeen Moon Chips Tomato 11 gm 96 Pkt Rs 5 - With Party Toys", "21069099", 20, "Bag", "314.0300", 12],
+  ["MALWA Namkeen Moon Chips Masala 12 gm 96 Pkt Rs 5 - With Pop Tube Toys", "21069099", 20, "Bag", "314.0300", 12],
+  ["MALWA Namkeen Salted Crunchy Pipe 18 Gm 180 Pkt Rs 5", "21069099", 70, "Carton", "588.8001", 12],
+  ["MALWA Namkeen Chilli Noodles 18 Gm 180 Pkt Rs 5", "21069099", 86, "Carton", "588.8001", 12],
+  ["MS Namkeen Tasty 18 gm 240 pkt Rs 5", "21069099", 30, "Carton", "816.4700", 12],
+  ["MS Namkeen Punjabi Tadka 18 gm 240 pkt Rs 5", "21069099", 10, "Carton", "816.4700", 12],
+  ["MS Namkeen Bhavnagari Gathiya 20 gm 240 Pkt Rs 5", "21069099", 25, "Carton", "816.4700", 12],
+  ["MS Namkeen Aloo Bhujia 20 gm 240 pkt Rs 5", "21069099", 50, "Carton", "816.4702", 12],
+  ["MS Namkeen Mitha Falahari 20 gm 240 pkt Rs 5", "21069099", 20, "Carton", "816.4700", 12],
+  ["MS Namkeen Khatta Mitha 20 gm 240 pkt Rs 5", "21069099", 15, "Carton", "816.4700", 12],
+  ["MS Namkeen Ratlami Sev 20 gm 240 pkt Rs 5", "21069099", 30, "Carton", "816.4700", 12],
+  ["Adhesive Tape", "39199090", 1, "Piece", "40.0000", 18],
+  ["Corrugated Box Chips 280 Pkt", "48191010", 15, "Piece", "2.0000", 12],
+  ["MS Popcorn Simply Salted 13 gm 280 pkt Rs 5", "21069099", 20, "Carton", "915.9200", 12],
+  ["Hanger", "73012090", 150, "Piece", "0.1000", 18],
+  ["MS Namkeen Puff Tomato 20 gm 210 pkt Rs 5", "21069099", 80, "Carton", "748.7701", 12],
+];
+const r2 = (n) => Math.round(n * 100) / 100;
+const f2 = (n) => n.toFixed(2);
+let net = 0;
+let half = 0;
+const snackRows = snacks
+  .map(([name, hsn, qty, uom, rate, gst], i) => {
+    const value = r2(qty * Number(rate));
+    const tax = r2((value * gst) / 200);
+    net += value;
+    half += tax;
+    return `<tr><td>${i + 1}</td><td class="desc">${name}</td><td>${hsn}</td><td class="n">${f2(qty)}</td><td>${uom}</td><td class="n">${rate}</td><td class="tax">CGST@${gst / 2} + SGST@${gst / 2}</td><td class="n">${f2(value)}</td><td class="n">${f2(tax)}</td><td class="n">${f2(tax)}</td><td class="n">0.00</td><td class="n">${f2(r2(value + 2 * tax))}</td></tr>`;
+  })
+  .join("");
+const companyInvoice = `<html><head><style>${css}
+  .inv td, .inv th { vertical-align: middle; padding: 7px 3px; font-size: 8px; }
+  .inv th { text-align: center; background: none; }
+  .inv td.desc { width: 105px; }
+  .inv td.tax { width: 34px; text-align: center; }
+  .kv td { border: none; padding: 1px 4px; }
+</style></head><body>
+  <div style="text-align:right">Org/Dup/Trip</div>
+  <div style="text-align:center;font-weight:bold;font-size:12px">TAX INVOICE</div>
+  <h1 style="text-align:center">Malwa Snacks Limited</h1>
+  <div>Billing Address : Plot 12, Sector C, Sanwer Road Industrial Area, Indore - 452015, INDIA</div>
+  <div class="row"><table class="kv" style="width:48%"><tr><td>Bill To Party :</td><td>0000104410</td></tr><tr><td colspan="2">Anand Distributors</td></tr><tr><td>GSTIN</td><td>: 23AAGFG5678G1ZA</td></tr></table>
+  <table class="kv" style="width:48%"><tr><td>GSTIN</td><td>: 23AAACM1234M1ZR</td></tr><tr><td>Invoice No.</td><td>: 2500104410</td></tr><tr><td>Invoice Date</td><td>: 24/08/2025</td></tr><tr><td>Payment Terms</td><td>: Cash Basis</td></tr></table></div>
+  <table class="inv">
+    <tbody>
+      <tr><th>SR.<br>No</th><th>Description</th><th>HSN<br>/SAC</th><th>Qty</th><th>UOM</th><th>Unit Price</th><th>Tax %</th><th>Net Value</th><th>CGST</th><th>SGST</th><th>IGST</th><th>Total</th></tr>
+      ${snackRows}
+      <tr><td></td><td colspan="6">Total Sales Value</td><td class="n">${f2(r2(net))}</td><td class="n">${f2(r2(half))}</td><td class="n">${f2(r2(half))}</td><td class="n">0.00</td><td class="n">${f2(r2(net + 2 * half))}</td></tr>
+    </tbody>
+  </table>
+  <div class="row"><span>Grand Total</span><b>${f2(r2(net + 2 * half))}</b></div>
+  <div class="box">Bank Details for Remittance : Payee Name : Malwa Snacks Ltd · IFSC : SBIN0001234</div>
+</body></html>`;
+
 const browser = await chromium.launch();
 const page = await browser.newPage();
-for (const [name, html] of [
+const footer = `<div style="font: 8px Arial; width: 100%; padding: 0 12mm; display: flex; gap: 40mm"><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span><span>Subject to Indore Jurisdiction</span></div>`;
+for (const [name, html, pageFooter] of [
   ["supplier-bill.pdf", bill],
   ["price-list.pdf", priceList],
+  ["company-invoice.pdf", companyInvoice, footer],
 ]) {
   await page.setContent(html);
-  await page.pdf({ path: join(HERE, name), format: "A4", margin: { top: "14mm", bottom: "14mm", left: "12mm", right: "12mm" } });
+  await page.pdf({
+    path: join(HERE, name),
+    format: "A4",
+    margin: { top: "14mm", bottom: "14mm", left: "12mm", right: "12mm" },
+    ...(pageFooter ? { displayHeaderFooter: true, headerTemplate: "<span></span>", footerTemplate: pageFooter } : {}),
+  });
   console.log("written", name);
 }
 await browser.close();

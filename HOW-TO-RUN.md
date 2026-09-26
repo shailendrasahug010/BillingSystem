@@ -96,7 +96,7 @@ Open **http://localhost:5173** in Chrome or Edge.
 2. Click **Send OTP**. On your own computer no SMS is sent: the code is shown on the screen ("Development code: 123456"). Type it in and create the account.
 3. The business is created with default roles, bill number series, GST rates and a main godown. A typical first day:
    * **Products → Import** (your product list as an Excel, CSV or PDF file) or **Products → Add product**
-   * **Suppliers → Add supplier**, then **Purchases → Import bill** (the supplier's bill as Excel, CSV or the PDF from their software) or **New purchase bill** to bring stock in. Items on the bill that are not in your product list can be added in one go with **Add … as new products**: name, GST, unit, rate, MRP, HSN and batch tracking are taken from the bill, you check the selling price (or set a margin %), and they go straight onto the purchase
+   * **Suppliers → Add supplier**, then **Purchases → Import bill** (the supplier's bill as Excel, CSV or the PDF from their software) or **New purchase bill** to bring stock in. Items on the bill that are not in your product list can be added in one go with **Add … as new products**: name, GST, unit, rate, MRP, HSN and batch tracking are taken from the bill, you check the selling price (or set a margin %), and they go straight onto the purchase. If the bill charges a GST rate that is no longer in your list (12% on a bill from before 22 Sep 2025, for example), pick today's rate once for all of them; the purchase itself keeps the bill's GST
    * **Customers → Import** or **Add customer**
    * **New Invoice** (Ctrl+I) and **Payments → Receive payment** (Alt+C)
 

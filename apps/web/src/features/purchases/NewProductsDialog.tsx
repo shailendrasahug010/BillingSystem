@@ -9,7 +9,7 @@ import { useToast } from "../../components/ui/Toast";
 import { WORKSPACE } from "../../data/db";
 import { refreshCatalog } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
-import { newProductFrom, type ImportedItem } from "./billImport";
+import { newProductFrom, taxCategoryForRate, type ImportedItem } from "./billImport";
 
 interface Row {
   key: string;
@@ -86,6 +86,8 @@ export function NewProductsDialog({ open, onOpenChange, items, supplierId, onAdd
   const set = (key: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch, error: null } : r)));
 
   const chosen = rows.filter((r) => r.include);
+  /** GST rates on the bill with no category of ours (a rate from before a change). */
+  const unlisted = [...new Set(rows.flatMap((r) => (r.item.file.gstRate && !taxCategoryForRate(r.item.file.gstRate) ? [r.item.file.gstRate] : [])))];
   const problem = (r: Row) => (!r.name.trim() ? t("validation.required") : !r.taxCategoryId ? t("billImport.pickGst") : !r.baseUnitId ? t("validation.required") : r.sellingPrice && !RATE.test(r.sellingPrice) ? t("validation.amount") : null);
   const invalid = useMemo(() => chosen.some((r) => problem(r)), [chosen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -145,8 +147,22 @@ export function NewProductsDialog({ open, onOpenChange, items, supplierId, onAdd
           <Input id="np-margin" inputMode="decimal" className="w-24" placeholder="10" value={margin} onChange={(e) => applyMargin(e.target.value.replace(/[^0-9.]/g, ""))} />
           <span className="text-ink-3">{t("billImport.marginHint")}</span>
         </div>
+        {unlisted.length > 0 && <p className="text-[13px] text-warn">{t("billImport.rateNotListed", { rates: unlisted.map((r) => `${r}%`).join(", ") })}</p>}
+        {rows.some((r) => r.include && !r.taxCategoryId) && (
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
+            <label htmlFor="np-gst">{t("billImport.gstForRest")}</label>
+            <Select id="np-gst" className="w-48" value="" onChange={(e) => e.target.value && setRows((rs) => rs.map((r) => (r.include && !r.taxCategoryId ? { ...r, taxCategoryId: e.target.value, error: null } : r)))}>
+              <option value="">—</option>
+              {WORKSPACE.taxCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         <div className="scroll-x">
-          <table className="w-full min-w-[880px] text-[13px]">
+          <table className="w-full min-w-[820px] text-[13px]">
             <thead>
               <tr className="border-b border-line text-left text-[12px] text-ink-3">
                 <th className="w-8 py-2" />
@@ -167,7 +183,7 @@ export function NewProductsDialog({ open, onOpenChange, items, supplierId, onAdd
                     <td className="py-2 align-top">
                       <Checkbox label={<span className="sr-only">{r.name}</span>} checked={r.include} onChange={(v) => set(r.key, { include: v })} />
                     </td>
-                    <td className="py-2 pr-2 align-top">
+                    <td className="min-w-56 py-2 pr-2 align-top">
                       <Input aria-label={`${t("billImport.productName")} ${f.itemName}`} value={r.name} disabled={!r.include} onChange={(e) => set(r.key, { name: e.target.value })} />
                       <p className="mt-1 text-[11.5px] text-ink-3">
                         {f.itemName}
@@ -175,10 +191,11 @@ export function NewProductsDialog({ open, onOpenChange, items, supplierId, onAdd
                       </p>
                       {r.lookalike && <p className="text-[11.5px] text-warn">{t("billImport.looksLike", { name: r.lookalike })}</p>}
                       {perPackAboveMrp(f) && <p className="text-[11.5px] text-warn">{t("billImport.packAboveMrp", { unit: f.unit ?? "" })}</p>}
+                      {f.gstRate && !taxCategoryForRate(f.gstRate) && <p className="text-[11.5px] text-warn">{t("billImport.billRate", { rate: f.gstRate })}</p>}
                       {(r.error || issue) && <p className="text-[11.5px] text-danger">{r.error ?? issue}</p>}
                     </td>
                     <td className="py-2 pr-2 align-top">
-                      <Select className="w-40" aria-label={`GST ${f.itemName}`} value={r.taxCategoryId} disabled={!r.include} onChange={(e) => set(r.key, { taxCategoryId: e.target.value })}>
+                      <Select className="w-36 min-w-36" aria-label={`GST ${f.itemName}`} value={r.taxCategoryId} disabled={!r.include} onChange={(e) => set(r.key, { taxCategoryId: e.target.value })}>
                         <option value="">—</option>
                         {WORKSPACE.taxCategories.map((c) => (
                           <option key={c.id} value={c.id}>
@@ -188,7 +205,7 @@ export function NewProductsDialog({ open, onOpenChange, items, supplierId, onAdd
                       </Select>
                     </td>
                     <td className="py-2 pr-2 align-top">
-                      <Select className="w-24" aria-label={`${t("billImport.unit")} ${f.itemName}`} value={r.baseUnitId} disabled={!r.include} onChange={(e) => set(r.key, { baseUnitId: e.target.value })}>
+                      <Select className="w-24 min-w-24" aria-label={`${t("billImport.unit")} ${f.itemName}`} value={r.baseUnitId} disabled={!r.include} onChange={(e) => set(r.key, { baseUnitId: e.target.value })}>
                         {WORKSPACE.unitList.map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.symbol}
@@ -199,7 +216,7 @@ export function NewProductsDialog({ open, onOpenChange, items, supplierId, onAdd
                     <td className="num py-2 pr-2 text-right align-top text-ink-2">{f.rate ?? "—"}</td>
                     <td className="num py-2 pr-2 text-right align-top text-ink-2">{f.mrp ?? "—"}</td>
                     <td className="py-2 align-top">
-                      <Input aria-label={`${t("billImport.sellingPrice")} ${f.itemName}`} inputMode="decimal" className="w-28 [&_input]:text-right" value={r.sellingPrice} disabled={!r.include} onChange={(e) => set(r.key, { sellingPrice: e.target.value.replace(/[^0-9.]/g, "") })} />
+                      <Input aria-label={`${t("billImport.sellingPrice")} ${f.itemName}`} inputMode="decimal" className="w-28 min-w-28 [&_input]:text-right" value={r.sellingPrice} disabled={!r.include} onChange={(e) => set(r.key, { sellingPrice: e.target.value.replace(/[^0-9.]/g, "") })} />
                     </td>
                   </tr>
                 );

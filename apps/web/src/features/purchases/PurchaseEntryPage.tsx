@@ -534,7 +534,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
                         )}
                       </td>
                       <td className="py-2 pl-2">
-                        <Select aria-label={t("invoice.unit")} className="h-8 w-24 px-2 text-[13px]" value={l.unitId} onChange={(e) => setLine(l.key, { unitId: e.target.value })}>
+                        <Select aria-label={t("invoice.unit")} className="h-8 w-auto min-w-24 px-2 text-[13px]" value={l.unitId} onChange={(e) => setLine(l.key, { unitId: e.target.value })}>
                           {units.map((u) => (
                             <option key={u.unitId} value={u.unitId}>
                               {u.symbol}
