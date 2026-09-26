@@ -68,7 +68,7 @@ await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
 signedIn = true;
 log("signed up");
 
-// 2. Product editor: new brand inline, case unit, prices per rate list.
+// 2. Product editor: new brand inline, case unit and an inner strip, prices per rate list.
 await nav("Products");
 await page.getByRole("button", { name: "Add product" }).first().click();
 await page.fill("#p-name", "Parle-G Biscuit 100 g");
@@ -80,6 +80,9 @@ await page.fill("#p-hsn", "1905");
 await page.fill("#p-barcode", "8901719101045");
 await page.selectOption("#p-case", { label: "BOX – Box" });
 await page.fill("#p-factor", "24");
+// A box of 24 packets sold as 4 strips of 6 as well.
+await page.selectOption("#p-inner", { label: "STRIP – Strip" });
+await page.fill("#p-inner-factor", "6");
 await page.fill("#p-min", "48");
 await page.fill("#p-cost", "8");
 await page.fill("#p-rate", "9.5");
@@ -92,10 +95,11 @@ log("product created from the editor");
 // Edit: change the selling price only.
 await page.getByRole("cell", { name: /Parle-G Biscuit/ }).click();
 await page.locator("#p-rate").waitFor();
+if ((await page.locator("#p-inner").inputValue()) === "" || (await page.locator("#p-inner-factor").inputValue()) !== "6" || (await page.locator("#p-factor").inputValue()) !== "24") errors.push("pack units not loaded back");
 await page.fill("#p-rate", "9.75");
 await page.getByRole("button", { name: "Save", exact: true }).click();
 await toast("Product saved");
-log("product edited (PATCH of changed fields)");
+log("product edited (PATCH of changed fields); box of 24 and strip of 6 kept");
 
 // 3. Supplier.
 await nav("Suppliers");

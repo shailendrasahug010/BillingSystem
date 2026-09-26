@@ -531,7 +531,13 @@
     "newCategory": "New category",
     "saved": "Product saved",
     "demoReadOnly": "The sample catalogue is read-only. Sign up to add your own products.",
-    "emptyHint": "Add the products you sell, or record a purchase bill to bring them in with stock."
+    "emptyHint": "Add the products you sell, or record a purchase bill to bring them in with stock.",
+    "innerUnit": "Inner pack unit",
+    "innerUnitHint": "Optional: a strip or packet inside the box",
+    "innerPack": "inner pack",
+    "innerFactor": "{{unit}} in one {{pack}}",
+    "innerSmaller": "An inner pack holds fewer than the case",
+    "innerSameAsCase": "Pick a unit other than the case unit"
   },
   "status": {
     "order": {

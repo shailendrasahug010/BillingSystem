@@ -78,6 +78,8 @@ function emptyForm() {
     barcodes: "",
     caseUnitId: "",
     caseFactor: "",
+    innerUnitId: "",
+    innerFactor: "",
     levelPrices: {} as Record<string, string>,
     openingStock: "",
     openingCost: "",
@@ -92,8 +94,11 @@ type Form = ReturnType<typeof emptyForm>;
 /** Details known before the form opens (a new product from a supplier's bill line). */
 export type ProductPrefill = Partial<Pick<Form, "name" | "hsnCode" | "taxCategoryId" | "baseUnitId" | "purchasePrice" | "mrp" | "barcodes" | "trackBatches" | "trackExpiry">>;
 
+/** Pack units, biggest first: the case / box, then the inner pack (a strip in a box). */
+const packsOf = (p: ProductDetail) => [...p.units].sort((a, b) => Number(b.conversionFactor) - Number(a.conversionFactor));
+
 function formFrom(p: ProductDetail): Form {
-  const alt = p.units[0];
+  const [alt, inner] = packsOf(p);
   return {
     ...emptyForm(),
     name: p.name,
@@ -115,6 +120,8 @@ function formFrom(p: ProductDetail): Form {
     barcodes: p.barcodes.map((b) => b.barcode).join(", "),
     caseUnitId: alt?.unitId ?? "",
     caseFactor: num(alt?.conversionFactor),
+    innerUnitId: inner?.unitId ?? "",
+    innerFactor: num(inner?.conversionFactor),
     levelPrices: Object.fromEntries(p.prices.filter((x) => x.unitId === p.baseUnitId).map((x) => [x.priceLevelId, num(x.price)])),
     isActive: p.isActive,
     trackBatches: p.trackBatches,
@@ -180,6 +187,10 @@ export function ProductEditor({
     for (const k of ["minStock", "reorderQty", "openingStock"] as const) if (form[k] && !QTY.test(form[k])) p[k] = t("validation.amount");
     if (form.caseUnitId && (!QTY.test(form.caseFactor) || Number(form.caseFactor) <= 0)) p.caseFactor = t("validation.amount");
     if (form.caseUnitId && form.caseUnitId === form.baseUnitId) p.caseUnitId = t("errors.ALT_UNIT_IS_BASE_UNIT");
+    if (form.innerUnitId && (!QTY.test(form.innerFactor) || Number(form.innerFactor) <= 0)) p.innerFactor = t("validation.amount");
+    else if (form.innerUnitId && form.caseUnitId && Number(form.innerFactor) >= Number(form.caseFactor)) p.innerFactor = t("product.innerSmaller");
+    if (form.innerUnitId && form.innerUnitId === form.baseUnitId) p.innerUnitId = t("errors.ALT_UNIT_IS_BASE_UNIT");
+    else if (form.innerUnitId && form.innerUnitId === form.caseUnitId) p.innerUnitId = t("product.innerSameAsCase");
     if (form.brandId === NEW && !form.newBrand.trim()) p.brandId = t("validation.required");
     if (form.categoryId === NEW && !form.newCategory.trim()) p.categoryId = t("validation.required");
     for (const l of levels) if (form.levelPrices[l.id] && !RATE.test(form.levelPrices[l.id]!)) p.levelPrices = t("validation.amount");
@@ -194,11 +205,13 @@ export function ProductEditor({
     let categoryId: string | null = form.categoryId || null;
     if (form.categoryId === NEW) categoryId = (await api.post<{ id: string }>("/categories", { name: form.newCategory.trim() })).id;
     const loaded = detail.data;
+    const [loadedCase, loadedInner, ...loadedRest] = loaded ? packsOf(loaded) : [];
     const units = [
       ...(form.caseUnitId
-        ? [{ unitId: form.caseUnitId, conversionFactor: form.caseFactor, isDefaultSale: loaded?.units[0]?.isDefaultSale ?? false, isDefaultPurchase: loaded?.units[0]?.isDefaultPurchase ?? true }]
+        ? [{ unitId: form.caseUnitId, conversionFactor: form.caseFactor, isDefaultSale: loadedCase?.isDefaultSale ?? false, isDefaultPurchase: loadedCase?.isDefaultPurchase ?? true }]
         : []),
-      ...(loaded?.units.slice(1).filter((u) => u.unitId !== form.caseUnitId && u.unitId !== form.baseUnitId) ?? []),
+      ...(form.innerUnitId ? [{ unitId: form.innerUnitId, conversionFactor: form.innerFactor, isDefaultSale: loadedInner?.isDefaultSale ?? false, isDefaultPurchase: loadedInner?.isDefaultPurchase ?? false }] : []),
+      ...loadedRest.filter((u) => u.unitId !== form.caseUnitId && u.unitId !== form.innerUnitId && u.unitId !== form.baseUnitId),
     ].map(({ unitId, conversionFactor, isDefaultSale, isDefaultPurchase }) => ({ unitId, conversionFactor: num(conversionFactor), isDefaultSale, isDefaultPurchase }));
     const unitIds = new Set([form.baseUnitId, ...units.map((u) => u.unitId)]);
     const editable = new Set(levels.map((l) => l.id));
@@ -407,6 +420,21 @@ export function ProductEditor({
               </Field>
               <Field label={t("product.caseFactor", { unit: WORKSPACE.units.get(form.baseUnitId) ?? "" })} htmlFor="p-factor" error={show("caseFactor")}>
                 <Input id="p-factor" inputMode="decimal" disabled={!form.caseUnitId} value={form.caseFactor} onChange={(e) => set("caseFactor", e.target.value.trim())} />
+              </Field>
+              <Field label={t("product.innerUnit")} htmlFor="p-inner" error={show("innerUnitId")} hint={t("product.innerUnitHint")}>
+                <Select id="p-inner" value={form.innerUnitId} onChange={(e) => set("innerUnitId", e.target.value)}>
+                  <option value="">{t("common.none")}</option>
+                  {WORKSPACE.unitList
+                    .filter((u) => u.id !== form.baseUnitId && u.id !== form.caseUnitId)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.symbol} – {u.name}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+              <Field label={t("product.innerFactor", { unit: WORKSPACE.units.get(form.baseUnitId) ?? "", pack: WORKSPACE.units.get(form.innerUnitId) ?? t("product.innerPack") })} htmlFor="p-inner-factor" error={show("innerFactor")}>
+                <Input id="p-inner-factor" inputMode="decimal" disabled={!form.innerUnitId} value={form.innerFactor} onChange={(e) => set("innerFactor", e.target.value.trim())} />
               </Field>
               <Field label={t("product.minStock")} htmlFor="p-min" error={show("minStock")} hint={t("product.minStockHint")}>
                 <Input id="p-min" inputMode="decimal" value={form.minStock} onChange={(e) => set("minStock", e.target.value.trim())} />

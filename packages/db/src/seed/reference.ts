@@ -56,6 +56,8 @@ const UNITS = [
   { name: "Box", symbol: "BOX", uqc: "BOX", decimals: 0 },
   { name: "Carton", symbol: "CTN", uqc: "CTN", decimals: 0 },
   { name: "Packet", symbol: "PAC", uqc: "PAC", decimals: 0 },
+  // No GST UQC for strips: returns report them as OTH (others).
+  { name: "Strip", symbol: "STRIP", uqc: "OTH", decimals: 0 },
   { name: "Bottle", symbol: "BTL", uqc: "BTL", decimals: 0 },
   { name: "Dozen", symbol: "DOZ", uqc: "DOZ", decimals: 0 },
   { name: "Bag", symbol: "BAG", uqc: "BAG", decimals: 0 },
