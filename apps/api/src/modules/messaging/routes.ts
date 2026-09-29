@@ -3,6 +3,7 @@ import { schema, type Tx } from "@vyapaar/db";
 import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@vyapaar/i18n";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isIP } from "node:net";
+import { randomBytes } from "node:crypto";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
@@ -84,6 +85,9 @@ function settingsView(deps: AppDeps, row: SettingsRow | null, channels: Channels
       phoneNumberId: row?.whatsappPhoneNumberId ?? null,
       webhookUrl: row?.whatsappWebhookUrl ?? null,
       hasSecret: Boolean(row?.whatsappSecret),
+      /** Delivery ticks: the key in the callback address (also Meta's verify token). */
+      statusKey: row?.whatsappStatusKey ?? null,
+      hasAppSecret: Boolean(row?.whatsappAppSecret),
       documentTemplate: row?.whatsappDocumentTemplate ?? null,
       reminderTemplate: row?.whatsappReminderTemplate ?? null,
       templateLanguage: row?.whatsappTemplateLanguage ?? "en",
@@ -213,7 +217,7 @@ export const messagingModule: ApiModule = async (app, deps) => {
 
   r.put("/messaging/settings", { preHandler: guard(deps, "settings.update"), schema: { tags: ["messaging"], body: MessagingSettingsBody } }, async (request) => {
     const ctx = request.ctx;
-    const { whatsappSecret, smtpPassword, ...plain } = request.body;
+    const { whatsappSecret, whatsappAppSecret, smtpPassword, ...plain } = request.body;
     if (plain.whatsappWebhookUrl) {
       const url = new URL(plain.whatsappWebhookUrl);
       if (deps.config.env === "production" && url.protocol !== "https:") throw badRequest("WEBHOOK_NOT_HTTPS", {}, "whatsappWebhookUrl");
@@ -225,12 +229,18 @@ export const messagingModule: ApiModule = async (app, deps) => {
         ...plain,
         ...(whatsappSecret !== undefined ? { whatsappSecret: whatsappSecret === null ? null : deps.cipher.encrypt(whatsappSecret) } : {}),
         ...(smtpPassword !== undefined ? { smtpPassword: smtpPassword === null ? null : deps.cipher.encrypt(smtpPassword) } : {}),
+        ...(whatsappAppSecret !== undefined ? { whatsappAppSecret: whatsappAppSecret === null ? null : deps.cipher.encrypt(whatsappAppSecret) } : {}),
         updatedBy: ctx.userId,
       };
       await tx
         .insert(schema.messagingSettings)
         .values({ id: uuidv7(), businessId: ctx.businessId, ...values, createdBy: ctx.userId })
         .onConflictDoUpdate({ target: schema.messagingSettings.businessId, set: { ...values, updatedAt: sql`now()` } });
+      // The address for delivery ticks, made once.
+      await tx
+        .update(schema.messagingSettings)
+        .set({ whatsappStatusKey: sql`coalesce(${schema.messagingSettings.whatsappStatusKey}, ${randomBytes(18).toString("base64url")})` })
+        .where(eq(schema.messagingSettings.businessId, ctx.businessId));
       // Which settings changed, never the secrets themselves.
       await audit(tx, ctx, { action: "messaging.updated", entityType: "setting", entityLabel: "messaging", changes: { fields: Object.keys(request.body) } });
       const { row, channels } = await channelsOf(tx, ctx.businessId);
@@ -396,9 +406,12 @@ export const messagingModule: ApiModule = async (app, deps) => {
           attachmentName: m.attachmentName,
           status: m.status,
           provider: m.provider,
+          providerMessageId: m.providerMessageId,
           error: m.error,
           attempts: m.attempts,
           sentAt: m.sentAt,
+          deliveredAt: m.deliveredAt,
+          readAt: m.readAt,
           createdAt: m.createdAt,
           sentBy: schema.users.name,
         })

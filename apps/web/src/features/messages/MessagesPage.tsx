@@ -4,7 +4,7 @@ import { Tabs } from "radix-ui";
 import { Mail, MessageCircle, RotateCcw, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { STATUS_TONE, showRecipient, useChannels, type MessageRow } from "../../components/messaging/SendDialog";
+import { MessageStatus, showRecipient, useChannels, type MessageRow } from "../../components/messaging/SendDialog";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Checkbox, Input, Select } from "../../components/ui/Field";
@@ -146,9 +146,7 @@ function SentList() {
                         {m.sentBy && ` · ${m.sentBy}`}
                       </span>
                     </span>
-                    <Badge tone={STATUS_TONE[m.status]} dot>
-                      {t(`messages.status.${m.status}`)}
-                    </Badge>
+                    <MessageStatus m={m} />
                   </button>
                   {expanded && (
                     <div className="flex flex-col gap-2 bg-surface-2 px-4 pt-1 pb-3 pl-11 text-[13px]">

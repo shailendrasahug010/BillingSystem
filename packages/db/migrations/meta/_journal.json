@@ -99,6 +99,13 @@
       "when": 1790696270107,
       "tag": "0013_price_list_names",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790696678765,
+      "tag": "0014_whatsapp_status",
+      "breakpoints": true
     }
   ]
 }

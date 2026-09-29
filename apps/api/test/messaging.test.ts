@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, createTestApp, hasDatabase, nextMobile, signup, type Session, type TestApp } from "./helpers.js";
 
@@ -83,6 +84,39 @@ describe.skipIf(!hasDatabase)("WhatsApp and email to customers", () => {
     expect(sent.template).toEqual({ name: "bill_with_pdf", language: "en", params: ["Sharma Kirana", ids.invoiceNumber, "₹1,180.00", "Laxmi Traders"] });
   });
 
+  it("shows delivered and read ticks from Meta's signed status callbacks", async () => {
+    const settings = (await put("/messaging/settings", { whatsappAppSecret: "meta-app-secret-123" })).body.whatsapp;
+    expect(settings).toMatchObject({ hasAppSecret: true, statusKey: expect.stringMatching(/^[A-Za-z0-9_-]{20,}$/) });
+    expect(JSON.stringify((await get("/messaging/settings")).body)).not.toContain("meta-app-secret");
+    const key = settings.statusKey as string;
+    const url = `/api/v1/webhooks/whatsapp/${key}`;
+    // Meta checks the address once with the verify token.
+    const verify = await t.app.inject({ method: "GET", url: `${url}?hub.mode=subscribe&hub.verify_token=${key}&hub.challenge=4815162342` });
+    expect(verify.statusCode).toBe(200);
+    expect(verify.body).toBe("4815162342");
+    expect((await t.app.inject({ method: "GET", url: `${url}?hub.mode=subscribe&hub.verify_token=guess&hub.challenge=1` })).statusCode).toBe(403);
+
+    const sent = await post("/messages/send", { channel: "whatsapp", documentType: "invoice", documentId: ids.invoice });
+    const wamid = (await t.owner.query("select provider_message_id from messages where id = $1", [sent.body.id])).rows[0].provider_message_id as string;
+    const status = (s: string, ts: number) =>
+      JSON.stringify({ object: "whatsapp_business_account", entry: [{ id: "WABA", changes: [{ field: "messages", value: { metadata: { phone_number_id: "109876543210" }, statuses: [{ id: wamid, status: s, timestamp: String(ts), recipient_id: "919826011111" }] } }] }] });
+    const callback = (body: string, signature = `sha256=${createHmac("sha256", "meta-app-secret-123").update(body).digest("hex")}`) =>
+      t.app.inject({ method: "POST", url, headers: { "content-type": "application/json", "x-hub-signature-256": signature }, payload: body });
+    const mine = async () => (await get("/messages?limit=50")).body.data.find((m: { id: string }) => m.id === sent.body.id);
+
+    expect((await callback(status("delivered", 1790500000))).statusCode).toBe(200);
+    expect(await mine()).toMatchObject({ status: "delivered", deliveredAt: expect.any(String), readAt: null });
+    expect((await callback(status("read", 1790500100))).statusCode).toBe(200);
+    expect(await mine()).toMatchObject({ status: "read", readAt: expect.any(String) });
+    // A late "delivered" does not take the read tick back; a forged call changes nothing.
+    await callback(status("delivered", 1790500200));
+    expect((await mine()).status).toBe("read");
+    expect((await callback(status("failed", 1790500300), "sha256=00")).statusCode).toBe(403);
+    expect((await callback(status("failed", 1790500300)).then(() => mine())).status).toBe("read");
+    // An unknown address is refused.
+    expect((await t.app.inject({ method: "POST", url: "/api/v1/webhooks/whatsapp/aaaaaaaaaaaaaaaaaaaaaaaa", headers: { "content-type": "application/json" }, payload: status("read", 1) })).statusCode).toBe(403);
+  });
+
   it("needs an address for email, and takes one typed in", async () => {
     const none = await post("/messages/send", { channel: "email", documentType: "receipt", documentId: ids.receipt });
     expect(none.status).toBe(400);
@@ -99,7 +133,7 @@ describe.skipIf(!hasDatabase)("WhatsApp and email to customers", () => {
     expect(res.status).toBe(502);
     expect(res.body.error).toMatchObject({ code: "MESSAGE_SEND_FAILED", params: { reason: "(#131026) Message undeliverable" } });
     const log = (await get(`/messages?documentId=${ids.invoice}`)).body.data;
-    expect(log.map((m: { status: string }) => m.status)).toEqual(["failed", "sent"]);
+    expect(log.map((m: { status: string }) => m.status)).toEqual(["failed", "read", "sent"]);
     expect(log[0]).toMatchObject({ error: "(#131026) Message undeliverable", sentBy: expect.any(String) });
   });
 

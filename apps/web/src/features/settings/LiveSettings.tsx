@@ -522,6 +522,9 @@ interface MessagingView {
     phoneNumberId: string | null;
     webhookUrl: string | null;
     hasSecret: boolean;
+    /** Delivery ticks: the key in the callback address, and whether Meta's app secret is saved. */
+    statusKey: string | null;
+    hasAppSecret: boolean;
     documentTemplate: string | null;
     reminderTemplate: string | null;
     templateLanguage: string;
@@ -550,6 +553,7 @@ function formOf(v: MessagingView): MessagingForm {
     whatsappPhoneNumberId: v.whatsapp.phoneNumberId ?? "",
     whatsappWebhookUrl: v.whatsapp.webhookUrl ?? "",
     whatsappSecret: "",
+    whatsappAppSecret: "",
     whatsappDocumentTemplate: v.whatsapp.documentTemplate ?? "",
     whatsappReminderTemplate: v.whatsapp.reminderTemplate ?? "",
     whatsappTemplateLanguage: v.whatsapp.templateLanguage,
@@ -591,7 +595,7 @@ function MessagingCard() {
       <Input id={`msg-${k}`} type={opts.type ?? "text"} disabled={!canEdit} placeholder={opts.placeholder} className={opts.mono ? "[&_input]:font-mono" : undefined} value={String(form[k] ?? "")} onChange={(e) => set(k, e.target.value)} />
     </Field>
   );
-  const secret = (k: "whatsappSecret" | "smtpPassword", label: string, has: boolean) =>
+  const secret = (k: "whatsappSecret" | "whatsappAppSecret" | "smtpPassword", label: string, has: boolean) =>
     text(k, label, { type: "password", ...(has ? { placeholder: "••••••••", hint: t("messages.settings.secretSet") } : {}) });
 
   const save = async () => {
@@ -617,6 +621,7 @@ function MessagingCard() {
       emailReplyTo: orNull("emailReplyTo"),
       // Secrets only when typed: an empty box keeps the saved one.
       ...(String(f.whatsappSecret) ? { whatsappSecret: String(f.whatsappSecret) } : {}),
+      ...(String(f.whatsappAppSecret) ? { whatsappAppSecret: String(f.whatsappAppSecret) } : {}),
       ...(String(f.smtpPassword) ? { smtpPassword: String(f.smtpPassword) } : {}),
     };
     try {
@@ -680,6 +685,28 @@ function MessagingCard() {
               {text("whatsappReminderTemplate", t("messages.settings.reminderTemplate"), { mono: true, placeholder: "payment_reminder" })}
               {text("whatsappTemplateLanguage", t("messages.settings.templateLanguage"), { mono: true, placeholder: "en" })}
               <p className="text-[12.5px] text-ink-3 sm:col-span-2">{t("messages.settings.templateHelp")}</p>
+            </div>
+          )}
+          {/* Delivered / read ticks: the address Meta (or the provider) reports message statuses to. */}
+          {v.whatsapp.provider !== "none" && form.whatsappProvider === v.whatsapp.provider && v.whatsapp.statusKey && (
+            <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-3">
+              <div>
+                <p className="text-[13px] font-semibold text-ink">{t("messages.settings.ticksTitle")}</p>
+                <p className="text-[12.5px] text-ink-3">{v.whatsapp.provider === "meta" ? t("messages.settings.ticksMeta") : t("messages.settings.ticksProvider")}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label={t("messages.settings.callbackUrl")} htmlFor="msg-callback">
+                  <Input id="msg-callback" readOnly className="[&_input]:font-mono" value={`${window.location.origin}/api/v1/webhooks/whatsapp/${v.whatsapp.statusKey}`} onFocus={(e) => e.currentTarget.select()} />
+                </Field>
+                {v.whatsapp.provider === "meta" && (
+                  <>
+                    <Field label={t("messages.settings.verifyToken")} htmlFor="msg-verify">
+                      <Input id="msg-verify" readOnly className="[&_input]:font-mono" value={v.whatsapp.statusKey} onFocus={(e) => e.currentTarget.select()} />
+                    </Field>
+                    {secret("whatsappAppSecret", t("messages.settings.appSecret"), v.whatsapp.hasAppSecret)}
+                  </>
+                )}
+              </div>
             </div>
           )}
         </section>

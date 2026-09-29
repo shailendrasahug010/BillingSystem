@@ -27,6 +27,13 @@ export const messagingSettings = pgTable("messaging_settings", {
   whatsappDocumentTemplate: varchar({ length: 100 }),
   whatsappReminderTemplate: varchar({ length: 100 }),
   whatsappTemplateLanguage: varchar({ length: 10 }).notNull().default("en"),
+  /**
+   * Delivery ticks: the random key in the address Meta (or the provider)
+   * calls back with "delivered" / "read", also Meta's verify token.
+   */
+  whatsappStatusKey: varchar({ length: 40 }).unique("messaging_settings_status_key_uq"),
+  /** Meta app secret that signs those callbacks (encrypted). */
+  whatsappAppSecret: text(),
   /** none | platform | smtp */
   emailMode: varchar({ length: 20 }).notNull().default("platform"),
   smtpHost: text(),
@@ -67,6 +74,9 @@ export const messages = pgTable(
     error: text(),
     attempts: integer().notNull().default(0),
     sentAt: tstz(),
+    /** WhatsApp ticks, from the provider's status callbacks. */
+    deliveredAt: tstz(),
+    readAt: tstz(),
     ...auditColumns,
   },
   (t) => [index("messages_business_created_idx").on(t.businessId, t.createdAt), index("messages_document_idx").on(t.businessId, t.documentId), index("messages_queued_idx").on(t.businessId, t.status)],

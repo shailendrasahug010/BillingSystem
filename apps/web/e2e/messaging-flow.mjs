@@ -2,7 +2,8 @@
  * End-to-end check of WhatsApp and email: sign up -> Settings: set up the
  * firm's WhatsApp Business number (Meta Cloud API, token saved and hidden)
  * -> an invoice -> Send: WhatsApp Business to the customer's mobile, with the
- * PDF -> Messages: the send is listed with its text -> Payment reminders:
+ * PDF -> Meta reports it delivered and read (signed callbacks) -> Messages:
+ * the send is listed as read, with its text -> Payment reminders:
  * the customer with an overdue bill is reminded -> listed as sent.
  *
  * The API must run with MESSAGING_DRIVER=log (the default outside
@@ -12,6 +13,7 @@
  * Needs the `playwright` package (PLAYWRIGHT_PATH if it is not resolvable
  * from here) and a Chromium (CHROMIUM_PATH optional).
  */
+import { createHmac } from "node:crypto";
 import { createRequire } from "node:module";
 const require = createRequire(process.env.PLAYWRIGHT_PATH ?? import.meta.url);
 const { chromium } = require("playwright");
@@ -88,8 +90,18 @@ await toast("Settings saved");
 await page.getByText("Saved. Leave empty to keep it.").waitFor();
 if ((await page.getByLabel("Access token").inputValue()) !== "") errors.push("token shown after saving");
 if ((await page.content()).includes("EAAG-e2e-secret-token")) errors.push("token visible in the page");
+// Delivered / read ticks: Meta's callback address and the app secret that signs its calls.
+await page.getByLabel("Meta app secret").fill("e2e-meta-app-secret");
+await card.getByRole("button", { name: "Save" }).click();
+await toast("Settings saved");
+const callbackUrl = await page.getByLabel("Callback URL").inputValue();
+const verifyToken = await page.getByLabel("Verify token").inputValue();
+if (!callbackUrl.endsWith(`/api/v1/webhooks/whatsapp/${verifyToken}`)) errors.push(`callback ${callbackUrl}`);
+// Meta checks the address with the verify token before sending anything.
+const check = await fetch(`${callbackUrl}?hub.mode=subscribe&hub.verify_token=${verifyToken}&hub.challenge=777`);
+if ((await check.text()) !== "777") errors.push("verify challenge not answered");
 await card.screenshot({ path: `${OUT}/messaging-1-settings.png` });
-log("WhatsApp Business set up; token saved and hidden");
+log("WhatsApp Business set up; token saved and hidden; callback address for ticks verified");
 
 // 3. Send the invoice on WhatsApp.
 await page.keyboard.press("Control+k");
@@ -105,6 +117,13 @@ await page.screenshot({ path: `${OUT}/messaging-2-send.png` });
 await dialog().getByRole("button", { name: "Send now" }).click();
 await toast("Sent to +91 98260 12345");
 log("invoice sent on WhatsApp Business");
+// Meta reports it delivered, then read (signed with the app secret).
+const sentMsg = (await api("GET", "/messages?limit=5", token)).data.find((m) => m.documentNumber === inv.invoiceNumber);
+for (const status of ["delivered", "read"]) {
+  const body = JSON.stringify({ object: "whatsapp_business_account", entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "109876543210" }, statuses: [{ id: sentMsg.providerMessageId, status, timestamp: String(Math.floor(Date.now() / 1000)) }] } }] }] });
+  const res = await fetch(callbackUrl, { method: "POST", headers: { "content-type": "application/json", "x-hub-signature-256": `sha256=${createHmac("sha256", "e2e-meta-app-secret").update(body).digest("hex")}` }, body });
+  if (res.status !== 200) errors.push(`${status} callback ${res.status}`);
+}
 
 // 4. Messages: the send is listed.
 await nav("Messages");
@@ -113,7 +132,9 @@ const row = page.getByRole("button", { name: new RegExp(`Sharma Kirana · Invoic
 await row.click();
 await page.getByText(`📎 ${inv.invoiceNumber.replace(/\//g, "-")}.pdf`).waitFor();
 await page.getByText(/Balance due/).first().waitFor();
-log("listed as sent, with the message and the PDF");
+if (!(await row.innerText()).includes("Read")) errors.push(`status in the list: ${await row.innerText()}`);
+await page.screenshot({ path: `${OUT}/messaging-3-read.png` });
+log("listed with two blue ticks (read), the message and the PDF");
 
 // 5. Payment reminders.
 await page.getByRole("tab", { name: "Payment reminders" }).click();

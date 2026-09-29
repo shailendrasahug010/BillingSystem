@@ -21,6 +21,8 @@ export const MessagingSettingsBody = z.strictObject({
     .optional(),
   whatsappWebhookUrl: z.url({ protocol: /^https?$/ }).max(500).nullable().optional(),
   whatsappSecret: z.string().min(8).max(2000).nullable().optional(),
+  /** Meta app secret, to check the delivery-tick callbacks are Meta's. */
+  whatsappAppSecret: z.string().min(8).max(500).nullable().optional(),
   whatsappDocumentTemplate: z
     .string()
     .trim()

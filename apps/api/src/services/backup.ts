@@ -130,7 +130,8 @@ export async function makeBackup(tx: Tx, businessId: string, now: Date, passphra
       rows = await tx.select().from(t).where(eq(t.businessId!, businessId));
     }
     if (info.name === "roles") roleIds = rows.map((r) => r.id as string);
-    if (info.name === "messaging_settings") rows = rows.map((r) => ({ ...r, whatsappSecret: null, smtpPassword: null }));
+    // Secrets stay out; the status callback key belongs to this business's address alone.
+    if (info.name === "messaging_settings") rows = rows.map((r) => ({ ...r, whatsappSecret: null, smtpPassword: null, whatsappAppSecret: null, whatsappStatusKey: null }));
     data[info.name] = rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, toJsonValue(v)])));
     counts[info.name] = rows.length;
   }

@@ -2129,7 +2129,13 @@
       "replyTo": "Replies go to",
       "testTo": "Mobile or email for a test",
       "sendTest": "Send test",
-      "testSent": "Test message sent"
+      "testSent": "Test message sent",
+      "ticksTitle": "Delivered and read ticks",
+      "ticksMeta": "In your Meta app → WhatsApp → Configuration → Webhook, paste this callback URL and verify token, subscribe to \"messages\", and save the app secret (App settings → Basic) here. Messages then show delivered and read.",
+      "ticksProvider": "Give this address to your provider for status updates. They sign them with the same secret as the messages we send them.",
+      "callbackUrl": "Callback URL",
+      "verifyToken": "Verify token",
+      "appSecret": "Meta app secret"
     }
   },
   "backup": {

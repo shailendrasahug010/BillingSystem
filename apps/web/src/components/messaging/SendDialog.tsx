@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LocaleCode } from "@vyapaar/i18n";
-import { Mail, MessageCircle, Send } from "lucide-react";
+import { Check, CheckCheck, Mail, MessageCircle, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { allowed } from "../../data/db";
@@ -31,6 +31,9 @@ export interface MessageRow {
   status: "queued" | "sent" | "delivered" | "read" | "failed";
   error: string | null;
   sentAt: string | null;
+  /** WhatsApp ticks, when the provider reports them. */
+  deliveredAt?: string | null;
+  readAt?: string | null;
   createdAt: string;
   sentBy: string | null;
 }
@@ -46,6 +49,32 @@ export function useChannels(enabled = true) {
 }
 
 export const STATUS_TONE: Record<MessageRow["status"], "good" | "warn" | "danger" | "neutral"> = { queued: "neutral", sent: "good", delivered: "good", read: "good", failed: "danger" };
+
+/**
+ * A message's status the way WhatsApp shows it: one tick sent, two ticks
+ * delivered, two blue ticks read (with the times on hover); email says sent.
+ */
+export function MessageStatus({ m }: { m: Pick<MessageRow, "channel" | "status" | "sentAt" | "deliveredAt" | "readAt"> }) {
+  const { t, dateTime } = useI18n();
+  const ticks =
+    m.channel !== "whatsapp" ? undefined : m.status === "sent" ? (
+      <Check size={13} aria-hidden />
+    ) : m.status === "delivered" ? (
+      <CheckCheck size={13} aria-hidden />
+    ) : m.status === "read" ? (
+      <CheckCheck size={13} className="text-accent" aria-hidden />
+    ) : undefined;
+  const title = [m.sentAt && `${t("messages.status.sent")}: ${dateTime(m.sentAt)}`, m.deliveredAt && `${t("messages.status.delivered")}: ${dateTime(m.deliveredAt)}`, m.readAt && `${t("messages.status.read")}: ${dateTime(m.readAt)}`]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <span title={title || undefined}>
+      <Badge tone={STATUS_TONE[m.status]} {...(ticks ? { icon: ticks } : { dot: true })}>
+        {t(`messages.status.${m.status}`)}
+      </Badge>
+    </span>
+  );
+}
 
 /** "919826011111" -> "+91 98260 11111"; email as it is. */
 export const showRecipient = (r: string) => (/^91\d{10}$/.test(r) ? `+91 ${r.slice(2, 7)} ${r.slice(7)}` : r);
@@ -172,9 +201,7 @@ export function SendDialog({
             <ul className="flex flex-col gap-1">
               {history.data?.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-center gap-2 text-[12.5px] text-ink-2">
-                  <Badge tone={STATUS_TONE[m.status]} dot>
-                    {t(`messages.status.${m.status}`)}
-                  </Badge>
+                  <MessageStatus m={m} />
                   <span>{m.channel === "email" ? t("messages.email") : t("messages.whatsapp")}</span>
                   <span className="font-mono">{showRecipient(m.recipient)}</span>
                   <span className="ml-auto text-ink-3">{dateTime(m.createdAt)}</span>
