@@ -16,6 +16,7 @@ function NumberCell({
   className,
   inputRef,
   onEnter,
+  onTab,
   decimals = 2,
 }: {
   value: number;
@@ -23,7 +24,10 @@ function NumberCell({
   label: string;
   className?: string;
   inputRef?: Ref<HTMLInputElement>;
+  /** Enter: the next field, or back to product search. */
   onEnter?(): void;
+  /** Tab (without Shift) from the line's last field: back to product search. */
+  onTab?(): void;
   decimals?: number;
 }) {
   const [text, setText] = useState(String(value));
@@ -55,6 +59,9 @@ function NumberCell({
         if (e.key === "Enter") {
           e.preventDefault();
           onEnter?.();
+        } else if (e.key === "Tab" && !e.shiftKey && onTab) {
+          e.preventDefault();
+          onTab();
         }
       }}
       className={cn(
@@ -69,7 +76,7 @@ function NumberCell({
  * The unit a line is sold in: the stock unit or one of the product's packs
  * (box of 24, strip of 10). Changing it re-prices the line for that unit.
  */
-function UnitSelect({ product, line, onUnit, className }: { product: Product; line: DraftLine; onUnit(unitId: string | null): void; className?: string }) {
+function UnitSelect({ product, line, onUnit, onEnter, className }: { product: Product; line: DraftLine; onUnit(unitId: string | null): void; onEnter?(): void; className?: string }) {
   const { t } = useI18n();
   const packs = product.packUnits ?? [];
   if (packs.length === 0) return <span className={cn("text-[11px] text-ink-3", className)}>{product.unit}</span>;
@@ -78,6 +85,12 @@ function UnitSelect({ product, line, onUnit, className }: { product: Product; li
       aria-label={`${t("invoice.unit")} ${product.name}`}
       value={line.unitId ?? ""}
       onChange={(e) => onUnit(e.target.value || null)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && onEnter) {
+          e.preventDefault();
+          onEnter();
+        }
+      }}
       className={cn("rounded-md border border-line bg-surface px-1.5 text-ink-2 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none", className)}
     >
       <option value="">{product.unit}</option>
@@ -139,6 +152,14 @@ export function LineItems({
   const { t, money, locale } = useI18n();
   const qtyRefs = useRef(new Map<string, HTMLInputElement>());
   const canChangeRate = allowed("invoice.override_price");
+  const rateRefs = useRef(new Map<string, HTMLInputElement>());
+  // Keyboard billing: product search -> Enter -> qty -> Enter -> rate -> Enter -> product search.
+  // Without the price-override permission the rate is fixed, so qty goes straight back.
+  const toRate = (key: string) => {
+    const el = canChangeRate ? rateRefs.current.get(key) : undefined;
+    if (el) el.focus();
+    else onBackToSearch();
+  };
 
   useEffect(() => {
     if (!focusKey) return;
@@ -180,7 +201,7 @@ export function LineItems({
                   <button type="button" className="flex size-11 items-center justify-center text-ink-2" aria-label="−1" onClick={() => (line.qty > 1 ? onUpdate(line.key, { qty: line.qty - 1 }) : onRemove(line.key))}>
                     <Minus size={18} />
                   </button>
-                  <NumberCell value={line.qty} label={t("invoice.qty")} decimals={3} onCommit={(v) => onUpdate(line.key, { qty: v })} className="h-11 w-14 text-center text-[16px] font-semibold" />
+                  <NumberCell value={line.qty} label={t("invoice.qty")} decimals={3} onCommit={(v) => onUpdate(line.key, { qty: v })} onEnter={onBackToSearch} className="h-11 w-14 text-center text-[16px] font-semibold" />
                   <button type="button" className="flex size-11 items-center justify-center text-ink-2" aria-label="+1" onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
                     <Plus size={18} />
                   </button>
@@ -238,7 +259,7 @@ export function LineItems({
                 </td>
                 <td className="py-1.5">
                   <div className="flex items-center justify-center">
-                    <button type="button" className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="−1" onClick={() => onUpdate(line.key, { qty: Math.max(1, line.qty - 1) })}>
+                    <button type="button" tabIndex={-1} className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="−1" onClick={() => onUpdate(line.key, { qty: Math.max(1, line.qty - 1) })}>
                       <Minus size={14} />
                     </button>
                     <NumberCell
@@ -250,21 +271,30 @@ export function LineItems({
                         else qtyRefs.current.delete(line.key);
                       }}
                       onCommit={(v) => onUpdate(line.key, { qty: v })}
-                      onEnter={onBackToSearch}
+                      onEnter={() => toRate(line.key)}
                       className="w-14 text-center font-semibold"
                     />
-                    <button type="button" className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="+1" onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
+                    <button type="button" tabIndex={-1} className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="+1" onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
                       <Plus size={14} />
                     </button>
                   </div>
                   <div className="flex justify-center">
-                    <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} className="h-7 text-[11.5px]" />
+                    <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} onEnter={() => toRate(line.key)} className="h-7 text-[11.5px]" />
                   </div>
                 </td>
                 <td className="py-1.5 pr-2">
                   {/* The rate-list price; only roles allowed to change prices can type another. */}
                   {canChangeRate ? (
-                    <NumberCell value={line.rate} label={`${t("invoice.rate")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { rate: v })} onEnter={onBackToSearch} />
+                    <NumberCell
+                      value={line.rate}
+                      label={`${t("invoice.rate")} ${p.name}`}
+                      inputRef={(el) => {
+                        if (el) rateRefs.current.set(line.key, el);
+                        else rateRefs.current.delete(line.key);
+                      }}
+                      onCommit={(v) => onUpdate(line.key, { rate: v })}
+                      onEnter={onBackToSearch}
+                    />
                   ) : (
                     <p className="num h-9 px-2 text-right text-[14px] leading-9 text-ink" aria-label={`${t("invoice.rate")} ${p.name}`}>
                       {line.rate}
@@ -272,7 +302,7 @@ export function LineItems({
                   )}
                 </td>
                 <td className="py-1.5 pr-2">
-                  <NumberCell value={line.discountPercent} label={`${t("invoice.discount")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { discountPercent: Math.min(100, v) })} onEnter={onBackToSearch} />
+                  <NumberCell value={line.discountPercent} label={`${t("invoice.discount")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { discountPercent: Math.min(100, v) })} onEnter={onBackToSearch} onTab={onBackToSearch} />
                 </td>
                 <td className="num py-2.5 pr-2 text-right text-ink-2">{r ? `${r.gstRate.toNumber()}%` : "—"}</td>
                 <td className="py-2.5 pr-3 text-right">

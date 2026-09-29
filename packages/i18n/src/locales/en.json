@@ -353,7 +353,8 @@
     "numberOnSave": "Assigned on save",
     "saveFailed": "Invoice not saved",
     "saving": "Saving…",
-    "savedWithWarnings": "Saved with warnings"
+    "savedWithWarnings": "Saved with warnings",
+    "keysHint": "Enter moves on: qty → rate → back to product search · F2 product search"
   },
   "suggestions": {
     "title": "Smart suggestions",

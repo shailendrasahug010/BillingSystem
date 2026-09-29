@@ -311,6 +311,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
               <h2 id="items-h" className="text-[15px] font-semibold text-ink">
                 {t("invoice.items")} <span className="num ml-1 text-[13px] font-normal text-ink-3">{draft.lines.length}</span>
               </h2>
+              {draft.lines.length > 0 && <p className="hidden text-[12px] text-ink-3 md:block">{t("invoice.keysHint")}</p>}
             </div>
             {error && (
               <p className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger" role="alert">
@@ -488,7 +489,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
               onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
               onUnit={(key, unitId) => dispatch({ type: "unit", key, unitId })}
               onRemove={(key) => dispatch({ type: "remove", key })}
-              onBackToSearch={() => undefined}
+              onBackToSearch={() => productRef.current?.focus()}
             />
           </section>
           <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom,0px))] z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">

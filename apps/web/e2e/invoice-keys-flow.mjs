@@ -4,7 +4,9 @@
  * yet is typed in the customer search -> arrow down to "Add … as a new
  * customer", Enter -> the form opens with the name filled in -> saved, the
  * bill has the new customer -> product search, Enter, the line switched to
- * boxes (re-priced for the box), F2 back to search, Ctrl+Enter saves. Then at tablet width (900 px): the full invoice screen
+ * boxes (re-priced for the box), qty -> Enter -> rate -> Enter -> back to the
+ * product search, a second product with Tab through qty, rate and Disc %
+ * back to the search, F2, Ctrl+Enter saves. Then at tablet width (900 px): the full invoice screen
  * with the same keys (F3, F2, Ctrl+Enter). Then on a phone: "Add customer"
  * from the search by tap.
  *
@@ -72,6 +74,7 @@ const token = (await api("POST", "/auth/login", null, { identifier: mobile, pass
 const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
 const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).data.map((c) => [c.name, c.id]));
 const oil = await api("POST", "/products", token, { name: "Fortune Oil 1L", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "150", openingStock: "100", units: [{ unitId: units.BOX, conversionFactor: "12" }] });
+await api("POST", "/products", token, { name: "Tata Salt 1kg", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "28", openingStock: "100" });
 await page.reload();
 await page.getByRole("heading", { name: /Kishan/ }).waitFor({ timeout: 15000 });
 log("signed up; one product, sold by the piece or in boxes of 12");
@@ -96,7 +99,7 @@ await page.getByText("Sharma General Store").first().waitFor();
 await expectFocus("Search product", "after adding the customer");
 log("new customer added from the invoice and put on the bill");
 
-// 3. Product by keyboard, F2 back to search, Ctrl+Enter saves.
+// 3. Products by keyboard: Enter from qty to rate and back to the search, Tab round the line, F2, Ctrl+Enter saves.
 await page.keyboard.type("fortune");
 await page.getByRole("option", { name: /Fortune Oil 1L/ }).waitFor();
 await page.keyboard.press("Enter");
@@ -104,19 +107,37 @@ await expectFocus("Qty", "after adding the product");
 // Sold by the box: the rate becomes the box's (12 x 150) and the qty stays 1.
 await page.getByLabel("Unit Fortune Oil 1L").selectOption({ label: "BOX (12 PCS)" });
 if ((await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800") errors.push(`box rate ${await page.getByLabel("Rate Fortune Oil 1L").inputValue()}`);
-await page.getByLabel("Qty Fortune Oil 1L").fill("2");
+// Keyboard only from here: qty, Enter -> rate, Enter -> back to product search.
+await page.getByLabel("Qty Fortune Oil 1L").focus();
+await page.keyboard.type("2");
+await page.keyboard.press("Enter");
+await expectFocus("Rate Fortune Oil 1L", "Enter from qty");
+await page.keyboard.press("Enter");
+await expectFocus("Search product", "Enter from rate");
+// The next product straight away: qty, then Tab through rate and Disc % back to the search.
+await page.keyboard.type("tata");
+await page.getByRole("option", { name: /Tata Salt 1kg/ }).waitFor();
+await page.keyboard.press("Enter");
+await expectFocus("Qty Tata Salt 1kg", "second product");
+await page.keyboard.type("5");
+await page.keyboard.press("Tab");
+await expectFocus("Rate Tata Salt 1kg", "Tab from qty");
+await page.keyboard.press("Tab");
+await expectFocus("Disc", "Tab from rate");
+await page.keyboard.press("Tab");
+await expectFocus("Search product", "Tab from Disc %");
 await page.screenshot({ path: `${OUT}/keys-1b-box.png` });
 await page.keyboard.press("F2");
 await expectFocus("Search product", "F2");
 await page.keyboard.press("Control+Enter");
 await toast(/Invoice INV\/.* saved/);
 let list = await bills();
-if (list.length !== 1 || !list[0].partyName?.includes("Sharma") || list[0].grandTotal !== "3780.00") errors.push(`bills: ${JSON.stringify(list.map((b) => [b.invoiceNumber, b.partyName, b.grandTotal]))}`);
+if (list.length !== 1 || !list[0].partyName?.includes("Sharma") || list[0].grandTotal !== "3927.00") errors.push(`bills: ${JSON.stringify(list.map((b) => [b.invoiceNumber, b.partyName, b.grandTotal]))}`);
 const first = await api("GET", `/invoices/${list[0].id}`, token);
 if (first.items[0].unitId !== units.BOX || first.items[0].qtyBase !== "24.000") errors.push(`item: ${JSON.stringify(first.items[0])}`);
 const stock = (await api("GET", "/catalog", token)).products.find((p) => p.id === oil.id)?.stock;
 if (stock !== "76.000") errors.push(`stock ${stock}, expected 76 after 2 boxes of 12`);
-log("2 boxes billed at 1,800 a box and saved with Ctrl+Enter:", list.map((b) => `${b.invoiceNumber} ${b.partyName} ${b.grandTotal}`).join(", "), "· stock", stock);
+log("2 boxes at 1,800 and 5 Tata Salt entered by keyboard only (Enter qty → rate → search, Tab round the line), saved with Ctrl+Enter:", list.map((b) => `${b.invoiceNumber} ${b.partyName} ${b.grandTotal}`).join(", "), "· stock", stock);
 
 // 4. Tablet / small laptop width: the full screen and the same keys.
 await page.setViewportSize({ width: 900, height: 800 });

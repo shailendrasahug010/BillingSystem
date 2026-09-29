@@ -353,7 +353,8 @@
     "numberOnSave": "सेव करने पर मिलेगा",
     "saveFailed": "इनवॉइस सेव नहीं हुआ",
     "saving": "सेव हो रहा है…",
-    "savedWithWarnings": "चेतावनी के साथ सेव हुआ"
+    "savedWithWarnings": "चेतावनी के साथ सेव हुआ",
+    "keysHint": "Enter से आगे: मात्रा → रेट → फिर प्रोडक्ट सर्च · F2 प्रोडक्ट सर्च"
   },
   "suggestions": {
     "title": "स्मार्ट सुझाव",
