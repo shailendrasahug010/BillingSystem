@@ -81,6 +81,8 @@ function emptyForm() {
     innerUnitId: "",
     innerFactor: "",
     levelPrices: {} as Record<string, string>,
+    /** Rate-list price of a pack, keyed "priceLevelId|unitId"; blank = the list's piece price × the pack. */
+    packPrices: {} as Record<string, string>,
     openingStock: "",
     openingCost: "",
     isActive: true,
@@ -90,6 +92,70 @@ function emptyForm() {
 }
 
 type Form = ReturnType<typeof emptyForm>;
+
+/**
+ * Box and strip prices per selling price list (Price A / B / C). Blank means
+ * the list's price for one piece times the pack (shown as the placeholder);
+ * a figure is that list's own rate for the pack, a box scheme for example.
+ */
+function PackPrices({ form, canPrice, error, onChange }: { form: Form; canPrice: boolean; error?: string; onChange(key: string, value: string): void }) {
+  const { t } = useI18n();
+  const packs = [
+    form.caseUnitId && Number(form.caseFactor) > 0 ? { unitId: form.caseUnitId, factor: Number(form.caseFactor) } : null,
+    form.innerUnitId && Number(form.innerFactor) > 0 ? { unitId: form.innerUnitId, factor: Number(form.innerFactor) } : null,
+  ].filter((p): p is { unitId: string; factor: number } => p !== null);
+  if (packs.length === 0 || WORKSPACE.priceLevels.length === 0) return null;
+  const base = WORKSPACE.units.get(form.baseUnitId) ?? "";
+  const piece = (levelId: string, isDefault: boolean) => Number((isDefault ? form.sellingPrice : form.levelPrices[levelId]) || form.sellingPrice || 0);
+  const round2 = (n: number) => String(Math.round(n * 100) / 100);
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <p className="text-[13px] font-medium text-ink-2">{t("product.packPrices")}</p>
+        <p className="text-[12px] text-ink-3">{t("product.packPricesHint")}</p>
+      </div>
+      <div className="scroll-x">
+        <table className="text-[13px]">
+          <thead>
+            <tr className="text-left text-[12px] text-ink-3">
+              <th className="py-1 pr-3 font-medium" />
+              {packs.map((p) => (
+                <th key={p.unitId} className="py-1 pr-3 font-medium">
+                  {WORKSPACE.units.get(p.unitId)} ({p.factor} {base})
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {WORKSPACE.priceLevels.map((l) => (
+              <tr key={l.id}>
+                <td className="py-1 pr-3 font-medium whitespace-nowrap text-ink">{l.name}</td>
+                {packs.map((p) => {
+                  const key = `${l.id}|${p.unitId}`;
+                  return (
+                    <td key={p.unitId} className="py-1 pr-3">
+                      <Input
+                        aria-label={`${l.name} ${WORKSPACE.units.get(p.unitId) ?? ""}`}
+                        inputMode="decimal"
+                        className="w-32"
+                        disabled={!canPrice}
+                        leading={<span className="text-[13px]">₹</span>}
+                        placeholder={round2(piece(l.id, l.isDefault) * p.factor)}
+                        value={form.packPrices[key] ?? ""}
+                        onChange={(e) => onChange(key, e.target.value.trim())}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {error && <p className="text-[12.5px] text-danger">{error}</p>}
+    </div>
+  );
+}
 
 /** Details known before the form opens (a new product from a supplier's bill line). */
 export type ProductPrefill = Partial<Pick<Form, "name" | "hsnCode" | "taxCategoryId" | "baseUnitId" | "purchasePrice" | "mrp" | "barcodes" | "trackBatches" | "trackExpiry">>;
@@ -123,6 +189,7 @@ function formFrom(p: ProductDetail): Form {
     innerUnitId: inner?.unitId ?? "",
     innerFactor: num(inner?.conversionFactor),
     levelPrices: Object.fromEntries(p.prices.filter((x) => x.unitId === p.baseUnitId).map((x) => [x.priceLevelId, num(x.price)])),
+    packPrices: Object.fromEntries(p.prices.filter((x) => x.unitId !== p.baseUnitId).map((x) => [`${x.priceLevelId}|${x.unitId}`, num(x.price)])),
     isActive: p.isActive,
     trackBatches: p.trackBatches,
     trackExpiry: p.trackExpiry,
@@ -158,6 +225,8 @@ export function ProductEditor({
   const canPrice = allowed("product.update_price") || !productId;
   const canCost = allowed("product.view_cost");
   const levels = WORKSPACE.priceLevels.filter((l) => !l.isDefault);
+  /** The default list (Price A) is the selling price itself. */
+  const defaultList = WORKSPACE.priceLevels.find((l) => l.isDefault);
   const prefillRef = useRef(prefill);
 
   const detail = useQuery({
@@ -194,6 +263,7 @@ export function ProductEditor({
     if (form.brandId === NEW && !form.newBrand.trim()) p.brandId = t("validation.required");
     if (form.categoryId === NEW && !form.newCategory.trim()) p.categoryId = t("validation.required");
     for (const l of levels) if (form.levelPrices[l.id] && !RATE.test(form.levelPrices[l.id]!)) p.levelPrices = t("validation.amount");
+    for (const v of Object.values(form.packPrices)) if (v && !RATE.test(v)) p.packPrices = t("validation.amount");
     return p;
   }, [form, t, levels]);
   const show = (k: keyof Form) => (touched ? problems[k] : undefined) ?? fieldError(k) ?? undefined;
@@ -215,8 +285,17 @@ export function ProductEditor({
     ].map(({ unitId, conversionFactor, isDefaultSale, isDefaultPurchase }) => ({ unitId, conversionFactor: num(conversionFactor), isDefaultSale, isDefaultPurchase }));
     const unitIds = new Set([form.baseUnitId, ...units.map((u) => u.unitId)]);
     const editable = new Set(levels.map((l) => l.id));
+    // The box and strip on the form: their prices come from the form, the other packs' stay as loaded.
+    const shownPacks = new Set([form.caseUnitId, form.innerUnitId].filter(Boolean));
     const prices = [
-      ...(loaded?.prices ?? []).filter((x) => !(x.unitId === form.baseUnitId && editable.has(x.priceLevelId)) && unitIds.has(x.unitId)),
+      ...(loaded?.prices ?? []).filter((x) => !(x.unitId === form.baseUnitId && editable.has(x.priceLevelId)) && !shownPacks.has(x.unitId) && unitIds.has(x.unitId)),
+      ...WORKSPACE.priceLevels.flatMap((l) =>
+        [...shownPacks].flatMap((unitId) => {
+          const price = form.packPrices[`${l.id}|${unitId}`];
+          if (!price) return [];
+          return [{ priceLevelId: l.id, unitId, price, discountPercent: loaded?.prices.find((x) => x.priceLevelId === l.id && x.unitId === unitId)?.discountPercent ?? "0" }];
+        }),
+      ),
       ...levels
         .filter((l) => form.levelPrices[l.id])
         .map((l) => ({
@@ -473,7 +552,7 @@ export function ProductEditor({
                   <Input id="p-cost" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.purchasePrice} onChange={(e) => set("purchasePrice", e.target.value.trim())} />
                 </Field>
               )}
-              <Field label={t("product.sellingPrice")} htmlFor="p-rate" error={show("sellingPrice")}>
+              <Field label={defaultList && levels.length > 0 ? `${t("product.sellingPrice")} · ${defaultList.name}` : t("product.sellingPrice")} htmlFor="p-rate" error={show("sellingPrice")}>
                 <Input id="p-rate" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.sellingPrice} onChange={(e) => set("sellingPrice", e.target.value.trim())} />
               </Field>
               <Field label={t("product.mrp")} htmlFor="p-mrp" error={show("mrp")}>
@@ -493,6 +572,7 @@ export function ProductEditor({
               ))}
             </div>
             <Checkbox label={t("product.pricesIncludeTax")} disabled={!canPrice} checked={form.pricesIncludeTax} onChange={(v) => set("pricesIncludeTax", v)} />
+            <PackPrices form={form} canPrice={canPrice} error={touched ? problems.packPrices : undefined} onChange={(key, value) => set("packPrices", { ...form.packPrices, [key]: value })} />
           </section>
         </form>
       )}

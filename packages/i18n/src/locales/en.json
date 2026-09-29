@@ -545,7 +545,9 @@
     "innerPack": "inner pack",
     "innerFactor": "{{unit}} in one {{pack}}",
     "innerSmaller": "An inner pack holds fewer than the case",
-    "innerSameAsCase": "Pick a unit other than the case unit"
+    "innerSameAsCase": "Pick a unit other than the case unit",
+    "packPrices": "Box / strip prices by price list",
+    "packPricesHint": "Optional. Blank: the list's piece price × the pack (shown in grey). Fill in a figure for a special box rate."
   },
   "status": {
     "order": {
