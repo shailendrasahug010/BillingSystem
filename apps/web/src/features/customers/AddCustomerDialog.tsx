@@ -8,15 +8,15 @@ import { Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { translateError } from "@vyapaar/i18n";
 import { upsertCustomer, type CustomerRow } from "../../data/live";
-import { BUSINESS } from "../../data/db";
+import { BUSINESS, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { api, ApiError } from "../../lib/api";
 import { stateOptions } from "../../lib/states";
 
 /**
- * Only the fields a counter clerk needs to start billing; everything else
- * (price level, route, credit terms...) has sensible defaults and lives on the
- * full profile. Validation runs as you type, with specific messages: a GSTIN
+ * Only the fields a counter clerk needs to start billing, and the selling
+ * price list (Price A / B / C) the shop buys on; everything else (route,
+ * credit terms...) has sensible defaults and lives on the full profile. Validation runs as you type, with specific messages: a GSTIN
  * typo is caught by its check digit, and a GSTIN from another state is flagged.
  */
 export function AddCustomerDialog({
@@ -37,7 +37,7 @@ export function AddCustomerDialog({
   const [serverError, setServerError] = useState<ApiError | null>(null);
   const toast = useToast();
   const [type, setType] = useState<"b2b" | "b2c">("b2b");
-  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "" });
+  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "" });
   const [form, setForm] = useState(blank);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -89,12 +89,13 @@ export function AddCustomerDialog({
         ...(type === "b2b" && form.gstin ? { gstin: form.gstin } : {}),
         ...(form.pincode ? { pincode: form.pincode } : {}),
         ...(form.creditLimit ? { creditLimit: form.creditLimit } : {}),
+        ...(form.priceLevelId ? { priceLevelId: form.priceLevelId } : {}),
       });
       const saved = upsertCustomer({ ...res, overdue: res.summary.overdue });
       toast({ tone: "success", title: t("customer.saved"), body: `${saved.code} · ${saved.businessName}` });
       onCreated?.(saved.id);
       onOpenChange(false);
-      setForm({ businessName: "", name: "", mobile: "", gstin: "", stateCode: form.stateCode, pincode: "", creditLimit: "" });
+      setForm({ ...blank(), stateCode: form.stateCode, priceLevelId: form.priceLevelId });
       setTouched({});
     } catch (e) {
       setServerError(e instanceof ApiError ? e : new ApiError(0, "generic"));
@@ -188,6 +189,17 @@ export function AddCustomerDialog({
         <Field label={t("customer.creditLimit")} htmlFor="c-credit" hint={t("common.optional")}>
           <Input id="c-credit" inputMode="numeric" leading={<span className="text-[13px]">₹</span>} value={form.creditLimit} onChange={(e) => set("creditLimit", e.target.value.replace(/[^0-9]/g, ""))} />
         </Field>
+        {WORKSPACE.priceLevels.length > 1 && (
+          <Field label={t("customer.priceList")} htmlFor="c-price-list" hint={t("customer.priceListHint")} error={serverFieldError("priceLevelId")}>
+            <Select id="c-price-list" value={form.priceLevelId} onChange={(e) => set("priceLevelId", e.target.value)}>
+              {WORKSPACE.priceLevels.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
       </form>
     </Dialog>
   );

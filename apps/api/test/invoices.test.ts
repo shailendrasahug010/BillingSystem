@@ -39,7 +39,7 @@ describe.skipIf(!hasDatabase)("invoicing", () => {
       baseUnitId: units.PCS,
       sellingPrice: "10",
       units: [{ unitId: units.BOX, conversionFactor: "24", isDefaultSale: true }],
-      prices: [{ priceLevelId: levels.Wholesale, unitId: units.BOX, price: "220" }],
+      prices: [{ priceLevelId: levels["Price B"], unitId: units.BOX, price: "220" }],
       openingStock: "500",
       openingStockCost: "8",
     });
@@ -66,7 +66,7 @@ describe.skipIf(!hasDatabase)("invoicing", () => {
         customerType: "b2b",
         stateCode: "27",
         gstin: gstin("27", "AABCP1234C"),
-        priceLevelId: levels.Wholesale,
+        priceLevelId: levels["Price B"],
       })
     ).body.id;
     ids.credit = (await post("/customers", { name: "Tight Credit Stores", stateCode: "23", creditLimit: "1000" })).body.id;
@@ -143,10 +143,10 @@ describe.skipIf(!hasDatabase)("invoicing", () => {
         baseUnitId: units.PCS,
         sellingPrice: "10",
         units: [{ unitId: units.STRIP, conversionFactor: "10" }],
-        prices: [{ priceLevelId: levels.Wholesale, unitId: units.PCS, price: "9" }],
+        prices: [{ priceLevelId: levels["Price B"], unitId: units.PCS, price: "9" }],
         openingStock: "100",
       });
-      // Wholesale: 9 a piece, so 90 a strip of 10 (not the selling price of 10 x 10).
+      // Price B: 9 a piece, so 90 a strip of 10 (not the selling price of 10 x 10).
       const res = await post("/invoices", { customerId: ids.b2b, lines: [{ productId: vim.body.id, unitId: units.STRIP, qty: "2" }] });
       expect(res.status).toBe(201);
       expect(res.body.items[0]).toMatchObject({ qty: "2.000", qtyBase: "20.000", rate: "90.0000", taxableValue: "180.00" });

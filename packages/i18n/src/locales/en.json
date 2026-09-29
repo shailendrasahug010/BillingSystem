@@ -446,7 +446,10 @@
       "runningBalance": "Balance",
       "particulars": "Particulars"
     },
-    "addNamed": "Add “{{name}}” as a new customer"
+    "addNamed": "Add “{{name}}” as a new customer",
+    "priceList": "Selling price list",
+    "priceListHint": "The rate list this shop buys on: Price A, B or C",
+    "priceListChanged": "Now bills at {{name}}"
   },
   "supplier": {
     "title": "Suppliers",
@@ -2178,5 +2181,16 @@
     "restored": "Restored: {{name}}",
     "restoredRows_one": "{{count}} record restored",
     "restoredRows_other": "{{count}} records restored"
+  },
+  "priceLists": {
+    "title": "Price lists",
+    "hint": "Each customer buys on one list (Price A, B, C…). The default list is the product's selling price and is what new customers get; set the other lists' prices on each product.",
+    "name": "Name of",
+    "default": "Default",
+    "madeDefault": "{{name}} is now the default list",
+    "renamed": "Renamed to {{name}}",
+    "added": "{{name}} added",
+    "newName": "New price list",
+    "add": "Add list"
   }
 }

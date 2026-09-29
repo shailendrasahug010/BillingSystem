@@ -92,7 +92,7 @@ describe.skipIf(!hasDatabase)("spreadsheet import", () => {
   it("imports customers: state from GSTIN, routes, rate lists, opening balances and advances", async () => {
     const rows = [
       { name: "Bhopal Mart", gstin: gstin("23", "AABCB9999C"), city: "Bhopal", credit_days: "15" },
-      { name: "Sharma Kirana", contact_person: "Ramesh Sharma", mobile: "98260 12345", route: "Rajwada", price_level: "Wholesale", opening_balance: "1,500", credit_limit: "20000" },
+      { name: "Sharma Kirana", contact_person: "Ramesh Sharma", mobile: "98260 12345", route: "Rajwada", price_level: "Price B", opening_balance: "1,500", credit_limit: "20000" },
       { name: "Advance Stores", mobile: "9826011111", state: "Maharashtra", opening_balance: "-250" },
     ];
     const res = await post("/customers/import", { rows });

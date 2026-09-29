@@ -18,7 +18,7 @@ import { balanceSide, customerType, partyGstRegistration } from "./enums.js";
 import { employees } from "./hr.js";
 import { businessId, states } from "./platform.js";
 
-/** Rate lists: Retail, Wholesale, Distributor, Special... Customers default to one. */
+/** Rate lists (selling price lists): Price A / B / C, or Retail, Wholesale, Distributor... Each customer buys on one. */
 export const priceLevels = pgTable(
   "price_levels",
   {

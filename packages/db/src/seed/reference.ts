@@ -137,9 +137,11 @@ export async function seedBusinessDefaults(db: Db, businessId: string, today: st
     await tx
       .insert(s.priceLevels)
       .values([
-        { businessId, name: "Retail", isDefault: true, sortOrder: 1 },
-        { businessId, name: "Wholesale", sortOrder: 2 },
-        { businessId, name: "Distributor", sortOrder: 3 },
+        // Price A is the product's selling price; B and C are the business's other rate lists
+        // (wholesale, distributor...), renamed or extended under Settings → Price lists.
+        { businessId, name: "Price A", isDefault: true, sortOrder: 1 },
+        { businessId, name: "Price B", sortOrder: 2 },
+        { businessId, name: "Price C", sortOrder: 3 },
       ])
       .onConflictDoNothing();
     await tx.insert(s.warehouses).values({ businessId, name: "Main Godown", code: "MAIN", isDefault: true }).onConflictDoNothing();

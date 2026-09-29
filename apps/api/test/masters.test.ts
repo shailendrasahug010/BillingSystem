@@ -138,8 +138,8 @@ describe.skipIf(!hasDatabase)("masters: settings, catalog, customers, suppliers"
         barcodes: ["8901063093019", "18901063093016"],
         units: [{ unitId: units.BOX, conversionFactor: "24", isDefaultSale: true }],
         prices: [
-          { priceLevelId: levels.Wholesale, unitId: units.PCS, price: "9.4" },
-          { priceLevelId: levels.Wholesale, unitId: units.BOX, price: "220" },
+          { priceLevelId: levels["Price B"], unitId: units.PCS, price: "9.4" },
+          { priceLevelId: levels["Price B"], unitId: units.BOX, price: "220" },
         ],
         openingStock: "100",
         openingStockCost: "8.25",

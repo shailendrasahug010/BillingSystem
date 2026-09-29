@@ -4,7 +4,7 @@ import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { Badge, type Tone } from "../../components/ui/Badge";
 import { Avatar, ProgressBar } from "../../components/ui/misc";
-import { TODAY } from "../../data/db";
+import { TODAY, WORKSPACE } from "../../data/db";
 import type { CustomerInsight } from "../../data/store";
 import type { Customer } from "../../data/types";
 import { cn } from "../../lib/cn";
@@ -34,6 +34,7 @@ export function CustomerCard({
   const limit = customer.creditLimit ?? 0;
   const used = limit > 0 ? insight.outstanding / limit : 0;
   const lastDays = insight.lastPurchase ? daysBetween(insight.lastPurchase, TODAY) : null;
+  const priceList = WORKSPACE.priceLevels.length > 1 ? WORKSPACE.priceLevels.find((l) => l.id === (customer.priceLevelId ?? WORKSPACE.defaultPriceLevelId))?.name : undefined;
 
   return (
     <div className="rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
@@ -48,6 +49,13 @@ export function CustomerCard({
             <Badge tone={BEHAVIOUR_TONE[insight.behaviour.rating]} dot>
               {t(`behaviour.${insight.behaviour.rating}`)}
             </Badge>
+            {/* The rate list the bill is priced from (Price A / B / C). */}
+            {priceList && (
+              <Badge>
+                <span className="sr-only">{t("customer.priceList")}: </span>
+                <span>{priceList}</span>
+              </Badge>
+            )}
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-ink-3">
             <span>{customer.name}</span>

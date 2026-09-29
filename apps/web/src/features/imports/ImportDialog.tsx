@@ -36,8 +36,8 @@ const SAMPLE: Record<Kind, string[][]> = {
     ["Surf Excel 1 kg", "", "", "8901030865278", "3402", "18", "PCS", "CTN", "12", "HUL", "Detergent", "1 kg", "140", "128", "115", "no", "12", "36"],
   ],
   customers: [
-    ["Sharma Kirana Store", "Ramesh Sharma", "9826012345", "", "23", "Indore", "12 MG Road", "452001", "20000", "7", "1500", "Retail", "Rajwada", "", ""],
-    ["Bhopal Mart", "Anil Jain", "9893012345", "23AABCB9999C1ZX", "", "Bhopal", "", "", "50000", "15", "0", "Wholesale", "", "", ""],
+    ["Sharma Kirana Store", "Ramesh Sharma", "9826012345", "", "23", "Indore", "12 MG Road", "452001", "20000", "7", "1500", "Price A", "Rajwada", "", ""],
+    ["Bhopal Mart", "Anil Jain", "9893012345", "23AABCB9999C1ZX", "", "Bhopal", "", "", "50000", "15", "0", "Price B", "", "", ""],
   ],
 };
 

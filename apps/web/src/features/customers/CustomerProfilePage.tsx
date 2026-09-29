@@ -1,7 +1,7 @@
 import { buildReorderList, daysBetween, findState } from "@vyapaar/core";
 import { ArrowLeft, ClipboardPlus, MapPin, MessageCircle, Phone, Receipt, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { BarList } from "../../components/charts/BarList";
@@ -9,18 +9,69 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Avatar, EmptyState } from "../../components/ui/misc";
-import { allowed, customerById, PRODUCTS, productById, TODAY } from "../../data/db";
+import { allowed, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
 import { useCustomerInsight } from "../../data/hooks";
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { useCustomerHistory } from "./useCustomerHistory";
 import { cn } from "../../lib/cn";
 import { shareOnWhatsApp } from "../../lib/share";
+import { api, ApiError } from "../../lib/api";
+import { upsertCustomer, type CustomerRow } from "../../data/live";
+import { useToast } from "../../components/ui/Toast";
+import { translateError } from "@vyapaar/i18n";
+import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 
 /** What each tab shows, and the permission it needs. */
 const TAB_PERMISSION = { overview: "customer.view", invoices: "invoice.view", payments: "payment.view", ledger: "customer.view_ledger", products: "customer.view" } as const;
-import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 
+/** The selling price list (Price A / B / C) this shop buys on; bills from now on use its prices. */
+function PriceListPicker({ customerId, value }: { customerId: string; value: string | null | undefined }) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (!LIVE || WORKSPACE.priceLevels.length < 2) return null;
+  const current = value ?? WORKSPACE.defaultPriceLevelId ?? "";
+  const name = WORKSPACE.priceLevels.find((l) => l.id === current)?.name ?? "—";
+  if (!allowed("customer.update")) {
+    return (
+      <span>
+        {t("customer.priceList")}: <span className="font-medium text-ink-2">{name}</span>
+      </span>
+    );
+  }
+  const change = async (priceLevelId: string) => {
+    setBusy(true);
+    try {
+      const res = await api.patch<CustomerRow & { summary: { overdue: string } }>(`/customers/${customerId}`, { priceLevelId });
+      upsertCustomer({ ...res, overdue: res.summary.overdue });
+      toast({ tone: "success", title: t("customer.priceListChanged", { name: WORKSPACE.priceLevels.find((l) => l.id === priceLevelId)?.name ?? "" }) });
+    } catch (e) {
+      toast({ tone: "danger", title: translateError(i18n, e instanceof ApiError ? e : new ApiError(0, "generic")) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <label className="inline-flex items-center gap-1.5">
+      {t("customer.priceList")}:
+      <select
+        aria-label={t("customer.priceList")}
+        value={current}
+        disabled={busy}
+        onChange={(e) => void change(e.target.value)}
+        className="h-7 rounded-md border border-line bg-surface px-1.5 text-[12.5px] font-medium text-ink focus:border-accent focus:outline-none"
+      >
+        {WORKSPACE.priceLevels.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 export function CustomerProfilePage({ customerId }: { customerId: string }) {
   const { t, money, compact, date, locale } = useI18n();
@@ -81,8 +132,12 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               </span>
               {customer.gstin && <span className="font-mono text-[12px]">GSTIN {customer.gstin}</span>}
             </p>
-            <p className="mt-0.5 text-[12.5px] text-ink-3">
-              {t("customer.route")}: {customer.route} · {t("customer.salesRep")}: {customer.salesRep} · {t("customer.creditDays")}: {customer.creditDays}
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-[12.5px] text-ink-3">
+              <span>
+                {t("customer.route")}: {customer.route} · {t("customer.salesRep")}: {customer.salesRep} · {t("customer.creditDays")}: {customer.creditDays}
+              </span>
+              {LIVE && WORKSPACE.priceLevels.length > 1 && <span aria-hidden>·</span>}
+              <PriceListPicker customerId={customer.id} value={customer.priceLevelId} />
             </p>
           </div>
         </div>
