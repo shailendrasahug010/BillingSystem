@@ -31,7 +31,7 @@ Each screen lists who uses it, what it shows, what it lets the user do, the rule
 * **Phone:** card list with business, city · route, outstanding and behaviour badge.
 
 ## 4. Customer profile — **Built**
-* **Header:** business name, B2B/B2C, category, contact, address and state, GSTIN, route, sales rep, payment terms. Actions: Call, WhatsApp, Receive payment, **New invoice** (opens the invoice with this customer selected).
+* **Header:** business name, B2B/B2C, category, contact, address and state, GSTIN, route, sales rep, payment terms, selling price list. Actions: Call, WhatsApp, **Edit** (name, type, mobile, GSTIN, state, pincode, address, city, credit limit, price list; only what changed is saved, checked against the version this device saw; offline it is kept on the device and sent later), Receive payment, New order, **New invoice** (opens the invoice with this customer selected). Receive payment, New order and Add customer work offline too (see 10-offline-sync).
 * **Tiles:** total sales (+ invoice count), outstanding (+ overdue), average order value, last purchase, payment behaviour (average days to pay).
 * **Tabs:** *Overview* (most purchased products, reorder suggestions table) · *Invoices* (number, date, due date, total, balance, status) · *Payments* · *Ledger* (running balance statement, debit/credit, export PDF/Excel) · *Products* (every product bought: orders, total qty, last purchase, typical interval) · *Credit/debit notes* (Phase 3).
 * **Rules:** financial tabs require `customer.view_ledger`.

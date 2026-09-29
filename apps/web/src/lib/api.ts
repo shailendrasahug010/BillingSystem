@@ -133,7 +133,7 @@ export const api = {
   blob: (path: string, query?: Query) => request<Blob>("GET", path, { ...(query ? { query } : {}), raw: true }),
   post: <T>(path: string, body?: unknown, options: Omit<RequestOptions, "body"> = {}) => request<T>("POST", path, { ...options, body: body ?? {} }),
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, { body }),
-  patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, { body }),
+  patch: <T>(path: string, body: unknown, options: Omit<RequestOptions, "body"> = {}) => request<T>("PATCH", path, { ...options, body }),
   delete: <T>(path: string) => request<T>("DELETE", path),
   /** Uploads a file as it is (backups). */
   upload: <T>(path: string, file: Blob, options: { query?: Query; headers?: Record<string, string> } = {}) => request<T>("POST", path, { file, ...options }),

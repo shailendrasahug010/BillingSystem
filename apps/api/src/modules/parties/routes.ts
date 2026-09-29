@@ -240,12 +240,13 @@ export const partiesModule: ApiModule = async (app, deps) => {
           price_level_id: string | null;
           category_id: string | null;
           is_active: boolean;
+          version: number;
           created_at: string;
           overdue: string;
         }>(sql`
           select c.id, c.code, c.name, c.business_name, c.customer_type, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
                  c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
-                 c.is_active, c.created_at, coalesce(od.amount, 0)::text as overdue
+                 c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue
           from customers c
           left join lateral (
             select sum(i.balance_due) as amount from invoices i
@@ -276,6 +277,8 @@ export const partiesModule: ApiModule = async (app, deps) => {
       priceLevelId: c.price_level_id,
       categoryId: c.category_id,
       isActive: c.is_active,
+      /** For If-Match on edits (an edit made offline is checked against it). */
+      version: c.version,
       createdAt: new Date(c.created_at).toISOString(),
     }));
     return page(data, q.limit, (c) => ({ v: q.sort === "name" ? c.name : q.sort === "outstanding" ? c.balance : c.createdAt, id: c.id }));
@@ -285,9 +288,24 @@ export const partiesModule: ApiModule = async (app, deps) => {
     tenant(request.ctx, (tx) => customerDetail(tx, request.ctx, request.params.id)),
   );
 
+  /**
+   * An Idempotency-Key (a UUID made on the device) becomes the customer's id,
+   * so a customer added offline can be billed at once and the bills sync
+   * after it; sending it again returns the same customer.
+   */
   r.post("/customers", { preHandler: guard(deps, "customer.create"), schema: { tags: ["customers"], body: CustomerBody } }, async (request, reply) => {
     const ctx = request.ctx;
+    const key = request.headers["idempotency-key"];
+    const clientId = typeof key === "string" && z.uuid().safeParse(key).success ? key : null;
+    if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
+      if (clientId) {
+        const [existing] = await tx
+          .select({ id: schema.customers.id })
+          .from(schema.customers)
+          .where(and(eq(schema.customers.id, clientId), eq(schema.customers.businessId, ctx.businessId)));
+        if (existing) return { replay: true, detail: { ...(await customerDetail(tx, ctx, existing.id)), duplicates: [] } };
+      }
       const raw = request.body;
       if (raw.customerType === "b2b" && !raw.gstin) throw badRequest("GSTIN_REQUIRED_FOR_B2B", {}, "gstin");
       const body = await normaliseParty(tx, { ...raw, gstRegistration: raw.gstRegistration ?? (raw.gstin ? "regular" : "consumer") });
@@ -297,18 +315,24 @@ export const partiesModule: ApiModule = async (app, deps) => {
       await assertOwned(tx, schema.employees, ctx.businessId, body.salesRepId, "salesRepId");
       const duplicates = await possibleDuplicates(tx, "customer", ctx.businessId, body);
       const code = await codeFor(tx, deps, ctx, "customer", body.code);
-      const id = uuidv7();
+      const id = clientId ?? uuidv7();
       const today = deps.clock.today(ctx.timeZone);
-      await tx.insert(schema.customers).values({
-        ...body,
-        id,
-        code,
-        businessId: ctx.businessId,
-        openingBalanceDate: today,
-        balance: "0",
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
-      });
+      const inserted = await tx
+        .insert(schema.customers)
+        .values({
+          ...body,
+          id,
+          code,
+          businessId: ctx.businessId,
+          openingBalanceDate: today,
+          balance: "0",
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        })
+        .onConflictDoNothing({ target: schema.customers.id })
+        .returning({ id: schema.customers.id });
+      // The id is taken by a row this business cannot see: not a key this device made for it.
+      if (inserted.length === 0) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
       if (dec(body.openingBalance).gt(0)) {
         await postPartyEntry(tx, {
           businessId: ctx.businessId,
@@ -323,9 +347,10 @@ export const partiesModule: ApiModule = async (app, deps) => {
         });
       }
       await audit(tx, ctx, { action: "customer.created", entityType: "customer", entityId: id, entityLabel: `${code} ${body.name}` });
-      return { ...(await customerDetail(tx, ctx, id)), duplicates };
+      return { replay: false, detail: { ...(await customerDetail(tx, ctx, id)), duplicates } };
     });
-    return reply.code(201).send(result);
+    if (result.replay) reply.header("idempotent-replay", "true");
+    return reply.code(result.replay ? 200 : 201).send(result.detail);
   });
 
   r.patch("/customers/:id", { preHandler: guard(deps, "customer.update"), schema: { tags: ["customers"], params: IdParams, body: CustomerPatch } }, async (request) => {

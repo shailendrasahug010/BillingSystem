@@ -450,7 +450,9 @@
     "addNamed": "Add “{{name}}” as a new customer",
     "priceList": "Selling price list",
     "priceListHint": "The rate list this shop buys on: Price A, B or C",
-    "priceListChanged": "Now bills at {{name}}"
+    "priceListChanged": "Now bills at {{name}}",
+    "edit": "Edit customer",
+    "updated": "Customer updated"
   },
   "supplier": {
     "title": "Suppliers",
@@ -1988,12 +1990,12 @@
   },
   "offline": {
     "notReady": "This device is not ready for offline bills yet. Open Digital Bahi once while connected to the internet.",
-    "banner": "No connection. Bills are saved on this device and sent when the internet is back.",
-    "title": "Bills on this device",
-    "description": "Bills made without a connection wait here until the server takes them. Each keeps the number printed on it.",
+    "banner": "No connection. Bills, payments, orders and customer changes are saved on this device and sent when the internet is back.",
+    "title": "Waiting on this device",
+    "description": "Work done without a connection waits here until the server takes it: bills keep the number printed on them, a new customer keeps what was billed to them.",
     "device": "This device: series {{code}} · next bill {{number}}",
     "noDevice": "This device has no offline bill series yet. It gets one the next time it connects.",
-    "empty": "No bills waiting. Everything is synced.",
+    "empty": "Nothing waiting. Everything is synced.",
     "waiting": "Waiting to sync",
     "failed": "Not accepted",
     "syncNow": "Sync now",
@@ -2005,8 +2007,8 @@
     "totalChanged": "Total on the server: {{amount}}",
     "notSynced": "Not synced yet",
     "signOutOffline": "Connect to the internet to sign out.",
-    "signOutPending_one": "{{count}} bill is still waiting to sync. It stays on this device and is sent the next time you sign in here. Sign out anyway?",
-    "signOutPending_other": "{{count}} bills are still waiting to sync. They stay on this device and are sent the next time you sign in here. Sign out anyway?",
+    "signOutPending_one": "{{count}} change is still waiting to sync. It stays on this device and is sent the next time you sign in here. Sign out anyway?",
+    "signOutPending_other": "{{count}} changes are still waiting to sync. They stay on this device and are sent the next time you sign in here. Sign out anyway?",
     "devices": {
       "title": "Devices for offline billing",
       "help": "Phones and computers that can make bills without internet. Each has its own bill series (A1, A2 …). Remove a lost or old device so it cannot send bills.",
@@ -2020,7 +2022,26 @@
       "remove": "Remove device",
       "removeConfirm": "Remove {{name}} (series {{code}})? Bills it has not sent yet will be refused.",
       "removedToast": "Device removed"
-    }
+    },
+    "kinds": {
+      "invoice": "Bill",
+      "payment": "Payment received",
+      "paymentOut": "Payment to supplier",
+      "order": "Order",
+      "customer": "New customer",
+      "customer-edit": "Customer details"
+    },
+    "removeEntryConfirm": "Remove this {{what}} ({{name}})? It will not reach the books.",
+    "removeCustomerConfirm": "Remove the new customer {{name}}? Bills, payments and orders for them that are still waiting cannot be sent then.",
+    "detailsChanged": "details changed",
+    "conflict": "Someone changed this customer on another device after you. Keep yours to save your change over theirs, or remove yours to keep theirs.",
+    "keepMine": "Keep mine",
+    "savedHere": "Saved on this device",
+    "sendsLater": "It goes to the server when the internet is back.",
+    "paymentNote": "No connection: the payment is saved on this device and, when it reaches the server, goes to the oldest bills first.",
+    "orderNote": "No connection: the order is saved on this device and priced by the server when it arrives.",
+    "customerNote": "No connection: saved on this device and sent when the internet is back.",
+    "notReadyWork": "This device cannot keep work offline (its storage is blocked). Connect to the internet and try again."
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"

@@ -87,7 +87,13 @@ export interface CustomerRow {
   priceLevelId: string | null;
   categoryId: string | null;
   isActive: boolean;
+  /** Edits are checked against it (If-Match), so one made offline cannot silently undo a later one. */
+  version?: number;
 }
+
+/** The customers as the server sent them (all fields), for edits made on this device. */
+const customerRows = new Map<string, CustomerRow>();
+export const customerRow = (id: string) => customerRows.get(id);
 
 // ---------------------------------------------------------------- mapping
 
@@ -116,6 +122,7 @@ function mapCustomer(c: CustomerRow, routeName: Map<string, string>): Customer {
     gstRegistration: c.gstin ? "regular" : "consumer",
     balance: Number(c.balance),
     overdue: Number(c.overdue),
+    ...(c.version !== undefined ? { version: c.version } : {}),
   };
 }
 
@@ -280,6 +287,7 @@ export async function refreshCustomers(): Promise<void> {
   const mapped = customers.map((c) => mapCustomer(c, routeName));
   replaceAll(CUSTOMERS, mapped);
   replaceMap(customerById, mapped.map((c) => [c.id, c]));
+  replaceMap(customerRows, customers.map((c) => [c.id, c]));
   touch();
 }
 
@@ -312,6 +320,7 @@ export function applyWorkspace(data: WorkspaceData): void {
   const mapped = data.customers.map((c) => mapCustomer(c, routeName));
   replaceAll(CUSTOMERS, mapped);
   replaceMap(customerById, mapped.map((c) => [c.id, c]));
+  replaceMap(customerRows, data.customers.map((c) => [c.id, c]));
   const supplierRows = data.suppliers.map(mapSupplier);
   replaceAll(SUPPLIERS, supplierRows);
   replaceMap(supplierById, supplierRows.map((s) => [s.id, s]));
@@ -351,13 +360,37 @@ export async function refreshCustomer(id: string): Promise<void> {
 
 /** Adds or refreshes one customer after it was created or edited. */
 export function upsertCustomer(row: CustomerRow): Customer {
-  const mapped = mapCustomer(row, new Map());
+  const route = customerById.get(row.id)?.route;
+  const mapped = mapCustomer(row, new Map(route && row.routeId ? [[row.routeId, route]] : []));
   const i = CUSTOMERS.findIndex((c) => c.id === row.id);
   if (i >= 0) CUSTOMERS[i] = mapped;
   else CUSTOMERS.push(mapped);
   customerById.set(mapped.id, mapped);
+  customerRows.set(row.id, row);
   touch();
   return mapped;
+}
+
+/**
+ * Shows a customer's details as changed on this device (an edit waiting to
+ * sync), keeping the balance the device has worked out.
+ */
+export function showCustomerDetails(row: CustomerRow): void {
+  const current = customerById.get(row.id);
+  if (!current) return;
+  const { balance, overdue } = current;
+  const shown = upsertCustomer(row);
+  shown.balance = balance;
+  shown.overdue = overdue;
+}
+
+/** Takes a customer off this device's list (one added offline and then removed). */
+export function dropCustomer(id: string): void {
+  const i = CUSTOMERS.findIndex((c) => c.id === id);
+  if (i >= 0) CUSTOMERS.splice(i, 1);
+  customerById.delete(id);
+  customerRows.delete(id);
+  touch();
 }
 
 /** Stock moves with every invoice; keep the cached figure close without reloading the catalogue. */
@@ -373,6 +406,7 @@ export function resetWorkspace(): void {
   productById.clear();
   replaceAll(CUSTOMERS, []);
   customerById.clear();
+  customerRows.clear();
   replaceAll(BRANDS, []);
   replaceAll(ROUTES, []);
   WORKSPACE.ready = false;

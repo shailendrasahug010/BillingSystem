@@ -7,29 +7,36 @@ import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { translateError } from "@vyapaar/i18n";
-import { upsertCustomer, type CustomerRow } from "../../data/live";
 import { BUSINESS, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
-import { api, ApiError } from "../../lib/api";
+import type { Customer } from "../../data/types";
+import { ApiError } from "../../lib/api";
 import { stateOptions } from "../../lib/states";
+import { useOffline } from "../../offline/sync";
+import { createCustomer, editCustomer, NotKeptOffline, type CustomerInput } from "./saveCustomer";
 
 /**
  * Only the fields a counter clerk needs to start billing, and the selling
  * price list (Price A / B / C) the shop buys on; everything else (route,
  * credit terms...) has sensible defaults and lives on the full profile. Validation runs as you type, with specific messages: a GSTIN
  * typo is caught by its check digit, and a GSTIN from another state is flagged.
+ * With `customer` it edits that customer's details (address and city too).
+ * Without a connection both are kept on this device and sent later.
  */
 export function AddCustomerDialog({
   open,
   onOpenChange,
   onCreated,
   initial,
+  customer,
 }: {
   open: boolean;
   onOpenChange(v: boolean): void;
   onCreated?(id: string): void;
   /** What was typed in a search that found nobody: a mobile number, a GSTIN or the shop's name. */
   initial?: string;
+  /** Edit this customer instead of adding one. */
+  customer?: Customer;
 }) {
   const i18n = useI18n();
   const { t, locale } = i18n;
@@ -37,10 +44,34 @@ export function AddCustomerDialog({
   const [serverError, setServerError] = useState<ApiError | null>(null);
   const toast = useToast();
   const [type, setType] = useState<"b2b" | "b2c">("b2b");
-  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "" });
+  const offline = useOffline();
+  const workingOffline = offline.offlineMode || !offline.online;
+  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "", address: "", city: "" });
   const [form, setForm] = useState(blank);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  /** The customer's details as the form shows them (edit mode). */
+  const fromCustomer = (c: Customer) => ({
+    businessName: c.businessName,
+    name: c.name === c.businessName ? "" : c.name,
+    mobile: c.mobile,
+    gstin: c.gstin ?? "",
+    stateCode: c.stateCode,
+    pincode: c.pincode,
+    creditLimit: c.creditLimit === null ? "" : String(Math.round(c.creditLimit)),
+    priceLevelId: c.priceLevelId ?? WORKSPACE.defaultPriceLevelId ?? "",
+    address: c.address,
+    city: c.city,
+  });
+
+  // Editing: start from the customer as they are.
+  useEffect(() => {
+    if (!open || !customer) return;
+    setType(customer.type);
+    setForm(fromCustomer(customer));
+    setTouched({});
+    setServerError(null);
+  }, [open, customer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opened from a search: start from what was typed.
   useEffect(() => {
@@ -76,29 +107,62 @@ export function AddCustomerDialog({
   const show = (k: keyof typeof errors) => (touched[k] ? errors[k] : null) ?? serverFieldError(k);
 
   /** Live mode: the server validates again (GSTIN checksum and state, duplicates) and assigns the code. */
-  const create = async () => {
+  const input = (): CustomerInput => ({
+    name: form.name.trim() || form.businessName.trim(),
+    businessName: form.businessName.trim(),
+    customerType: type,
+    ...(form.mobile ? { mobile: form.mobile } : {}),
+    stateCode: form.stateCode,
+    ...(type === "b2b" && form.gstin ? { gstin: form.gstin } : {}),
+    ...(form.pincode ? { pincode: form.pincode } : {}),
+    ...(form.creditLimit ? { creditLimit: form.creditLimit } : {}),
+    ...(form.priceLevelId ? { priceLevelId: form.priceLevelId } : {}),
+    ...(form.address.trim() ? { addressLine1: form.address.trim() } : {}),
+    ...(form.city.trim() ? { city: form.city.trim() } : {}),
+  });
+  /** Only what changed (edit mode); a cleared credit limit means no limit. */
+  const changes = (c: Customer): Partial<CustomerInput> => {
+    const now = input();
+    const was = fromCustomer(c);
+    const patch: Partial<CustomerInput> = {};
+    if (now.businessName !== c.businessName) patch.businessName = now.businessName;
+    if (now.name !== c.name) patch.name = now.name;
+    if (type !== c.type) patch.customerType = type;
+    if (form.mobile !== was.mobile && now.mobile) patch.mobile = now.mobile;
+    if (form.stateCode !== was.stateCode) patch.stateCode = form.stateCode;
+    if (type === "b2b" && form.gstin !== was.gstin && now.gstin) patch.gstin = now.gstin;
+    if (form.pincode !== was.pincode && now.pincode) patch.pincode = now.pincode;
+    if (form.creditLimit !== was.creditLimit) patch.creditLimit = form.creditLimit || null;
+    if (form.priceLevelId !== was.priceLevelId && form.priceLevelId) patch.priceLevelId = form.priceLevelId;
+    if (form.address.trim() !== was.address.trim()) patch.addressLine1 = form.address.trim();
+    if (form.city.trim() !== was.city.trim()) patch.city = form.city.trim();
+    return patch;
+  };
+
+  const save = async () => {
     setBusy(true);
     setServerError(null);
     try {
-      const res = await api.post<CustomerRow & { summary: { overdue: string } }>("/customers", {
-        name: form.name.trim() || form.businessName.trim(),
-        businessName: form.businessName.trim(),
-        customerType: type,
-        mobile: form.mobile,
-        stateCode: form.stateCode,
-        ...(type === "b2b" && form.gstin ? { gstin: form.gstin } : {}),
-        ...(form.pincode ? { pincode: form.pincode } : {}),
-        ...(form.creditLimit ? { creditLimit: form.creditLimit } : {}),
-        ...(form.priceLevelId ? { priceLevelId: form.priceLevelId } : {}),
-      });
-      const saved = upsertCustomer({ ...res, overdue: res.summary.overdue });
-      toast({ tone: "success", title: t("customer.saved"), body: `${saved.code} · ${saved.businessName}` });
-      onCreated?.(saved.id);
+      let result: Awaited<ReturnType<typeof createCustomer>>;
+      if (customer) {
+        const patch = changes(customer);
+        if (Object.keys(patch).length === 0) {
+          onOpenChange(false);
+          return;
+        }
+        result = await editCustomer(customer.id, patch);
+      } else {
+        result = await createCustomer(input());
+      }
+      const saved = result.customer;
+      if (result.queued) toast({ tone: "offline", title: t("offline.savedHere"), body: `${saved.businessName} · ${t("offline.sendsLater")}` });
+      else toast({ tone: "success", title: customer ? t("customer.updated") : t("customer.saved"), body: `${saved.code} · ${saved.businessName}` });
+      if (!customer) onCreated?.(saved.id);
       onOpenChange(false);
-      setForm({ ...blank(), stateCode: form.stateCode, priceLevelId: form.priceLevelId });
+      if (!customer) setForm({ ...blank(), stateCode: form.stateCode, priceLevelId: form.priceLevelId });
       setTouched({});
     } catch (e) {
-      setServerError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+      setServerError(e instanceof ApiError ? e : e instanceof NotKeptOffline ? new ApiError(0, "OFFLINE_NOT_KEPT") : new ApiError(0, "generic"));
     } finally {
       setBusy(false);
     }
@@ -108,7 +172,7 @@ export function AddCustomerDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t("customer.add")}
+      title={customer ? t("customer.edit") : t("customer.add")}
       size="lg"
       closeLabel={t("common.close")}
       footer={
@@ -120,7 +184,7 @@ export function AddCustomerDialog({
             onClick={() => {
               setTouched({ businessName: true, mobile: true, pincode: true, gstin: true });
               if (!valid) return;
-              if (LIVE) return void create();
+              if (LIVE) return void save();
               toast({ tone: "success", title: t("customer.saved"), body: form.businessName });
               onOpenChange(false);
             }}
@@ -133,9 +197,10 @@ export function AddCustomerDialog({
       <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={(e) => e.preventDefault()}>
         {serverError && !serverError.field && (
           <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger sm:col-span-2" role="alert">
-            {translateError(i18n, serverError)}
+            {serverError.code === "OFFLINE_NOT_KEPT" ? t("offline.notReadyWork") : translateError(i18n, serverError)}
           </p>
         )}
+        {LIVE && workingOffline && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn sm:col-span-2">{t("offline.customerNote")}</p>}
         <div className="sm:col-span-2">
           <Segmented
             label={t("customer.type")}
@@ -186,6 +251,16 @@ export function AddCustomerDialog({
         <Field label={t("customer.pincode")} htmlFor="c-pin" error={show("pincode")}>
           <Input id="c-pin" inputMode="numeric" maxLength={6} value={form.pincode} onChange={(e) => set("pincode", e.target.value)} onBlur={() => setTouched((x) => ({ ...x, pincode: true }))} invalid={Boolean(show("pincode"))} />
         </Field>
+        {customer && (
+          <>
+            <Field label={t("customer.address")} htmlFor="c-address">
+              <Input id="c-address" value={form.address} onChange={(e) => set("address", e.target.value)} />
+            </Field>
+            <Field label={t("common.city")} htmlFor="c-city">
+              <Input id="c-city" value={form.city} onChange={(e) => set("city", e.target.value)} />
+            </Field>
+          </>
+        )}
         <Field label={t("customer.creditLimit")} htmlFor="c-credit" hint={t("common.optional")}>
           <Input id="c-credit" inputMode="numeric" leading={<span className="text-[13px]">₹</span>} value={form.creditLimit} onChange={(e) => set("creditLimit", e.target.value.replace(/[^0-9]/g, ""))} />
         </Field>

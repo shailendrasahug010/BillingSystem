@@ -14,7 +14,7 @@ import { LIVE } from "../../data/source";
 import { customerInsight, getSyncState, peekNextInvoiceNumber, saveInvoice, useStoreVersion } from "../../data/store";
 import { ApiError, newIdempotencyKey } from "../../lib/api";
 import { peekOfflineNumber } from "../../offline/device";
-import { getOfflineState, useOffline } from "../../offline/sync";
+import { getOfflineState, isWaitingCustomer, useOffline } from "../../offline/sync";
 import { postInvoice, type SavedInvoice } from "./postInvoice";
 import { OfflineNotReady, saveOffline } from "./saveOffline";
 import { cn } from "../../lib/cn";
@@ -176,7 +176,8 @@ function useSave(view: DraftView) {
         const key = idempotencyKey.current;
         const offline = (invoice: SavedInvoice) => ({ invoice, offline: true });
         // Offline, or the connection dropped on the way: keep the bill on the device (same key, so never twice).
-        const attempt = workingOffline()
+        // A customer added offline and not sent yet: the bill waits behind them.
+        const attempt = workingOffline() || isWaitingCustomer(customer.id)
           ? saveOffline(view, key).then(offline)
           : postInvoice(view, key).then(
               (invoice) => ({ invoice, offline: false }),
@@ -549,8 +550,8 @@ function MobileInvoice({ view }: { view: DraftView }) {
   );
 }
 
-/** Customers can be added while billing by anyone allowed to add them, when online. */
-const canAddCustomer = () => LIVE && allowed("customer.create") && getOfflineState().online && !getOfflineState().offlineMode;
+/** Customers can be added while billing by anyone allowed to add them (offline too: sent before the bill). */
+const canAddCustomer = () => LIVE && allowed("customer.create");
 
 export function CreateInvoicePage({ customerId }: { customerId?: string }) {
   const view = useInvoiceDraft(customerId ?? null);

@@ -1,5 +1,5 @@
 import { buildReorderList, daysBetween, findState } from "@vyapaar/core";
-import { ArrowLeft, ClipboardPlus, MapPin, MessageCircle, Phone, Receipt, Wallet } from "lucide-react";
+import { ArrowLeft, ClipboardPlus, MapPin, MessageCircle, Pencil, Phone, Receipt, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -16,9 +16,10 @@ import { useStoreVersion } from "../../data/store";
 import { useCustomerHistory } from "./useCustomerHistory";
 import { cn } from "../../lib/cn";
 import { shareOnWhatsApp } from "../../lib/share";
-import { api, ApiError } from "../../lib/api";
-import { upsertCustomer, type CustomerRow } from "../../data/live";
+import { ApiError } from "../../lib/api";
 import { useToast } from "../../components/ui/Toast";
+import { AddCustomerDialog } from "./AddCustomerDialog";
+import { editCustomer, NotKeptOffline } from "./saveCustomer";
 import { translateError } from "@vyapaar/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 
@@ -44,11 +45,11 @@ function PriceListPicker({ customerId, value }: { customerId: string; value: str
   const change = async (priceLevelId: string) => {
     setBusy(true);
     try {
-      const res = await api.patch<CustomerRow & { summary: { overdue: string } }>(`/customers/${customerId}`, { priceLevelId });
-      upsertCustomer({ ...res, overdue: res.summary.overdue });
-      toast({ tone: "success", title: t("customer.priceListChanged", { name: WORKSPACE.priceLevels.find((l) => l.id === priceLevelId)?.name ?? "" }) });
+      const { queued } = await editCustomer(customerId, { priceLevelId });
+      const title = t("customer.priceListChanged", { name: WORKSPACE.priceLevels.find((l) => l.id === priceLevelId)?.name ?? "" });
+      toast(queued ? { tone: "offline", title, body: t("offline.sendsLater") } : { tone: "success", title });
     } catch (e) {
-      toast({ tone: "danger", title: translateError(i18n, e instanceof ApiError ? e : new ApiError(0, "generic")) });
+      toast({ tone: "danger", title: e instanceof NotKeptOffline ? t("offline.notReadyWork") : translateError(i18n, e instanceof ApiError ? e : new ApiError(0, "generic")) });
     } finally {
       setBusy(false);
     }
@@ -77,6 +78,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
   const { t, money, compact, date, locale } = useI18n();
   const { navigate } = useRouter();
   const version = useStoreVersion();
+  const [editing, setEditing] = useState(false);
   const customer = customerById.get(customerId);
   const insight = useCustomerInsight(customer ? customer.id : null);
   const { invoices, payments, ledger } = useCustomerHistory(customerId);
@@ -151,6 +153,11 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
                 {t("common.whatsapp")}
               </Button>
             </>
+          )}
+          {LIVE && allowed("customer.update") && (
+            <Button icon={<Pencil size={16} />} onClick={() => setEditing(true)}>
+              {t("common.edit")}
+            </Button>
           )}
           {allowed("payment.collect") && (
             <Button icon={<Wallet size={16} />} onClick={() => navigate(LIVE ? { name: "planned", module: "payments", action: "collect", partyId: customer.id } : { name: "planned", module: "payments" })}>
@@ -364,6 +371,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           </Card>
         </Tabs.Content>
       </Tabs.Root>
+      <AddCustomerDialog open={editing} onOpenChange={setEditing} customer={customer} />
     </div>
   );
 }

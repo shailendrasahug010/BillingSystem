@@ -87,6 +87,7 @@ export interface Customer {
   gstRegistration?: string;
   balance?: number;
   overdue?: number;
+  version?: number;
 }
 
 export interface InvoiceLine {

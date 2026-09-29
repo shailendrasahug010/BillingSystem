@@ -7,7 +7,8 @@ import { TODAY } from "../../data/db";
 import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { peekOfflineNumber } from "../../offline/device";
-import { removeBill, retryBill, syncNow, useOffline, type OutboxEntry } from "../../offline/sync";
+import { kindOf, removeEntry, retryEntry, syncNow, useOffline, type OutboxEntry, type PaymentEntry, type QueuedEntry, type SyncedEntry } from "../../offline/sync";
+import type { Route } from "../../app/router";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
@@ -56,36 +57,63 @@ export function OfflineBanner() {
   );
 }
 
-function EntryRow({ entry, onOpen }: { entry: OutboxEntry; onOpen(): void }) {
+/** What an entry is, in a word or two. */
+function useKindLabel() {
+  const { t } = useI18n();
+  return (e: Pick<QueuedEntry, "kind"> & Partial<Pick<PaymentEntry, "direction">>) => {
+    const kind = kindOf(e);
+    return kind === "payment" && e.direction === "out" ? t("offline.kinds.paymentOut") : t(`offline.kinds.${kind}`);
+  };
+}
+
+function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const i18n = useI18n();
   const { t, money, date } = i18n;
+  const label = useKindLabel();
   const failed = entry.status === "failed";
+  const kind = kindOf(entry);
+  const bill = kind === "invoice" ? (entry as OutboxEntry) : null;
+  const name = entry.kind === "payment" ? entry.partyName : (entry as { customerName: string }).customerName;
+  const amount = entry.kind === "payment" ? entry.amount : entry.kind === "order" ? entry.estimate : bill ? bill.total : null;
+  const when = entry.kind === "payment" || entry.kind === "order" ? entry.date : bill ? bill.date : null;
+  const conflict = kind === "customer-edit" && entry.error?.code === "VERSION_CONFLICT";
+  const removeText =
+    kind === "invoice" ? t("offline.removeConfirm", { number: bill!.number }) : kind === "customer" ? t("offline.removeCustomerConfirm", { name }) : t("offline.removeEntryConfirm", { what: label(entry).toLowerCase(), name });
   return (
     <li className="flex flex-col gap-1.5 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={onOpen} className="font-mono text-[13.5px] font-semibold text-accent hover:underline">
-          {entry.number}
-        </button>
+        {bill ? (
+          <button type="button" onClick={onOpen} className="font-mono text-[13.5px] font-semibold text-accent hover:underline">
+            {bill.number}
+          </button>
+        ) : (
+          <span className="text-[13.5px] font-semibold text-ink">{label(entry)}</span>
+        )}
         <Badge tone={failed ? "danger" : "warn"} dot>
           {failed ? t("offline.failed") : t("offline.waiting")}
         </Badge>
-        <span className="num ml-auto text-[13.5px] font-medium text-ink">{money(entry.total)}</span>
+        {amount !== null && amount > 0 && (
+          <span className="num ml-auto text-[13.5px] font-medium text-ink">
+            {entry.kind === "order" ? "≈ " : ""}
+            {money(amount)}
+          </span>
+        )}
       </div>
       <p className="text-[12.5px] text-ink-3">
-        {entry.customerName} · {date(entry.date)}
+        {[name, when ? date(when) : null, entry.kind === "customer-edit" ? t("offline.detailsChanged") : null].filter(Boolean).join(" · ")}
       </p>
       {failed && entry.error && (
         <>
-          <p className="text-[12.5px] text-danger">{translateError(i18n, new ApiError(entry.error.status, entry.error.code, entry.error.params))}</p>
+          <p className="text-[12.5px] text-danger">{conflict ? t("offline.conflict") : translateError(i18n, new ApiError(entry.error.status, entry.error.code, entry.error.params))}</p>
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => void retryBill(entry.id)}>
-              {t("offline.tryAgain")}
+            <Button size="sm" onClick={() => void retryEntry(entry.id)}>
+              {conflict ? t("offline.keepMine") : t("offline.tryAgain")}
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
-                if (window.confirm(t("offline.removeConfirm", { number: entry.number }))) void removeBill(entry.id);
+                if (window.confirm(removeText)) void removeEntry(entry.id);
               }}
             >
               {t("offline.remove")}
@@ -97,14 +125,30 @@ function EntryRow({ entry, onOpen }: { entry: OutboxEntry; onOpen(): void }) {
   );
 }
 
+/** Where something the server took can be seen now. */
+function syncedRoute(s: SyncedEntry): Route | null {
+  switch (kindOf(s)) {
+    case "invoice":
+      return { name: "invoice-view", invoiceId: s.serverId };
+    case "order":
+      return { name: "order-view", orderId: s.serverId };
+    case "customer":
+    case "customer-edit":
+      return { name: "customer", customerId: s.serverId };
+    default:
+      return null;
+  }
+}
+
 export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v: boolean): void }) {
   const { t, money, date } = useI18n();
   const { navigate } = useRouter();
   const state = useOffline();
   const offline = state.offlineMode || !state.online;
-  const show = (invoiceId: string) => {
+  const label = useKindLabel();
+  const go = (route: Route) => {
     onOpenChange(false);
-    navigate({ name: "invoice-view", invoiceId });
+    navigate(route);
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={t("offline.title")} description={t("offline.description")} size="md" closeLabel={t("common.close")}>
@@ -117,7 +161,7 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
         ) : (
           <ul className="divide-y divide-line">
             {state.entries.map((e) => (
-              <EntryRow key={e.id} entry={e} onOpen={() => show(`offline:${e.id}`)} />
+              <EntryRow key={e.id} entry={e} onOpen={() => go({ name: "invoice-view", invoiceId: `offline:${e.id}` })} />
             ))}
           </ul>
         )}
@@ -136,18 +180,37 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
           <section className="flex flex-col gap-1 border-t border-line pt-3">
             <h3 className="text-[13px] font-semibold text-ink-2">{t("offline.recent")}</h3>
             <ul className="flex flex-col">
-              {state.synced.slice(0, 8).map((s) => (
-                <li key={s.id} className="flex flex-wrap items-center gap-x-2 py-1 text-[12.5px] text-ink-3">
-                  <button type="button" onClick={() => show(s.serverId)} className="font-mono font-medium text-accent hover:underline">
-                    {s.serverNumber}
-                  </button>
-                  {s.serverNumber !== s.number && <span>({t("offline.savedAs", { number: s.serverNumber })} · {s.number})</span>}
-                  <span>{s.customerName}</span>
-                  <span className="num ml-auto">{money(s.serverTotal)}</span>
-                  {Math.abs(s.serverTotal - s.total) >= 0.01 && <span className="w-full text-warn">{t("offline.totalChanged", { amount: money(s.serverTotal) })}</span>}
-                  <span className="sr-only">{date(s.syncedAt.slice(0, 10))}</span>
-                </li>
-              ))}
+              {state.synced.slice(0, 8).map((s) => {
+                const kind = kindOf(s);
+                const route = syncedRoute(s);
+                return (
+                  <li key={s.id} className="flex flex-wrap items-center gap-x-2 py-1 text-[12.5px] text-ink-3">
+                    {kind !== "invoice" && <span className="text-ink-2">{label(s)}</span>}
+                    {route && kind !== "customer-edit" ? (
+                      <button type="button" onClick={() => go(route)} className="font-mono font-medium text-accent hover:underline">
+                        {s.serverNumber}
+                      </button>
+                    ) : kind === "payment" ? (
+                      <span className="font-mono font-medium text-ink-2">{s.serverNumber}</span>
+                    ) : null}
+                    {kind === "invoice" && s.serverNumber !== s.number && (
+                      <span>
+                        ({t("offline.savedAs", { number: s.serverNumber })} · {s.number})
+                      </span>
+                    )}
+                    {route && kind === "customer-edit" ? (
+                      <button type="button" onClick={() => go(route)} className="font-medium text-accent hover:underline">
+                        {s.customerName}
+                      </button>
+                    ) : (
+                      <span>{s.customerName}</span>
+                    )}
+                    {s.serverTotal > 0 && <span className="num ml-auto">{money(s.serverTotal)}</span>}
+                    {kind === "invoice" && Math.abs(s.serverTotal - s.total) >= 0.01 && <span className="w-full text-warn">{t("offline.totalChanged", { amount: money(s.serverTotal) })}</span>}
+                    <span className="sr-only">{date(s.syncedAt.slice(0, 10))}</span>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}

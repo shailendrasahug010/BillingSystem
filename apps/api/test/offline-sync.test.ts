@@ -91,6 +91,46 @@ describe.skipIf(!hasDatabase)("offline bills from devices", () => {
     ]);
   });
 
+  it("adds a customer made offline under the device's id, once, and takes its bill, payment and order", async () => {
+    const id = "0199a0d6-0000-7000-8000-0000000000c1";
+    const body = { name: "Naya Kirana", businessName: "Naya Kirana Stores", mobile: "9826099001", stateCode: "23" };
+    const first = await post("/customers", body, salesToken, { "idempotency-key": id });
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({ id, businessName: "Naya Kirana Stores", version: 1 });
+    // Sent again (the answer was lost on the way): the same customer, not a second.
+    const again = await post("/customers", body, salesToken, { "idempotency-key": id });
+    expect(again.status).toBe(200);
+    expect(again.headers["idempotent-replay"]).toBe("true");
+    expect(again.body.code).toBe(first.body.code);
+    const list = (await get("/customers?q=Naya")).body.data;
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id, version: 1 });
+    // What was queued after it on the device goes through with the same id.
+    const paid = await post("/payments", { direction: "in", customerId: id, amount: "150", method: "cash" }, salesToken, { "idempotency-key": "0199a0d6-0000-7000-8000-0000000000c2" });
+    expect(paid.status).toBe(201);
+    const order = await post("/sales-orders", { customerId: id, lines: [{ productId: ids.soap, qty: "2" }] }, salesToken, { "idempotency-key": "0199a0d6-0000-7000-8000-0000000000c3" });
+    expect(order.status).toBe(201);
+    const orderAgain = await post("/sales-orders", { customerId: id, lines: [{ productId: ids.soap, qty: "2" }] }, salesToken, { "idempotency-key": "0199a0d6-0000-7000-8000-0000000000c3" });
+    expect(orderAgain.status).toBe(200);
+    expect(orderAgain.body.orderNumber).toBe(order.body.orderNumber);
+
+    // Another business cannot take (or probe) that id.
+    const other = await signup(t, { legalName: "Other Traders", stateCode: "23" });
+    const taken = await post("/customers", { name: "Copy", stateCode: "23" }, other.token, { "idempotency-key": id });
+    expect(taken.status).toBe(400);
+    expect(taken.body.error.code).toBe("INVALID_IDEMPOTENCY_KEY");
+    expect((await post("/customers", { name: "Bad key", stateCode: "23" }, owner.token, { "idempotency-key": "not-a-uuid" })).status).toBe(400);
+  });
+
+  it("refuses an offline customer edit made on an old version", async () => {
+    const shop = (await get(`/customers/${ids.shop}`)).body;
+    const edit = (patch: object, version: number) => call(t.app, "PATCH", `/customers/${ids.shop}`, { token: owner.token, body: patch, headers: { "if-match": String(version) } });
+    expect((await edit({ city: "Indore" }, shop.version)).status).toBe(200);
+    const stale = await edit({ mobile: "9826099002" }, shop.version);
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toMatchObject({ code: "VERSION_CONFLICT", params: { current: shop.version + 1 } });
+  });
+
   it("keeps device series out of the editable number series", async () => {
     const series = (await get("/document-series")).body.data;
     expect(series.some((s: { pattern: string }) => s.pattern.includes("{DEVICE}"))).toBe(false);

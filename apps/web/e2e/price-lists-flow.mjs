@@ -5,7 +5,8 @@
  * Price B -> a box rate of Price B's own on the product -> a bill for them
  * is priced from Price B (piece and box), and the invoice's customer card
  * says so -> the customer moved to Price C on their page -> the next bill is
- * priced from Price C (its box = 24 x its piece price).
+ * priced from Price C (its box = 24 x its piece price) -> their address and
+ * city changed with Edit on their page.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/price-lists-flow.mjs
@@ -157,6 +158,21 @@ const invoices = (await api("GET", "/invoices", token)).data.map((i) => i.grandT
 // 2 boxes at 220 + 5% = 462; 2 boxes at 216 (24 x 9) + 5% = 453.60, rounded off to 454.
 if (JSON.stringify(invoices) !== JSON.stringify(["454.00", "462.00"])) errors.push(`invoice totals ${invoices.join(", ")}`);
 log("moved to Price C on the customer's page; next bill 9 a piece, 216 a box — totals", invoices.join(", "));
+
+// 6. Edit on their page: address and city (only what changed goes to the server).
+await nav("Customers");
+await page.getByRole("cell", { name: /Jain Kirana/ }).first().click();
+await page.getByRole("button", { name: "Edit", exact: true }).click();
+await page.getByRole("heading", { name: "Edit customer" }).waitFor();
+if ((await page.inputValue("#c-business")) !== "Jain Kirana") errors.push("edit form not filled in");
+await page.fill("#c-address", "14 Sarafa Bazar");
+await page.fill("#c-city", "Indore");
+await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+await toast("Customer updated");
+await page.getByText(/14 Sarafa Bazar/).first().waitFor();
+const edited = await api("GET", `/customers/${customer.id}`, token);
+if (edited.addressLine1 !== "14 Sarafa Bazar" || edited.city !== "Indore" || edited.priceLevelId !== levels["Price C"].id) errors.push(`after edit: ${JSON.stringify({ a: edited.addressLine1, c: edited.city, p: edited.priceLevelId })}`);
+log("address and city changed with Edit:", edited.addressLine1, edited.city, "· version", edited.version);
 
 console.log(errors.length ? `ERRORS:\n${errors.join("\n")}` : "no errors");
 await browser.close();

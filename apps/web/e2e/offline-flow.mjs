@@ -3,10 +3,13 @@
  * worker serves the app without a network): sign up -> the device gets its
  * own series -> the connection goes -> the app still opens from the copy on
  * the device -> two bills are made and printed with the device's numbers
- * (A1/26-27/0001, 0002) -> sign-out is refused while offline -> the
- * connection comes back -> the bills reach the server with the same numbers
- * and the stock moves -> a third bill made when the network drops in the
- * middle of work is sent by itself when it returns.
+ * (A1/26-27/0001, 0002) -> still offline: a new customer is added and
+ * billed, a payment is received, an order is booked for the new customer and
+ * a customer's city is changed -> sign-out is refused while offline -> the
+ * connection comes back -> everything reaches the server in order (the new
+ * customer first, under the id it was billed with), the bills keep their
+ * numbers and the stock and balances move -> a bill made when the network
+ * drops in the middle of work is sent by itself when it returns.
  *
  * Build the app and serve it with the API behind /api:
  *   pnpm --filter @vyapaar/web build && (cd apps/web && npx vite preview --port 4173)
@@ -95,7 +98,7 @@ const token = (await api("POST", "/auth/login", null, { identifier: mobile, pass
 const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
 const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).data.map((c) => [c.name, c.id]));
 const soap = await api("POST", "/products", token, { name: "Lifebuoy Soap 100g", hsnCode: "3401", taxCategoryId: taxes["GST 18%"], baseUnitId: units.PCS, sellingPrice: "40", openingStock: "50", openingStockCost: "30" });
-await api("POST", "/customers", token, { name: "Sharma Kirana", mobile: "9826012345", stateCode: "23", city: "Indore" });
+const sharma = await api("POST", "/customers", token, { name: "Sharma Kirana", mobile: "9826012345", stateCode: "23", city: "Indore" });
 log("signed up; product (50 in stock) and customer added");
 
 // 2. Loaded once online: the business is kept on the device and the device gets its series.
@@ -120,7 +123,7 @@ log("device registered:", devices.map((d) => `${d.seriesCode} ${d.name}`).join("
 // 3. No connection: the app still opens, from the copy on the device.
 await goOffline(true);
 await page.reload();
-await page.getByText("No connection. Bills are saved on this device").waitFor({ timeout: 15000 });
+await page.getByText("No connection. Bills, payments, orders and customer changes are saved on this device").waitFor({ timeout: 15000 });
 await page.getByRole("heading", { name: /Mohan/ }).waitFor();
 await page.screenshot({ path: `${OUT}/offline-1-start.png` });
 log("opened offline from the saved copy");
@@ -139,11 +142,60 @@ log("bill A1/26-27/0001 saved and printed offline");
 await page.goto(`${WEB}/#invoice`);
 await bill("Sharma", "lifebuoy", 1);
 await toast("Invoice A1/26-27/0002 saved");
-await page.getByRole("button", { name: /Offline.*2 changes waiting to sync/ }).click();
-await page.getByRole("dialog").getByText("A1/26-27/0002").waitFor();
+log("second bill queued");
+
+// 4b. More work offline: a new customer (billed at once), a payment, an order and a changed city.
+const openCustomer = async (name) => {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Customers", exact: true }).click();
+  await page.getByRole("cell", { name: new RegExp(name) }).first().click({ timeout: 15000 });
+  await page.getByRole("heading", { name: new RegExp(name) }).waitFor({ timeout: 15000 });
+};
+await page.goto(`${WEB}/#customers`);
+await page.getByRole("button", { name: "Add customer" }).first().click();
+await page.getByText("No connection: saved on this device and sent when the internet is back.").waitFor();
+await page.getByRole("radio", { name: "B2C" }).click();
+await page.fill("#c-business", "Naya Kirana Stores");
+await page.fill("#c-mobile", "9826055555");
+await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+await toast("Saved on this device");
+await page.goto(`${WEB}/#invoice`);
+await bill("Naya", "lifebuoy", 2);
+await toast("Invoice A1/26-27/0003 saved");
+log("new customer added offline and billed A1/26-27/0003");
+
+await openCustomer("Sharma Kirana");
+await page.getByRole("button", { name: "Receive Payment" }).click();
+await page.getByText(/the payment is saved on this device/).waitFor({ timeout: 15000 });
+await page.fill("#pay-amount", "50");
+await page.getByRole("dialog").getByRole("button", { name: /^Save/ }).click();
+await toast("Saved on this device");
+log("payment of 50 kept offline");
+
+await openCustomer("Naya Kirana Stores");
+await page.getByRole("button", { name: "New order" }).click();
+await page.getByText(/the order is saved on this device/).waitFor({ timeout: 15000 });
+await page.getByRole("dialog").getByPlaceholder(/Search product/).fill("lifebuoy");
+await page.waitForTimeout(200);
+await page.keyboard.press("Enter");
+await page.getByRole("dialog").getByLabel("Qty Lifebuoy Soap 100g").fill("5");
+await page.getByRole("dialog").getByRole("button", { name: /^Save order/ }).click();
+await toast("Saved on this device");
+log("order for the new customer kept offline");
+
+await openCustomer("Sharma Kirana");
+await page.getByRole("button", { name: "Edit", exact: true }).click();
+await page.fill("#c-city", "Ujjain");
+await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+await toast("Saved on this device");
+log("Sharma's city changed offline");
+
+await page.getByRole("button", { name: /Offline.*7 changes waiting to sync/ }).click();
+const waiting = page.getByRole("dialog");
+await waiting.getByText("A1/26-27/0003").waitFor();
+for (const what of ["New customer", "Payment received", "Order", "Customer details"]) await waiting.getByText(what, { exact: true }).first().waitFor();
 await page.screenshot({ path: `${OUT}/offline-3-waiting.png` });
-await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-log("second bill queued; 2 waiting");
+await waiting.getByRole("button", { name: "Close" }).click();
+log("7 changes waiting: 3 bills, a new customer, a payment, an order and a customer change");
 
 // Signing out needs the server.
 await page.getByRole("button", { name: "Sign out" }).first().click({ timeout: 5000 }).catch(async () => {
@@ -155,12 +207,23 @@ log("sign-out refused while offline");
 
 // 5. Back online: the bills go to the server with their numbers.
 await goOffline(false);
-await page.getByRole("button", { name: /^Online$/ }).waitFor({ timeout: 45000 });
+await page.getByRole("button", { name: /^Online$/ }).waitFor({ timeout: 60000 });
 const synced = (await api("GET", "/invoices?q=A1/", token)).data;
 log("server now has:", synced.map((i) => `${i.invoiceNumber} ${i.grandTotal}`).join(" | "));
-if (synced.length !== 2) errors.push(`expected 2 synced bills, got ${synced.length}`);
+if (synced.length !== 3) errors.push(`expected 3 synced bills, got ${synced.length}`);
 const stockAfter = (await api("GET", "/catalog", token)).products.find((p) => p.id === soap.id).stock;
-if (Number(stockAfter) !== 46) errors.push(`stock after sync ${stockAfter}, expected 46`);
+if (Number(stockAfter) !== 44) errors.push(`stock after sync ${stockAfter}, expected 44 (orders do not move stock)`);
+const naya = (await api("GET", "/customers?q=Naya", token)).data;
+if (naya.length !== 1) errors.push(`new customer on the server: ${naya.length}`);
+const nayaBill = synced.find((i) => i.invoiceNumber === "A1/26-27/0003");
+if (!naya[0] || nayaBill?.customerId !== naya[0].id) errors.push(`A1/26-27/0003 not billed to the new customer: ${JSON.stringify(nayaBill)}`);
+const payments = (await api("GET", `/payments?direction=in`, token)).data.filter((p) => p.partyName === "Sharma Kirana" || p.customerId === sharma.id);
+if (!payments.some((p) => Number(p.amount) === 50)) errors.push(`payment not synced: ${JSON.stringify(payments)}`);
+const orders = (await api("GET", "/sales-orders", token)).data;
+if (!orders.some((o) => o.customerId === naya[0]?.id || o.customerName === "Naya Kirana Stores")) errors.push(`order not synced: ${JSON.stringify(orders)}`);
+const sharmaNow = await api("GET", `/customers/${sharma.id}`, token);
+if (sharmaNow.city !== "Ujjain") errors.push(`Sharma's city ${sharmaNow.city}`);
+log("server has the new customer", naya[0]?.code, "with its bill, the payment, the order; Sharma in", sharmaNow.city, "owing", sharmaNow.balance);
 await page.getByRole("button", { name: /^Online$/ }).click();
 await page.getByRole("dialog").getByText("Recently synced").waitFor();
 await page.screenshot({ path: `${OUT}/offline-4-synced.png` });
@@ -172,14 +235,14 @@ await page.goto(`${WEB}/#invoice`);
 await page.getByPlaceholder("Search customer by name, mobile, GSTIN or code").waitFor({ timeout: 15000 });
 await goOffline(true);
 await bill("Sharma", "lifebuoy", 2);
-await toast("Invoice A1/26-27/0003 saved");
+await toast("Invoice A1/26-27/0004 saved");
 await goOffline(false);
 for (let i = 0; i < 30; i++) {
-  const found = (await api("GET", "/invoices?q=A1/26-27/0003", token)).data;
+  const found = (await api("GET", "/invoices?q=A1/26-27/0004", token)).data;
   if (found.length === 1) break;
   await page.waitForTimeout(500);
 }
-const third = (await api("GET", "/invoices?q=A1/26-27/0003", token)).data;
+const third = (await api("GET", "/invoices?q=A1/26-27/0004", token)).data;
 if (third.length !== 1) errors.push("third bill not synced after the network returned");
 log("bill made during a drop synced:", third.map((i) => i.invoiceNumber).join(", "));
 

@@ -13,6 +13,7 @@ import { customerById, supplierById, TODAY } from "../../data/db";
 import { refreshCustomer, refreshSupplier } from "../../data/live";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
 import { cn } from "../../lib/cn";
+import { isWaitingCustomer, offlineScope, queueEntry, unreachable, useOffline, workingOffline } from "../../offline/sync";
 import { searchCustomers } from "../invoice/CustomerPicker";
 import { searchSuppliers, supplierLabel } from "../suppliers/search";
 
@@ -28,10 +29,10 @@ export interface OpenDoc {
 }
 
 /** Open (unpaid / part-paid) bills of a party, oldest due first. */
-export function useOpenDocuments(direction: "in" | "out", partyId: string | null) {
+export function useOpenDocuments(direction: "in" | "out", partyId: string | null, enabled = true) {
   return useQuery({
     queryKey: ["open-docs", direction, partyId],
-    enabled: Boolean(partyId),
+    enabled: enabled && Boolean(partyId),
     queryFn: async (): Promise<OpenDoc[]> => {
       const docs =
         direction === "in"
@@ -103,7 +104,10 @@ export function PaymentDialog({
   const [error, setError] = useState<unknown>(null);
   const [touched, setTouched] = useState(false);
   const fieldError = useFieldError(error);
-  const docs = useOpenDocuments(direction, party);
+  const offline = useOffline();
+  // Without a connection (or for a customer not sent yet) the server applies it to the oldest bills when it arrives.
+  const keepHere = offline.offlineMode || !offline.online || (direction === "in" && Boolean(party) && isWaitingCustomer(party!));
+  const docs = useOpenDocuments(direction, party, !keepHere);
 
   useEffect(() => {
     if (!open) return;
@@ -118,7 +122,7 @@ export function PaymentDialog({
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const amount = MONEY.test(form.amount) ? Number(form.amount) : 0;
   const auto = useMemo(() => oldestFirst(amount, docs.data ?? []), [amount, docs.data]);
-  const applied = manual ? Object.fromEntries(Object.entries(manual).map(([k, v]) => [k, Number(v) || 0])) : auto;
+  const applied = keepHere ? {} : manual ? Object.fromEntries(Object.entries(manual).map(([k, v]) => [k, Number(v) || 0])) : auto;
   const allocated = Object.values(applied).reduce((s, v) => s + v, 0);
   const advance = Math.round((amount - allocated) * 100) / 100;
 
@@ -147,19 +151,49 @@ export function PaymentDialog({
     if (Object.values(problems).some(Boolean)) return;
     setBusy(true);
     setError(null);
+    const body = {
+      direction,
+      ...(direction === "in" ? { customerId: party } : { supplierId: party }),
+      paymentDate: form.date,
+      amount: amount.toFixed(2),
+      method: form.method,
+      ...(form.reference.trim() ? { referenceNumber: form.reference.trim() } : {}),
+      ...(form.method === "cheque" && form.chequeDate ? { chequeDate: form.chequeDate } : {}),
+      ...(form.method === "cheque" && form.chequeBank.trim() ? { chequeBank: form.chequeBank.trim() } : {}),
+      ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+    };
+    /** Kept on this device with the same key, so an attempt that did reach the server is never counted twice. */
+    const keep = async () => {
+      const scope = offlineScope();
+      const name = direction === "in" ? customerById.get(party!)?.businessName : supplierById.get(party!) && supplierLabel(supplierById.get(party!)!);
+      const kept =
+        scope &&
+        (await queueEntry({
+          kind: "payment",
+          id: key,
+          userId: scope.userId,
+          businessId: scope.businessId,
+          savedAt: new Date().toISOString(),
+          status: "pending",
+          error: null,
+          direction,
+          partyId: party!,
+          partyName: name ?? "",
+          date: form.date,
+          amount,
+          method: form.method,
+          body,
+        }));
+      if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("payment.saved")} · ${money(amount)} · ${t("offline.sendsLater")}` });
+      onOpenChange(false);
+    };
     try {
+      if (keepHere || workingOffline()) return await keep();
       const res = await api.post<{ paymentNumber: string; amount: string }>(
         "/payments",
         {
-          direction,
-          ...(direction === "in" ? { customerId: party } : { supplierId: party }),
-          paymentDate: form.date,
-          amount: amount.toFixed(2),
-          method: form.method,
-          ...(form.reference.trim() ? { referenceNumber: form.reference.trim() } : {}),
-          ...(form.method === "cheque" && form.chequeDate ? { chequeDate: form.chequeDate } : {}),
-          ...(form.method === "cheque" && form.chequeBank.trim() ? { chequeBank: form.chequeBank.trim() } : {}),
-          ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+          ...body,
           allocations: Object.entries(applied)
             .filter(([, v]) => v > 0)
             .map(([documentId, v]) => ({ documentId, amount: v.toFixed(2) })),
@@ -171,6 +205,10 @@ export function PaymentDialog({
       toast({ tone: "success", title: t("payment.saved"), body: `${res.paymentNumber} · ${money(res.amount)}` });
       onOpenChange(false);
     } catch (e) {
+      if (unreachable(e)) {
+        await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));
+        return;
+      }
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
       setBusy(false);
@@ -194,7 +232,14 @@ export function PaymentDialog({
       }
     >
       <form className="flex flex-col gap-4" onSubmit={(e) => (e.preventDefault(), void save())}>
-        {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}
+        {error instanceof ApiError && error.code === "OFFLINE_NOT_KEPT" ? (
+          <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger" role="alert">
+            {t("offline.notReadyWork")}
+          </p>
+        ) : error instanceof ApiError && !error.field ? (
+          <ErrorNote error={error} />
+        ) : null}
+        {keepHere && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{t("offline.paymentNote")}</p>}
         <Field label={direction === "in" ? t("customer.name") : t("supplier.name")} htmlFor="pay-party" error={show("party")}>
           <SearchSelect
             id="pay-party"
@@ -258,7 +303,7 @@ export function PaymentDialog({
           )}
         </div>
 
-        {party && (
+        {party && !keepHere && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-[13px] font-semibold tracking-wide text-ink-3 uppercase">{t("payment.openBills")}</h3>

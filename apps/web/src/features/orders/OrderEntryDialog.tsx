@@ -13,6 +13,7 @@ import { useToast } from "../../components/ui/Toast";
 import { customerById, productById, TODAY } from "../../data/db";
 import { useSearchableProducts } from "../../data/hooks";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { isWaitingCustomer, offlineScope, queueEntry, unreachable, useOffline, workingOffline } from "../../offline/sync";
 import { searchCustomers } from "../invoice/CustomerPicker";
 import { rateFor } from "../invoice/useInvoiceDraft";
 
@@ -46,6 +47,8 @@ export function OrderEntryDialog({ open, onOpenChange, customerId: initialCustom
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const fieldError = useFieldError(error);
+  const offline = useOffline();
+  const keepHere = offline.offlineMode || !offline.online || (Boolean(customerId) && isWaitingCustomer(customerId!));
 
   useEffect(() => {
     if (!open) return;
@@ -80,31 +83,57 @@ export function OrderEntryDialog({ open, onOpenChange, customerId: initialCustom
   const save = async () => {
     setBusy(true);
     setError(null);
+    const body = {
+      customerId,
+      source,
+      ...(delivery ? { expectedDeliveryDate: delivery } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+      lines: lines.map((l) => {
+        const p = productById.get(l.productId);
+        return {
+          productId: l.productId,
+          ...(l.unitId && l.unitId !== p?.unitId ? { unitId: l.unitId } : {}),
+          qty: l.qty,
+          ...(l.freeQty && Number(l.freeQty) > 0 ? { freeQty: l.freeQty } : {}),
+        };
+      }),
+    };
+    /** Kept on this device (same key: an attempt that did reach the server is not booked twice). */
+    const keep = async () => {
+      const scope = offlineScope();
+      const kept =
+        scope &&
+        (await queueEntry({
+          kind: "order",
+          id: key,
+          userId: scope.userId,
+          businessId: scope.businessId,
+          savedAt: new Date().toISOString(),
+          status: "pending",
+          error: null,
+          customerId: customerId!,
+          customerName: customer?.businessName ?? "",
+          date: TODAY,
+          estimate: Math.round(estimate * 100) / 100,
+          lineCount: lines.length,
+          body,
+        }));
+      if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("orders.saved")} · ${customer?.businessName ?? ""} · ${t("offline.sendsLater")}` });
+      onOpenChange(false);
+    };
     try {
-      const res = await api.post<{ id: string; orderNumber: string; grandTotal: string }>(
-        "/sales-orders",
-        {
-          customerId,
-          source,
-          ...(delivery ? { expectedDeliveryDate: delivery } : {}),
-          ...(notes.trim() ? { notes: notes.trim() } : {}),
-          lines: lines.map((l) => {
-            const p = productById.get(l.productId);
-            return {
-              productId: l.productId,
-              ...(l.unitId && l.unitId !== p?.unitId ? { unitId: l.unitId } : {}),
-              qty: l.qty,
-              ...(l.freeQty && Number(l.freeQty) > 0 ? { freeQty: l.freeQty } : {}),
-            };
-          }),
-        },
-        { idempotencyKey: key },
-      );
+      if (keepHere || workingOffline()) return await keep();
+      const res = await api.post<{ id: string; orderNumber: string; grandTotal: string }>("/sales-orders", body, { idempotencyKey: key });
       void qc.invalidateQueries({ queryKey: ["orders"] });
       toast({ tone: "success", title: t("orders.saved"), body: `${res.orderNumber} · ${money(res.grandTotal)}` });
       onOpenChange(false);
       navigate({ name: "order-view", orderId: res.id });
     } catch (e) {
+      if (unreachable(e)) {
+        await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));
+        return;
+      }
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
       setBusy(false);
@@ -129,7 +158,14 @@ export function OrderEntryDialog({ open, onOpenChange, customerId: initialCustom
       }
     >
       <div className="flex flex-col gap-4">
-        {error instanceof ApiError && !error.field?.startsWith("customer") ? <ErrorNote error={error} /> : null}
+        {error instanceof ApiError && error.code === "OFFLINE_NOT_KEPT" ? (
+          <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger" role="alert">
+            {t("offline.notReadyWork")}
+          </p>
+        ) : error instanceof ApiError && !error.field?.startsWith("customer") ? (
+          <ErrorNote error={error} />
+        ) : null}
+        {keepHere && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{t("offline.orderNote")}</p>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr_1fr]">
           <Field label={t("customer.name")} htmlFor="so-customer" error={fieldError("customerId")}>
             <SearchSelect
