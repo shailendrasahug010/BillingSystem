@@ -259,6 +259,11 @@ async function importCustomers(tx: Tx, ctx: RequestCtx, today: string, rows: Row
   const [business] = await tx.select({ stateCode: schema.businesses.stateCode }).from(schema.businesses).where(eq(schema.businesses.id, businessId));
   const levels = await tx.select({ id: schema.priceLevels.id, name: schema.priceLevels.name }).from(schema.priceLevels).where(eq(schema.priceLevels.businessId, businessId));
   const levelBy = new Map(levels.map((l) => [l.name.toUpperCase(), l.id]));
+  // Older sheets name the first lists Retail / Wholesale / Distributor, or just "A", "B", "C".
+  for (const [alias, name] of [["RETAIL", "PRICE A"], ["WHOLESALE", "PRICE B"], ["DISTRIBUTOR", "PRICE C"], ["A", "PRICE A"], ["B", "PRICE B"], ["C", "PRICE C"]] as const) {
+    const id = levelBy.get(name);
+    if (id && !levelBy.has(alias)) levelBy.set(alias, id);
+  }
   const routes = await tx.select({ id: schema.salesRoutes.id, name: schema.salesRoutes.name }).from(schema.salesRoutes).where(eq(schema.salesRoutes.businessId, businessId));
   const routeBy = new Map(routes.map((r) => [r.name.toUpperCase(), r.id]));
   const existing = await tx

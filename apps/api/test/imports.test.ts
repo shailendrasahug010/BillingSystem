@@ -92,14 +92,16 @@ describe.skipIf(!hasDatabase)("spreadsheet import", () => {
   it("imports customers: state from GSTIN, routes, rate lists, opening balances and advances", async () => {
     const rows = [
       { name: "Bhopal Mart", gstin: gstin("23", "AABCB9999C"), city: "Bhopal", credit_days: "15" },
-      { name: "Sharma Kirana", contact_person: "Ramesh Sharma", mobile: "98260 12345", route: "Rajwada", price_level: "Price B", opening_balance: "1,500", credit_limit: "20000" },
+      { name: "Sharma Kirana", contact_person: "Ramesh Sharma", mobile: "98260 12345", route: "Rajwada", price_level: "Wholesale", opening_balance: "1,500", credit_limit: "20000" },
       { name: "Advance Stores", mobile: "9826011111", state: "Maharashtra", opening_balance: "-250" },
     ];
     const res = await post("/customers/import", { rows });
     expect(res.body).toMatchObject({ created: 3, newRoutes: 1, withOpeningBalance: 2, errors: [] });
     const list = (await get("/customers?limit=10")).body.data as Array<Record<string, unknown>>;
     expect(list.find((c) => c.name === "Bhopal Mart")).toMatchObject({ customerType: "b2b", stateCode: "23", creditDays: 15 });
-    expect(list.find((c) => c.businessName === "Sharma Kirana")).toMatchObject({ name: "Ramesh Sharma", mobile: "9826012345", balance: "1500.00", creditLimit: "20000.00" });
+    // An older sheet's "Wholesale" is the second list, now Price B.
+    const priceB = (await get("/price-levels")).body.data.find((l: { name: string }) => l.name === "Price B").id;
+    expect(list.find((c) => c.businessName === "Sharma Kirana")).toMatchObject({ name: "Ramesh Sharma", mobile: "9826012345", balance: "1500.00", creditLimit: "20000.00", priceLevelId: priceB });
     expect(list.find((c) => c.businessName === "Advance Stores")).toMatchObject({ stateCode: "27", balance: "-250.00" });
     const routes = (await get("/routes")).body.data;
     expect(routes.map((r: { name: string }) => r.name)).toEqual(["Rajwada"]);

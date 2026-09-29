@@ -7,6 +7,7 @@
  *   DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @vyapaar/db test
  */
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   calculateDocument,
   financialYearOf,
@@ -262,6 +263,23 @@ describe.skipIf(!adminUrl)("database integrity (PostgreSQL)", () => {
     expect(roles.map((r) => r.key).sort()).toEqual(["accountant", "admin", "hr", "manager", "sales", "warehouse"]);
     const series = await db.select().from(s.documentSeries).where(eq(s.documentSeries.businessId, ids.bizA));
     expect(series.find((x) => x.docType === "invoice")?.financialYear).toBe("2026-27");
+  });
+
+  it("renames the price lists first created as Retail / Wholesale / Distributor to Price A / B / C, and only those", async () => {
+    const rename = readFileSync(new URL("../migrations/0013_price_list_names.sql", import.meta.url), "utf8");
+    const names = async (business: string) =>
+      (await db.select({ name: s.priceLevels.name }).from(s.priceLevels).where(eq(s.priceLevels.businessId, business)).orderBy(s.priceLevels.sortOrder)).map((l) => l.name);
+    const setNames = async (business: string, list: string[]) => {
+      const levels = await db.select().from(s.priceLevels).where(eq(s.priceLevels.businessId, business)).orderBy(s.priceLevels.sortOrder);
+      for (const [i, l] of levels.entries()) await db.update(s.priceLevels).set({ name: list[i]! }).where(eq(s.priceLevels.id, l.id));
+    };
+    // A business as it was first set up, and one that had already renamed a list.
+    await setNames(ids.bizA, ["Retail", "Wholesale", "Distributor"]);
+    await setNames(ids.bizB, ["Retail", "Wholesale", "Super Stockist"]);
+    await db.execute(sql.raw(rename));
+    expect(await names(ids.bizA)).toEqual(["Price A", "Price B", "Price C"]);
+    expect(await names(ids.bizB)).toEqual(["Retail", "Wholesale", "Super Stockist"]);
+    await setNames(ids.bizB, ["Price A", "Price B", "Price C"]);
   });
 
   it("posts an invoice atomically and keeps ledger and balances consistent", async () => {
