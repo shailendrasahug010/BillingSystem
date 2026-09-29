@@ -24,6 +24,7 @@ import {
   Landmark,
   ChartPie,
   Factory,
+  HandCoins,
   History,
   MessagesSquare,
 } from "lucide-react";
@@ -69,6 +70,7 @@ export const MODULES: ModuleDef[] = [
   { key: "orders", label: "nav.orders", icon: ClipboardList, group: "daily", route: planned("orders"), permission: "order.view", phase: 3 },
   { key: "customers", label: "nav.customers", icon: Users, group: "daily", route: { name: "customers" }, permission: "customer.view" },
   { key: "payments", label: "nav.payments", icon: Wallet, group: "daily", route: planned("payments"), permission: "payment.view", phase: 3 },
+  { key: "outstanding", label: "nav.outstanding", icon: HandCoins, group: "daily", route: { name: "outstanding" }, permission: "customer.view_ledger" },
   { key: "messages", label: "nav.messages", icon: MessagesSquare, group: "daily", route: planned("messages"), permission: "message.send", phase: 5 },
 
   { key: "products", label: "nav.products", icon: Package, group: "stock", route: { name: "products" }, permission: "product.view" },

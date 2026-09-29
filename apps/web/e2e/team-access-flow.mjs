@@ -108,7 +108,7 @@ log("salesperson signed in with the user ID");
 
 // 4. Only what the Sales role allows: the menu, the dashboard's actions, the buttons on each screen.
 const menu = (await staffPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Messages", "Products", "Notifications"];
+const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Outstanding", "Messages", "Products", "Notifications"];
 if (JSON.stringify(menu) !== JSON.stringify(expectedMenu)) errors.push(`sales menu: ${menu.join(", ")}`);
 const quick = (await staffPage.getByRole("region", { name: "Quick actions" }).getByRole("button").allTextContents()).map((s) => s.replace(/(Ctrl|Alt).*$/, "").trim());
 if (JSON.stringify(quick) !== JSON.stringify(["Create Invoice", "New Order", "Receive Payment", "Add Customer"])) errors.push(`sales quick actions: ${quick.join(", ")}`);
@@ -133,7 +133,7 @@ await staffPage.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 15
 await staffPage.goto(`${WEB}/#settings`);
 await staffPage.getByText("Not part of your role").waitFor({ timeout: 15000 });
 await staffPage.screenshot({ path: `${OUT}/team-5-no-access.png` });
-log("sales sees its eight screens, its four actions, no product editing or exports, a fixed rate; Settings says no access");
+log("sales sees its nine screens, its four actions, no product editing or exports, a fixed rate; Settings says no access");
 
 // 5. A warehouse worker has no dashboard: they land on their first screen.
 const packer = await api("POST", "/members", token, { name: "Pappu Packer", mobile: `98778${run}`, roleId: (await api("GET", "/roles", token)).data.find((r) => r.key === "warehouse").id, username: `pappu${run}`, password: "Pappu-pass-2026" });

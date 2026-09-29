@@ -115,6 +115,13 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 * **Lists:** receipts and payments with filters (method, date, collected by), cheque status (deposited, cleared, bounced — bounce reverses the allocation and notifies).
 * **Phone:** "Collect" flow for salespeople on a beat: customer → amount → method → save (works offline).
 
+## 16a. Outstanding (money to collect) — **Built**
+* **For collectors:** everyone who owes money, largest first, with a chip per city (customers, total; "Dewas" and "DEWAS" are one place, customers without a city last). A collector going to one town picks it and sees only that town. Search by name, mobile or code; route; only overdue; sort by amount, overdue, oldest due or name. A banner shows what the chosen place owes: to collect, overdue, not due yet.
+* **Desktop:** a table (customer and mobile, city and route, open bills, oldest due with days late, last payment, overdue, to collect) with totals. **Phone:** cards with the amount and a call button at the thumb.
+* **A customer** opens in a sheet (a bottom sheet on phones): Call, a WhatsApp reminder with the dues typed in, to collect / overdue / not due / last payment, credit terms, aging, each open bill with its days late (opens the invoice), opening balance, the last five payments; **Receive payment** there (the dues refresh), print the customer's dues, open the customer.
+* **Print** the list for the day's round (firm letterhead, place, a blank *Collected* column, totals, collector's signature). **Download** PDF, Excel or CSV of what is on screen; every download is in the audit log.
+* **Who:** `customer.view_ledger` (owner, manager, sales, accountant), which covers downloading this list too; not warehouse or HR. **Offline:** the balances on the device, printable and as CSV; the bills show again once online.
+
 ## 17. Employee management — **Built** (live)
 * **Built:** list (current / all, department, search), add / edit (bank, PAN, Aadhaar encrypted; masked copies shown), detail with salary structure, advances and loans, record leaving; daily attendance marking (present, absent, half day, leave, holiday, weekly off, overtime) and a month register. *Login link, photo:* later.
 * List (status, department, designation), profile with personal, job, bank (encrypted, masked), PAN (masked), optional Aadhaar last 4 only, emergency contact, login link; attendance calendar.

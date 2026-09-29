@@ -72,7 +72,7 @@ export function oldestFirst(amount: number, docs: OpenDoc[]): Record<string, num
 
 /** Everything that shows a party's money must re-read after a payment. */
 export function invalidateMoney(qc: ReturnType<typeof useQueryClient>) {
-  for (const key of ["payments", "open-docs", "customer-invoices", "customer-payments", "customer-ledger", "supplier-detail", "supplier-ledger", "purchases", "purchase", "invoice-raw", "dashboard", "reports"]) {
+  for (const key of ["payments", "open-docs", "customer-invoices", "customer-payments", "customer-ledger", "supplier-detail", "supplier-ledger", "purchases", "purchase", "invoice-raw", "dashboard", "reports", "collections"]) {
     void qc.invalidateQueries({ queryKey: [key] });
   }
 }

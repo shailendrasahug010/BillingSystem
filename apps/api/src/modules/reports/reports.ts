@@ -1,5 +1,5 @@
 import { CollectionReportQuery, OutstandingQuery, PurchaseReportQuery, SalesReportQuery } from "@vyapaar/contracts";
-import { ageDocuments, dec, type OpenDocument } from "@vyapaar/core";
+import { ageDocuments, dec, type OpenDocument, type Permission } from "@vyapaar/core";
 import type { Tx } from "@vyapaar/db";
 import { sql, type SQL } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
@@ -62,9 +62,11 @@ export async function sendReport(
   columns: Column[],
   body: { rows: Array<Record<string, unknown>>; totals?: Record<string, unknown> } & Record<string, unknown>,
   meta: ReportMeta,
+  /** Who may take the file; most reports need report.export, some lists the permission that shows them. */
+  exportPermission: Permission = "report.export",
 ) {
   if (format === "json") return body;
-  if (!can(ctx, "report.export")) throw forbidden("report.export");
+  if (!can(ctx, exportPermission)) throw forbidden(exportPermission);
   const period = meta.from && meta.to ? `${pdfDate(meta.from)} – ${pdfDate(meta.to)}` : meta.asOf ? `As of ${pdfDate(meta.asOf)}` : null;
   if (format === "xlsx") {
     const letterhead = await loadLetterhead(deps, ctx);
