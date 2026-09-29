@@ -205,6 +205,7 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 | `GET/PATCH /reminder-rules` | Which reminders run, thresholds, channels |
 | `GET /audit-logs?entityType=&entityId=&userId=` [audit.view] | Audit trail |
 | `POST /files` → pre-signed upload · `GET /files/:id` → signed download | Uploads (validated type and size) |
+| `GET` · `PUT /backups/schedule` [backup.configure; saving also needs backup.download] | Automatic backups: off / daily / weekly, hour, weekday, recipient (empty: the firm's email) and the file's password (write-only; kept when left out); the view has the next time and the last result as an error code |
 | `POST /backups/download` · `POST /backups/email` · `GET /backups` · `POST /backups/restore?dryRun=` [backup.*] | The whole business as one file (optional password in the body, never the URL) / a password-protected copy by email / history with size and checksum / restore a file sent as `application/octet-stream` (password base64 in `X-Backup-Passphrase`) as a NEW business; the response carries the new session |
 
 ### Offline sync

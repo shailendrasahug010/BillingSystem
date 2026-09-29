@@ -157,3 +157,33 @@ export const backups = pgTable(
   },
   (t) => [index("backups_business_idx").on(t.businessId, t.createdAt)],
 );
+
+/**
+ * Automatic backups: a password-protected copy emailed on a schedule, one
+ * row per business. The password is encrypted with the API's field cipher and
+ * never returned. `next_run_at` is when the scheduler next sends a copy.
+ */
+export const backupSchedules = pgTable(
+  "backup_schedules",
+  {
+    id: pk(),
+    businessId: businessId().unique("backup_schedules_business_uq"),
+    /** off | daily | weekly */
+    frequency: varchar({ length: 10 }).notNull().default("off"),
+    /** 0 = Sunday … 6 = Saturday (weekly only). */
+    weekday: smallint().notNull().default(0),
+    /** Hour of the day in the business's time zone. */
+    hour: smallint().notNull().default(21),
+    /** Empty: the business's own email. */
+    emailTo: text(),
+    passphrase: text(),
+    nextRunAt: tstz(),
+    lastRunAt: tstz(),
+    lastStatus: varchar({ length: 10 }),
+    lastError: text(),
+    /** Whose name the automatic backups go out under (the person who set it up). */
+    configuredBy: uuid(),
+    ...timestamps,
+  },
+  (t) => [index("backup_schedules_due_idx").on(t.nextRunAt)],
+);

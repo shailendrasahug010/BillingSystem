@@ -1,7 +1,8 @@
 /**
  * End-to-end check of Backup & Restore: sign up -> a customer, a product and
  * a bill -> Backup & Restore: download a backup, then one protected with a
- * password -> both listed -> Restore: the protected file is checked (firm,
+ * password -> both listed -> automatic backups turned on (weekly, emailed
+ * with a password) -> Restore: the protected file is checked (firm,
  * date, what is in it), then (with the owner's own password typed again)
  * restored as a NEW business the app switches to,
  * with the bill in it; the original business is still there.
@@ -96,7 +97,23 @@ await page.getByRole("row", { name: /Downloaded\s*Password/ }).waitFor({ timeout
 await page.screenshot({ path: `${OUT}/backup-1-download.png`, fullPage: true });
 log("two backups downloaded (one with a password) and listed");
 
-// 3. Restore the protected file as a new business.
+// 3. Automatic backups: every Sunday at 9 pm, emailed with a password.
+await page.getByRole("heading", { name: "Automatic backups" }).waitFor();
+await page.getByRole("radio", { name: "Every week" }).click();
+await page.selectOption("#auto-day", { label: "Sunday" });
+if ((await page.locator("#auto-hour").inputValue()) !== "21") errors.push("default time is not 9 pm");
+await page.fill("#auto-to", "backups@devi.example");
+if (!(await page.getByRole("button", { name: "Save schedule" }).isDisabled())) errors.push("schedule saved without a password");
+await page.fill("#auto-password", "devi-auto-2026");
+await page.getByRole("button", { name: "Save schedule" }).click();
+await toast("Automatic backups are on");
+await page.getByText(/^Next backup: /).first().waitFor();
+const auto = await api("GET", "/backups/schedule", token);
+if (auto.frequency !== "weekly" || auto.weekday !== 0 || auto.hour !== 21 || auto.to !== "backups@devi.example" || !auto.hasPassword || new Date(auto.nextRunAt).getUTCDay() !== 0) errors.push(`schedule: ${JSON.stringify(auto)}`);
+await page.screenshot({ path: `${OUT}/backup-auto.png`, fullPage: true });
+log("automatic backups on:", auto.frequency, "next", auto.nextRunAt);
+
+// 4. Restore the protected file as a new business.
 await page.getByLabel("Backup file (.dbbackup)").setInputFiles(lockedPath);
 passwordRefusal = true;
 await page.getByRole("button", { name: "Check the file" }).click();

@@ -922,7 +922,9 @@
     "USERNAME_TAKEN": "This user ID is already in use. Choose another.",
     "MEMBER_ACCOUNT_SHARED": "This person also uses Digital Bahi in another business, so only they can change their user ID or password.",
     "ACCOUNT_PASSWORD_REQUIRED": "Type your Digital Bahi password to restore.",
-    "ACCOUNT_PASSWORD_WRONG": "That is not your Digital Bahi password."
+    "ACCOUNT_PASSWORD_WRONG": "That is not your Digital Bahi password.",
+    "BACKUP_SCHEDULE_NO_PASSWORD": "Automatic backups need a password for the file (at least 8 characters).",
+    "BACKUP_SCHEDULE_NO_ACCESS": "The person who set up automatic backups can no longer download backups, so they were turned off. Turn them on again."
   },
   "validation": {
     "required": "This field is required",
@@ -2168,7 +2170,8 @@
     "kinds": {
       "download": "Downloaded",
       "email": "Emailed",
-      "restore": "Restored from a file"
+      "restore": "Restored from a file",
+      "auto": "Emailed automatically"
     },
     "restoreTitle": "Restore from a backup",
     "restoreHint": "A backup is always restored as a NEW business next to this one. Nothing in the current business is changed or deleted.",
@@ -2193,7 +2196,28 @@
     "restoredRows_one": "{{count}} record restored",
     "restoredRows_other": "{{count}} records restored",
     "accountPassword": "Your Digital Bahi password",
-    "accountPasswordHint": "The password you sign in with, to confirm it is you."
+    "accountPasswordHint": "The password you sign in with, to confirm it is you.",
+    "auto": {
+      "title": "Automatic backups",
+      "hint": "A password-protected copy is emailed on its own every day or week, so a copy stays safe even if this computer is lost.",
+      "frequency": "How often",
+      "off": "Off",
+      "daily": "Every day",
+      "weekly": "Every week",
+      "day": "Day",
+      "time": "Time",
+      "toHint": "Empty: the firm's email ({{email}})",
+      "toNeeded": "The firm has no email in Settings; type one here.",
+      "passwordSaved": "A password is saved. Type a new one only to change it.",
+      "save": "Save schedule",
+      "saved": "Automatic backups are on",
+      "turnedOff": "Automatic backups are off",
+      "next": "Next backup: {{when}}",
+      "lastSent": "Last backup emailed {{when}}.",
+      "lastFailed": "The backup of {{when}} was not sent: {{reason}}",
+      "setUpBy": "Set up by {{name}}; the copies go out in their name.",
+      "emailNotReady": "Email is not set up yet. Set it up in Settings → WhatsApp & email, then turn on automatic backups."
+    }
   },
   "priceLists": {
     "title": "Price lists",

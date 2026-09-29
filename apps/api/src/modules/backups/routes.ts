@@ -1,15 +1,17 @@
 import { schema } from "@vyapaar/db";
+import { hasPermission } from "@vyapaar/core";
 import { desc, eq, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 import { guard } from "../../lib/access.js";
-import { audit } from "../../lib/audit.js";
-import type { RequestCtx } from "../../lib/context.js";
+import { audit, diff } from "../../lib/audit.js";
 import { withTenant } from "../../lib/db.js";
-import { ApiError, badRequest, conflict, unauthorized } from "../../lib/errors.js";
-import { makeBackup, manifestOf, openBackup, restoreInto } from "../../services/backup.js";
+import { ApiError, badRequest, conflict, forbidden, unauthorized } from "../../lib/errors.js";
+import { manifestOf, openBackup, restoreInto } from "../../services/backup.js";
+import { buildBackup, emailBackup, recordBackup } from "../../services/backup-delivery.js";
+import { nextBackupAt } from "../../services/backup-schedule.js";
 import { verifyPassword } from "../../lib/security.js";
 import { MAX_OWNED_BUSINESSES } from "../identity/businesses.js";
 import { listBusinesses, sessionResponse, setSessionBusiness } from "../identity/sessions.js";
@@ -20,19 +22,45 @@ const Passphrase = z.string().min(8).max(200);
 const DownloadBody = z.strictObject({ passphrase: Passphrase.optional() });
 const EmailBody = z.strictObject({ passphrase: Passphrase, to: z.email().max(200).optional() });
 const RestoreQuery = z.object({ dryRun: z.enum(["true", "false"]).optional() });
+const ScheduleBody = z.strictObject({
+  frequency: z.enum(["off", "daily", "weekly"]),
+  hour: z.number().int().min(0).max(23),
+  weekday: z.number().int().min(0).max(6).default(0),
+  /** Empty: the firm's own email. */
+  to: z.union([z.email().max(200), z.literal("")]).nullable().optional(),
+  /** Needed the first time; left out keeps the one saved. */
+  passphrase: Passphrase.optional(),
+});
 
 const MAX_RESTORE_BYTES = 200 * 1024 * 1024;
 /** Wrong account passwords before the account is locked for a while (as at sign-in). */
 const MAX_REAUTH_FAILURES = 5;
 const REAUTH_LOCK_MINUTES = 15;
-const MAX_EMAIL_BYTES = 20 * 1024 * 1024;
 
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40) || "firm";
+type ScheduleRow = typeof schema.backupSchedules.$inferSelect;
+
+function scheduleView(row: ScheduleRow | null, extra: { defaultTo: string | null; emailReady: boolean; by: string | null }) {
+  let lastError: { code: string; params: Record<string, string | number> } | null = null;
+  try {
+    lastError = row?.lastError ? JSON.parse(row.lastError) : null;
+  } catch {
+    lastError = { code: "MESSAGE_SEND_FAILED", params: { reason: row!.lastError! } };
+  }
+  return {
+    frequency: (row?.frequency ?? "off") as "off" | "daily" | "weekly",
+    hour: row?.hour ?? 21,
+    weekday: row?.weekday ?? 0,
+    to: row?.emailTo ?? null,
+    defaultTo: extra.defaultTo,
+    hasPassword: Boolean(row?.passphrase),
+    nextRunAt: row?.nextRunAt ?? null,
+    lastRunAt: row?.lastRunAt ?? null,
+    lastStatus: (row?.lastStatus ?? null) as "sent" | "failed" | null,
+    lastError,
+    emailReady: extra.emailReady,
+    setUpBy: row?.configuredBy ? extra.by : null,
+  };
+}
 
 /**
  * Backup & restore for the firm's owner: download the whole book (optionally
@@ -43,34 +71,6 @@ export const backupsModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   // Backup files arrive as they are (no JSON wrapping, no base64).
   app.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: MAX_RESTORE_BYTES }, (_req, body, done) => done(null, body));
-
-  const build = (ctx: RequestCtx, passphrase?: string) =>
-    withTenant(deps.db, ctx, async (tx) => {
-      const [b] = await tx.select({ name: sql<string>`coalesce(${schema.businesses.tradeName}, ${schema.businesses.legalName})` }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
-      const made = await makeBackup(tx, ctx.businessId, deps.clock.now(), passphrase);
-      return { ...made, filename: `digital-bahi-${slug(b!.name)}-${deps.clock.today(ctx.timeZone)}.dbbackup` };
-    });
-
-  const record = (ctx: RequestCtx, kind: "download" | "email", made: { file: Buffer; sha256: string; manifest: { schema: string; counts: Record<string, number> } }, encrypted: boolean, error: string | null = null) =>
-    withTenant(deps.db, ctx, async (tx) => {
-      const now = deps.clock.now().toISOString();
-      await tx.insert(schema.backups).values({
-        id: uuidv7(),
-        businessId: ctx.businessId,
-        kind,
-        status: error ? "failed" : "completed",
-        sizeBytes: made.file.length,
-        sha256: made.sha256,
-        schemaVersion: made.manifest.schema,
-        encrypted,
-        startedAt: now,
-        completedAt: now,
-        error,
-        requestedBy: ctx.userId,
-      });
-      const records = Object.values(made.manifest.counts).reduce((a, b) => a + b, 0);
-      await audit(tx, ctx, { action: kind === "email" ? "backup.emailed" : "backup.downloaded", entityType: "backup", entityLabel: made.sha256.slice(0, 12), changes: { records, bytes: made.file.length, encrypted } });
-    });
 
   r.get("/backups", { preHandler: guard(deps, "backup.create"), schema: { tags: ["backup"] } }, async (request) =>
     withTenant(deps.db, request.ctx, async (tx) => ({
@@ -99,8 +99,8 @@ export const backupsModule: ApiModule = async (app, deps) => {
   /** The whole firm as one file (POST so a password never appears in a URL). */
   r.post("/backups/download", { preHandler: guard(deps, "backup.download"), schema: { tags: ["backup"], body: DownloadBody } }, async (request, reply) => {
     const ctx = request.ctx;
-    const made = await build(ctx, request.body.passphrase);
-    await record(ctx, "download", made, Boolean(request.body.passphrase));
+    const made = await buildBackup(deps, ctx, request.body.passphrase);
+    await recordBackup(deps, ctx, "download", made, Boolean(request.body.passphrase));
     reply.header("content-type", "application/octet-stream");
     reply.header("content-disposition", `attachment; filename="${made.filename}"`);
     reply.header("cache-control", "private, no-store");
@@ -109,41 +109,61 @@ export const backupsModule: ApiModule = async (app, deps) => {
   });
 
   /** A password-protected copy by email (the firm's email by default). */
-  r.post("/backups/email", { preHandler: guard(deps, "backup.download"), schema: { tags: ["backup"], body: EmailBody } }, async (request) => {
+  r.post("/backups/email", { preHandler: guard(deps, "backup.download"), schema: { tags: ["backup"], body: EmailBody } }, async (request) =>
+    emailBackup(deps, request.ctx, { passphrase: request.body.passphrase, to: request.body.to ?? null, kind: "email" }),
+  );
+
+  /** Automatic backups: how often, when, to whom (never the password). */
+  r.get("/backups/schedule", { preHandler: guard(deps, "backup.configure"), schema: { tags: ["backup"] } }, async (request) => {
     const ctx = request.ctx;
-    const { channels, to, business } = await withTenant(deps.db, ctx, async (tx) => {
-      const [b] = await tx.select({ email: schema.businesses.email, name: sql<string>`coalesce(${schema.businesses.tradeName}, ${schema.businesses.legalName})` }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
-      return { channels: await channelsFor(deps, tx, ctx.businessId), to: request.body.to ?? b!.email, business: b! };
+    const { row, business, channels, by } = await withTenant(deps.db, ctx, async (tx) => {
+      const [row] = await tx.select().from(schema.backupSchedules).where(eq(schema.backupSchedules.businessId, ctx.businessId));
+      const [business] = await tx.select({ email: schema.businesses.email }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
+      const [by] = row?.configuredBy ? await tx.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, row.configuredBy)) : [];
+      return { row, business: business!, channels: await channelsFor(deps, tx, ctx.businessId), by };
     });
-    if (!ready(deps, channels, "email")) throw conflict("MESSAGING_NOT_CONFIGURED", { channel: "email" });
-    if (!to) throw badRequest("MESSAGE_NO_RECIPIENT", { channel: "email", party: business.name }, "to");
-    const made = await build(ctx, request.body.passphrase);
-    if (made.file.length > MAX_EMAIL_BYTES) throw badRequest("BACKUP_TOO_LARGE_FOR_EMAIL", { mb: Math.ceil(made.file.length / 1048576) });
-    const subject = `Digital Bahi backup · ${business.name} · ${deps.clock.today(ctx.timeZone)}`;
-    const text = `The attached file is a password-protected backup of ${business.name}. Keep it safe. To restore it, open Digital Bahi → Backup & Restore → Restore, choose the file and type its password.`;
-    const logged = await withTenant(deps.db, ctx, async (tx) => {
+    return scheduleView(row ?? null, { defaultTo: business.email, emailReady: ready(deps, channels, "email"), by: by?.name ?? null });
+  });
+
+  /**
+   * Turns automatic backups on or off. Needs backup.download as well: a
+   * schedule sends the whole book by email, which is a download by another
+   * route. The password is kept encrypted and only ever used to lock the file.
+   */
+  r.put("/backups/schedule", { preHandler: guard(deps, "backup.configure"), schema: { tags: ["backup"], body: ScheduleBody } }, async (request) => {
+    const ctx = request.ctx;
+    if (!hasPermission(ctx.grants, "backup.download")) throw forbidden("backup.download");
+    const body = request.body;
+    const to = body.to?.trim() || null;
+    const saved = await withTenant(deps.db, ctx, async (tx) => {
+      const [before] = await tx.select().from(schema.backupSchedules).where(eq(schema.backupSchedules.businessId, ctx.businessId));
+      const [business] = await tx.select({ email: schema.businesses.email, name: sql<string>`coalesce(${schema.businesses.tradeName}, ${schema.businesses.legalName})` }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
+      if (body.frequency !== "off") {
+        if (!ready(deps, await channelsFor(deps, tx, ctx.businessId), "email")) throw conflict("MESSAGING_NOT_CONFIGURED", { channel: "email" });
+        if (!to && !business!.email) throw badRequest("MESSAGE_NO_RECIPIENT", { channel: "email", party: business!.name }, "to");
+        if (!body.passphrase && !before?.passphrase) throw badRequest("BACKUP_SCHEDULE_NO_PASSWORD", {}, "passphrase");
+      }
+      const now = deps.clock.now();
+      const values = {
+        frequency: body.frequency,
+        hour: body.hour,
+        weekday: body.weekday,
+        emailTo: to,
+        ...(body.passphrase ? { passphrase: deps.cipher.encrypt(body.passphrase) } : {}),
+        nextRunAt: body.frequency === "off" ? null : nextBackupAt(now, { frequency: body.frequency, hour: body.hour, weekday: body.weekday }, ctx.timeZone).toISOString(),
+        configuredBy: ctx.userId,
+        updatedAt: now.toISOString(),
+      };
       const [row] = await tx
-        .insert(schema.messages)
-        .values({ id: uuidv7(), businessId: ctx.businessId, channel: "email", kind: "backup", recipient: to, subject, body: text, attachmentName: made.filename, createdBy: ctx.userId })
+        .insert(schema.backupSchedules)
+        .values({ id: uuidv7(), businessId: ctx.businessId, ...values })
+        .onConflictDoUpdate({ target: schema.backupSchedules.businessId, set: values })
         .returning();
-      return row!;
+      const changes = diff({ frequency: before?.frequency ?? "off", hour: before?.hour ?? 21, weekday: before?.weekday ?? 0, emailTo: before?.emailTo ?? null }, { frequency: row!.frequency, hour: row!.hour, weekday: row!.weekday, emailTo: row!.emailTo });
+      await audit(tx, ctx, { action: "backup.schedule_changed", entityType: "backup", changes: { ...changes, ...(body.passphrase ? { password: "changed" } : {}) } });
+      return { row: row!, defaultTo: business!.email };
     });
-    let error: string | null = null;
-    let delivery: { provider: string; providerMessageId: string | null } | null = null;
-    try {
-      delivery = await deps.messenger.deliver(channels, { channel: "email", to, subject, text, attachment: { filename: made.filename, content: made.file, contentType: "application/octet-stream" }, template: null });
-    } catch (e) {
-      error = (e as Error).message.slice(0, 500);
-    }
-    await withTenant(deps.db, ctx, (tx) =>
-      tx
-        .update(schema.messages)
-        .set(error ? { status: "failed", error, attempts: 1 } : { status: "sent", provider: delivery!.provider, providerMessageId: delivery!.providerMessageId, sentAt: deps.clock.now().toISOString(), attempts: 1 })
-        .where(eq(schema.messages.id, logged.id)),
-    );
-    await record(ctx, "email", made, true, error);
-    if (error) throw new ApiError(502, "MESSAGE_SEND_FAILED", { reason: error });
-    return { sentTo: to, filename: made.filename, sizeBytes: made.file.length, sha256: made.sha256 };
+    return scheduleView(saved.row, { defaultTo: saved.defaultTo, emailReady: true, by: ctx.userName });
   });
 
   /**

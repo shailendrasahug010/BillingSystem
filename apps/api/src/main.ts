@@ -5,6 +5,7 @@ import { createFieldCipher } from "./lib/crypto.js";
 import { loadConfig } from "./config.js";
 import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
+import { startBackupScheduler } from "./services/backup-schedule.js";
 import { LiveMessenger, LogMessenger } from "./services/messaging/transport.js";
 
 const config = loadConfig();
@@ -27,9 +28,12 @@ const app = await buildApp({
 });
 
 log = (msg, err) => app.log.warn({ err: err.message }, msg);
+// Automatic backups (emailed on each firm's schedule).
+const stopBackups = startBackupScheduler(app.deps, config.backupSchedulerSeconds, app.log);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");
+  stopBackups();
   await app.close();
   await pool.end();
   process.exit(0);

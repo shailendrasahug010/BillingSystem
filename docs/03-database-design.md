@@ -430,7 +430,7 @@ erDiagram
 | Payroll | `salary_components`, `employee_salary_structures`, `employee_salary_structure_components`, `employee_advances`, `payroll_runs`, `salary_slips`, `salary_slip_lines` |
 | Expenses | `expense_categories`, `expenses` |
 | GST | `gst_transactions`, `gst_return_periods`, `gst_exports`, `gst_config` |
-| System | `audit_logs`, `notifications`, `reminder_rules`, `outbox_events`, `sync_mutations`, `backups` |
+| System | `audit_logs`, `notifications`, `reminder_rules`, `outbox_events`, `sync_mutations`, `backups`, `backup_schedules` |
 | Analytics (derived, rebuildable) | `customer_product_stats`, `product_associations`, `customer_stats`, `sales_daily_product`, `sales_daily_customer` |
 
 How the requested entities map: *Stock* → `stock_balances`; *StockLedger* → `stock_ledger`; *Salaries* → `salary_slips`; *SalaryComponents* → `salary_components` + `salary_slip_lines`; *Leaves* → `leave_requests` (+ types, balances); *Companies/Brands* → `brands`; *ProductCategories* → `product_categories` (self-referencing for subcategories); *TaxRates* → `tax_categories` + `tax_rates`; *GSTTransactions* → `gst_transactions`.

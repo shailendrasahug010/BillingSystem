@@ -1,14 +1,16 @@
 import type { SessionResponse } from "@vyapaar/contracts";
+import { translateError } from "@vyapaar/i18n";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { DatabaseBackup, Download, Eye, EyeOff, Mail, Upload } from "lucide-react";
-import { useState } from "react";
+import { CalendarClock, DatabaseBackup, Download, Eye, EyeOff, Mail, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useSession } from "../../app/session";
 import { useChannels } from "../../components/messaging/SendDialog";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
-import { Checkbox, Field, Input } from "../../components/ui/Field";
+import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
+import { Segmented } from "../../components/ui/misc";
 import { DataTable, ErrorNote, PageHeader } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BUSINESS, TODAY } from "../../data/db";
@@ -17,7 +19,7 @@ import { downloadBlob } from "../../lib/download";
 
 interface BackupRow {
   id: string;
-  kind: "download" | "email" | "restore";
+  kind: "download" | "email" | "auto" | "restore";
   status: "queued" | "running" | "completed" | "failed";
   sizeBytes: number | null;
   sha256: string | null;
@@ -26,6 +28,21 @@ interface BackupRow {
   error: string | null;
   createdAt: string;
   by: string | null;
+}
+
+interface Schedule {
+  frequency: "off" | "daily" | "weekly";
+  hour: number;
+  weekday: number;
+  to: string | null;
+  defaultTo: string | null;
+  hasPassword: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastStatus: "sent" | "failed" | null;
+  lastError: { code: string; params: Record<string, string | number> } | null;
+  emailReady: boolean;
+  setUpBy: string | null;
 }
 
 interface Manifest {
@@ -69,6 +86,7 @@ export function BackupPage() {
     <div className="flex flex-col gap-5">
       <PageHeader title={t("backup.title")} subtitle={t("backup.subtitle")} />
       {allowed("backup.download") && <DownloadCard />}
+      {allowed("backup.download") && allowed("backup.configure") && <ScheduleCard />}
       <HistoryCard />
       {allowed("backup.restore") && <RestoreCard />}
     </div>
@@ -144,6 +162,129 @@ function DownloadCard() {
               </Button>
             </div>
           </section>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** 1 Jan 2023 was a Sunday: weekday names and hours in the reader's language. */
+const weekdayName = (day: number, locale: string) => new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2023, 0, 1 + day)));
+const hourName = (hour: number, locale: string) => new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2023, 0, 1, hour)));
+
+/**
+ * Automatic backups: a password-protected copy emailed every day or week,
+ * so there is a copy away from this computer without anyone remembering.
+ */
+function ScheduleCard() {
+  const i18n = useI18n();
+  const { t, dateTime, locale } = i18n;
+  const toast = useToast();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["backup-schedule"], queryFn: () => api.get<Schedule>("/backups/schedule") });
+  const [frequency, setFrequency] = useState<Schedule["frequency"]>("off");
+  const [hour, setHour] = useState(21);
+  const [weekday, setWeekday] = useState(0);
+  const [to, setTo] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    if (!q.data) return;
+    setFrequency(q.data.frequency);
+    setHour(q.data.hour);
+    setWeekday(q.data.weekday);
+    setTo(q.data.to ?? "");
+  }, [q.data]);
+
+  const s = q.data;
+  const needsPassword = frequency !== "off" && !s?.hasPassword;
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await api.put<Schedule>("/backups/schedule", { frequency, hour, weekday, to: to.trim(), ...(password ? { passphrase: password } : {}) });
+      qc.setQueryData(["backup-schedule"], saved);
+      setPassword("");
+      toast({ tone: "success", title: saved.frequency === "off" ? t("backup.auto.turnedOff") : t("backup.auto.saved"), ...(saved.nextRunAt ? { body: t("backup.auto.next", { when: dateTime(saved.nextRunAt) }) } : {}) });
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader title={t("backup.auto.title")} subtitle={t("backup.auto.hint")} />
+      <div className="flex flex-col gap-4 p-4 sm:p-5">
+        {q.error ? <ErrorNote error={q.error} /> : null}
+        {error ? <ErrorNote error={error} /> : null}
+        {s && !s.emailReady && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{t("backup.auto.emailNotReady")}</p>}
+        {s && (
+          <>
+            <Segmented
+              label={t("backup.auto.frequency")}
+              value={frequency}
+              onChange={setFrequency}
+              options={[
+                { value: "off", label: t("backup.auto.off") },
+                { value: "daily", label: t("backup.auto.daily") },
+                { value: "weekly", label: t("backup.auto.weekly") },
+              ]}
+            />
+            {frequency !== "off" && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {frequency === "weekly" && (
+                  <Field label={t("backup.auto.day")} htmlFor="auto-day">
+                    <Select id="auto-day" value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>
+                      {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                        <option key={d} value={d}>
+                          {weekdayName(d, locale)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
+                <Field label={t("backup.auto.time")} htmlFor="auto-hour">
+                  <Select id="auto-hour" value={hour} onChange={(e) => setHour(Number(e.target.value))}>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>
+                        {hourName(h, locale)}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label={t("messages.to")} htmlFor="auto-to" hint={s.defaultTo ? t("backup.auto.toHint", { email: s.defaultTo }) : t("backup.auto.toNeeded")}>
+                  <Input id="auto-to" type="email" value={to} placeholder={s.defaultTo ?? "accounts@…"} onChange={(e) => setTo(e.target.value)} />
+                </Field>
+                <Secret
+                  id="auto-password"
+                  label={t("backup.password")}
+                  hint={s.hasPassword ? t("backup.auto.passwordSaved") : t("backup.passwordHint")}
+                  value={password}
+                  onChange={setPassword}
+                />
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="primary"
+                icon={<CalendarClock size={16} />}
+                disabled={busy || (frequency !== "off" && (!s.emailReady || (password.length > 0 && password.length < 8) || (needsPassword && !password) || (!to.trim() && !s.defaultTo)))}
+                onClick={() => void save()}
+              >
+                {t("backup.auto.save")}
+              </Button>
+              {s.frequency !== "off" && s.nextRunAt && <span className="text-[13px] text-ink-2">{t("backup.auto.next", { when: dateTime(s.nextRunAt) })}</span>}
+            </div>
+            {s.lastRunAt && (
+              <p className={s.lastStatus === "failed" ? "rounded-lg bg-danger-soft px-3 py-2 text-[12.5px] text-danger" : "text-[12.5px] text-ink-3"} role={s.lastStatus === "failed" ? "alert" : undefined}>
+                {s.lastStatus === "failed" ? t("backup.auto.lastFailed", { when: dateTime(s.lastRunAt), reason: translateError(i18n, s.lastError) }) : t("backup.auto.lastSent", { when: dateTime(s.lastRunAt) })}
+              </p>
+            )}
+            {s.setUpBy && s.frequency !== "off" && <p className="text-[12px] text-ink-3">{t("backup.auto.setUpBy", { name: s.setUpBy })}</p>}
+          </>
         )}
       </div>
     </Card>

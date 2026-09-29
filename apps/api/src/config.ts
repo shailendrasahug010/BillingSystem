@@ -38,6 +38,8 @@ const Env = z.object({
   WHATSAPP_API_BASE: z.url().default("https://graph.facebook.com/v21.0"),
   /** Days a new SaaS business stays in trial. */
   TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
+  /** How often the API looks for automatic backups that are due (0 = never, e.g. on extra instances). */
+  BACKUP_SCHEDULER_SECONDS: z.coerce.number().int().min(0).max(3600).default(300),
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().default(20),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -58,6 +60,7 @@ export interface Config {
   otpWebhook?: { url: string; token?: string };
   messaging: { driver: "live" | "log"; smtpUrl?: string; mailFrom?: string; whatsappApiBase: string };
   trialDays: number;
+  backupSchedulerSeconds: number;
   rateLimit: { max: number; authMax: number };
   logLevel: string;
   docsEnabled: boolean;
@@ -100,6 +103,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       whatsappApiBase: e.WHATSAPP_API_BASE.replace(/\/+$/, ""),
     },
     trialDays: e.TRIAL_DAYS,
+    backupSchedulerSeconds: e.BACKUP_SCHEDULER_SECONDS,
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },
     logLevel: e.LOG_LEVEL,
     docsEnabled: e.DOCS_ENABLED ?? e.NODE_ENV !== "production",

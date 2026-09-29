@@ -11,8 +11,11 @@ export interface AuditEntry {
   changes?: Record<string, Change | unknown> | null;
 }
 
+/** Who did it: a request's context, or a scheduled job (no address or request). */
+export type AuditActor = Pick<RequestCtx, "businessId" | "userId" | "userName" | "userAgent"> & { ip: string | null; requestId: string | null };
+
 /** Written inside the same transaction as the change it records (append-only table). */
-export async function audit(tx: Tx, ctx: Pick<RequestCtx, "businessId" | "userId" | "userName" | "ip" | "userAgent" | "requestId">, entry: AuditEntry): Promise<void> {
+export async function audit(tx: Tx, ctx: AuditActor, entry: AuditEntry): Promise<void> {
   await tx.insert(schema.auditLogs).values({
     businessId: ctx.businessId,
     userId: ctx.userId,

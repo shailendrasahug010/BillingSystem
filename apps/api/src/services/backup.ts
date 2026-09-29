@@ -28,7 +28,7 @@ const MAGIC = Buffer.from("DBBK");
 const MAX_JSON_BYTES = 1024 * 1024 * 1024;
 
 /** Tables with business rows that are not part of a backup. */
-const LEFT_OUT = new Set(["businesses", "business_members", "refresh_tokens", "otp_challenges", "sync_mutations", "notifications", "outbox_events", "backups", "devices"]);
+const LEFT_OUT = new Set(["businesses", "business_members", "refresh_tokens", "otp_challenges", "sync_mutations", "notifications", "outbox_events", "backups", "backup_schedules", "devices"]);
 /** Global tables a restored row may point to as they are. */
 const GLOBAL = new Set(["states", "permissions"]);
 
