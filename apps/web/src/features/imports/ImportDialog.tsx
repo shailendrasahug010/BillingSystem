@@ -245,7 +245,7 @@ export function ImportDialog({ kind, open, onOpenChange }: { kind: Kind; open: b
             <div className="max-h-72 overflow-y-auto rounded-lg border border-line">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                  <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                     <th className="py-2 pl-3 font-medium">{t("imports.row")}</th>
                     <th className="py-2 pl-3 font-medium">{t("imports.column")}</th>
                     <th className="py-2 pr-3 pl-3 font-medium">{t("imports.problem")}</th>

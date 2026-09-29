@@ -13,7 +13,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
       <div className="flex min-w-0 items-center gap-3">
         {back}
         <div className="min-w-0">
-          <h1 className="truncate text-[26px] font-semibold text-ink">{title}</h1>
+          <h1 className="truncate text-[26px] font-semibold tracking-tight text-ink sm:text-[28px]">{title}</h1>
           {subtitle && <div className="num text-[13px] text-ink-3">{subtitle}</div>}
         </div>
       </div>
@@ -55,7 +55,7 @@ export function DataTable<T>({
 }) {
   const { t } = useI18n();
   return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line/80 bg-surface shadow-card">
       {loading ? (
         <div className="flex flex-col gap-3 p-4" role="status" aria-label={t("common.loading")}>
           {Array.from({ length: 5 }, (_, i) => (
@@ -68,7 +68,7 @@ export function DataTable<T>({
         <div className="scroll-x">
           <table className="w-full text-[13.5px]" style={{ minWidth }}>
             <thead>
-              <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+              <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                 {columns.map((c, i) => (
                   <th key={c.key} className={cn("py-2.5 font-medium", i === 0 ? "pl-4" : "pl-3", i === columns.length - 1 ? "pr-4" : "pr-3", c.align === "right" && "text-right")}>
                     {c.header}
@@ -81,10 +81,10 @@ export function DataTable<T>({
                 <tr
                   key={rowKey(row)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={cn("border-b border-line last:border-b-0", onRowClick && "cursor-pointer hover:bg-surface-2")}
+                  className={cn("border-b border-line/70 transition-colors last:border-b-0", onRowClick && "cursor-pointer hover:bg-accent-soft/40")}
                 >
                   {columns.map((c, i) => (
-                    <td key={c.key} className={cn("py-2.5 align-top", i === 0 ? "pl-4" : "pl-3", i === columns.length - 1 ? "pr-4" : "pr-3", c.align === "right" && "text-right", c.className)}>
+                    <td key={c.key} className={cn("py-3 align-top", i === 0 ? "pl-4" : "pl-3", i === columns.length - 1 ? "pr-4" : "pr-3", c.align === "right" && "text-right", c.className)}>
                       {c.render(row)}
                     </td>
                   ))}

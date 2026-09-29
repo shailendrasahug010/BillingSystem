@@ -15,7 +15,8 @@ The design system is implemented, not just described: tokens in `apps/web/src/st
 
 | Element | Choice | Reason |
 |---|---|---|
-| Accent | **Royal blue** `#1450B4` from the Digital Bahi logo (dark theme `#7AA7FF`) | Matches the brand; distinct from the status colours (green = paid, red = overdue) |
+| Accent | **Royal blue** `#1450B4` from the Digital Bahi logo (dark theme `#7AA7FF`), with a lighter partner (`--accent-2`) for gradients. The person can pick another accent in **Settings → Appearance** (and the phone menu): **emerald, violet, saffron or teal**, each with light and dark values (`data-accent` on `<html>`); the phone's browser bar follows it | Matches the brand; distinct from the status colours (green = paid, red = overdue), which never change with the accent |
+| Depth | Primary buttons, the menu and the dashboard banner use the accent **gradient** (`--accent-grad`, `--hero-grad`, `--side-bg`); pages sit on a soft accent glow; the top bar, phone tab bar and toasts are **frosted glass** | A modern, layered look that still reads as one colour per screen |
 | Brand | The **Digital Bahi** logo (open ledger with the rupee sign and a green swoosh), wordmark "Digital" in navy `#0B2D72` and "Bahi" in green `#2F8F1F`, tagline *Aapke Business ka Digital Hisab* | The software's identity: sign-in screen, top of the menu, installed-app icon, and a small "Made with Digital Bahi" line on printouts |
 | Firm identity | The business's own uploaded logo, name, address, mobile, email and GSTIN | The user's identity: the firm card in the menu and the letterhead of every printed document |
 | Neutrals | Cool greys with a slight blue bias (`--bg #F3F5FA`, `--ink #0E1A33`) | Look deliberate next to the accent |
@@ -23,7 +24,7 @@ The design system is implemented, not just described: tokens in `apps/web/src/st
 | UI type | **IBM Plex Sans / IBM Plex Sans Devanagari** | Highly legible at 13–15 px, true tabular figures, matching Devanagari companion |
 | Identifiers | **IBM Plex Mono** | GSTINs, invoice numbers, HSN codes, barcodes are read character by character |
 
-Fonts are bundled with the app in production (not loaded from Google Fonts) so offline devices render correctly.
+Fonts are bundled with the app (`src/styles/fonts.css`, files from `@fontsource`, OFL; only the weights used and the Latin, Latin-extended and Devanagari ranges, about 790 KB in all), not loaded from a font CDN, so every device, offline too, renders the same type.
 
 ## 3. Tokens
 
@@ -47,45 +48,50 @@ All colours are CSS custom properties on `:root`; the dark theme redefines only 
 | Type | 11 (eyebrow) · 12.5 (caption) · 13.5 (table) · 14 (body) · 15–16 (inputs on phone) · 18 (section) · 24–26 (page title) · 30 (hero figure) |
 | Line height | 1.5 for Latin; **1.65 when the UI is in Hindi** (room for matras above and below) |
 | Spacing | 4 px base; component gaps 8/12/16; page gutter 16 (phone) → 32 (desktop) |
-| Radius | Controls 10 px, cards 14 px, pills full |
-| Elevation | `shadow-card` (resting cards), `shadow-pop` (menus, dialogs, toasts) |
-| Motion | 160 ms ease-out pop-in for overlays; spinners only for sync; all disabled under `prefers-reduced-motion` |
+| Radius | Controls 12 px, cards 18 px, sheets 28 px, pills and tabs full |
+| Elevation | `shadow-card` (resting cards), `shadow-lift` (a tile under the pointer), `shadow-pop` (menus, dialogs, toasts), `shadow-glow` (accent buttons) |
+| Tints | Seven soft icon colours (`--tint-blue … --tint-amber`, light and dark) for KPI tiles, quick actions, menu tiles and initials; decoration only, never state |
+| Motion | Screens rise in (360 ms), cards follow one after another (`stagger`), tiles lift under the pointer, buttons give way when pressed, sheets slide up on phones, chart lines draw in and bars grow, dashboard figures count up; all of it off under `prefers-reduced-motion` |
 | Breakpoints | `sm 640` · `md 768` · `lg 1024` (sidebar appears, quick invoice becomes the full invoice screen) · `xl 1280` · `2xl 1536` |
 
 ## 4. Components
 
 | Component | Notes |
 |---|---|
-| **Button** | `primary`, `secondary`, `soft`, `ghost`, `danger`; sizes 32 / 40 / 48 px (48 px for primary actions on phones); optional icon and keyboard hint |
+| **Button** | `primary` (accent gradient with a soft glow), `secondary`, `soft`, `ghost`, `danger`; sizes 32 / 40 / 48 px (48 px for primary actions on phones); optional icon and keyboard hint; every button scales down slightly when pressed |
 | **Input / Select / Field** | Label always visible (no placeholder-only fields); hint or specific error under the field; leading icon; `invalid` state; numeric inputs keep what the user typed (`12.`) and commit valid numbers |
 | **Combobox** (customer / product search) | ARIA combobox + listbox, arrow keys, Enter to choose, results show the information needed to choose correctly (outstanding for customers; stock, price and "bought 12×" for products) |
 | **Badge** | Neutral, accent, good, warn, danger; optional dot; one mapping from workflow state to tone (`lib/status.ts`) |
 | **Card / CardHeader** | Used by role, not everywhere: grouped content, lists, charts |
-| **Stat tile** | Label · value (tabular, compact) · delta vs previous period (colour by whether up is good) · optional footnote; clickable when it leads to a list |
-| **Dialog** | Radix dialog: focus trap, Esc closes, titled; becomes a **bottom sheet on phones** |
+| **Stat tile** | Label · tinted icon (with a faint glow of its colour in the corner) · value that counts up (tabular, compact) · delta chip vs previous period (colour by whether up is good) · optional footnote; lifts under the pointer when it leads to a list |
+| **Dashboard banner** | Accent gradient with a dot texture: date, greeting, firm, and today's sales and collection counting up with their change since yesterday |
+| **Avatar** | Initials on one of the tint colours, the same colour for the same name every time (customers, firm, user) |
+| **Dialog** | Radix dialog: focus trap, Esc closes, titled; becomes a **bottom sheet on phones** (grab handle, slides up), a centred card with a blurred backdrop on bigger screens |
 | **Toast** | Result of an action with an optional follow-up action ("Invoice INV/26-27/00670 saved · Details"); offline saves say so |
-| **Segmented control** | Mutually exclusive views (daily/weekly/monthly, B2B/B2C) |
+| **Segmented control** | Mutually exclusive views (daily/weekly/monthly, B2B/B2C), as a pill |
 | **Tabs** | Profile sections |
 | **Data table** | Sticky header, right-aligned tabular numbers, row click opens detail, horizontal scroll inside its own container on small screens, card list alternative on phones; production version adds column chooser, virtualised rows (TanStack), bulk select and export |
 | **Empty / loading / error states** | Every list has all three: skeletons that match the final layout, an empty state that says what to do next, an error state with retry |
 | **Progress / meter** | Credit used; the track is a lighter step of the same hue |
 | **Kbd** | Shortcut hints next to actions on desktop |
 | **Command palette** | Ctrl+K global search and navigation |
-| **Charts** | Trend (line + area, crosshair tooltip, keyboard, table view), ranked bar list, ordinal columns (aging) |
+| **Charts** | Trend (smooth monotone line that never overshoots the data + gradient area, crosshair tooltip, keyboard, table view), ranked bar list on a track, ordinal columns (aging) |
 | **Sync chip** | Online / Offline / Syncing with pending count |
 | **Language toggle** | EN / हिं, always one tap away (top bar, login, settings) |
 
 ## 5. Layout
 
 ### Desktop (≥ 1024 px)
-* **Sidebar** (248 px): brand, current business + GSTIN, navigation grouped by *Daily work · Stock · Money · People · Insights · Admin*, user and shortcuts at the bottom. Items the user's role cannot use are hidden.
-* **Top bar**: global search (Ctrl+K), sync status, language, theme, notifications, **+ New Invoice** (Ctrl+I).
+* **Sidebar** (256 px) on a deep navy tinted by the accent (`.on-dark` redefines the ink and surface tokens for it, so every component inside just works): brand, current business + GSTIN, navigation grouped by *Daily work · Stock · Money · People · Insights · Admin* with the open screen as a glowing accent pill, user and shortcuts at the bottom. Items the user's role cannot use are hidden.
+* **Top bar** (frosted glass): global search (Ctrl+K), sync status, language, theme, notifications, **+ New Invoice** (Ctrl+I).
+* **Dashboard**: the banner, quick actions as tiles with tinted icons, today's tiles, trend and money, the range summary, aging, needs attention and stock alerts.
 * **Content**: max 1480 px wide; list screens use full width; forms and settings a readable column.
 
 ### Phone (< 1024 px)
-* **Top bar**: menu, brand, search icon, sync, language, theme, notifications.
-* **Bottom navigation**: Home · Customers · **Create (+)** · Products · More. *Create* opens a sheet of quick actions (invoice, order, collect payment, add customer, purchase, product). *More* opens the full module list.
-* Primary actions sit in a sticky bottom bar (e.g. invoice total + Next), above the bottom navigation and the safe-area inset.
+* **Top bar**: menu, brand, search, sync, notifications (language, theme and colour are in the *More* sheet).
+* **Tab bar**: a floating frosted bar — Home · Customers · **Create (+)** (a raised gradient button) · Products · More; the open tab shows its icon in an accent pill. *Create* opens a sheet of quick actions as a grid of coloured icons (invoice, order, collect payment, add customer, purchase, product). *More* opens a launcher: the firm on the accent gradient, language / theme / colour, then every module as a coloured tile, grouped.
+* **Dashboard**: the banner with today's figures, then quick actions as a four-column grid of round icons (as in the payment apps people already use), then the tiles.
+* Primary actions sit in a floating bar (e.g. invoice total + Next), above the tab bar and the safe-area inset.
 
 ## 6. Patterns
 

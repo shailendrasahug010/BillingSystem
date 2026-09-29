@@ -1,7 +1,7 @@
 import { LOCALES } from "@vyapaar/i18n";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { applyTheme, readTheme, type ThemeChoice } from "../../app/theme";
+import { ACCENTS, applyAccent, applyTheme, useAppearance } from "../../app/theme";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Segmented } from "../../components/ui/misc";
 import { BUSINESS } from "../../data/db";
@@ -13,13 +13,13 @@ import { cn } from "../../lib/cn";
 export function SettingsPage() {
   const { t, locale, setLocale } = useI18n();
   useStoreVersion();
-  const [theme, setTheme] = useState<ThemeChoice>(readTheme);
+  const { theme, accent } = useAppearance();
   const [stockPolicy, setStockPolicy] = useState<"allow" | "warn" | "block">("warn");
   const { online } = getSyncState();
 
   return (
     <div className="flex max-w-3xl flex-col gap-5">
-      <h1 className="text-[26px] font-semibold text-ink">{t("settings.title")}</h1>
+      <h1 className="text-[28px] font-semibold tracking-tight text-ink">{t("settings.title")}</h1>
 
       <Card>
         <CardHeader title={t("settings.language")} subtitle={t("settings.languageHint")} />
@@ -44,20 +44,41 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader title={t("settings.appearance")} />
-        <div className="p-4 sm:p-5">
+        <div className="flex flex-col gap-5 p-4 sm:p-5">
           <Segmented
             label={t("common.theme")}
             value={theme}
-            onChange={(v) => {
-              applyTheme(v);
-              setTheme(v);
-            }}
+            onChange={(v) => applyTheme(v)}
             options={[
               { value: "system", label: t("common.systemTheme") },
               { value: "light", label: t("common.lightTheme") },
               { value: "dark", label: t("common.darkTheme") },
             ]}
           />
+          <div className="flex flex-col gap-2.5">
+            <div>
+              <p className="text-[13.5px] font-medium text-ink">{t("settings.accent")}</p>
+              <p className="text-[12.5px] text-ink-3">{t("settings.accentHint")}</p>
+            </div>
+            <div role="radiogroup" aria-label={t("settings.accent")} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={accent === a.key}
+                  onClick={() => applyAccent(a.key)}
+                  className={cn(
+                    "press flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[13px] font-medium transition-colors",
+                    accent === a.key ? "border-accent bg-accent-soft text-accent-ink" : "border-line text-ink-2 hover:border-line-strong",
+                  )}
+                >
+                  <span className="size-6 shrink-0 rounded-full shadow-card" style={{ backgroundImage: `linear-gradient(135deg, ${a.swatch}, ${a.swatch2})` }} aria-hidden />
+                  {t(`settings.accents.${a.key}`)}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
 

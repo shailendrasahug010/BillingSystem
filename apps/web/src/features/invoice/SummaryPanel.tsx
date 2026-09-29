@@ -60,7 +60,7 @@ export function SummaryPanel({
   const grand = totals?.grandTotal.toNumber() ?? 0;
 
   return (
-    <aside className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-line bg-surface p-4 shadow-card sm:p-5" aria-label={t("invoice.summary")}>
+    <aside className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-line/80 bg-surface p-4 shadow-card sm:p-5" aria-label={t("invoice.summary")}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="eyebrow">{t("invoice.taxInvoice")}</p>
@@ -76,7 +76,7 @@ export function SummaryPanel({
         </div>
       </div>
 
-      <div className="rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">
+      <div className="rounded-xl bg-accent-soft/60 px-3 py-2 text-[12.5px] text-ink-2">
         <p className="font-medium text-ink">{intra ? t("invoice.supplyIntra", { state: stateComponent }) : t("invoice.supplyInter")}</p>
         <p>
           {t("invoice.placeOfSupply")}: {pos ? stateName(pos.code, locale) : "—"}
@@ -100,9 +100,12 @@ export function SummaryPanel({
         <Row label={t("invoice.roundOff")} value={money(totals?.roundOff.toNumber() ?? 0)} muted />
       </dl>
 
-      <div className="flex items-baseline justify-between border-t border-line pt-3">
-        <span className="text-[14px] font-medium text-ink-2">{t("invoice.grandTotal")}</span>
-        <span className="num font-display text-[30px] leading-none font-semibold text-ink">{money(grand)}</span>
+      <div className="bg-hero on-dark relative overflow-hidden rounded-2xl px-4 py-3.5 shadow-glow">
+        <div className="dots pointer-events-none absolute inset-0 opacity-40" aria-hidden />
+        <div className="relative flex items-baseline justify-between gap-3">
+          <span className="text-[14px] font-medium text-ink-2">{t("invoice.grandTotal")}</span>
+          <span className="num font-display text-[30px] leading-none font-semibold tracking-tight text-ink">{money(grand)}</span>
+        </div>
       </div>
 
       {totals && totals.rateBreakup.length > 1 && (

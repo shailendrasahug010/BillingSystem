@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 /**
  * Line/area trend chart drawn in SVG. One y-axis only (both series are rupees),
@@ -19,6 +19,30 @@ function niceMax(v: number): number {
   const f = v / exp;
   const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
   return nice * exp;
+}
+
+/** Monotone cubic interpolation (as d3's curveMonotoneX): smooth, and it never overshoots the data. */
+function smoothPath(points: ReadonlyArray<readonly [number, number]>): string {
+  const n = points.length;
+  if (n === 0) return "";
+  if (n < 3) return points.map(([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(1)},${py.toFixed(1)}`).join(" ");
+  const dx = points.slice(1).map((p, i) => p[0] - points[i]![0]);
+  const slope = points.slice(1).map((p, i) => (p[1] - points[i]![1]) / (dx[i] || 1));
+  const tangent = points.map((_, i) => {
+    if (i === 0) return slope[0]!;
+    if (i === n - 1) return slope[n - 2]!;
+    const a = slope[i - 1]!;
+    const b = slope[i]!;
+    return a * b <= 0 ? 0 : (3 * (dx[i - 1]! + dx[i]!)) / ((2 * dx[i]! + dx[i - 1]!) / a + (dx[i]! + 2 * dx[i - 1]!) / b);
+  });
+  let d = `M${points[0]![0].toFixed(1)},${points[0]![1].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = points[i]!;
+    const [x1, y1] = points[i + 1]!;
+    const h = (x1 - x0) / 3;
+    d += ` C${(x0 + h).toFixed(1)},${(y0 + h * tangent[i]!).toFixed(1)} ${(x1 - h).toFixed(1)},${(y1 - h * tangent[i + 1]!).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
+  }
+  return d;
 }
 
 export function TrendChart({
@@ -43,6 +67,7 @@ export function TrendChart({
   tableHeader: string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const gid = useId().replace(/:/g, "");
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
 
@@ -64,7 +89,8 @@ export function TrendChart({
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(innerW / 72))));
 
-  const path = (values: number[]) => values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  // Smooth, but never overshooting: a monotone cubic through the points (no dip below zero).
+  const path = (values: number[]) => smoothPath(values.map((v, i) => [x(i), y(v)] as const));
   const area = (values: number[]) => `${path(values)} L${x(n - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`;
 
   const onMove = (clientX: number) => {
@@ -138,7 +164,8 @@ export function TrendChart({
           </g>
         ))}
         {labels.map((l, i) =>
-          i % labelEvery === 0 || i === n - 1 ? (
+          // Every few labels, and the last one (without crowding the label just before it).
+          (i % labelEvery === 0 && (n - 1 - i >= labelEvery * 0.75 || i === 0)) || i === n - 1 ? (
             <text
               key={l + i}
               x={x(i)}
@@ -151,9 +178,15 @@ export function TrendChart({
             </text>
           ) : null,
         )}
-        {series[0] && <path d={area(series[0].values)} fill={series[0].color} fillOpacity={0.1} />}
+        <defs>
+          <linearGradient id={`${gid}-area`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={series[0]?.color} stopOpacity={0.26} />
+            <stop offset="100%" stopColor={series[0]?.color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        {series[0] && <path d={area(series[0].values)} fill={`url(#${gid}-area)`} className="chart-fade" />}
         {series.map((s) => (
-          <path key={s.key} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          <path key={s.key} d={path(s.values)} pathLength={1} fill="none" stroke={s.color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" className="chart-draw" />
         ))}
         {/* End markers */}
         {series.map((s) => (
@@ -170,7 +203,7 @@ export function TrendChart({
       </svg>
       {hover !== null && (
         <div
-          className="pointer-events-none absolute top-2 z-10 w-[178px] rounded-lg border border-line bg-surface px-3 py-2 shadow-pop"
+          className="glass pointer-events-none absolute top-2 z-10 w-[178px] rounded-xl border border-line/70 px-3 py-2 shadow-pop"
           style={{ left: tipLeft }}
         >
           <p className="mb-1 text-[12px] font-medium text-ink-2">{tooltipLabels?.[hover] ?? labels[hover]}</p>

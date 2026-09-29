@@ -6,6 +6,7 @@ import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { api } from "../../lib/api";
 import { cn } from "../../lib/cn";
+import { tintFor } from "../ui/misc";
 
 /**
  * Two identities appear in the app. Digital Bahi is the software: its mark,
@@ -70,7 +71,7 @@ export function FirmLogo({ size = 40, className }: { size?: number; className?: 
     .join("");
   return (
     <span
-      className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-white", !logo && "bg-accent-soft text-accent-ink", className)}
+      className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg", logo ? "border border-line bg-white" : tintFor(BUSINESS.name || "Firm"), className)}
       style={{ width: size, height: size }}
       aria-hidden
     >

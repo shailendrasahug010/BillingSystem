@@ -245,7 +245,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           <Card className="scroll-x">
             <table className="w-full min-w-[600px] text-[13.5px]">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                   <th className="px-4 py-2.5 font-medium">{t("invoice.number")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("common.date")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("invoice.dueDate")}</th>
@@ -286,7 +286,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
             ) : (
               <table className="w-full min-w-[520px] text-[13.5px]">
                 <thead>
-                  <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                  <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                     <th className="px-4 py-2.5 font-medium">#</th>
                     <th className="px-3 py-2.5 font-medium">{t("common.date")}</th>
                     <th className="px-3 py-2.5 font-medium">{t("invoice.paymentMode")}</th>
@@ -315,7 +315,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           <Card className="scroll-x">
             <table className="w-full min-w-[620px] text-[13.5px]">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                   <th className="px-4 py-2.5 font-medium">{t("common.date")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("customer.ledger.particulars")}</th>
                   <th className="px-3 py-2.5 text-right font-medium">{t("customer.ledger.debit")}</th>
@@ -344,7 +344,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           <Card className="scroll-x">
             <table className="w-full min-w-[640px] text-[13.5px]">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                   <th className="px-4 py-2.5 font-medium">{t("invoice.product")}</th>
                   <th className="px-3 py-2.5 text-right font-medium">{t("customer.invoiceCount")}</th>
                   <th className="px-3 py-2.5 text-right font-medium">{t("invoice.qty")}</th>

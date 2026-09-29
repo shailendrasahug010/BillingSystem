@@ -28,15 +28,16 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Field";
-import { Kbd, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
-import { PRODUCTS, TODAY, allowed } from "../../data/db";
+import { Avatar, CountUp, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
+import { shortcutLabel } from "../../app/shortcuts";
+import { BUSINESS, PRODUCTS, TODAY, allowed } from "../../data/db";
 import { useStoreVersion, type RangeKey } from "../../data/store";
 import { useSession } from "../../app/session";
 import { useDashboardView, type Grain } from "./data";
 import { cn } from "../../lib/cn";
 
 
-function Delta({ current, previous, upIsGood = true }: { current: number; previous: number; upIsGood?: boolean }) {
+function Delta({ current, previous, upIsGood = true, onDark }: { current: number; previous: number; upIsGood?: boolean; onDark?: boolean }) {
   const { t } = useI18n();
   if (previous <= 0) return null;
   const change = (current - previous) / previous;
@@ -44,12 +45,29 @@ function Delta({ current, previous, upIsGood = true }: { current: number; previo
   const good = up === upIsGood;
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className={cn("inline-flex items-center gap-0.5 text-[12px] font-medium", good ? "text-good" : "text-danger")} title={t("dashboard.kpi.vsPrevious")}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[12px] font-semibold",
+        onDark ? "bg-white/15 text-white" : good ? "bg-good-soft text-good" : "bg-danger-soft text-danger",
+      )}
+      title={t("dashboard.kpi.vsPrevious")}
+    >
       <Icon size={14} aria-hidden />
       <span className="num">{Math.abs(Math.round(change * 100))}%</span>
     </span>
   );
 }
+
+type Tint = "blue" | "green" | "orange" | "violet" | "rose" | "teal" | "amber";
+const TINT: Record<Tint, string> = {
+  blue: "bg-tint-blue-soft text-tint-blue",
+  green: "bg-tint-green-soft text-tint-green",
+  orange: "bg-tint-orange-soft text-tint-orange",
+  violet: "bg-tint-violet-soft text-tint-violet",
+  rose: "bg-tint-rose-soft text-tint-rose",
+  teal: "bg-tint-teal-soft text-tint-teal",
+  amber: "bg-tint-amber-soft text-tint-amber",
+};
 
 function StatTile({
   label,
@@ -58,6 +76,7 @@ function StatTile({
   delta,
   foot,
   tone,
+  tint = "blue",
   onClick,
 }: {
   label: string;
@@ -66,29 +85,47 @@ function StatTile({
   delta?: ReactNode;
   foot?: ReactNode;
   tone?: "danger" | "warn";
+  tint?: Tint;
   onClick?(): void;
 }) {
   const Tag = onClick ? "button" : "div";
+  const iconTone = tone === "danger" ? "bg-danger-soft text-danger" : tone === "warn" ? "bg-warn-soft text-warn" : TINT[tint];
   return (
     <Tag
       {...(onClick ? { type: "button" as const, onClick } : {})}
       className={cn(
-        "flex min-w-0 flex-col gap-2 rounded-[var(--radius-card)] border border-line bg-surface p-4 text-left shadow-card",
-        onClick && "transition-colors hover:border-line-strong",
+        "relative flex min-w-0 flex-col gap-2.5 overflow-hidden rounded-[var(--radius-card)] border border-line/80 bg-surface p-4 text-left shadow-card",
+        onClick && "lift press hover:border-line-strong",
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[13px] text-ink-2">{label}</span>
-        <span className={cn("flex size-7 items-center justify-center rounded-md", tone === "danger" ? "bg-danger-soft text-danger" : tone === "warn" ? "bg-warn-soft text-warn" : "bg-surface-2 text-ink-3")}>
-          {icon}
-        </span>
+      {/* A soft glow of the tile's colour in the corner. */}
+      <span className={cn("pointer-events-none absolute -top-10 -right-10 size-28 rounded-full opacity-70 blur-2xl", iconTone)} aria-hidden />
+      <div className="relative flex items-center justify-between gap-2">
+        <span className="text-[13px] font-medium text-ink-2">{label}</span>
+        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", iconTone)}>{icon}</span>
       </div>
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="num font-display text-[24px] leading-none font-semibold text-ink">{value}</span>
+      <div className="relative flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="num font-display text-[26px] leading-none font-semibold tracking-tight text-ink">{value}</span>
         {delta}
       </div>
-      {foot && <div className="text-[12px] text-ink-3">{foot}</div>}
+      {foot && <div className="relative text-[12px] text-ink-3">{foot}</div>}
     </Tag>
+  );
+}
+
+/** Today's sales or collection in the banner. */
+function HeroFigure({ label, value, format, previous, foot }: { label: string; value: number; format(v: number): string; previous: number; foot: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm md:min-w-[190px]">
+      <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
+      <span className="num font-display text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[30px]">
+        <CountUp value={value} format={format} />
+      </span>
+      <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
+        <Delta current={value} previous={previous} onDark />
+        {foot}
+      </span>
+    </div>
   );
 }
 
@@ -133,17 +170,17 @@ export function DashboardPage() {
   // Only the actions this person's role can carry out.
   const actions = (
     [
-      { label: t("dashboard.actions.createInvoice"), icon: <Receipt size={16} />, route: { name: "invoice-new" }, keys: "mod+i", primary: true, permission: "invoice.create" },
-      { label: t("dashboard.actions.newOrder"), icon: <ClipboardList size={16} />, route: { name: "planned", module: "orders" }, keys: "alt+o", permission: "order.create" },
-      { label: t("dashboard.actions.receivePayment"), icon: <Wallet size={16} />, route: { name: "planned", module: "payments" }, keys: "alt+c", permission: "payment.collect" },
-      { label: t("dashboard.actions.purchaseEntry"), icon: <ShoppingCart size={16} />, route: { name: "planned", module: "purchases" }, keys: "alt+p", permission: "purchase.create" },
-      { label: t("dashboard.actions.addCustomer"), icon: <UserPlus size={16} />, route: { name: "customers" }, permission: "customer.create" },
-      { label: t("dashboard.actions.addSupplier"), icon: <Users size={16} />, route: { name: "planned", module: "suppliers" }, permission: "supplier.create" },
-      { label: t("dashboard.actions.paySupplier"), icon: <CreditCard size={16} />, route: { name: "planned", module: "payments" }, permission: "payment.pay" },
-      { label: t("dashboard.actions.stockAdjustment"), icon: <Boxes size={16} />, route: { name: "planned", module: "inventory" }, permission: "inventory.adjust" },
-      { label: t("dashboard.actions.addProduct"), icon: <Package size={16} />, route: { name: "products" }, permission: "product.create" },
-      { label: t("dashboard.actions.addExpense"), icon: <BadgeIndianRupee size={16} />, route: { name: "planned", module: "expenses" }, permission: "expense.create" },
-    ] as Array<{ label: string; icon: ReactNode; route: Route; keys?: string; primary?: boolean; permission: string }>
+      { label: t("dashboard.actions.createInvoice"), icon: <Receipt size={19} />, route: { name: "invoice-new" }, keys: "mod+i", primary: true, tint: "blue", permission: "invoice.create" },
+      { label: t("dashboard.actions.newOrder"), icon: <ClipboardList size={19} />, route: { name: "planned", module: "orders" }, keys: "alt+o", tint: "violet", permission: "order.create" },
+      { label: t("dashboard.actions.receivePayment"), icon: <Wallet size={19} />, route: { name: "planned", module: "payments" }, keys: "alt+c", tint: "green", permission: "payment.collect" },
+      { label: t("dashboard.actions.purchaseEntry"), icon: <ShoppingCart size={19} />, route: { name: "planned", module: "purchases" }, keys: "alt+p", tint: "teal", permission: "purchase.create" },
+      { label: t("dashboard.actions.addCustomer"), icon: <UserPlus size={19} />, route: { name: "customers" }, tint: "orange", permission: "customer.create" },
+      { label: t("dashboard.actions.addSupplier"), icon: <Users size={19} />, route: { name: "planned", module: "suppliers" }, tint: "blue", permission: "supplier.create" },
+      { label: t("dashboard.actions.paySupplier"), icon: <CreditCard size={19} />, route: { name: "planned", module: "payments" }, tint: "rose", permission: "payment.pay" },
+      { label: t("dashboard.actions.stockAdjustment"), icon: <Boxes size={19} />, route: { name: "planned", module: "inventory" }, tint: "amber", permission: "inventory.adjust" },
+      { label: t("dashboard.actions.addProduct"), icon: <Package size={19} />, route: { name: "products" }, tint: "violet", permission: "product.create" },
+      { label: t("dashboard.actions.addExpense"), icon: <BadgeIndianRupee size={19} />, route: { name: "planned", module: "expenses" }, tint: "rose", permission: "expense.create" },
+    ] as Array<{ label: string; icon: ReactNode; route: Route; keys?: string; primary?: boolean; tint: Tint; permission: string }>
   ).filter((a) => allowed(a.permission));
 
   const agingLabels: Record<string, string> = {
@@ -159,30 +196,58 @@ export function DashboardPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[13px] text-ink-3">{weekday}</p>
-          <h1 className="mt-0.5 text-[26px] leading-tight font-semibold text-ink sm:text-[30px]">{t("dashboard.greeting", { name: session.user?.name.split(" ")[0] ?? "Anil" })}</h1>
+    <div className="stagger flex flex-col gap-6">
+      {/* Banner: the day, the greeting and today's money coming in. */}
+      <section className="bg-hero on-dark relative overflow-hidden rounded-[26px] px-5 py-5 shadow-pop sm:px-7 sm:py-6">
+        <div className="dots pointer-events-none absolute inset-0 opacity-40" aria-hidden />
+        <div className="pointer-events-none absolute -top-28 -right-24 size-80 rounded-full bg-white/10 blur-3xl" aria-hidden />
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div className="min-w-0">
+            <p className="text-[13px] text-ink-2">{weekday}</p>
+            <h1 className="mt-1 text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[32px]">{t("dashboard.greeting", { name: session.user?.name.split(" ")[0] ?? "Anil" })}</h1>
+            {BUSINESS.name && <p className="mt-1 truncate text-[13.5px] text-ink-2">{BUSINESS.name}</p>}
+          </div>
+          {shown ? (
+            <div className="grid grid-cols-2 gap-3 md:flex">
+              <HeroFigure label={t("dashboard.kpi.todaySales")} value={view.today.sales} previous={view.today.salesPrev} format={(v) => money(v, 0)} foot={`${t("common.yesterday")} ${money(view.today.salesPrev, 0)}`} />
+              <HeroFigure label={t("dashboard.kpi.todayCollection")} value={view.today.collections} previous={view.today.collectionsPrev} format={(v) => money(v, 0)} foot={`${t("common.yesterday")} ${money(view.today.collectionsPrev, 0)}`} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 md:flex">
+              {[0, 1].map((i) => (
+                <div key={i} className="flex flex-col gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 md:min-w-[190px]">
+                  <Skeleton className="w-24" />
+                  <Skeleton className="h-7 w-28" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      </section>
 
-      {/* Quick actions */}
-      <section aria-label={t("dashboard.quickActions")} className="-mx-4 px-4 scroll-x sm:mx-0 sm:px-0">
-        <div className="flex w-max gap-2 pb-1 sm:w-auto sm:flex-wrap">
+      {/* Quick actions: a grid of icons on phones, a row of tiles on bigger screens. */}
+      <section aria-label={t("dashboard.quickActions")}>
+        <div className="grid grid-cols-4 gap-x-1.5 gap-y-4 sm:flex sm:flex-wrap sm:gap-2.5">
           {actions.map((a) => (
             <button
               key={a.label}
               type="button"
               onClick={() => navigate(a.route)}
+              title={a.keys ? `${a.label} (${shortcutLabel(a.keys).join("+")})` : a.label}
               className={cn(
-                "inline-flex h-10 items-center gap-2 rounded-[var(--radius-control)] border px-3.5 text-[13.5px] font-medium whitespace-nowrap transition-colors",
-                a.primary ? "border-transparent bg-accent text-ink-inverse shadow-card hover:bg-accent-hover" : "border-line bg-surface text-ink hover:border-accent",
+                "press group flex min-w-0 flex-col items-center gap-1.5 text-center",
+                "lift sm:flex-row sm:gap-2.5 sm:rounded-2xl sm:border sm:border-line/80 sm:bg-surface sm:py-1.5 sm:pr-3.5 sm:pl-1.5 sm:text-left sm:shadow-card sm:hover:border-line-strong",
               )}
             >
-              <span className={a.primary ? "" : "text-accent"}>{a.icon}</span>
-              {a.label}
-              {a.keys && <Kbd keys={a.keys} className={cn("hidden xl:inline-flex", a.primary && "[&_kbd]:border-white/30 [&_kbd]:bg-white/15 [&_kbd]:text-white")} />}
+              <span
+                className={cn(
+                  "flex size-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105 sm:size-9 sm:rounded-xl",
+                  a.primary ? "bg-accent bg-accent-grad text-ink-inverse shadow-glow" : TINT[a.tint],
+                )}
+              >
+                {a.icon}
+              </span>
+              <span className="line-clamp-2 text-[11.5px] leading-tight font-medium text-ink sm:text-[13.5px] sm:whitespace-nowrap">{a.label}</span>
             </button>
           ))}
         </div>
@@ -191,17 +256,15 @@ export function DashboardPage() {
       {/* Today */}
       <section aria-labelledby="today-h" className="flex flex-col gap-3">
         <h2 id="today-h" className="eyebrow">{t("dashboard.section.today")}</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <div className="stagger grid grid-cols-2 gap-3 md:grid-cols-3">
           {shown ? (
             <>
-              <StatTile label={t("dashboard.kpi.todaySales")} icon={<Receipt size={15} />} value={money(view.today.sales, 0)} delta={<Delta current={view.today.sales} previous={view.today.salesPrev} />} foot={t("common.yesterday") + " " + money(view.today.salesPrev, 0)} />
-              <StatTile label={t("dashboard.kpi.todayCollection")} icon={<Wallet size={15} />} value={money(view.today.collections, 0)} delta={<Delta current={view.today.collections} previous={view.today.collectionsPrev} />} foot={t("common.yesterday") + " " + money(view.today.collectionsPrev, 0)} />
-              {view.today.purchases !== null && <StatTile label={t("dashboard.kpi.todayPurchase")} icon={<ShoppingCart size={15} />} value={money(view.today.purchases, 0)} />}
-              {view.today.expenses !== null && <StatTile label={t("dashboard.kpi.todayExpenses")} icon={<BadgeIndianRupee size={15} />} value={money(view.today.expenses, 0)} />}
-              <StatTile label={t("dashboard.kpi.todayOrders")} icon={<ClipboardList size={15} />} value={view.today.orders} onClick={() => navigate({ name: "planned", module: "orders" })} />
+              {view.today.purchases !== null && <StatTile label={t("dashboard.kpi.todayPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view.today.purchases} format={(v) => money(v, 0)} />} />}
+              {view.today.expenses !== null && <StatTile label={t("dashboard.kpi.todayExpenses")} tint="rose" icon={<BadgeIndianRupee size={17} />} value={<CountUp value={view.today.expenses} format={(v) => money(v, 0)} />} />}
+              <StatTile label={t("dashboard.kpi.todayOrders")} tint="violet" icon={<ClipboardList size={17} />} value={<CountUp value={view.today.orders} format={(v) => String(Math.round(v))} />} onClick={() => navigate({ name: "planned", module: "orders" })} />
             </>
           ) : (
-            Array.from({ length: 5 }, (_, i) => (
+            Array.from({ length: 3 }, (_, i) => (
               <div key={i} className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line bg-surface p-4">
                 <Skeleton className="w-24" />
                 <Skeleton className="h-6 w-28" />
@@ -281,22 +344,23 @@ export function DashboardPage() {
           <div className="grid grid-cols-2 gap-3">
             <StatTile
               label={t("dashboard.kpi.receivable")}
-              icon={<ArrowDownRight size={15} />}
-              value={compact(view?.receivable.total ?? 0)}
+              icon={<ArrowDownRight size={17} />}
+              tint="green"
+              value={<CountUp value={view?.receivable.total ?? 0} format={(v) => compact(v)} />}
               tone={(view?.receivable.overdue ?? 0) > 0 ? "danger" : undefined}
               foot={<span className="text-danger">{t("dashboard.kpi.overdue", { amount: compact(view?.receivable.overdue ?? 0) })}</span>}
               onClick={() => navigate({ name: "customers" })}
             />
             {view?.payable !== null && (
-              <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={15} />} value={compact(view?.payable ?? 0)} {...(allowed("supplier.view") ? { onClick: () => navigate({ name: "planned", module: "suppliers" }) } : {})} />
+              <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={17} />} tint="orange" value={<CountUp value={view?.payable ?? 0} format={(v) => compact(v)} />} {...(allowed("supplier.view") ? { onClick: () => navigate({ name: "planned", module: "suppliers" }) } : {})} />
             )}
           </div>
           <Card className="p-2">
             <p className="eyebrow px-3 pt-2 pb-1">{t("dashboard.section.operations")}</p>
             {[
-              { label: t("dashboard.kpi.pendingOrders"), n: view?.orders.pending ?? 0, icon: <ClipboardList size={16} />, route: { name: "planned", module: "orders" } as Route },
-              { label: t("dashboard.kpi.toPack"), n: view?.orders.toPack ?? 0, icon: <PackageCheck size={16} />, route: { name: "planned", module: "packing" } as Route },
-              { label: t("dashboard.kpi.toDispatch"), n: view?.orders.toDispatch ?? 0, icon: <Truck size={16} />, route: { name: "planned", module: "dispatch" } as Route },
+              { label: t("dashboard.kpi.pendingOrders"), n: view?.orders.pending ?? 0, icon: <ClipboardList size={16} />, tint: "violet" as Tint, route: { name: "planned", module: "orders" } as Route },
+              { label: t("dashboard.kpi.toPack"), n: view?.orders.toPack ?? 0, icon: <PackageCheck size={16} />, tint: "amber" as Tint, route: { name: "planned", module: "packing" } as Route },
+              { label: t("dashboard.kpi.toDispatch"), n: view?.orders.toDispatch ?? 0, icon: <Truck size={16} />, tint: "teal" as Tint, route: { name: "planned", module: "dispatch" } as Route },
             ].map((row) => (
               <button
                 key={row.label}
@@ -304,9 +368,9 @@ export function DashboardPage() {
                 onClick={() => navigate(row.route)}
                 // A count the role may see, but a screen it may not open (packing, dispatch).
                 disabled={!canOpen(row.route)}
-                className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-[14px] text-ink enabled:hover:bg-surface-2"
+                className="press flex h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left text-[14px] text-ink enabled:hover:bg-surface-2"
               >
-                <span className="text-ink-3">{row.icon}</span>
+                <span className={cn("flex size-8 items-center justify-center rounded-lg", TINT[row.tint])}>{row.icon}</span>
                 <span className="flex-1">{row.label}</span>
                 <span className="num font-display text-[18px] font-semibold">{row.n}</span>
               </button>
@@ -387,7 +451,8 @@ export function DashboardPage() {
           <CardHeader title={t("dashboard.needsAttention")} subtitle={t("customer.filters.overdue")} />
           <ul className="px-2 pt-2 pb-3">
             {(view?.attention ?? []).map((c) => (
-              <li key={c.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-surface-2">
+              <li key={c.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-surface-2">
+                <Avatar name={c.name} />
                 <button type="button" onClick={() => navigate({ name: "customer", customerId: c.id })} className="min-w-0 flex-1 text-left">
                   <p className="truncate text-[14px] font-medium text-ink">{c.name}</p>
                   <p className="text-[12.5px] text-ink-3">
@@ -432,10 +497,10 @@ export function DashboardPage() {
       <section aria-labelledby="month-h" className="flex flex-col gap-3">
         <h2 id="month-h" className="eyebrow">{t("dashboard.section.month")}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatTile label={t("dashboard.kpi.monthSales")} icon={<Receipt size={15} />} value={compact(view?.month.sales ?? 0)} delta={<Delta current={view?.month.sales ?? 0} previous={view?.month.salesPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
-          <StatTile label={t("dashboard.kpi.monthCollection")} icon={<Wallet size={15} />} value={compact(view?.month.collections ?? 0)} delta={<Delta current={view?.month.collections ?? 0} previous={view?.month.collectionsPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          <StatTile label={t("dashboard.kpi.monthSales")} tint="blue" icon={<Receipt size={17} />} value={<CountUp value={view?.month.sales ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.sales ?? 0} previous={view?.month.salesPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          <StatTile label={t("dashboard.kpi.monthCollection")} tint="green" icon={<Wallet size={17} />} value={<CountUp value={view?.month.collections ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.collections ?? 0} previous={view?.month.collectionsPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
           {view?.month.purchases !== null && (
-            <StatTile label={t("dashboard.kpi.monthPurchase")} icon={<ShoppingCart size={15} />} value={compact(view?.month.purchases ?? 0)} delta={<Delta current={view?.month.purchases ?? 0} previous={view?.month.purchasesPrev ?? 0} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
+            <StatTile label={t("dashboard.kpi.monthPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view?.month.purchases ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.purchases ?? 0} previous={view?.month.purchasesPrev ?? 0} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
           )}
         </div>
       </section>

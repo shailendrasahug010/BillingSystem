@@ -36,7 +36,7 @@ export function EmptyState({
 }) {
   return (
     <div className={cn("flex flex-col items-center justify-center gap-2 px-6 py-10 text-center", className)}>
-      <div className="flex size-11 items-center justify-center rounded-full bg-surface-2 text-ink-3">{icon ?? <Inbox size={20} />}</div>
+      <div className="flex size-14 items-center justify-center rounded-2xl bg-accent-soft text-accent shadow-card">{icon ?? <Inbox size={24} />}</div>
       <p className="font-medium text-ink">{title}</p>
       {hint && <p className="max-w-sm text-[13px] text-ink-3">{hint}</p>}
       {action && <div className="mt-2">{action}</div>}
@@ -85,7 +85,7 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-[var(--radius-control)] border border-line bg-surface-2 p-0.5">
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-full border border-line/70 bg-surface-2 p-1">
       {options.map((o) => (
         <button
           key={o.value}
@@ -94,9 +94,9 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-[calc(var(--radius-control)-2px)] font-medium transition-colors",
-            size === "sm" ? "h-7 px-2.5 text-[12px]" : "h-8 px-3 text-[13px]",
-            value === o.value ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink",
+            "press rounded-full font-medium transition-[background-color,color,box-shadow] duration-200",
+            size === "sm" ? "h-7 px-3 text-[12px]" : "h-8 px-3.5 text-[13px]",
+            value === o.value ? "bg-surface text-accent-ink shadow-card ring-1 ring-line/60" : "text-ink-3 hover:text-ink",
           )}
         >
           {o.label}
@@ -104,6 +104,23 @@ export function Segmented<T extends string>({
       ))}
     </div>
   );
+}
+
+/** Soft colour pairs for initials; the same name always gets the same one. */
+const AVATAR_TINTS = [
+  "bg-tint-blue-soft text-tint-blue",
+  "bg-tint-green-soft text-tint-green",
+  "bg-tint-orange-soft text-tint-orange",
+  "bg-tint-violet-soft text-tint-violet",
+  "bg-tint-rose-soft text-tint-rose",
+  "bg-tint-teal-soft text-tint-teal",
+  "bg-tint-amber-soft text-tint-amber",
+] as const;
+
+export function tintFor(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_TINTS[h % AVATAR_TINTS.length]!;
 }
 
 export function Avatar({ name, className }: { name: string; className?: string }) {
@@ -115,16 +132,41 @@ export function Avatar({ name, className }: { name: string; className?: string }
     .join("")
     .toUpperCase();
   return (
-    <span
-      className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft font-display text-[13px] font-semibold text-accent-ink",
-        className,
-      )}
-      aria-hidden
-    >
+    <span className={cn("inline-flex size-9 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-semibold", tintFor(name), className)} aria-hidden>
       {initials}
     </span>
   );
+}
+
+/**
+ * A number that counts up to its value when it first appears (and glides to
+ * a new value when it changes), ending on exactly the formatted value.
+ * Reduced motion shows it at once.
+ */
+export function CountUp({ value, format, duration = 900 }: { value: number; format(v: number): string; duration?: number }) {
+  const [shown, setShown] = useState(0);
+  const [from, setFrom] = useState(0);
+  useEffect(() => {
+    const reduce = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || typeof requestAnimationFrame === "undefined") {
+      setShown(value);
+      return;
+    }
+    const start = performance.now();
+    const begin = from;
+    let frame = 0;
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setShown(begin + (value - begin) * eased);
+      if (p < 1) frame = requestAnimationFrame(step);
+      else setFrom(value);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, duration]);
+  return <span className="count-up">{format(Math.abs(shown - value) < 0.005 ? value : shown)}</span>;
 }
 
 export function ProgressBar({ value, tone = "accent", label }: { value: number; tone?: "accent" | "warn" | "danger" | "good"; label: string }) {

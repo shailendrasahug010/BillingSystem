@@ -2,8 +2,8 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from "../../lib/cn";
 
 const control =
-  "w-full rounded-[var(--radius-control)] border border-line bg-surface text-ink placeholder:text-ink-3 transition-colors " +
-  "hover:border-line-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:bg-surface-2";
+  "w-full rounded-[var(--radius-control)] border border-line bg-surface text-ink shadow-[inset_0_1px_1px_rgb(16_24_40/0.03)] placeholder:text-ink-3 " +
+  "transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 disabled:bg-surface-2";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   leading?: ReactNode;

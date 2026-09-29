@@ -136,7 +136,7 @@ export function ReturnDialog({ kind, documentId, open, onOpenChange }: { kind: "
           <div className="overflow-hidden rounded-lg border border-line">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                   <th className="py-2 pl-3 font-medium">{t("invoice.product")}</th>
                   <th className="py-2 pl-3 text-right font-medium">{t("notes.billed")}</th>
                   <th className="py-2 pl-3 text-right font-medium">{t("notes.canReturn")}</th>

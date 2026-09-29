@@ -1,11 +1,13 @@
 import {
   Bell,
+  ClipboardList,
   Cloud,
   CloudOff,
   Download,
   House,
   Keyboard,
   LayoutGrid,
+  LogOut,
   Menu,
   Moon,
   Package,
@@ -13,14 +15,17 @@ import {
   Receipt,
   RefreshCw,
   Search,
+  ShoppingCart,
   Sun,
+  UserPlus,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { GROUP_LABELS, homeRoute, moduleForRoute, phaseBadge, visibleModules, type ModuleDef } from "../../app/modules";
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
-import { applyTheme, readTheme, type ThemeChoice } from "../../app/theme";
+import { ACCENTS, applyAccent, applyTheme, useAppearance } from "../../app/theme";
 import { useSession } from "../../app/session";
 import { allowed, BUSINESS, ORDERS, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
@@ -28,7 +33,7 @@ import { getSyncState, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
 import { installApp, useCanInstall } from "../../lib/pwa";
 import { Dialog } from "../ui/Dialog";
-import { Kbd } from "../ui/misc";
+import { Kbd, tintFor } from "../ui/misc";
 import { UpdateBanner } from "./UpdateBanner";
 import { OfflineBanner, OfflineChip } from "../offline/OfflineBills";
 import { getOfflineState } from "../../offline/sync";
@@ -44,7 +49,7 @@ function sameRoute(a: Route, b: Route): boolean {
 export function LanguageToggle({ className }: { className?: string }) {
   const { locale, setLocale, t } = useI18n();
   return (
-    <div role="radiogroup" aria-label={t("common.language")} className={cn("rounded-lg border border-line bg-surface-2 p-0.5", className?.includes("hidden") ? "" : "inline-flex", className)}>
+    <div role="radiogroup" aria-label={t("common.language")} className={cn("rounded-full border border-line/70 bg-surface-2 p-0.5", className?.includes("hidden") ? "" : "inline-flex", className)}>
       {(
         [
           ["en", "EN"],
@@ -58,7 +63,7 @@ export function LanguageToggle({ className }: { className?: string }) {
           aria-checked={locale === code}
           onClick={() => setLocale(code)}
           className={cn(
-            "h-7 min-w-9 rounded-md px-2 text-[12.5px] font-semibold transition-colors",
+            "press h-7 min-w-9 rounded-full px-2.5 text-[12.5px] font-semibold transition-colors",
             locale === code ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink",
           )}
         >
@@ -69,25 +74,48 @@ export function LanguageToggle({ className }: { className?: string }) {
   );
 }
 
-function ThemeToggle() {
+function ThemeToggle({ className }: { className?: string }) {
   const { t } = useI18n();
-  const [theme, setTheme] = useState<ThemeChoice>(readTheme);
+  const { theme } = useAppearance();
   const isDark =
     theme === "dark" || (theme === "system" && typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches);
   return (
     <button
       type="button"
-      className="inline-flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink"
+      // Callers may hide it on phones ("hidden sm:inline-flex"); only add a display when they don't.
+      className={cn("press size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 hover:text-ink", /(^|\s)hidden(\s|$)/.test(className ?? "") ? "" : "inline-flex", className)}
       aria-label={isDark ? t("common.lightTheme") : t("common.darkTheme")}
       title={t("common.theme")}
-      onClick={() => {
-        const next = isDark ? "light" : "dark";
-        applyTheme(next);
-        setTheme(next);
-      }}
+      onClick={() => applyTheme(isDark ? "light" : "dark")}
     >
       {isDark ? <Sun size={18} /> : <Moon size={18} />}
     </button>
+  );
+}
+
+/** The accent colour, as swatches (Settings → Appearance has the same). */
+export function AccentPicker({ className }: { className?: string }) {
+  const { t } = useI18n();
+  const { accent } = useAppearance();
+  return (
+    <div role="radiogroup" aria-label={t("settings.accent")} className={cn("flex flex-wrap items-center gap-2", className)}>
+      {ACCENTS.map((a) => (
+        <button
+          key={a.key}
+          type="button"
+          role="radio"
+          aria-checked={accent === a.key}
+          aria-label={t(`settings.accents.${a.key}`)}
+          title={t(`settings.accents.${a.key}`)}
+          onClick={() => applyAccent(a.key)}
+          className={cn(
+            "press size-8 rounded-full ring-offset-2 ring-offset-surface transition-shadow",
+            accent === a.key ? "ring-2 ring-ink" : "ring-1 ring-line hover:ring-line-strong",
+          )}
+          style={{ backgroundImage: `linear-gradient(135deg, ${a.swatch}, ${a.swatch2})` }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -121,13 +149,13 @@ function NavItem({ mod, active, onClick }: { mod: ModuleDef; active: boolean; on
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[13.5px] transition-colors",
-        active ? "bg-accent-soft font-semibold text-accent-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
+        "press group flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
+        active ? "bg-accent bg-accent-grad font-semibold text-ink-inverse shadow-glow" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
       )}
     >
-      <Icon size={17} className={cn("shrink-0", active ? "text-accent" : "text-ink-3 group-hover:text-ink-2")} />
+      <Icon size={17} className={cn("shrink-0 transition-transform duration-200", active ? "text-ink-inverse" : "text-ink-3 group-hover:scale-110 group-hover:text-ink")} />
       <span className="min-w-0 flex-1 truncate">{t(mod.label)}</span>
-      {phaseBadge(mod) && <span className="rounded bg-surface-2 px-1.5 text-[10.5px] font-medium text-ink-3">P{phaseBadge(mod)}</span>}
+      {phaseBadge(mod) && <span className="rounded-full bg-surface-2 px-1.5 text-[10.5px] font-medium text-ink-3">P{phaseBadge(mod)}</span>}
     </button>
   );
 }
@@ -155,6 +183,57 @@ function NavList({ onNavigate }: { onNavigate?(): void }) {
               }}
             />
           ))}
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+/** Colour of each menu group's tiles in the phone launcher. */
+const GROUP_TINT: Record<ModuleDef["group"], string> = {
+  daily: "bg-tint-blue-soft text-tint-blue",
+  stock: "bg-tint-orange-soft text-tint-orange",
+  money: "bg-tint-green-soft text-tint-green",
+  people: "bg-tint-violet-soft text-tint-violet",
+  insights: "bg-tint-teal-soft text-tint-teal",
+  admin: "bg-tint-rose-soft text-tint-rose",
+};
+
+/** Phones: the menu as a launcher, a grid of coloured tiles per group. */
+function NavGrid({ onNavigate }: { onNavigate(): void }) {
+  const { route, navigate } = useRouter();
+  const { t } = useI18n();
+  const current = moduleForRoute(route);
+  const modules = visibleModules();
+  const groups = (Object.keys(GROUP_LABELS) as ModuleDef["group"][]).filter((g) => modules.some((m) => m.group === g));
+  return (
+    <nav className="flex flex-col gap-5" aria-label="Main">
+      {groups.map((g) => (
+        <div key={g} className="flex flex-col gap-2.5">
+          <p className="eyebrow px-1">{t(GROUP_LABELS[g])}</p>
+          <div className="stagger grid grid-cols-4 gap-x-1 gap-y-3">
+            {modules.filter((m) => m.group === g).map((m) => {
+              const Icon = m.icon;
+              const active = current?.key === m.key || sameRoute(route, m.route);
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => {
+                    navigate(m.route);
+                    onNavigate();
+                  }}
+                  className="press flex flex-col items-center gap-1.5 rounded-2xl px-0.5 py-1 text-center"
+                >
+                  <span className={cn("flex size-12 items-center justify-center rounded-2xl transition-shadow", active ? "bg-accent bg-accent-grad text-ink-inverse shadow-glow" : GROUP_TINT[g])}>
+                    <Icon size={21} />
+                  </span>
+                  <span className={cn("line-clamp-2 text-[11.5px] leading-tight", active ? "font-semibold text-ink" : "text-ink-2")}>{t(m.label)}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       ))}
     </nav>
@@ -193,9 +272,9 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
       type="button"
       onClick={() => void installApp()}
       title={t("app.installHint")}
-      className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium text-accent hover:bg-accent-soft"
+      className="press flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left text-[13px] font-medium text-ink hover:bg-surface-2"
     >
-      <Download size={16} />
+      <Download size={16} className="text-accent-2" />
       {t("app.install")}
     </button>
   ) : null;
@@ -207,7 +286,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           aria-label={t("auth.switchBusiness")}
           value={WORKSPACE.businessId ?? ""}
           onChange={(e) => void session.switchBusiness(e.target.value)}
-          className="h-9 w-full rounded-lg border border-line bg-surface px-2 text-[13px] text-ink"
+          className="h-9 w-full rounded-xl border border-line bg-surface px-2 text-[13px] text-ink"
         >
           {session.businesses.map((b) => (
             <option key={b.id} value={b.id} disabled={b.status === "suspended" || b.status === "closed"}>
@@ -216,7 +295,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           ))}
         </select>
       )}
-      <button type="button" onClick={signOut} className="h-9 rounded-lg px-2 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
+      <button type="button" onClick={signOut} className="press flex h-9 items-center gap-2 rounded-xl px-2.5 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
+        <LogOut size={15} className="text-ink-3" />
         {t("auth.signOut")}
       </button>
     </div>
@@ -224,34 +304,34 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
 
   const quickActions = (
     [
-      { label: t("dashboard.actions.createInvoice"), route: { name: "invoice-new" }, icon: <Receipt size={18} />, permission: "invoice.create" },
-      { label: t("dashboard.actions.newOrder"), route: { name: "planned", module: "orders" }, icon: <Plus size={18} />, permission: "order.create" },
-      { label: t("dashboard.actions.receivePayment"), route: { name: "planned", module: "payments" }, icon: <Plus size={18} />, permission: "payment.collect" },
-      { label: t("dashboard.actions.addCustomer"), route: { name: "customers" }, icon: <Users size={18} />, permission: "customer.create" },
-      { label: t("dashboard.actions.purchaseEntry"), route: { name: "planned", module: "purchases" }, icon: <Plus size={18} />, permission: "purchase.create" },
-      { label: t("dashboard.actions.addProduct"), route: { name: "products" }, icon: <Package size={18} />, permission: "product.create" },
-    ] satisfies Array<{ label: string; route: Route; icon: ReactNode; permission: string }>
+      { label: t("dashboard.actions.createInvoice"), route: { name: "invoice-new" }, icon: <Receipt size={22} />, tint: "bg-tint-blue-soft text-tint-blue", permission: "invoice.create" },
+      { label: t("dashboard.actions.newOrder"), route: { name: "planned", module: "orders" }, icon: <ClipboardList size={22} />, tint: "bg-tint-violet-soft text-tint-violet", permission: "order.create" },
+      { label: t("dashboard.actions.receivePayment"), route: { name: "planned", module: "payments" }, icon: <Wallet size={22} />, tint: "bg-tint-green-soft text-tint-green", permission: "payment.collect" },
+      { label: t("dashboard.actions.addCustomer"), route: { name: "customers" }, icon: <UserPlus size={22} />, tint: "bg-tint-orange-soft text-tint-orange", permission: "customer.create" },
+      { label: t("dashboard.actions.purchaseEntry"), route: { name: "planned", module: "purchases" }, icon: <ShoppingCart size={22} />, tint: "bg-tint-teal-soft text-tint-teal", permission: "purchase.create" },
+      { label: t("dashboard.actions.addProduct"), route: { name: "products" }, icon: <Package size={22} />, tint: "bg-tint-amber-soft text-tint-amber", permission: "product.create" },
+    ] satisfies Array<{ label: string; route: Route; icon: ReactNode; tint: string; permission: string }>
   ).filter((a) => allowed(a.permission));
 
   const bottomItems = (
     [
       { key: "home", label: t("nav.home"), icon: <House size={20} />, route: homeRoute() },
       { key: "customers", label: t("nav.customers"), icon: <Users size={20} />, route: { name: "customers" }, permission: "customer.view" },
-      { key: "create", label: t("nav.create"), icon: <Plus size={22} />, onClick: () => setCreateOpen(true), hidden: quickActions.length === 0 },
+      { key: "create", label: t("nav.create"), icon: <Plus size={24} strokeWidth={2.4} />, onClick: () => setCreateOpen(true), hidden: quickActions.length === 0 },
       { key: "products", label: t("nav.products"), icon: <Package size={20} />, route: { name: "products" }, permission: "product.view" },
       { key: "more", label: t("nav.more"), icon: <LayoutGrid size={20} />, onClick: () => setMoreOpen(true) },
     ] as Array<{ key: string; label: string; icon: ReactNode; route?: Route; onClick?(): void; permission?: string; hidden?: boolean }>
   ).filter((b) => !b.hidden && (!b.permission || allowed(b.permission)));
 
   return (
-    <div className="min-h-full lg:grid lg:grid-cols-[248px_1fr]">
-      {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-surface lg:flex">
-        <div className="flex h-16 items-center px-3">
+    <div className="min-h-full lg:grid lg:grid-cols-[256px_1fr]">
+      {/* Desktop sidebar: the menu on the accent-tinted navy. */}
+      <aside className="on-dark bg-side sticky top-0 hidden h-screen flex-col lg:flex">
+        <div className="flex h-16 items-center px-4">
           <BrandMark tagline />
         </div>
-        <div className="mx-3 mb-3 flex items-center gap-2.5 rounded-xl border border-line bg-surface-2 px-2.5 py-2">
-          <FirmLogo size={38} />
+        <div className="mx-3 mb-4 flex items-center gap-2.5 rounded-2xl border border-line bg-surface-2 px-2.5 py-2.5">
+          <FirmLogo size={38} className="rounded-xl" />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold text-ink" title={BUSINESS.name}>
               {BUSINESS.name}
@@ -263,13 +343,13 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             )}
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 [scrollbar-color:rgb(255_255_255/0.15)_transparent] [scrollbar-width:thin]">
           <NavList />
         </div>
         {installButton && <div className="px-3 pb-1">{installButton}</div>}
         {accountActions && <div className="px-3 pb-2">{accountActions}</div>}
-        <div className="flex items-center gap-3 border-t border-line px-4 py-3">
-          <span className="inline-flex size-8 items-center justify-center rounded-full bg-surface-3 font-display text-[12px] font-semibold text-ink-2">{initials}</span>
+        <div className="mx-3 mb-3 flex items-center gap-3 rounded-2xl border border-line bg-surface-2 px-3 py-2.5">
+          <span className={cn("inline-flex size-9 items-center justify-center rounded-full font-display text-[12.5px] font-semibold", tintFor(userName))}>{initials}</span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-medium text-ink">{userName}</p>
             <p className="text-[11.5px] text-ink-3">{roleLabel}</p>
@@ -277,7 +357,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           <button
             type="button"
             onClick={onOpenShortcuts}
-            className="inline-flex size-8 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-2 hover:text-ink"
+            className="press inline-flex size-8 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-3 hover:text-ink"
             aria-label={t("shortcuts.title")}
             title={t("shortcuts.title")}
           >
@@ -288,10 +368,10 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
 
       <div className="flex min-w-0 flex-col">
         {/* Top bar */}
-        <header className="sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-14 items-center gap-2 border-b border-line bg-surface/90 px-4 backdrop-blur lg:h-16 lg:px-6">
+        <header className="glass sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-14 items-center gap-2 border-b border-line/60 px-4 lg:h-16 lg:px-6">
           <button
             type="button"
-            className="-ml-1 inline-flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 lg:hidden"
+            className="press -ml-1 inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 lg:hidden"
             onClick={() => setMoreOpen(true)}
             aria-label={t("nav.more")}
           >
@@ -304,30 +384,30 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             type="button"
             onClick={onOpenSearch}
             aria-label={t("search.placeholder")}
-            className="ml-1 flex h-9 items-center gap-2 rounded-lg border border-line bg-surface-2 px-2.5 text-left text-[13px] text-ink-3 transition-colors hover:border-line-strong sm:min-w-0 sm:flex-1 sm:px-3 lg:max-w-md"
+            className="press ml-auto flex h-9 items-center gap-2 rounded-full border border-line/70 bg-surface-2/80 px-2.5 text-left text-[13px] text-ink-3 transition-colors hover:border-line-strong hover:bg-surface sm:ml-1 sm:min-w-0 sm:flex-1 sm:px-3.5 lg:max-w-md"
           >
             <Search size={16} className="shrink-0" />
             <span className="hidden min-w-0 flex-1 truncate sm:block">{t("search.placeholder")}</span>
             <Kbd keys="mod+k" className="hidden sm:inline-flex" />
           </button>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:ml-auto sm:gap-1.5">
             {LIVE ? <OfflineChip /> : <SyncChip />}
-            <LanguageToggle />
-            <ThemeToggle />
+            <LanguageToggle className="hidden sm:inline-flex" />
+            <ThemeToggle className="hidden sm:inline-flex" />
             {allowed("notification.view") && <button
               type="button"
-              className="relative inline-flex size-9 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2"
+              className="press relative inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2"
               aria-label={t("nav.notifications")}
               onClick={() => navigate({ name: "planned", module: "notifications" })}
             >
               <Bell size={18} />
-              {pendingOrders > 0 && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-danger" aria-hidden />}
+              {pendingOrders > 0 && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-danger ring-2 ring-surface" aria-hidden />}
             </button>}
             {route.name !== "invoice-new" && allowed("invoice.create") && (
               <button
                 type="button"
                 onClick={() => navigate({ name: "invoice-new" })}
-                className="ml-1 hidden h-9 items-center gap-2 rounded-lg bg-accent px-3.5 text-[13.5px] font-semibold text-ink-inverse shadow-card hover:bg-accent-hover lg:inline-flex"
+                className="press ml-1 hidden h-9 items-center gap-2 rounded-full bg-accent bg-accent-grad px-4 text-[13.5px] font-semibold text-ink-inverse shadow-glow transition-[filter,box-shadow] hover:shadow-lift hover:brightness-110 lg:inline-flex"
               >
                 <Plus size={16} />
                 {t("invoice.new")}
@@ -345,21 +425,22 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-[1480px] flex-1 px-4 pt-5 pb-28 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12">{children}</main>
+        <main className="mx-auto w-full max-w-[1480px] flex-1 px-4 pt-5 pb-32 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12">{children}</main>
       </div>
 
-      {/* Mobile bottom navigation */}
+      {/* Phones: a floating tab bar with the Create button in the middle. */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur lg:hidden"
+        className="glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] border border-line/70 shadow-pop lg:hidden"
+        style={{ gridTemplateColumns: `repeat(${bottomItems.length}, minmax(0, 1fr))` }}
         aria-label="Primary"
       >
         {bottomItems.map((item) => {
           const active = item.route ? sameRoute(route, item.route) : false;
           if (item.key === "create") {
             return (
-              <button key={item.key} type="button" onClick={item.onClick} className="flex flex-col items-center justify-center gap-0.5 py-1.5" aria-label={item.label}>
-                <span className="-mt-5 flex size-13 items-center justify-center rounded-2xl bg-accent text-ink-inverse shadow-pop">{item.icon}</span>
-                <span className="text-[11px] font-medium text-ink-2">{item.label}</span>
+              <button key={item.key} type="button" onClick={item.onClick} className="press flex flex-col items-center justify-end pb-1.5" aria-label={item.label}>
+                <span className="-mt-7 mb-0.5 flex size-14 items-center justify-center rounded-[20px] bg-accent bg-accent-grad text-ink-inverse shadow-glow ring-4 ring-bg">{item.icon}</span>
+                <span className="text-[10.5px] font-semibold text-ink-2">{item.label}</span>
               </button>
             );
           }
@@ -369,9 +450,9 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
               type="button"
               onClick={() => (item.route ? navigate(item.route) : item.onClick?.())}
               aria-current={active ? "page" : undefined}
-              className={cn("flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium", active ? "text-accent" : "text-ink-3")}
+              className={cn("press flex flex-col items-center justify-center gap-1 text-[10.5px] font-semibold", active ? "text-accent-ink" : "text-ink-3")}
             >
-              {item.icon}
+              <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200", active ? "bg-accent-soft text-accent" : "")}>{item.icon}</span>
               {item.label}
             </button>
           );
@@ -379,23 +460,36 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
       </nav>
 
       <Dialog open={moreOpen} onOpenChange={setMoreOpen} title={BUSINESS.name} {...(BUSINESS.gstin ? { description: `GSTIN ${BUSINESS.gstin}` } : {})} closeLabel={t("common.close")}>
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-2.5">
-          <FirmLogo size={44} />
-          <div className="min-w-0 flex-1 text-[12.5px] text-ink-2">
-            {[BUSINESS.address, BUSINESS.city].filter(Boolean).join(", ") && <p className="truncate">{[BUSINESS.address, BUSINESS.city].filter(Boolean).join(", ")}</p>}
-            {[BUSINESS.phone, BUSINESS.email].filter(Boolean).length > 0 && <p className="truncate">{[BUSINESS.phone, BUSINESS.email].filter(Boolean).join(" · ")}</p>}
+        <div className="bg-hero on-dark relative mb-5 overflow-hidden rounded-2xl p-3.5">
+          <div className="dots pointer-events-none absolute inset-0 opacity-60" aria-hidden />
+          <div className="relative flex items-center gap-3">
+            <FirmLogo size={46} className="rounded-xl" />
+            <div className="min-w-0 flex-1 text-[12.5px] text-ink-2">
+              <p className="truncate text-[14px] font-semibold text-ink">{userName}</p>
+              {[BUSINESS.address, BUSINESS.city].filter(Boolean).join(", ") && <p className="truncate">{[BUSINESS.address, BUSINESS.city].filter(Boolean).join(", ")}</p>}
+              {[BUSINESS.phone, BUSINESS.email].filter(Boolean).length > 0 && <p className="truncate">{[BUSINESS.phone, BUSINESS.email].filter(Boolean).join(" · ")}</p>}
+            </div>
           </div>
         </div>
-        <div className="mb-4 sm:hidden">
-          <LanguageToggle />
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-line/70 bg-surface-2/60 px-3 py-3 lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <LanguageToggle />
+            <ThemeToggle className="bg-surface shadow-card" />
+          </div>
+          <AccentPicker className="justify-between" />
         </div>
-        <NavList onNavigate={() => setMoreOpen(false)} />
-        {installButton && <div className="mt-3">{installButton}</div>}
+        <div className="lg:hidden">
+          <NavGrid onNavigate={() => setMoreOpen(false)} />
+        </div>
+        <div className="hidden lg:block">
+          <NavList onNavigate={() => setMoreOpen(false)} />
+        </div>
+        {installButton && <div className="mt-4">{installButton}</div>}
         {accountActions && <div className="mt-3">{accountActions}</div>}
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen} title={t("dashboard.quickActions")} closeLabel={t("common.close")}>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="stagger grid grid-cols-3 gap-x-2 gap-y-5 pb-2">
           {quickActions.map((a) => (
             <button
               key={a.label}
@@ -404,10 +498,10 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
                 setCreateOpen(false);
                 navigate(a.route);
               }}
-              className="flex min-h-16 items-center gap-3 rounded-xl border border-line bg-surface px-3.5 text-left text-[14px] font-medium text-ink hover:border-accent"
+              className="press flex flex-col items-center gap-2 rounded-2xl px-1 py-1 text-center"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">{a.icon}</span>
-              {a.label}
+              <span className={cn("flex size-14 items-center justify-center rounded-2xl shadow-card", a.tint)}>{a.icon}</span>
+              <span className="text-[12.5px] leading-tight font-medium text-ink">{a.label}</span>
             </button>
           ))}
         </div>

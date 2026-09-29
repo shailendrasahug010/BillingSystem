@@ -250,7 +250,7 @@ function Reminders() {
           <div className="scroll-x">
             <table className="w-full min-w-[620px] text-[13.5px]">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                   <th className="w-10 px-3 py-2">
                     <Checkbox label={<span className="sr-only">{t("messages.selectAll")}</span>} checked={chosen.length > 0 && chosen.length === sendable.length} onChange={(v) => setPicked(new Set(v ? sendable.map((c) => c.id) : []))} />
                   </th>

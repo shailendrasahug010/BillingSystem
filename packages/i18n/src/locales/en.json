@@ -709,7 +709,16 @@
     "removeLogo": "Remove logo",
     "logoSaved": "Logo saved",
     "logoRemoved": "Logo removed",
-    "logoPreview": "How bills will show your firm"
+    "logoPreview": "How bills will show your firm",
+    "accent": "Colour",
+    "accentHint": "The app's main colour: buttons, the menu and highlights. Paid, due and overdue keep their own colours.",
+    "accents": {
+      "royal": "Royal blue",
+      "emerald": "Emerald",
+      "violet": "Violet",
+      "saffron": "Saffron",
+      "teal": "Teal"
+    }
   },
   "gst": {
     "b2b": "B2B",

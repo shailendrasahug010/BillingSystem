@@ -42,9 +42,9 @@ export function BarList({
                 <span className={cn("min-w-0 truncate", hover === item.id ? "text-ink" : "text-ink-2")}>{item.label}</span>
                 <span className="num shrink-0 font-medium text-ink">{format(item.amount)}</span>
               </div>
-              <div className="h-2 w-full">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
                 <div
-                  className="h-full rounded-r-[4px] transition-[width,opacity] duration-300"
+                  className="bar-grow h-full rounded-full transition-[width,opacity] duration-300"
                   style={{ width: `${Math.max(1.5, pct)}%`, background: color, opacity: hover && hover !== item.id ? 0.45 : 1 }}
                 />
               </div>
@@ -84,7 +84,7 @@ export function AgingColumns({
           <span className="num text-[12px] font-medium text-ink">{format(b.amount)}</span>
           <div className="flex w-full max-w-[40px] flex-1 items-end">
             <div
-              className="w-full rounded-t-[4px] transition-opacity"
+              className="bar-rise w-full rounded-t-lg transition-opacity"
               style={{
                 height: `${Math.max(2, (b.amount / max) * 100)}%`,
                 background: ramp[i],

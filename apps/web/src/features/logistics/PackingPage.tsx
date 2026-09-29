@@ -255,7 +255,7 @@ function PackDialog({ order, onClose }: { order: QueueOrder | null; onClose(): v
         <div className="scroll-x rounded-lg border border-line">
           <table className="w-full min-w-[640px] text-[13px]">
             <thead>
-              <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+              <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                 <th className="py-2 pl-3 font-medium">{t("invoice.product")}</th>
                 <th className="py-2 pl-2 text-right font-medium">{t("packing.ordered")}</th>
                 <th className="py-2 pl-2 text-right font-medium">{t("packing.remaining")}</th>

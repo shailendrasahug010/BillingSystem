@@ -25,17 +25,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-[60] flex flex-col items-center gap-2 px-4 lg:bottom-6 lg:items-end lg:px-6"
+        className="pointer-events-none fixed inset-x-0 bottom-[calc(92px+env(safe-area-inset-bottom,0px))] z-[60] flex flex-col items-center gap-2 px-4 lg:bottom-6 lg:items-end lg:px-6"
       >
         {items.map((t) => {
           const Icon = t.tone === "success" ? CircleCheckBig : t.tone === "offline" ? CloudOff : t.tone === "danger" ? TriangleAlert : Info;
           return (
             <div
               key={t.id}
-              className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-line bg-surface px-4 py-3 shadow-pop animate-pop"
+              className="glass pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border border-line/70 px-3.5 py-3 shadow-pop animate-sheet"
               role="status"
             >
-              <Icon size={18} className={cn("mt-0.5 shrink-0", t.tone === "success" ? "text-good" : t.tone === "offline" ? "text-warn" : t.tone === "danger" ? "text-danger" : "text-accent")} />
+              <span
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center rounded-full",
+                  t.tone === "success" ? "bg-good-soft text-good" : t.tone === "offline" ? "bg-warn-soft text-warn" : t.tone === "danger" ? "bg-danger-soft text-danger" : "bg-accent-soft text-accent",
+                )}
+              >
+                <Icon size={17} />
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-medium text-ink">{t.title}</p>
                 {t.body && <p className="text-[13px] text-ink-3">{t.body}</p>}

@@ -132,7 +132,7 @@ export function ProductsPage() {
           <div className="scroll-x">
             <table className="w-full min-w-[860px] text-[13.5px]">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                   <th className="px-4 py-2.5 font-medium">{t("product.name")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("product.brand")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("product.hsn")}</th>

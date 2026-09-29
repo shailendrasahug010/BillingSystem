@@ -6,7 +6,7 @@ import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
-import { EmptyState, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
+import { Avatar, EmptyState, Segmented, Skeleton, useDelayedReady } from "../../components/ui/misc";
 import { allowed, CUSTOMERS, ROUTES, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { customerInsight, useStoreVersion } from "../../data/store";
@@ -153,7 +153,7 @@ export function CustomersPage() {
           <>
             <table className="hidden w-full text-[13.5px] md:table">
               <thead>
-                <tr className="border-b border-line bg-surface-2 text-left text-[12px] text-ink-3">
+                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
                   <th className="px-4 py-2.5 font-medium">{t("customer.name")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("customer.gstin")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("customer.route")}</th>
@@ -170,12 +170,17 @@ export function CustomersPage() {
               </thead>
               <tbody>
                 {rows.map(({ c, ins }) => (
-                  <tr key={c.id} onClick={() => navigate({ name: "customer", customerId: c.id })} className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2">
+                  <tr key={c.id} onClick={() => navigate({ name: "customer", customerId: c.id })} className="cursor-pointer border-b border-line/70 transition-colors last:border-b-0 hover:bg-accent-soft/40">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-ink">{c.businessName}</p>
-                      <p className="text-[12.5px] text-ink-3">
-                        {c.name} · {c.city} · <span className="num">{c.mobile}</span>
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <Avatar name={c.businessName} />
+                        <div className="min-w-0">
+                          <p className="font-medium text-ink">{c.businessName}</p>
+                          <p className="text-[12.5px] text-ink-3">
+                            {c.name} · {c.city} · <span className="num">{c.mobile}</span>
+                          </p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-3 py-3">{c.gstin ? <span className="font-mono text-[12px] text-ink-2">{c.gstin}</span> : <Badge>{t("customer.b2c")}</Badge>}</td>
                     <td className="px-3 py-3 text-ink-2">{c.route}</td>
@@ -210,11 +215,12 @@ export function CustomersPage() {
             <ul className="divide-y divide-line md:hidden">
               {rows.map(({ c, ins }) => (
                 <li key={c.id}>
-                  <button type="button" onClick={() => navigate({ name: "customer", customerId: c.id })} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
+                  <button type="button" onClick={() => navigate({ name: "customer", customerId: c.id })} className="press flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-surface-2">
+                    <Avatar name={c.businessName} className="size-10" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[15px] font-medium text-ink">{c.businessName}</p>
                       <p className="truncate text-[12.5px] text-ink-3">
-                        {c.city} · {c.route}
+                        {[c.city, c.route].filter(Boolean).join(" · ")}
                       </p>
                     </div>
                     <div className="text-right">

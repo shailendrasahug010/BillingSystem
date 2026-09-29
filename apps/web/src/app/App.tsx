@@ -27,7 +27,6 @@ import { SessionProvider, useSession } from "./session";
 import { I18nProvider, useI18n } from "./i18n";
 import { RouterProvider, useRouter, type Route } from "./router";
 import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, useShortcuts } from "./shortcuts";
-import { applyTheme, readTheme } from "./theme";
 
 /** Module screens load on first use, so the billing screens start fast on slow connections. */
 const GstPage = lazy(() => import("../features/gst/GstPage").then((m) => ({ default: m.GstPage })));
@@ -246,7 +245,10 @@ function Root() {
 
   return (
     <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
-      <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
+      {/* Each screen rises in as it opens. */}
+      <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className="animate-page">
+        <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
+      </div>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </AppShell>
@@ -254,7 +256,6 @@ function Root() {
 }
 
 export function App() {
-  useEffect(() => applyTheme(readTheme()), []);
   return (
     <I18nProvider>
       <SessionProvider>

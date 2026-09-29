@@ -53,10 +53,14 @@ const SessionContext = createContext<SessionValue | null>(null);
  * (encrypted, opened with the person's device key from the server),
  * registers the device for offline bills and sends any work waiting.
  */
-async function keepOnDevice(res: SessionResponse, me: MeResponse, data: WorkspaceData): Promise<void> {
+async function keepOnDevice(res: SessionResponse, me: MeResponse, data: WorkspaceData, password?: string): Promise<void> {
   const userId = res.user.id;
   const businessId = me.business!.id;
-  if (await unlockOnline(userId)) void dropUnlockedSnapshots();
+  if (await unlockOnline(userId)) {
+    void dropUnlockedSnapshots();
+    // Just typed at sign-in: from now on it also opens this copy without internet.
+    if (password) await rememberPassword(userId, password).catch(() => false);
+  }
   await setOfflineScope(userId, businessId);
   setOfflineMode(false);
   // Bills still waiting (or refused) stay out of the stock and balances just loaded.
@@ -129,7 +133,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const enter = useCallback(
-    async (res: SessionResponse | null) => {
+    async (res: SessionResponse | null, password?: string) => {
       setSessionState(res);
       queryClient.clear();
       offlineMode.current = false;
@@ -159,7 +163,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           return;
         }
         const data = await hydrateWorkspace(profile);
-        await keepOnDevice(res, profile, data);
+        await keepOnDevice(res, profile, data, password);
         setMe(profile);
         setError(null);
         setStatus("ready");
@@ -282,8 +286,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (call: () => Promise<SessionResponse>, password?: string) => {
       const res = await call();
       setSession(res);
-      await enter(res);
-      if (password) await rememberPassword(res.user.id, password).catch(() => false);
+      await enter(res, password);
     },
     [enter],
   );

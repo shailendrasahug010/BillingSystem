@@ -493,7 +493,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
               onBackToSearch={() => productRef.current?.focus()}
             />
           </section>
-          <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom,0px))] z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
+          <div className="glass fixed inset-x-3 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop">
             <div className="mx-auto flex max-w-xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
@@ -504,7 +504,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
               </Button>
             </div>
           </div>
-          <div className="h-20" aria-hidden />
+          <div className="h-24" aria-hidden />
         </div>
       )}
 
