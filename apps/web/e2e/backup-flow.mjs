@@ -2,7 +2,8 @@
  * End-to-end check of Backup & Restore: sign up -> a customer, a product and
  * a bill -> Backup & Restore: download a backup, then one protected with a
  * password -> both listed -> Restore: the protected file is checked (firm,
- * date, what is in it), then restored as a NEW business the app switches to,
+ * date, what is in it), then (with the owner's own password typed again)
+ * restored as a NEW business the app switches to,
  * with the bill in it; the original business is still there.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true:
@@ -107,6 +108,9 @@ await page.getByText(/backup of/).waitFor({ timeout: 15000 });
 const summary = await page.getByText(/backup of/).locator("xpath=ancestor::section[1]").innerText();
 if (!summary.includes("Devi Provision Stores") || !/Invoices\s*1/.test(summary)) errors.push(`summary: ${summary}`);
 await page.getByText(/I understand this creates a new business/).click();
+// Restoring needs the person's own password again, even with the session open.
+if (!(await page.getByRole("button", { name: "Restore as a new business" }).isDisabled())) errors.push("restore allowed without the account password");
+await page.getByLabel("Your Digital Bahi password", { exact: true }).fill(password);
 await page.screenshot({ path: `${OUT}/backup-2-restore-check.png`, fullPage: true });
 await page.getByRole("button", { name: "Restore as a new business" }).click();
 await toast("Restored: Devi Provision Stores (restored)");

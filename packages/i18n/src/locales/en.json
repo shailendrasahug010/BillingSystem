@@ -918,7 +918,9 @@
     "BACKUP_INCONSISTENT": "The backup has entries that do not fit together ({{table}}). It cannot be restored.",
     "BACKUP_TOO_LARGE_FOR_EMAIL": "The backup is {{mb}} MB, too large for email. Download it instead.",
     "USERNAME_TAKEN": "This user ID is already in use. Choose another.",
-    "MEMBER_ACCOUNT_SHARED": "This person also uses Digital Bahi in another business, so only they can change their user ID or password."
+    "MEMBER_ACCOUNT_SHARED": "This person also uses Digital Bahi in another business, so only they can change their user ID or password.",
+    "ACCOUNT_PASSWORD_REQUIRED": "Type your Digital Bahi password to restore.",
+    "ACCOUNT_PASSWORD_WRONG": "That is not your Digital Bahi password."
   },
   "validation": {
     "required": "This field is required",
@@ -2181,7 +2183,9 @@
     "restoring": "Restoring…",
     "restored": "Restored: {{name}}",
     "restoredRows_one": "{{count}} record restored",
-    "restoredRows_other": "{{count}} records restored"
+    "restoredRows_other": "{{count}} records restored",
+    "accountPassword": "Your Digital Bahi password",
+    "accountPasswordHint": "The password you sign in with, to confirm it is you."
   },
   "priceLists": {
     "title": "Price lists",

@@ -195,11 +195,13 @@ function RestoreCard() {
   const session = useSession();
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [understood, setUnderstood] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const headers = () => (password ? { "x-backup-passphrase": btoa(String.fromCharCode(...new TextEncoder().encode(password))) } : undefined);
+  const b64 = (v: string) => btoa(String.fromCharCode(...new TextEncoder().encode(v)));
+  const headers = () => (password ? { "x-backup-passphrase": b64(password) } : undefined);
 
   const check = async () => {
     if (!file) return;
@@ -220,7 +222,8 @@ function RestoreCard() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.upload<{ session: SessionResponse; counts: Record<string, number> }>("/backups/restore", file, headers() ? { headers: headers()! } : {});
+      // The person's own sign-in password again: an open session alone cannot restore.
+      const res = await api.upload<{ session: SessionResponse; counts: Record<string, number> }>("/backups/restore", file, { headers: { ...headers(), "x-account-password": b64(accountPassword) } });
       const rows = Object.values(res.counts).reduce((a, b) => a + b, 0);
       await session.adopt(res.session);
       toast({ tone: "success", title: t("backup.restored", { name: res.session.business?.tradeName ?? "" }), body: t("backup.restoredRows", { count: rows }) });
@@ -271,8 +274,11 @@ function RestoreCard() {
               ))}
             </dl>
             <Checkbox label={t("backup.understand", { name: `${manifest.business.tradeName ?? manifest.business.legalName} (restored)`, today: date(TODAY) })} checked={understood} onChange={setUnderstood} />
+            <div className="max-w-sm">
+              <Secret id="restore-account-password" label={t("backup.accountPassword")} hint={t("backup.accountPasswordHint")} value={accountPassword} onChange={setAccountPassword} />
+            </div>
             <div>
-              <Button variant="primary" icon={<DatabaseBackup size={16} />} disabled={!understood || busy} onClick={() => void restore()}>
+              <Button variant="primary" icon={<DatabaseBackup size={16} />} disabled={!understood || !accountPassword || busy} onClick={() => void restore()}>
                 {busy ? t("backup.restoring") : t("backup.restore")}
               </Button>
             </div>

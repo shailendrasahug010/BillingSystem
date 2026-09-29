@@ -10,6 +10,7 @@ import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, unauthorized } from "../../lib/errors.js";
 import { makeBackup, manifestOf, openBackup, restoreInto } from "../../services/backup.js";
+import { verifyPassword } from "../../lib/security.js";
 import { MAX_OWNED_BUSINESSES } from "../identity/businesses.js";
 import { listBusinesses, sessionResponse, setSessionBusiness } from "../identity/sessions.js";
 import { channelsFor, ready } from "../messaging/routes.js";
@@ -21,6 +22,9 @@ const EmailBody = z.strictObject({ passphrase: Passphrase, to: z.email().max(200
 const RestoreQuery = z.object({ dryRun: z.enum(["true", "false"]).optional() });
 
 const MAX_RESTORE_BYTES = 200 * 1024 * 1024;
+/** Wrong account passwords before the account is locked for a while (as at sign-in). */
+const MAX_REAUTH_FAILURES = 5;
+const REAUTH_LOCK_MINUTES = 15;
 const MAX_EMAIL_BYTES = 20 * 1024 * 1024;
 
 const slug = (s: string) =>
@@ -146,7 +150,10 @@ export const backupsModule: ApiModule = async (app, deps) => {
    * Restores a backup file as a new business owned by the caller and moves
    * the session into it. With ?dryRun=true only reads the file and says what
    * is in it. The password (if the file has one) comes base64-encoded in the
-   * X-Backup-Passphrase header, so it stays out of URLs and logs.
+   * X-Backup-Passphrase header, so it stays out of URLs and logs. The restore
+   * itself also needs the person's own Digital Bahi password again
+   * (X-Account-Password, base64): an unattended open session is not enough
+   * to create a business from a file.
    */
   r.post(
     "/backups/restore",
@@ -163,6 +170,26 @@ export const backupsModule: ApiModule = async (app, deps) => {
 
       const [user] = await deps.db.select().from(schema.users).where(eq(schema.users.id, ctx.userId));
       if (!user?.isActive) throw unauthorized();
+      const accountHeader = request.headers["x-account-password"];
+      const accountPassword = typeof accountHeader === "string" && accountHeader ? Buffer.from(accountHeader, "base64").toString("utf8") : "";
+      if (!accountPassword) throw badRequest("ACCOUNT_PASSWORD_REQUIRED", {}, "accountPassword");
+      const at = deps.clock.now();
+      if (user.lockedUntil && Date.parse(user.lockedUntil) > at.getTime()) {
+        throw new ApiError(429, "ACCOUNT_LOCKED", { retryAfter: Math.ceil((Date.parse(user.lockedUntil) - at.getTime()) / 1000) });
+      }
+      if (!(await verifyPassword(user.passwordHash, accountPassword))) {
+        await deps.db
+          .update(schema.users)
+          .set({
+            failedLoginCount: sql`${schema.users.failedLoginCount} + 1`,
+            lockedUntil: sql`case when ${schema.users.failedLoginCount} + 1 >= ${MAX_REAUTH_FAILURES}
+              then ${new Date(at.getTime() + REAUTH_LOCK_MINUTES * 60_000).toISOString()}::timestamptz else ${schema.users.lockedUntil} end`,
+          })
+          .where(eq(schema.users.id, user.id));
+        await withTenant(deps.db, ctx, (tx) => audit(tx, ctx, { action: "backup.restore_refused", entityType: "business", entityId: ctx.businessId, changes: { reason: "wrong account password" } }));
+        throw badRequest("ACCOUNT_PASSWORD_WRONG", {}, "accountPassword");
+      }
+      if (user.failedLoginCount > 0) await deps.db.update(schema.users).set({ failedLoginCount: 0 }).where(eq(schema.users.id, user.id));
       const owned = (await listBusinesses(deps.db, user.id)).filter((b) => b.isOwner).length;
       if (owned >= MAX_OWNED_BUSINESSES) throw conflict("BUSINESS_LIMIT_REACHED", { max: MAX_OWNED_BUSINESSES });
 

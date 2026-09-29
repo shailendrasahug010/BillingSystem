@@ -13,8 +13,14 @@ describe.skipIf(!hasDatabase)("backup and restore", () => {
   const get = (url: string, token = owner.token) => call(t.app, "GET", url, { token });
   const raw = (method: "POST", url: string, token: string, payload: Buffer | object, headers: Record<string, string> = {}) =>
     t.app.inject({ method, url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}`, ...(Buffer.isBuffer(payload) ? { "content-type": "application/octet-stream" } : {}), ...headers }, payload });
-  const restore = (file: Buffer, opts: { dryRun?: boolean; passphrase?: string; token?: string } = {}) =>
-    raw("POST", `/backups/restore${opts.dryRun ? "?dryRun=true" : ""}`, opts.token ?? owner.token, file, opts.passphrase ? { "x-backup-passphrase": Buffer.from(opts.passphrase).toString("base64") } : {});
+  /** The owner's own password goes along unless the test says otherwise (null: none). */
+  const restore = (file: Buffer, opts: { dryRun?: boolean; passphrase?: string; token?: string; accountPassword?: string | null } = {}) => {
+    const account = opts.accountPassword === undefined ? owner.password : opts.accountPassword;
+    return raw("POST", `/backups/restore${opts.dryRun ? "?dryRun=true" : ""}`, opts.token ?? owner.token, file, {
+      ...(opts.passphrase ? { "x-backup-passphrase": Buffer.from(opts.passphrase).toString("base64") } : {}),
+      ...(account ? { "x-account-password": Buffer.from(account).toString("base64") } : {}),
+    });
+  };
   /** Opens an unprotected backup, lets the test change it, and packs it again. */
   const tamper = (file: Buffer, change: (doc: { tables: Record<string, Array<Record<string, unknown>>> }) => void) => {
     const doc = JSON.parse(gunzipSync(file.subarray(6)).toString());
@@ -69,6 +75,17 @@ describe.skipIf(!hasDatabase)("backup and restore", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().manifest).toMatchObject({ format: "digital-bahi-backup", business: { legalName: "Laxmi Traders" }, counts: { invoices: 1 } });
     expect((await get("/me")).body.business.legalName).toBe("Laxmi Traders");
+  });
+
+  it("asks for the person's own password again before restoring", async () => {
+    const missing = await restore(backup, { accountPassword: null });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json().error).toMatchObject({ code: "ACCOUNT_PASSWORD_REQUIRED", field: "accountPassword" });
+    const wrong = await restore(backup, { accountPassword: "not-my-password" });
+    expect(wrong.json().error).toMatchObject({ code: "ACCOUNT_PASSWORD_WRONG", field: "accountPassword" });
+    // Nothing was created, and checking a file never needs it.
+    expect((await get("/businesses")).body.data).toHaveLength(1);
+    expect((await restore(backup, { dryRun: true, accountPassword: null })).statusCode).toBe(200);
   });
 
   it("restores into a new business with everything in place, the original untouched", async () => {
