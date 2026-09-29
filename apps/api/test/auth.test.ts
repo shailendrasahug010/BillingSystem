@@ -216,6 +216,32 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
       expect(res.body.error.code).toBe("SESSION_REVOKED");
     });
 
+    it("hands a person's device key only to their signed-in sessions, the same each time", async () => {
+      const a = await signup(t);
+      const b = await signup(t);
+      const first = await call(t.app, "GET", "/me/device-key", { token: a.token });
+      expect(first.status).toBe(200);
+      expect(first.headers["cache-control"]).toBe("private, no-store");
+      expect(Buffer.from(first.body.key, "base64")).toHaveLength(32);
+      expect((await call(t.app, "GET", "/me/device-key", { token: a.token })).body.key).toBe(first.body.key);
+      expect((await call(t.app, "GET", "/me/device-key", { token: b.token })).body.key).not.toBe(first.body.key);
+      expect((await call(t.app, "GET", "/me/device-key")).status).toBe(401);
+      // Kept encrypted in the database.
+      const stored = (await t.owner.query("select device_key from users where id = $1", [a.userId])).rows[0].device_key as string;
+      expect(stored).not.toContain(first.body.key);
+    });
+
+    it("checks the signed-in person's password without a new session, counting wrong tries", async () => {
+      const s = await signup(t);
+      const check = (password: string) => call(t.app, "POST", "/auth/password/check", { token: s.token, body: { password } });
+      expect((await check(s.password)).status).toBe(204);
+      const wrong = await check("not-my-password");
+      expect(wrong.status).toBe(400);
+      expect(wrong.body.error).toMatchObject({ code: "INVALID_CREDENTIALS", field: "password" });
+      expect((await t.owner.query("select failed_login_count from users where id = $1", [s.userId])).rows[0].failed_login_count).toBe(1);
+      expect((await call(t.app, "POST", "/auth/password/check", { body: { password: s.password } })).status).toBe(401);
+    });
+
     it("rejects missing and forged access tokens", async () => {
       expect((await call(t.app, "GET", "/me")).body.error.code).toBe("UNAUTHORIZED");
       expect((await call(t.app, "GET", "/me", { token: "x.y.z" })).body.error.code).toBe("TOKEN_INVALID");

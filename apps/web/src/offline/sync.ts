@@ -6,6 +6,7 @@ import type { PrintableInvoice } from "../features/invoice/printable";
 import { api, ApiError } from "../lib/api";
 import { loadDevice, type DeviceRecord } from "./device";
 import { idbAll, idbDelete, idbGet, idbPut } from "./idb";
+import { isSealed, seal, unseal, type Sealed } from "./vault";
 
 /**
  * Work done without a connection waits here (on the device, in IndexedDB)
@@ -165,12 +166,57 @@ export function onSynced(listener: (count: number) => void): () => void {
 const syncedKey = () => `synced:${scope!.userId}:${scope!.businessId}`;
 const byOrder = (a: QueuedEntry, b: QueuedEntry) => a.savedAt.localeCompare(b.savedAt) || a.id.localeCompare(b.id);
 
+/** How an entry is stored: who and when in the clear (to find and order them), the rest encrypted. */
+interface StoredEntry {
+  id: string;
+  userId: string;
+  businessId: string;
+  savedAt: string;
+  sealed: Sealed;
+}
+const entryLabel = (id: string) => `outbox:${id}`;
+
+/** Keeps an entry on the device, encrypted; false when it cannot (storage blocked, copy locked). */
+async function putEntry(e: QueuedEntry): Promise<boolean> {
+  const sealed = await seal(e, entryLabel(e.id));
+  if (!sealed) return false;
+  return idbPut("outbox", { id: e.id, userId: e.userId, businessId: e.businessId, savedAt: e.savedAt, sealed } satisfies StoredEntry);
+}
+
+async function readEntries(userId: string, businessId: string): Promise<QueuedEntry[]> {
+  const out: QueuedEntry[] = [];
+  for (const row of await idbAll<StoredEntry | QueuedEntry>("outbox")) {
+    if (row.userId !== userId || row.businessId !== businessId) continue;
+    if ("sealed" in row && isSealed(row.sealed)) {
+      const e = await unseal<QueuedEntry>(row.sealed, entryLabel(row.id));
+      if (e) out.push(e);
+      continue;
+    }
+    // Kept before the device copy was encrypted: encrypted now (left as it is if the copy is locked).
+    const plain = row as QueuedEntry;
+    await putEntry(plain);
+    out.push(plain);
+  }
+  return out.sort(byOrder);
+}
+
+async function readSynced(): Promise<SyncedEntry[]> {
+  const stored = await idbGet<unknown>("kv", syncedKey());
+  if (isSealed(stored)) return (await unseal<SyncedEntry[]>(stored, syncedKey())) ?? [];
+  return Array.isArray(stored) ? (stored as SyncedEntry[]) : [];
+}
+
+async function saveSynced(history: SyncedEntry[]): Promise<void> {
+  const sealed = await seal(history, syncedKey());
+  if (sealed) await idbPut("kv", sealed, syncedKey());
+}
+
 async function reload(): Promise<void> {
   if (!scope) return;
   const { userId, businessId } = scope;
-  const [all, synced, device] = await Promise.all([idbAll<QueuedEntry>("outbox"), idbGet<SyncedEntry[]>("kv", syncedKey()), loadDevice(userId, businessId)]);
+  const [entries, synced, device] = await Promise.all([readEntries(userId, businessId), readSynced(), loadDevice(userId, businessId)]);
   if (scope?.userId !== userId || scope.businessId !== businessId) return;
-  set({ entries: all.filter((e) => e.userId === userId && e.businessId === businessId).sort(byOrder), synced: synced ?? [], device: device?.seriesCode ? device : null });
+  set({ entries, synced, device: device?.seriesCode ? device : null });
 }
 
 /** Points the queue at the signed-in user and business (work of others stays on the device, untouched). */
@@ -242,7 +288,7 @@ function applyEffects(e: QueuedEntry, sign: 1 | -1): void {
 
 /** Keeps work done offline; its effect on stock, balances and customers shows on this device at once. */
 export async function queueEntry(entry: QueuedEntry): Promise<boolean> {
-  if (!(await idbPut("outbox", entry))) return false;
+  if (!(await putEntry(entry))) return false;
   applyEffects(entry, 1);
   touch();
   set({ entries: [...state.entries.filter((x) => x.id !== entry.id), entry].sort(byOrder) });
@@ -293,7 +339,7 @@ export async function retryEntry(id: string): Promise<void> {
   if (!e) return;
   const overwrite = kindOf(e) === "customer-edit" && e.error?.code === "VERSION_CONFLICT";
   const next = { ...e, status: "pending", error: null, ...(overwrite ? { version: null } : {}) } as QueuedEntry;
-  await idbPut("outbox", next);
+  await putEntry(next);
   set({ entries: state.entries.map((x) => (x.id === id ? next : x)) });
   await syncNow();
 }
@@ -365,14 +411,14 @@ export function syncNow(): Promise<number> {
           const result = await send(e);
           await idbDelete("outbox", e.id);
           const history = [{ ...result, id: e.id, syncedAt: new Date().toISOString() }, ...state.synced].slice(0, 30);
-          await idbPut("kv", history, syncedKey());
+          await saveSynced(history);
           set({ entries: state.entries.filter((x) => x.id !== e.id), synced: history });
           done += 1;
         } catch (err) {
           const error = err instanceof ApiError ? err : new ApiError(0, "network");
           if (error.status >= 400 && error.status < 500 && ![401, 408, 429].includes(error.status)) {
             const failed = { ...e, status: "failed", error: { status: error.status, code: error.code, params: error.params } } as QueuedEntry;
-            await idbPut("outbox", failed);
+            await putEntry(failed);
             set({ entries: state.entries.map((x) => (x.id === e.id ? failed : x)) });
             if (kindOf(e) === "customer") blocked.add((e as CustomerEntry).customerId);
             continue;

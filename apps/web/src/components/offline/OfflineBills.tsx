@@ -1,14 +1,18 @@
 import { translateError } from "@vyapaar/i18n";
-import { Cloud, CloudOff, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { Cloud, CloudOff, LockKeyhole, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
+import { useSession } from "../../app/session";
 import { TODAY } from "../../data/db";
-import { ApiError } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { peekOfflineNumber } from "../../offline/device";
 import { kindOf, removeEntry, retryEntry, syncNow, useOffline, type OutboxEntry, type PaymentEntry, type QueuedEntry, type SyncedEntry } from "../../offline/sync";
 import type { Route } from "../../app/router";
+import { passwordOpens, rememberPassword, vaultOpen } from "../../offline/vault";
+import { Field, Input } from "../ui/Field";
+import { useToast } from "../ui/Toast";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
@@ -125,6 +129,67 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   );
 }
 
+/**
+ * Signed in without typing the password (OTP, a restored session): the copy
+ * on this device cannot open without internet until the password is
+ * confirmed once, here, while online.
+ */
+function OpenOfflineSetup() {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const toast = useToast();
+  const userId = useSession().user?.id;
+  const [needed, setNeeded] = useState(false);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  useEffect(() => {
+    if (userId && vaultOpen(userId)) void passwordOpens(userId).then((opens) => setNeeded(!opens));
+  }, [userId]);
+  if (!needed || !userId) return null;
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post("/auth/password/check", { password });
+      if (await rememberPassword(userId, password)) {
+        setNeeded(false);
+        toast({ tone: "success", title: t("offline.passwordSetup.done") });
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setPassword("");
+      setBusy(false);
+    }
+  };
+  return (
+    <form
+      className="flex flex-col gap-2 rounded-lg border border-line bg-surface-2 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void confirm();
+      }}
+    >
+      <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+        <LockKeyhole size={14} aria-hidden />
+        {t("offline.passwordSetup.title")}
+      </p>
+      <p className="text-[12.5px] text-ink-3">{t("offline.passwordSetup.body")}</p>
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <Field label={t("auth.password")} htmlFor="offline-password" error={error ? translateError(i18n, error) : null}>
+            <Input id="offline-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        </div>
+        <Button type="submit" size="md" disabled={busy || !password}>
+          {t("offline.passwordSetup.confirm")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 /** Where something the server took can be seen now. */
 function syncedRoute(s: SyncedEntry): Route | null {
   switch (kindOf(s)) {
@@ -156,6 +221,7 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
         <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
           {state.device ? t("offline.device", { code: state.device.seriesCode, number: peekOfflineNumber(state.device, TODAY) }) : t("offline.noDevice")}
         </p>
+        {!offline && <OpenOfflineSetup />}
         {state.entries.length === 0 ? (
           <p className="text-[13.5px] text-ink-3">{t("offline.empty")}</p>
         ) : (

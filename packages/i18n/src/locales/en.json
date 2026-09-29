@@ -2041,7 +2041,13 @@
     "paymentNote": "No connection: the payment is saved on this device and, when it reaches the server, goes to the oldest bills first.",
     "orderNote": "No connection: the order is saved on this device and priced by the server when it arrives.",
     "customerNote": "No connection: saved on this device and sent when the internet is back.",
-    "notReadyWork": "This device cannot keep work offline (its storage is blocked). Connect to the internet and try again."
+    "notReadyWork": "This device cannot keep work offline (its storage is blocked). Connect to the internet and try again.",
+    "passwordSetup": {
+      "title": "Open without internet",
+      "body": "When this device starts without internet it asks for your password. You signed in without it here, so confirm it once.",
+      "confirm": "Confirm",
+      "done": "This device now opens without internet with your password."
+    }
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"
@@ -2250,5 +2256,16 @@
     "added": "{{name}} added",
     "newName": "New price list",
     "add": "Add list"
+  },
+  "unlock": {
+    "title": "Open {{business}} without internet",
+    "hint": "The copy on this device is locked. Type {{name}}'s Digital Bahi password to open it.",
+    "password": "{{name}}'s password",
+    "open": "Open",
+    "opening": "Opening…",
+    "wrong": "This password does not open the copy on this device. If you changed your password recently, use the one you had when this device was last online.",
+    "noPassword": "This copy opens without internet only after you have signed in with your password on this device once. Connect to the internet to continue.",
+    "retry": "Try the internet again",
+    "why": "Your customers, bills and accounts are kept on this device encrypted, so nobody can read them from a lost phone or a copied browser."
   }
 }

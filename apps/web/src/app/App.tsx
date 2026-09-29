@@ -6,6 +6,7 @@ import { ToastProvider } from "../components/ui/Toast";
 import { AuthLayout, AuthPage } from "../features/auth/AuthPage";
 import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
+import { UnlockPage } from "../features/auth/UnlockPage";
 import { CustomerProfilePage } from "../features/customers/CustomerProfilePage";
 import { CustomersPage } from "../features/customers/CustomersPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
@@ -177,6 +178,7 @@ function SessionGate() {
   if (!LIVE || session.status === "ready") return <Root />;
   if (session.status === "signed-out") return <AuthPage />;
   if (session.status === "no-business") return <BusinessPicker />;
+  if (session.status === "locked") return <UnlockPage />;
   const offline = session.status === "error" && session.error?.code === "network";
   return (
     <AuthLayout>

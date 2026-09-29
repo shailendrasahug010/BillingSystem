@@ -49,6 +49,10 @@ export const ResetPasswordBody = z.strictObject({
   password: z.string().min(8).max(128),
 });
 
+export const CheckPasswordBody = z.strictObject({
+  password: z.string().min(1).max(128),
+});
+
 export const ChangePasswordBody = z.strictObject({
   currentPassword: z.string().min(1).max(128),
   newPassword: z.string().min(8).max(128),

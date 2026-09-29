@@ -85,6 +85,7 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 | Method & path | Purpose |
 |---|---|
 | `GET /customers` ★ | List with search (`q` matches name, business name, mobile, GSTIN, code), filters (type, route, category, has outstanding, overdue), sort by outstanding / last purchase |
+| `GET /me/device-key` · `POST /auth/password/check` [signed in] | The person's device key (32 bytes, base64; `no-store`) that wraps the key of the encrypted copy on their devices / checks their password without a new session (wrong tries count toward the sign-in lock), before a device lets it open that copy offline |
 | `POST /customers` ★ · `GET/PATCH /customers/:id` ★ · `DELETE /customers/:id` (soft) | CRUD with GSTIN checksum + state-code validation. `POST` takes an `Idempotency-Key` (UUID) that becomes the customer's id (a customer added offline keeps the id it was billed under; sent again it returns the same customer). `PATCH` takes `If-Match: <version>` (`VERSION_CONFLICT` when someone saved in between); lists and details carry `version` |
 | `GET /customers/:id/summary` ★ | Outstanding, overdue, credit limit/available, last purchase, average order, payment behaviour |
 | `GET /customers/:id/ledger` ★ | Statement with running balance (date range, PDF/Excel via `?format=`) |

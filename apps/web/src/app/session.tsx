@@ -6,10 +6,12 @@ import { applyMe, applyWorkspace, hydrateWorkspace, resetWorkspace, type Workspa
 import { LIVE } from "../data/source";
 import { api, ApiError, onSessionChange, refreshSession, setSession } from "../lib/api";
 import { ensureDevice } from "../offline/device";
-import { clearSnapshots, loadLastSnapshot, loadSnapshot, saveSnapshot, type Snapshot } from "../offline/snapshot";
+import { clearSnapshots, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
+import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
 
-export type SessionStatus = "loading" | "signed-out" | "no-business" | "ready" | "error";
+/** "locked": no server, and the copy on this device waits for the person's password. */
+export type SessionStatus = "loading" | "signed-out" | "no-business" | "ready" | "error" | "locked";
 
 export interface SignupInput {
   name: string;
@@ -38,17 +40,23 @@ interface SessionValue {
   adopt(res: SessionResponse): Promise<void>;
   logout(): Promise<void>;
   retry(): void;
+  /** Status "locked": whose copy it is, and whether their password can open it here. */
+  locked: (SnapshotMeta & { passwordOpens: boolean }) | null;
+  /** Opens the locked copy with the person's password. */
+  unlock(password: string): Promise<"ok" | "wrong" | "none">;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
 
 /**
- * Online: keeps a copy of the business on this device for offline starts,
- * registers the device for offline bills and sends any bills waiting.
+ * Online: keeps a copy of the business on this device for offline starts
+ * (encrypted, opened with the person's device key from the server),
+ * registers the device for offline bills and sends any work waiting.
  */
 async function keepOnDevice(res: SessionResponse, me: MeResponse, data: WorkspaceData): Promise<void> {
   const userId = res.user.id;
   const businessId = me.business!.id;
+  if (await unlockOnline(userId)) void dropUnlockedSnapshots();
   await setOfflineScope(userId, businessId);
   setOfflineMode(false);
   // Bills still waiting (or refused) stay out of the stock and balances just loaded.
@@ -93,6 +101,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [locked, setLocked] = useState<SessionValue["locked"]>(null);
   const offlineMode = useRef(false);
   const current = useRef<{ session: SessionResponse | null; me: MeResponse | null }>({ session: null, me: null });
   current.current = { session, me };
@@ -100,20 +109,35 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const showSaved = useCallback(async (snapshot: Snapshot) => {
     const profile = await openSaved(snapshot);
     offlineMode.current = true;
+    setLocked(null);
     setSessionState(offlineSession(snapshot));
     setMe(profile);
     setError(null);
     setStatus("ready");
   }, []);
 
+  /** No server: opens the copy on this device if it is open already, else asks for the password. */
+  const openOffline = useCallback(
+    async (meta: SnapshotMeta) => {
+      const saved = vaultOpen(meta.userId) ? await loadSnapshot(meta.userId, meta.businessId) : undefined;
+      if (saved) return showSaved(saved);
+      setLocked({ ...meta, passwordOpens: await passwordOpens(meta.userId) });
+      setError(null);
+      setStatus("locked");
+    },
+    [showSaved],
+  );
+
   const enter = useCallback(
     async (res: SessionResponse | null) => {
       setSessionState(res);
       queryClient.clear();
       offlineMode.current = false;
+      setLocked(null);
       if (!res) {
-        // Signed out (or the session ended): forget the saved business; waiting bills stay for the next sign-in.
+        // Signed out (or the session ended): forget the saved business; waiting work stays, locked, for the next sign-in.
         void clearSnapshots();
+        lockVault();
         clearOfflineScope();
         resetWorkspace();
         setMe(null);
@@ -141,13 +165,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setStatus("ready");
       } catch (e) {
         const err = e instanceof ApiError ? e : new ApiError(0, "generic");
-        const saved = err.code === "network" ? await loadSnapshot(res.user.id, res.business.id) : undefined;
-        if (saved) return showSaved(saved);
+        if (err.code === "network" && (await hasSnapshot(res.user.id, res.business.id))) {
+          return openOffline({ userId: res.user.id, businessId: res.business.id, userName: res.user.name, businessName: res.business.tradeName ?? res.business.legalName });
+        }
         setError(err);
         setStatus("error");
       }
     },
-    [showSaved],
+    [openOffline],
   );
 
   /**
@@ -188,10 +213,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       async (e: unknown) => {
         if (cancelled) return;
         const err = e instanceof ApiError ? e : new ApiError(0, "network");
-        // No server: open the business saved on this device, if there is one.
-        const saved = err.code === "network" ? await loadLastSnapshot() : undefined;
+        // No server: open the business saved on this device, if there is one (with the password).
+        const saved = err.code === "network" ? await lastSnapshotMeta() : undefined;
         if (cancelled) return;
-        if (saved?.business) return showSaved(saved);
+        if (saved) return openOffline(saved);
         setError(err);
         setStatus("error");
       },
@@ -200,6 +225,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const off = onSessionChange((res) => {
       if (!res) {
         void clearSnapshots();
+        lockVault();
         clearOfflineScope();
         offlineMode.current = false;
         setSessionState(null);
@@ -210,11 +236,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       off();
     };
-  }, [enter, showSaved, attempt]);
+  }, [enter, openOffline, attempt]);
 
-  // Started without a network: try again as soon as the connection is back.
+  // Started without a network (or waiting for the password): try again as soon as the connection is back.
   useEffect(() => {
-    if (status !== "error" || error?.code !== "network") return;
+    if (status !== "locked" && (status !== "error" || error?.code !== "network")) return;
     const again = () => setAttempt((n) => n + 1);
     window.addEventListener("online", again);
     return () => window.removeEventListener("online", again);
@@ -248,13 +274,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  /**
+   * Moves into a session. With the password the person just typed, their
+   * copy on this device can then also be opened with it without internet.
+   */
   const withSession = useCallback(
-    async (call: () => Promise<SessionResponse>) => {
+    async (call: () => Promise<SessionResponse>, password?: string) => {
       const res = await call();
       setSession(res);
       await enter(res);
+      if (password) await rememberPassword(res.user.id, password).catch(() => false);
     },
     [enter],
+  );
+
+  const unlock = useCallback(
+    async (password: string): Promise<"ok" | "wrong" | "none"> => {
+      if (!locked) return "none";
+      const result = await unlockWithPassword(locked.userId, password);
+      if (result !== "ok") return result;
+      const saved = await loadSnapshot(locked.userId, locked.businessId);
+      if (!saved) return "none";
+      await showSaved(saved);
+      return "ok";
+    },
+    [locked, showSaved],
   );
 
   const value = useMemo<SessionValue>(
@@ -264,10 +308,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       businesses: session?.businesses ?? [],
       me,
       error,
-      login: (identifier, password) => withSession(() => api.post<SessionResponse>("/auth/login", { identifier, password })),
+      locked,
+      unlock,
+      login: (identifier, password) => withSession(() => api.post<SessionResponse>("/auth/login", { identifier, password }), password),
       requestOtp: (mobile, purpose) => api.post<{ devCode?: string }>("/auth/otp", { mobile, purpose }),
       loginWithOtp: (mobile, otp) => withSession(() => api.post<SessionResponse>("/auth/login/otp", { mobile, otp })),
-      signup: (input) => withSession(() => api.post<SessionResponse>("/auth/signup", input)),
+      signup: (input) => withSession(() => api.post<SessionResponse>("/auth/signup", input), input.password),
       resetPassword: async (mobile, otp, password) => {
         await api.post("/auth/password/reset", { mobile, otp, password });
       },
@@ -285,7 +331,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       },
       retry: () => setAttempt((n) => n + 1),
     }),
-    [status, session, me, error, withSession, enter],
+    [status, session, me, error, locked, unlock, withSession, enter],
   );
 
   return (

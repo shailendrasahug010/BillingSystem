@@ -52,6 +52,11 @@ export const users = pgTable(
     lockedUntil: tstz(),
     lastLoginAt: tstz(),
     passwordChangedAt: tstz(),
+    /**
+     * Locks the copy of the business kept on this person's devices for offline
+     * work (field-encrypted; handed only to a signed-in session).
+     */
+    deviceKey: text(),
     ...timestamps,
   },
   (t) => [uniqueIndex("users_mobile_uq").on(t.mobile), uniqueIndex("users_email_uq").on(t.email), uniqueIndex("users_username_uq").on(t.username)],

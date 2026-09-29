@@ -2,7 +2,8 @@
  * End-to-end check of offline billing on the production build (the service
  * worker serves the app without a network): sign up -> the device gets its
  * own series -> the connection goes -> the app still opens from the copy on
- * the device -> two bills are made and printed with the device's numbers
+ * the device, which is encrypted and opens with the owner's password (a
+ * wrong one is refused) -> two bills are made and printed with the device's numbers
  * (A1/26-27/0001, 0002) -> still offline: a new customer is added and
  * billed, a payment is received, an order is booked for the new customer and
  * a customer's city is changed -> sign-out is refused while offline -> the
@@ -123,6 +124,14 @@ log("device registered:", devices.map((d) => `${d.seriesCode} ${d.name}`).join("
 // 3. No connection: the app still opens, from the copy on the device.
 await goOffline(true);
 await page.reload();
+// The copy on the device is locked: it opens with the password, not without it.
+await page.getByRole("heading", { name: "Open Mohan Traders without internet" }).waitFor({ timeout: 15000 });
+await page.fill("#unlock-password", "not-the-password");
+await page.getByRole("button", { name: "Open", exact: true }).click();
+await page.getByText("This password does not open the copy on this device.", { exact: false }).waitFor({ timeout: 15000 });
+await page.screenshot({ path: `${OUT}/offline-0-locked.png` });
+await page.fill("#unlock-password", password);
+await page.getByRole("button", { name: "Open", exact: true }).click();
 await page.getByText("No connection. Bills, payments, orders and customer changes are saved on this device").waitFor({ timeout: 15000 });
 await page.getByRole("heading", { name: /Mohan/ }).waitFor();
 await page.screenshot({ path: `${OUT}/offline-1-start.png` });
@@ -196,6 +205,28 @@ for (const what of ["New customer", "Payment received", "Order", "Customer detai
 await page.screenshot({ path: `${OUT}/offline-3-waiting.png` });
 await waiting.getByRole("button", { name: "Close" }).click();
 log("7 changes waiting: 3 bills, a new customer, a payment, an order and a customer change");
+
+// Nothing readable on the device: customers, products and bills are stored encrypted.
+const stored = await page.evaluate(
+  () =>
+    new Promise((resolve) => {
+      const req = indexedDB.open("digital-bahi");
+      req.onsuccess = () => {
+        const tx = req.result.transaction(["kv", "outbox"]);
+        const texts = [];
+        let pending = 2;
+        for (const name of ["kv", "outbox"]) {
+          const all = tx.objectStore(name).getAll();
+          all.onsuccess = () => {
+            texts.push(JSON.stringify(all.result));
+            if (--pending === 0) resolve(texts.join("\n"));
+          };
+        }
+      };
+    }),
+);
+for (const secret of ["Sharma Kirana", "Naya Kirana", "Lifebuoy", "9826012345", "Ujjain"]) if (stored.includes(secret)) errors.push(`"${secret}" readable in the device's storage`);
+log("device storage checked:", stored.length, "characters, no customer, product or bill readable");
 
 // Signing out needs the server.
 await page.getByRole("button", { name: "Sign out" }).first().click({ timeout: 5000 }).catch(async () => {

@@ -1,5 +1,6 @@
 import {
   ChangePasswordBody,
+  CheckPasswordBody,
   CreateBusinessBody,
   LoginBody,
   OtpLoginBody,
@@ -15,6 +16,7 @@ import { expandGrants, normalizeIndianMobile, type Grant } from "@vyapaar/core";
 import { schema } from "@vyapaar/db";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
+import { randomBytes } from "node:crypto";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { authenticate, loadAccess } from "../../lib/access.js";
@@ -274,6 +276,34 @@ export const identityModule: ApiModule = async (app, deps) => {
     },
   );
 
+  /**
+   * Checks the signed-in person's password without signing in again: a device
+   * uses it before it lets that password open its copy without internet.
+   * Wrong answers count toward the same lock as sign-in.
+   */
+  r.post("/auth/password/check", { preHandler: authenticate(deps), config: authLimit, schema: { tags: ["auth"], body: CheckPasswordBody } }, async (request, reply) => {
+    const claims = request.user!;
+    const [user] = await deps.db.select().from(schema.users).where(eq(schema.users.id, claims.userId));
+    if (!user?.isActive) throw unauthorized();
+    const at = now();
+    if (user.lockedUntil && Date.parse(user.lockedUntil) > at.getTime()) {
+      throw new ApiError(429, "ACCOUNT_LOCKED", { retryAfter: Math.ceil((Date.parse(user.lockedUntil) - at.getTime()) / 1000) });
+    }
+    if (!(await verifyPassword(user.passwordHash, request.body.password))) {
+      await deps.db
+        .update(schema.users)
+        .set({
+          failedLoginCount: sql`${schema.users.failedLoginCount} + 1`,
+          lockedUntil: sql`case when ${schema.users.failedLoginCount} + 1 >= ${MAX_FAILED_LOGINS}
+            then ${new Date(at.getTime() + LOCK_MINUTES * 60_000).toISOString()}::timestamptz else ${schema.users.lockedUntil} end`,
+        })
+        .where(eq(schema.users.id, user.id));
+      throw badRequest("INVALID_CREDENTIALS", {}, "password");
+    }
+    if (user.failedLoginCount > 0) await deps.db.update(schema.users).set({ failedLoginCount: 0 }).where(eq(schema.users.id, user.id));
+    return reply.code(204).send();
+  });
+
   // ---------------------------------------------------------------- businesses (tenants)
   r.get("/businesses", { preHandler: authenticate(deps), schema: { tags: ["business"] } }, async (request) => ({
     data: await listBusinesses(deps.db, request.user!.userId),
@@ -314,6 +344,32 @@ export const identityModule: ApiModule = async (app, deps) => {
   });
 
   // ---------------------------------------------------------------- me
+  /**
+   * The key that locks the copy of the business kept on this person's
+   * devices for offline work (the copy's own key is wrapped with it). Only a
+   * signed-in session gets it, so a copy opens by itself only while its
+   * person is signed in; otherwise (offline, or signed out elsewhere) it takes
+   * their password. Made on first use; stored field-encrypted.
+   */
+  r.get("/me/device-key", { preHandler: authenticate(deps), schema: { tags: ["auth"] } }, async (request, reply) => {
+    const claims = request.user!;
+    const [user] = await deps.db.select({ isActive: schema.users.isActive, deviceKey: schema.users.deviceKey }).from(schema.users).where(eq(schema.users.id, claims.userId));
+    if (!user?.isActive) throw unauthorized();
+    let sealed = user.deviceKey;
+    if (!sealed) {
+      const fresh = deps.cipher.encrypt(randomBytes(32).toString("base64"));
+      // Two first requests at once both get the one that was stored first.
+      const [row] = await deps.db
+        .update(schema.users)
+        .set({ deviceKey: sql`coalesce(${schema.users.deviceKey}, ${fresh})` })
+        .where(eq(schema.users.id, claims.userId))
+        .returning({ deviceKey: schema.users.deviceKey });
+      sealed = row!.deviceKey!;
+    }
+    reply.header("cache-control", "private, no-store");
+    return { key: deps.cipher.decrypt(sealed) };
+  });
+
   r.get("/me", { preHandler: authenticate(deps), schema: { tags: ["auth"] } }, async (request): Promise<MeResponse> => {
     const claims = request.user!;
     const [user] = await deps.db.select().from(schema.users).where(eq(schema.users.id, claims.userId));
