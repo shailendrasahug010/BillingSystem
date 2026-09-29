@@ -120,6 +120,13 @@
       "when": 1790712828971,
       "tag": "0016_device_key",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790718158307,
+      "tag": "0017_collection_notes",
+      "breakpoints": true
     }
   ]
 }

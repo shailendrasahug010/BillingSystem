@@ -78,8 +78,8 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const kind = kindOf(entry);
   const bill = kind === "invoice" ? (entry as OutboxEntry) : null;
   const name = entry.kind === "payment" ? entry.partyName : (entry as { customerName: string }).customerName;
-  const amount = entry.kind === "payment" ? entry.amount : entry.kind === "order" ? entry.estimate : bill ? bill.total : null;
-  const when = entry.kind === "payment" || entry.kind === "order" ? entry.date : bill ? bill.date : null;
+  const amount = entry.kind === "payment" ? entry.amount : entry.kind === "order" ? entry.estimate : entry.kind === "collection-note" ? entry.amount : bill ? bill.total : null;
+  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" ? entry.date : bill ? bill.date : null;
   const conflict = kind === "customer-edit" && entry.error?.code === "VERSION_CONFLICT";
   const removeText =
     kind === "invoice" ? t("offline.removeConfirm", { number: bill!.number }) : kind === "customer" ? t("offline.removeCustomerConfirm", { name }) : t("offline.removeEntryConfirm", { what: label(entry).toLowerCase(), name });

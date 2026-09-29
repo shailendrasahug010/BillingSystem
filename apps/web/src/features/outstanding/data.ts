@@ -7,7 +7,14 @@ import { customerInsight, useStoreVersion } from "../../data/store";
 import { api } from "../../lib/api";
 import { unreachable, useOffline } from "../../offline/sync";
 
-export type Sort = "amount" | "overdue" | "oldest" | "name";
+export type Sort = "amount" | "overdue" | "oldest" | "name" | "promise";
+
+/** The customer's open promise to pay (made after their last payment). */
+export interface PayPromise {
+  date: string;
+  amount: number | null;
+  note: string | null;
+}
 
 /** One customer who owes money, as the list shows them. */
 export interface OutstandingRow {
@@ -28,6 +35,20 @@ export interface OutstandingRow {
   daysOverdue: number;
   lastPaymentDate: string | null;
   lastPaymentAmount: number | null;
+  promise: PayPromise | null;
+  /** The latest visit note or promise, kept or not. */
+  lastNote: { kind: "promise" | "note"; note: string | null; date: string } | null;
+}
+
+export interface CollectionNote {
+  id: string;
+  kind: "promise" | "note";
+  note: string | null;
+  promisedAmount: string | null;
+  promisedOn: string | null;
+  visitedOn: string;
+  createdAt: string;
+  by: string | null;
 }
 
 export interface OutstandingDetail {
@@ -56,15 +77,26 @@ export interface OutstandingDetail {
   /** Null when the bills are not on this device (offline). */
   bills: Array<{ id: string; number: string; date: string; dueDate: string; total: string; paid: string; balance: string; daysOverdue: number }> | null;
   payments: Array<{ id: string; number: string | null; date: string; amount: string; method: PaymentMethod }>;
+  promise: PayPromise | null;
+  notes: CollectionNote[];
 }
 
-type ServerRow = Omit<OutstandingRow, "outstanding" | "overdue" | "lastPaymentAmount"> & { outstanding: string; overdue: string; lastPaymentAmount: string | null };
+type ServerPromise = Omit<PayPromise, "amount"> & { amount: string | null };
+type ServerRow = Omit<OutstandingRow, "outstanding" | "overdue" | "lastPaymentAmount" | "promise"> & {
+  outstanding: string;
+  overdue: string;
+  lastPaymentAmount: string | null;
+  promise: ServerPromise | null;
+};
+
+const promiseFrom = (p: ServerPromise | null): PayPromise | null => (p ? { ...p, amount: p.amount === null ? null : Number(p.amount) } : null);
 
 const fromServer = (r: ServerRow): OutstandingRow => ({
   ...r,
   outstanding: Number(r.outstanding),
   overdue: Number(r.overdue),
   lastPaymentAmount: r.lastPaymentAmount === null ? null : Number(r.lastPaymentAmount),
+  promise: promiseFrom(r.promise),
 });
 
 /** From the customers kept on the device: the demo, and live mode without a connection. */
@@ -98,6 +130,8 @@ function deviceRows(): OutstandingRow[] {
         daysOverdue: oldest && oldest < TODAY ? daysBetween(oldest, TODAY) : 0,
         lastPaymentDate: paid?.date ?? null,
         lastPaymentAmount: paid?.amount ?? null,
+        promise: null,
+        lastNote: null,
       },
     ];
   });
@@ -170,6 +204,8 @@ function deviceDetail(row: OutstandingRow): OutstandingDetail {
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5)
       .map((p) => ({ id: p.id, number: p.number, date: p.date, amount: p.amount.toFixed(2), method: p.method })),
+    promise: row.promise,
+    notes: [],
   };
 }
 
@@ -177,7 +213,10 @@ function deviceDetail(row: OutstandingRow): OutstandingDetail {
 export function useOutstandingDetail(row: OutstandingRow | null, source: "server" | "device") {
   const q = useQuery({
     queryKey: ["collections", "customer", row?.customerId],
-    queryFn: () => api.get<Omit<OutstandingDetail, "bills"> & { bills: NonNullable<OutstandingDetail["bills"]> }>(`/collections/outstanding/${row!.customerId}`),
+    queryFn: () =>
+      api
+        .get<Omit<OutstandingDetail, "bills" | "promise"> & { bills: NonNullable<OutstandingDetail["bills"]>; promise: ServerPromise | null }>(`/collections/outstanding/${row!.customerId}`)
+        .then((d): OutstandingDetail => ({ ...d, promise: promiseFrom(d.promise) })),
     enabled: Boolean(row) && source === "server",
   });
   const onDevice = source === "device" || (q.isError && unreachable(q.error));
@@ -227,8 +266,13 @@ export interface Filters {
   route: string;
   q: string;
   overdueOnly: boolean;
+  /** Promised to pay by today (or earlier) and not paid since. */
+  promiseDue: boolean;
   sort: Sort;
 }
+
+/** Promised by today or earlier, and not paid since. */
+export const promiseDue = (r: OutstandingRow, today: string) => r.promise !== null && r.promise.date <= today;
 
 export function applyFilters(rows: OutstandingRow[], f: Filters): OutstandingRow[] {
   const q = f.q.trim().toLowerCase();
@@ -239,6 +283,7 @@ export function applyFilters(rows: OutstandingRow[], f: Filters): OutstandingRow
         (f.place === null || cityKey(r.city) === f.place) &&
         (!f.route || r.route === f.route) &&
         (!f.overdueOnly || r.overdue > 0) &&
+        (!f.promiseDue || promiseDue(r, TODAY)) &&
         (!q ||
           r.name.toLowerCase().includes(q) ||
           (r.contactName ?? "").toLowerCase().includes(q) ||
@@ -254,6 +299,8 @@ export function applyFilters(rows: OutstandingRow[], f: Filters): OutstandingRow
           return (a.oldestDueDate ?? "9999").localeCompare(b.oldestDueDate ?? "9999") || b.outstanding - a.outstanding;
         case "name":
           return a.name.localeCompare(b.name);
+        case "promise":
+          return (a.promise?.date ?? "9999").localeCompare(b.promise?.date ?? "9999") || b.outstanding - a.outstanding;
         default:
           return b.outstanding - a.outstanding || a.name.localeCompare(b.name);
       }

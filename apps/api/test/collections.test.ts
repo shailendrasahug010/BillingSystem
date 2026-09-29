@@ -135,7 +135,7 @@ describe.skipIf(!hasDatabase)("outstanding to collect", () => {
     expect(xlsx.headers["content-disposition"]).toBe('attachment; filename="outstanding-dewas-2026-09-24.xlsx"');
     const sheet = (await readSheet(xlsx.rawPayload)).map((r) => r.map((c) => (c == null ? null : String(c))));
     const header = sheet.findIndex((r) => r[0] === "Customer");
-    expect(sheet[header]).toEqual(["Customer", "Mobile", "City / route", "Bills", "Oldest due", "Overdue", "Outstanding"]);
+    expect(sheet[header]).toEqual(["Customer", "Mobile", "City / route", "Bills", "Oldest due", "Promised", "Overdue", "Outstanding"]);
     expect(sheet[header + 1]?.slice(0, 3)).toEqual(["Gupta Kirana", "9826022222", "Dewas · Dewas Road"]);
 
     const pdf = await file("/collections/outstanding?city=Dewas&format=pdf", salesToken);
@@ -147,7 +147,7 @@ describe.skipIf(!hasDatabase)("outstanding to collect", () => {
 
     const csv = await file("/collections/outstanding?format=csv", salesToken);
     expect(csv.statusCode).toBe(200);
-    expect(csv.body.split("\r\n")[0]).toBe("\uFEFFCustomer,Mobile,City / route,Bills,Oldest due,Overdue,Outstanding");
+    expect(csv.body.split("\r\n")[0]).toBe("\uFEFFCustomer,Mobile,City / route,Bills,Oldest due,Promised,Overdue,Outstanding");
 
     const audit = (await get("/audit-logs?action=outstanding.exported")).body.data;
     expect(audit).toHaveLength(3);
@@ -157,5 +157,54 @@ describe.skipIf(!hasDatabase)("outstanding to collect", () => {
     expect((await get("/collections/outstanding", warehouseToken)).status).toBe(403);
     expect((await get(`/collections/outstanding/${ids.gupta}`, warehouseToken)).status).toBe(403);
     expect((await file("/collections/outstanding?format=pdf", warehouseToken)).statusCode).toBe(403);
+  });
+
+  it("keeps notes and promises to pay from a visit, until the customer pays", async () => {
+    const note = (body: unknown, token = salesToken, headers: Record<string, string> = {}) => call(t.app, "POST", "/collections/notes", { token, body, headers });
+    const key = "0190d3c8-1111-7000-8000-000000000001";
+    const made = await note({ customerId: ids.verma, kind: "promise", promisedOn: "2026-09-30", promisedAmount: "1000", note: "After Navratri sales" }, salesToken, { "idempotency-key": key });
+    expect(made.status).toBe(201);
+    expect(made.body).toMatchObject({ id: key, kind: "promise", promisedOn: "2026-09-30", promisedAmount: "1000.00", visitedOn: "2026-09-24", by: "Sales Sam" });
+    // Sent again from a phone that lost the answer: the same note, not a second one.
+    const again = await note({ customerId: ids.verma, kind: "promise", promisedOn: "2026-09-30", promisedAmount: "1000" }, salesToken, { "idempotency-key": key });
+    expect(again.status).toBe(200);
+    expect(again.body.id).toBe(key);
+    expect((await note({ customerId: ids.sharma, kind: "note", note: "Shop closed, owner at a wedding" })).status).toBe(201);
+    expect((await note({ customerId: ids.sharma, kind: "promise", promisedOn: "2026-09-24" })).status).toBe(201);
+
+    expect((await note({ customerId: ids.verma, kind: "promise", promisedOn: "2026-09-23" })).body.error).toMatchObject({ code: "PROMISE_DATE_PAST", field: "promisedOn" });
+    expect((await note({ customerId: ids.verma, kind: "promise" })).body.error.code).toBe("PROMISE_DATE_REQUIRED");
+    expect((await note({ customerId: ids.verma, kind: "promise", promisedOn: "2027-12-31" })).body.error.code).toBe("PROMISE_DATE_TOO_FAR");
+    expect((await note({ customerId: ids.verma, kind: "note", note: "  " })).body.error.code).toBe("NOTE_REQUIRED");
+    expect((await note({ customerId: ids.verma, kind: "note", note: "x" }, warehouseToken)).status).toBe(403);
+    const other = await signup(t, { legalName: "Other Traders", stateCode: "23" });
+    const theirs = (await call(t.app, "POST", "/customers", { token: other.token, body: { name: "Their Shop", stateCode: "23" } })).body.id;
+    expect((await note({ customerId: theirs, kind: "note", note: "Not ours" })).status).toBe(404);
+    expect((await note({ customerId: ids.gupta, kind: "note", note: "x" }, other.token, { "idempotency-key": key })).status).toBe(404);
+
+    const list = (await get("/collections/outstanding")).body.rows;
+    const byName = (n: string) => list.find((r: { name: string }) => r.name === n);
+    expect(byName("Verma Traders").promise).toEqual({ date: "2026-09-30", amount: "1000.00", note: "After Navratri sales" });
+    expect(byName("Sharma Stores")).toMatchObject({ promise: { date: "2026-09-24", amount: null }, lastNote: { kind: "promise", date: "2026-09-24" } });
+    expect(byName("Gupta Kirana").promise).toBeNull();
+    const names = async (qs: string) => (await get(`/collections/outstanding?${qs}`)).body.rows.map((r: { name: string }) => r.name);
+    expect(await names("promise=due")).toEqual(["Sharma Stores"]);
+    expect(await names("promise=any&sort=promise")).toEqual(["Sharma Stores", "Verma Traders"]);
+
+    const detail = (await get(`/collections/outstanding/${ids.sharma}`)).body;
+    expect(detail.promise).toMatchObject({ date: "2026-09-24" });
+    expect(detail.notes.map((n: { kind: string; note: string | null; by: string }) => [n.kind, n.note, n.by])).toEqual([
+      ["promise", null, "Sales Sam"],
+      ["note", "Shop closed, owner at a wedding", "Sales Sam"],
+    ]);
+
+    // Verma pays: the promise is settled; the note stays in the history.
+    await post("/payments", { direction: "in", customerId: ids.verma, amount: "500", method: "cash" });
+    expect((await get("/collections/outstanding?promise=any")).body.rows.map((r: { name: string }) => r.name)).toEqual(["Sharma Stores"]);
+    const verma = (await get(`/collections/outstanding/${ids.verma}`)).body;
+    expect(verma.promise).toBeNull();
+    expect(verma.notes).toHaveLength(1);
+    const audit = (await get("/audit-logs?action=collection.promise_noted")).body.data;
+    expect(audit).toHaveLength(2);
   });
 });

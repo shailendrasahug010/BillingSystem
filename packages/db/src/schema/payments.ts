@@ -172,3 +172,31 @@ export const partyLedgerEntries = pgTable(
     ),
   ],
 );
+
+/**
+ * A collector's visit when the money did not come: a note ("shop closed") or
+ * the customer's promise to pay by a date (and how much, if they said).
+ * Shown on Outstanding; a promise stays open until the customer next pays.
+ */
+export const collectionNotes = pgTable(
+  "collection_notes",
+  {
+    id: pk(),
+    businessId: businessId(),
+    customerId: uuid()
+      .notNull()
+      .references(() => customers.id),
+    /** promise | note */
+    kind: varchar({ length: 10 }).notNull(),
+    note: text(),
+    promisedAmount: money(),
+    promisedOn: date({ mode: "string" }),
+    visitedOn: date({ mode: "string" }).notNull(),
+    ...auditColumns,
+  },
+  (t) => [
+    check("collection_notes_kind_chk", sql`${t.kind} in ('promise', 'note')`),
+    check("collection_notes_promise_chk", sql`${t.kind} <> 'promise' or ${t.promisedOn} is not null`),
+    index("collection_notes_customer_idx").on(t.businessId, t.customerId, t.createdAt),
+  ],
+);

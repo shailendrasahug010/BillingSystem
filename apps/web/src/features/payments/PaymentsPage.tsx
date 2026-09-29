@@ -214,7 +214,8 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
   );
 }
 
-function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null; onClose(): void }) {
+/** A payment with its receipt: print, PDF, WhatsApp; cheque status, advance and cancel for those allowed. */
+export function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string | null; onClose(): void }) {
   const { t, money, dateMedium, locale } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();

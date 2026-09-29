@@ -4,11 +4,15 @@
  * phone opens Outstanding from the menu -> a chip per city with its total ->
  * Dewas narrows the list (Dewas and DEWAS are one place) -> search and "only
  * overdue" -> a customer opens with the open bills, days late, the last
- * payments, Call and WhatsApp -> he takes a payment there and the dues drop
- * -> the Dewas list downloads as PDF and Excel and prints with a "Collected"
- * column -> without a connection the list still shows from the phone ->
- * the owner sees the table on the desktop and opens the customer -> a
- * warehouse worker has no Outstanding.
+ * payments, Call and WhatsApp -> he takes a payment there, gets its receipt
+ * at once (print, PDF, WhatsApp) and the dues drop -> another customer
+ * promises to pay today: shown on the list, under "Promise due" and in the
+ * visit history -> the Dewas list downloads as PDF and Excel and prints
+ * with a "Collected" column -> without a connection the list still shows
+ * from the phone; a visit note and a payment (with a provisional receipt)
+ * are kept and sent when the connection returns -> the owner sees the table
+ * on the desktop and opens the customer -> a warehouse worker has no
+ * Outstanding.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/outstanding-flow.mjs
@@ -128,15 +132,46 @@ for (const s of ["Open bills", "Recent payments", "15 days credit", "₹1,570.00
 if (!(await sheet.getByRole("button", { name: "Call" }).isEnabled()) || !(await sheet.getByRole("button", { name: "WhatsApp reminder" }).isEnabled())) errors.push("call / WhatsApp");
 await page.screenshot({ path: `${OUT}/outstanding-3-sheet.png` });
 await sheet.getByRole("button", { name: "Receive payment" }).click();
+if ((await page.inputValue("#pay-amount")) !== "980.00") errors.push(`amount to collect starts at ${await page.inputValue("#pay-amount")}, not the overdue 980.00`);
 await page.fill("#pay-amount", "1000");
 await page.getByRole("dialog").getByRole("button", { name: /^Save/ }).click();
 await page.getByText("Payment saved").first().waitFor({ timeout: 15000 });
+// The receipt at once: print, PDF, WhatsApp.
+const receipt = page.getByRole("dialog");
+await receipt.getByRole("heading", { name: /^Receipt RCT\// }).waitFor({ timeout: 15000 });
+for (const b of ["Print receipt", "Download PDF"]) if ((await receipt.getByRole("button", { name: b }).count()) === 0) errors.push(`receipt lacks ${b}`);
+if (!(await page.locator(".print-root").textContent()).includes("1,000.00")) errors.push("printed receipt");
+await page.screenshot({ path: `${OUT}/outstanding-3-receipt.png` });
+await page.keyboard.press("Escape");
 await page.getByRole("dialog").getByRole("heading", { name: "Gupta Kirana" }).waitFor();
 await page.getByRole("dialog").getByText("₹570.00").first().waitFor({ timeout: 15000 });
 if ((await page.getByRole("dialog").getByText("days late").count()) !== 0) errors.push("still overdue after paying the old bill");
 await page.keyboard.press("Escape");
 await page.getByLabel("To collect").getByText("₹1,320").first().waitFor({ timeout: 15000 });
-log("sheet: bills, 25 days late, last payments; ₹1,000 taken there, Dewas now ₹1,320");
+log("sheet: bills, 25 days late, last payments; ₹1,000 taken there with its receipt, Dewas now ₹1,320");
+
+// 4b. Sharma cannot pay now: promises ₹500 by today.
+await cards().filter({ hasText: "Sharma Stores" }).click();
+await page.getByRole("dialog").getByRole("button", { name: "Not paid? Note or promise" }).click();
+const noteDialog = page.getByRole("dialog");
+await noteDialog.getByRole("heading", { name: "Visit note" }).waitFor();
+await page.fill("#note-on", today);
+await page.fill("#note-amount", "500");
+await page.fill("#note-text", "After the Sunday market");
+await noteDialog.getByRole("button", { name: "Save", exact: true }).click();
+await page.getByText("Promise saved").first().waitFor({ timeout: 15000 });
+const sharmaSheet = page.getByRole("dialog");
+await sharmaSheet.getByRole("heading", { name: "Sharma Stores" }).waitFor();
+await sharmaSheet.getByText(/Promised ₹500 by/).first().waitFor({ timeout: 15000 });
+await sharmaSheet.getByText("After the Sunday market").first().waitFor();
+await sharmaSheet.getByText("by Sonu Sales").waitFor();
+await page.screenshot({ path: `${OUT}/outstanding-3-promise.png` });
+await page.keyboard.press("Escape");
+await cards().filter({ hasText: "Sharma Stores" }).getByText(/Promised ₹500 by/).waitFor({ timeout: 15000 });
+await page.getByRole("button", { name: "Promise due" }).click();
+if (JSON.stringify(await names()) !== JSON.stringify(["Sharma Stores"])) errors.push(`promise due: ${await names()}`);
+await page.getByRole("button", { name: "Promise due" }).click();
+log("Sharma promised ₹500 by today: on the card, under Promise due, in the visit history");
 
 // 5. Downloads (the sales role may export this list) and print.
 let download = page.waitForEvent("download");
@@ -149,12 +184,13 @@ await page.getByRole("button", { name: "Excel", exact: true }).click();
 file = await download;
 if (file.suggestedFilename() !== `outstanding-dewas-${today}.xlsx`) errors.push(`xlsx name ${file.suggestedFilename()}`);
 const printed = await page.locator(".print-root").textContent();
-for (const s of ["Outstanding · Dewas", "Collected", "Collector's signature", "Gupta Kirana", "Sharma Stores", "Total · 2 customers"]) if (!printed.includes(s)) errors.push(`print lacks ${s}`);
+for (const s of ["Outstanding · Dewas", "Collected", "Collector's signature", "Gupta Kirana", "Sharma Stores", "Total · 2 customers", "Promised ₹500 by"]) if (!printed.includes(s)) errors.push(`print lacks ${s}`);
 if (printed.includes("Verma")) errors.push("print has another city");
 await page.emulateMedia({ media: "print" });
 await page.screenshot({ path: `${OUT}/outstanding-4-print.png`, fullPage: true });
 await page.emulateMedia({ media: "screen" });
 const audit = (await api("GET", "/audit-logs?action=outstanding.exported", token)).data;
+if ((await api("GET", "/audit-logs?action=collection.promise_noted", token)).data.length !== 1) errors.push("promise not in the audit log");
 if (audit.length !== 2) errors.push(`audit: ${audit.length} downloads noted`);
 log("Dewas list downloaded as PDF and Excel (noted in the audit log); prints with a Collected column");
 
@@ -169,8 +205,32 @@ file = await download;
 const csv = readFileSync(await file.path(), "utf8");
 if (!csv.includes("Gupta Kirana") || !csv.includes("Sharma Stores") || csv.includes("Verma")) errors.push(`offline CSV: ${csv}`);
 await page.screenshot({ path: `${OUT}/outstanding-5-offline.png` });
+// A visit note and a payment, kept on the phone.
+await cards().filter({ hasText: "Gupta Kirana" }).click();
+await page.getByRole("dialog").getByRole("button", { name: "Not paid? Note or promise" }).click();
+await page.getByRole("dialog").getByRole("radio", { name: "Note" }).click();
+await page.getByRole("dialog").getByRole("button", { name: "Shop closed" }).click();
+await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+await page.getByText("Saved on this device").first().waitFor({ timeout: 15000 });
+await page.getByRole("dialog").getByRole("heading", { name: "Gupta Kirana" }).waitFor();
+await page.getByRole("dialog").getByRole("button", { name: "Receive payment" }).click();
+await page.fill("#pay-amount", "100");
+await page.getByRole("dialog").getByRole("button", { name: /^Save/ }).click();
+await page.getByRole("dialog").getByRole("heading", { name: "Provisional receipt" }).waitFor({ timeout: 15000 });
+const provisional = await page.locator(".print-root").textContent();
+if (!provisional.includes("(number after sync)") || !provisional.includes("100.00")) errors.push(`provisional receipt: ${provisional.slice(0, 200)}`);
+await page.screenshot({ path: `${OUT}/outstanding-5-provisional.png` });
+await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
+await page.keyboard.press("Escape");
 await phone.setOffline(false);
-log("offline: Dewas list from the phone, CSV download");
+let synced = null;
+for (let i = 0; i < 40 && !synced; i++) {
+  const d = await api("GET", `/collections/outstanding/${gupta.id}`, token);
+  if (d.notes.some((n) => n.note === "Shop closed") && d.outstanding === "470.00") synced = d;
+  else await page.waitForTimeout(500);
+}
+if (!synced) errors.push("the note and payment made offline did not reach the server");
+log("offline: Dewas list from the phone, CSV; a note and a ₹100 payment (provisional receipt) kept and synced");
 
 // 7. The owner at the desk: the table, a row opens, then the customer.
 const desk = await browser.newPage({ viewport: { width: 1360, height: 900 }, acceptDownloads: true });
@@ -183,7 +243,7 @@ await table.getByRole("row", { name: /Verma Traders/ }).waitFor({ timeout: 15000
 const rows = await table.locator("tbody tr").allInnerTexts();
 if (rows.length !== 4 || !rows[0].includes("Verma Traders") || !rows[0].includes("10 days late")) errors.push(`desk rows: ${JSON.stringify(rows)}`);
 const foot = await table.locator("tfoot").innerText();
-if (!foot.includes("4 customers") || !foot.includes("₹3,798")) errors.push(`desk total: ${foot}`);
+if (!foot.includes("4 customers") || !foot.includes("₹3,698")) errors.push(`desk total: ${foot}`);
 await desk.screenshot({ path: `${OUT}/outstanding-6-desk.png`, fullPage: true });
 await table.getByRole("row", { name: /Sharma Stores/ }).click();
 const dlg = desk.getByRole("dialog");
@@ -191,7 +251,7 @@ await dlg.getByText("Opening balance / other").waitFor({ timeout: 15000 });
 await desk.screenshot({ path: `${OUT}/outstanding-7-desk-detail.png` });
 await dlg.getByRole("button", { name: "Open customer" }).click();
 await desk.getByRole("heading", { name: "Sharma Stores" }).waitFor({ timeout: 15000 });
-log("desk: table of 4 (₹3,798), Sharma's opening balance, opens the customer");
+log("desk: table of 4 (₹3,698), Sharma's opening balance, opens the customer");
 
 // 8. A warehouse worker has no Outstanding.
 const packer = await browser.newPage({ viewport: { width: 1360, height: 900 } });

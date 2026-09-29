@@ -1,13 +1,15 @@
+import { Money } from "@vyapaar/contracts";
 import { ageDocuments, dec } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
-import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { uuidv7 } from "uuidv7";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
-import { notFound } from "../../lib/errors.js";
+import { badRequest, notFound } from "../../lib/errors.js";
 import { getSettings } from "../../services/settings.js";
 import type { ApiModule } from "../types.js";
 import { Format, sendReport } from "./reports.js";
@@ -18,11 +20,31 @@ const OutstandingListQuery = z.object({
   routeId: z.uuid().optional(),
   q: z.string().trim().max(100).optional(),
   overdue: z.enum(["true", "false"]).optional(),
-  sort: z.enum(["amount", "overdue", "name", "oldest"]).default("amount"),
+  /** "due": promised by today and not paid since; "any": any open promise. */
+  promise: z.enum(["due", "any"]).optional(),
+  sort: z.enum(["amount", "overdue", "name", "oldest", "promise"]).default("amount"),
   ...Format,
 });
 
 const IdParams = z.object({ customerId: z.uuid() });
+
+const NoteBody = z.strictObject({
+  customerId: z.uuid(),
+  kind: z.enum(["promise", "note"]),
+  note: z.string().trim().max(500).optional(),
+  promisedAmount: Money.optional(),
+  promisedOn: z.iso.date().optional(),
+});
+
+/**
+ * The customer's open promise: the latest one made after their last payment
+ * (a payment since then settles it, whatever the amount).
+ */
+const openPromise = (customer: SQL) => sql`
+  select n.promised_on, n.promised_amount, n.note from collection_notes n
+  where n.customer_id = ${customer} and n.kind = 'promise'
+    and n.created_at > coalesce((select max(p.created_at) from payments p where p.customer_id = ${customer} and p.status = 'posted' and p.direction = 'in'), '-infinity'::timestamptz)
+  order by n.created_at desc limit 1`;
 
 const likeContains = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
@@ -55,11 +77,14 @@ export const collectionsModule: ApiModule = async (app, deps) => {
         filters.push(sql`(c.name ilike ${like} or c.business_name ilike ${like} or c.code ilike ${like} or c.mobile ilike ${like} or c.city ilike ${like})`);
       }
       if (q.overdue === "true") filters.push(sql`coalesce(od.overdue, 0) > 0`);
+      if (q.promise === "due") filters.push(sql`pr.promised_on <= ${today}`);
+      if (q.promise === "any") filters.push(sql`pr.promised_on is not null`);
       const order = {
         amount: sql`c.balance desc, c.name`,
         overdue: sql`coalesce(od.overdue, 0) desc, c.balance desc`,
         name: sql`coalesce(c.business_name, c.name)`,
         oldest: sql`od.oldest_due asc nulls last, c.balance desc`,
+        promise: sql`pr.promised_on asc nulls last, c.balance desc`,
       }[q.sort];
 
       const { rows, cities } = await tenant(ctx, async (tx) => {
@@ -80,10 +105,18 @@ export const collectionsModule: ApiModule = async (app, deps) => {
             oldest_due: string | null;
             last_payment_date: string | null;
             last_payment_amount: string | null;
+            promised_on: string | null;
+            promised_amount: string | null;
+            promise_note: string | null;
+            note_kind: string | null;
+            note_text: string | null;
+            note_on: string | null;
           }>(sql`
             select c.id, c.code, c.name, c.business_name, c.mobile, c.city, c.address_line1, c.route_id, r.name as route_name, c.balance::text,
                    coalesce(od.overdue, 0)::text as overdue, coalesce(od.open_bills, 0)::int as open_bills, od.oldest_due::text as oldest_due,
-                   lp.payment_date::text as last_payment_date, lp.amount::text as last_payment_amount
+                   lp.payment_date::text as last_payment_date, lp.amount::text as last_payment_amount,
+                   pr.promised_on::text as promised_on, pr.promised_amount::text as promised_amount, pr.note as promise_note,
+                   ln.kind as note_kind, ln.note as note_text, ln.visited_on::text as note_on
             from customers c
             left join sales_routes r on r.id = c.route_id
             left join lateral (
@@ -97,6 +130,10 @@ export const collectionsModule: ApiModule = async (app, deps) => {
               where p.customer_id = c.id and p.status = 'posted' and p.direction = 'in'
               order by p.payment_date desc, p.created_at desc limit 1
             ) lp on true
+            left join lateral (${openPromise(sql`c.id`)}) pr on true
+            left join lateral (
+              select n.kind, n.note, n.visited_on from collection_notes n where n.customer_id = c.id order by n.created_at desc limit 1
+            ) ln on true
             where ${sql.join(filters, sql` and `)}
             order by ${order}
             limit 5000`)
@@ -132,6 +169,8 @@ export const collectionsModule: ApiModule = async (app, deps) => {
           daysOverdue: oldest && oldest < today ? Math.round((Date.parse(today) - Date.parse(oldest)) / 86_400_000) : 0,
           lastPaymentDate: c.last_payment_date,
           lastPaymentAmount: c.last_payment_amount ? dec(c.last_payment_amount).toFixed(2) : null,
+          promise: c.promised_on ? { date: c.promised_on, amount: c.promised_amount ? dec(c.promised_amount).toFixed(2) : null, note: c.promise_note } : null,
+          lastNote: c.note_on ? { kind: c.note_kind as "promise" | "note", note: c.note_text, date: c.note_on } : null,
         };
       });
       const totals = {
@@ -142,7 +181,7 @@ export const collectionsModule: ApiModule = async (app, deps) => {
 
       if (q.format !== "json") {
         await tenant(ctx, (tx) =>
-          audit(tx, ctx, { action: "outstanding.exported", entityType: "customer", changes: { format: q.format, city: q.city ?? null, routeId: q.routeId ?? null, rows: data.length } }),
+          audit(tx, ctx, { action: "outstanding.exported", entityType: "customer", changes: { format: q.format, city: q.city ?? null, routeId: q.routeId ?? null, promise: q.promise ?? null, rows: data.length } }),
         );
       }
       const place = q.city && q.city !== "-" ? q.city : null;
@@ -158,6 +197,7 @@ export const collectionsModule: ApiModule = async (app, deps) => {
           { key: "place", label: "City / route" },
           { key: "openBills", label: "Bills" },
           { key: "oldestDue", label: "Oldest due" },
+          { key: "promisedOn", label: "Promised" },
           { key: "overdue", label: "Overdue" },
           { key: "outstanding", label: "Outstanding" },
           // Left blank for the collector to write in (PDF and print).
@@ -170,6 +210,7 @@ export const collectionsModule: ApiModule = async (app, deps) => {
             ...x,
             place: [x.city, x.route].filter(Boolean).join(" · "),
             oldestDue: x.oldestDueDate ?? "",
+            promisedOn: x.promise?.date ?? "",
             collected: "",
           })),
           totals,
@@ -209,6 +250,23 @@ export const collectionsModule: ApiModule = async (app, deps) => {
             where business_id = ${ctx.businessId} and customer_id = ${c.customer.id} and status = 'posted' and direction = 'in'
             order by payment_date desc, created_at desc limit 5`)
         ).rows;
+        const [promise] = (await tx.execute<{ promised_on: string; promised_amount: string | null; note: string | null }>(openPromise(sql`${c.customer.id}`))).rows;
+        const notes = await tx
+          .select({
+            id: schema.collectionNotes.id,
+            kind: schema.collectionNotes.kind,
+            note: schema.collectionNotes.note,
+            promisedAmount: schema.collectionNotes.promisedAmount,
+            promisedOn: schema.collectionNotes.promisedOn,
+            visitedOn: schema.collectionNotes.visitedOn,
+            createdAt: schema.collectionNotes.createdAt,
+            by: schema.users.name,
+          })
+          .from(schema.collectionNotes)
+          .leftJoin(schema.users, eq(schema.users.id, schema.collectionNotes.createdBy))
+          .where(and(eq(schema.collectionNotes.businessId, ctx.businessId), eq(schema.collectionNotes.customerId, c.customer.id)))
+          .orderBy(desc(schema.collectionNotes.createdAt))
+          .limit(10);
         const aged = ageDocuments(
           bills.map((x) => ({ id: x.id, number: x.number, date: x.date, dueDate: x.due_date, balance: x.balance })),
           { asOf: today, edges: settings["reports.aging_buckets"], basis: "due_date" },
@@ -251,8 +309,81 @@ export const collectionsModule: ApiModule = async (app, deps) => {
             daysOverdue: x.due_date < today ? Math.round((Date.parse(today) - Date.parse(x.due_date)) / 86_400_000) : 0,
           })),
           payments: payments.map((p) => ({ id: p.id, number: p.number, date: p.date, amount: dec(p.amount).toFixed(2), method: p.method })),
+          promise: promise ? { date: promise.promised_on, amount: promise.promised_amount ? dec(promise.promised_amount).toFixed(2) : null, note: promise.note } : null,
+          notes: notes.map((n) => ({ ...n, kind: n.kind as "promise" | "note", promisedAmount: n.promisedAmount ? dec(n.promisedAmount).toFixed(2) : null })),
         };
       });
+    },
+  );
+
+  /**
+   * Nothing (or not all) received on a visit: a note, or the customer's
+   * promise to pay by a date. The Idempotency-Key (a UUID made on the device)
+   * becomes the note's id, so a note saved offline and sent twice is one note.
+   */
+  r.post(
+    "/collections/notes",
+    { preHandler: guard(deps, "payment.collect"), schema: { tags: ["reports"], body: NoteBody } },
+    async (request, reply) => {
+      const ctx = request.ctx;
+      const body = request.body;
+      const key = request.headers["idempotency-key"];
+      const clientId = typeof key === "string" && z.uuid().safeParse(key).success ? key : null;
+      if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
+      const today = deps.clock.today(ctx.timeZone);
+      if (body.kind === "promise") {
+        if (!body.promisedOn) throw badRequest("PROMISE_DATE_REQUIRED", {}, "promisedOn");
+        if (body.promisedOn < today) throw badRequest("PROMISE_DATE_PAST", {}, "promisedOn");
+        if (Date.parse(body.promisedOn) - Date.parse(today) > 366 * 86_400_000) throw badRequest("PROMISE_DATE_TOO_FAR", {}, "promisedOn");
+        if (body.promisedAmount !== undefined && !dec(body.promisedAmount).gt(0)) throw badRequest("VALIDATION_FAILED", {}, "promisedAmount");
+      } else if (!body.note) throw badRequest("NOTE_REQUIRED", {}, "note");
+      const result = await tenant(ctx, async (tx) => {
+        const read = async (id: string) => {
+          const [row] = await tx
+            .select({ note: schema.collectionNotes, by: schema.users.name })
+            .from(schema.collectionNotes)
+            .leftJoin(schema.users, eq(schema.users.id, schema.collectionNotes.createdBy))
+            .where(and(eq(schema.collectionNotes.id, id), eq(schema.collectionNotes.businessId, ctx.businessId)));
+          return row ? { ...row.note, by: row.by } : null;
+        };
+        if (clientId) {
+          const existing = await read(clientId);
+          if (existing) return { replay: true, note: existing };
+        }
+        const [customer] = await tx
+          .select({ id: schema.customers.id, name: schema.customers.name })
+          .from(schema.customers)
+          .where(and(eq(schema.customers.id, body.customerId), eq(schema.customers.businessId, ctx.businessId), isNull(schema.customers.deletedAt)));
+        if (!customer) throw notFound("customer");
+        const id = clientId ?? uuidv7();
+        const inserted = await tx
+          .insert(schema.collectionNotes)
+          .values({
+            id,
+            businessId: ctx.businessId,
+            customerId: customer.id,
+            kind: body.kind,
+            note: body.note || null,
+            promisedAmount: body.kind === "promise" && body.promisedAmount ? dec(body.promisedAmount).toFixed(2) : null,
+            promisedOn: body.kind === "promise" ? body.promisedOn! : null,
+            visitedOn: today,
+            createdBy: ctx.userId,
+            updatedBy: ctx.userId,
+          })
+          .onConflictDoNothing({ target: schema.collectionNotes.id })
+          .returning({ id: schema.collectionNotes.id });
+        // The id is taken by a row this business cannot see: not a key this device made for it.
+        if (inserted.length === 0) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
+        await audit(tx, ctx, {
+          action: body.kind === "promise" ? "collection.promise_noted" : "collection.note_added",
+          entityType: "customer",
+          entityId: customer.id,
+          entityLabel: customer.name,
+          changes: { kind: body.kind, note: body.note ?? null, promisedOn: body.promisedOn ?? null, promisedAmount: body.promisedAmount ?? null },
+        });
+        return { replay: false, note: (await read(id))! };
+      });
+      return reply.code(result.replay ? 200 : 201).send(result.note);
     },
   );
 };

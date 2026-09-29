@@ -10,8 +10,8 @@ import { isSealed, seal, unseal, type Sealed } from "./vault";
 
 /**
  * Work done without a connection waits here (on the device, in IndexedDB)
- * until the server takes it: bills, payments, orders, new customers and
- * changes to customers. Each is sent with its own Idempotency-Key, so a send
+ * until the server takes it: bills, payments, orders, new customers, changes
+ * to customers and collectors' visit notes. Each is sent with its own Idempotency-Key, so a send
  * cut off half-way is simply sent again; the server keeps the number the
  * device gave a bill, and a new customer keeps the id it was billed under.
  */
@@ -88,7 +88,19 @@ export interface CustomerEditEntry extends EntryBase {
   after: CustomerRow;
 }
 
-export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry;
+/** A collector's visit: a note, or the customer's promise to pay by a date. */
+export interface CollectionNoteEntry extends EntryBase {
+  kind: "collection-note";
+  customerId: string;
+  customerName: string;
+  noteKind: "promise" | "note";
+  /** The promised date, or the day of the visit. */
+  date: string;
+  amount: number | null;
+  body: Record<string, unknown>;
+}
+
+export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry;
 export type QueuedKind = NonNullable<QueuedEntry["kind"]>;
 export const kindOf = (e: { kind?: QueuedKind }): QueuedKind => e.kind ?? "invoice";
 
@@ -240,7 +252,7 @@ export const refreshDevice = () => reload();
 function customerOf(e: QueuedEntry): string | null {
   const kind = kindOf(e);
   if (kind === "payment") return (e as PaymentEntry).direction === "in" ? (e as PaymentEntry).partyId : null;
-  return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry).customerId;
+  return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry).customerId;
 }
 
 /**
@@ -282,6 +294,7 @@ function applyEffects(e: QueuedEntry, sign: 1 | -1): void {
       return;
     }
     case "order":
+    case "collection-note":
       return;
   }
 }
@@ -383,6 +396,11 @@ async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt"
         res = now;
       }
       return { kind: "customer-edit", number: "", customerName: c.customerName, total: 0, serverId: res.id, serverNumber: res.code, serverTotal: 0 };
+    }
+    case "collection-note": {
+      const n = e as CollectionNoteEntry;
+      const res = await api.post<{ id: string }>("/collections/notes", n.body, { idempotencyKey: n.id });
+      return { kind: "collection-note", number: "", customerName: n.customerName, total: n.amount ?? 0, serverId: res.id, serverNumber: "", serverTotal: n.amount ?? 0 };
     }
   }
 }

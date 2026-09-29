@@ -12,10 +12,10 @@ import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { downloadCsv, downloadReport } from "../../lib/download";
 import { applyFilters, cityKey, placesOf, sumMoney, type Filters, type OutstandingRow, type Sort, useOutstandingRows } from "./data";
-import { OutstandingDetailDialog } from "./OutstandingDetailDialog";
+import { OutstandingDetailDialog, PromiseLine } from "./OutstandingDetailDialog";
 import { OutstandingListPrint } from "./OutstandingPrint";
 
-const SORTS: Sort[] = ["amount", "overdue", "oldest", "name"];
+const SORTS: Sort[] = ["amount", "overdue", "oldest", "promise", "name"];
 
 function Figure({ label, value, format, sub }: { label: string; value: number; format(v: number): string; sub?: string }) {
   return (
@@ -40,7 +40,7 @@ export function OutstandingPage() {
   const { t, money, date } = useI18n();
   const toast = useToast();
   const data = useOutstandingRows();
-  const [filters, setFilters] = useState<Filters>({ place: null, route: "", q: "", overdueOnly: false, sort: "amount" });
+  const [filters, setFilters] = useState<Filters>({ place: null, route: "", q: "", overdueOnly: false, promiseDue: false, sort: "amount" });
   const [openRow, setOpenRow] = useState<OutstandingRow | null>(null);
   const [busy, setBusy] = useState<"pdf" | "xlsx" | "csv" | null>(null);
   const set = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
@@ -54,7 +54,7 @@ export function OutstandingPage() {
 
   const place = filters.place === null ? null : (places.find((p) => p.key === filters.place) ?? null);
   const placeLabel = place ? (place.label ?? t("collect.noCity")) : null;
-  const filterLabels = [placeLabel, filters.route || null, filters.overdueOnly ? t("collect.onlyOverdue") : null, filters.q.trim() ? `“${filters.q.trim()}”` : null].filter((x): x is string => Boolean(x));
+  const filterLabels = [placeLabel, filters.route || null, filters.overdueOnly ? t("collect.onlyOverdue") : null, filters.promiseDue ? t("collect.promiseDue") : null, filters.q.trim() ? `“${filters.q.trim()}”` : null].filter((x): x is string => Boolean(x));
   const printTitle = placeLabel ? t("collect.printTitlePlace", { place: placeLabel }) : t("collect.printTitle");
   const fileName = `outstanding${place?.label ? `-${place.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}` : ""}-${data.asOf}`;
   const remote = LIVE && data.source === "server";
@@ -70,6 +70,7 @@ export function OutstandingPage() {
           { label: t("collect.place"), value: (r) => [r.city, r.route].filter(Boolean).join(" · ") },
           { label: t("collect.bills"), value: (r) => r.openBills },
           { label: t("collect.oldestDue"), value: (r) => r.oldestDueDate },
+          { label: t("collect.promisedCol"), value: (r) => r.promise?.date },
           { label: t("collect.overdue"), value: (r) => r.overdue.toFixed(2) },
           { label: t("collect.toCollect"), value: (r) => r.outstanding.toFixed(2) },
         ],
@@ -84,6 +85,7 @@ export function OutstandingPage() {
       ...(routeId ? { routeId } : {}),
       ...(filters.q.trim() ? { q: filters.q.trim() } : {}),
       ...(filters.overdueOnly ? { overdue: "true" } : {}),
+      ...(filters.promiseDue ? { promise: "due" } : {}),
     };
     setBusy(format);
     downloadReport("/collections/outstanding", query, fileName, format)
@@ -198,6 +200,16 @@ export function OutstandingPage() {
           >
             {t("collect.onlyOverdue")}
           </button>
+          {remote && (
+            <button
+              type="button"
+              aria-pressed={filters.promiseDue}
+              onClick={() => set({ promiseDue: !filters.promiseDue })}
+              className={cn("h-10 shrink-0 rounded-full border px-4 text-[13px] font-medium", filters.promiseDue ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong")}
+            >
+              {t("collect.promiseDue")}
+            </button>
+          )}
         </div>
       </div>
 
@@ -218,7 +230,7 @@ export function OutstandingPage() {
           data.rows.length === 0 ? (
             <EmptyState title={t("collect.empty")} hint={t("collect.emptyHint")} />
           ) : (
-            <EmptyState title={t("collect.emptyFiltered")} action={<Button size="sm" onClick={() => setFilters({ place: null, route: "", q: "", overdueOnly: false, sort: filters.sort })}>{t("common.reset")}</Button>} />
+            <EmptyState title={t("collect.emptyFiltered")} action={<Button size="sm" onClick={() => setFilters({ place: null, route: "", q: "", overdueOnly: false, promiseDue: false, sort: filters.sort })}>{t("common.reset")}</Button>} />
           )
         ) : (
           <>
@@ -247,6 +259,7 @@ export function OutstandingPage() {
                             {r.name}
                           </button>
                           <p className="num text-[12.5px] text-ink-3">{[r.contactName, r.mobile].filter(Boolean).join(" · ")}</p>
+                          <VisitLine row={r} />
                         </div>
                       </div>
                     </td>
@@ -311,6 +324,7 @@ export function OutstandingPage() {
                           {r.daysOverdue > 0 && <span className="text-danger">{t("collect.daysLate", { count: r.daysOverdue })}</span>}
                         </p>
                       )}
+                      <VisitLine row={r} />
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="num text-[15px] font-semibold text-ink">{money(r.outstanding, 0)}</p>
@@ -341,4 +355,17 @@ export function OutstandingPage() {
       <OutstandingDetailDialog row={openRow} source={data.source} onOpenChange={(v) => !v && setOpenRow(null)} />
     </div>
   );
+}
+
+/** Under a customer's name: their open promise, or what the last visit noted. */
+function VisitLine({ row }: { row: OutstandingRow }) {
+  const { date } = useI18n();
+  if (row.promise) return <PromiseLine promise={row.promise} className="text-[12px] font-medium" />;
+  if (row.lastNote?.kind === "note" && row.lastNote.note)
+    return (
+      <p className="truncate text-[12px] text-ink-3 italic">
+        {date(row.lastNote.date)} · {row.lastNote.note}
+      </p>
+    );
+  return null;
 }

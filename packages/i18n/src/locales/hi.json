@@ -936,7 +936,11 @@
     "ACCOUNT_PASSWORD_REQUIRED": "रिस्टोर करने के लिए अपना Digital Bahi पासवर्ड लिखें।",
     "ACCOUNT_PASSWORD_WRONG": "यह आपका Digital Bahi पासवर्ड नहीं है।",
     "BACKUP_SCHEDULE_NO_PASSWORD": "अपने-आप बैकअप के लिए फ़ाइल का पासवर्ड चाहिए (कम से कम 8 अक्षर)।",
-    "BACKUP_SCHEDULE_NO_ACCESS": "जिन्होंने अपने-आप बैकअप चालू किया था वे अब बैकअप डाउनलोड नहीं कर सकते, इसलिए ये बंद कर दिए गए। फिर से चालू करें।"
+    "BACKUP_SCHEDULE_NO_ACCESS": "जिन्होंने अपने-आप बैकअप चालू किया था वे अब बैकअप डाउनलोड नहीं कर सकते, इसलिए ये बंद कर दिए गए। फिर से चालू करें।",
+    "PROMISE_DATE_REQUIRED": "ग्राहक ने किस तारीख तक भुगतान का वादा किया, वह चुनें",
+    "PROMISE_DATE_PAST": "वादे की तारीख आज से पहले की नहीं हो सकती",
+    "PROMISE_DATE_TOO_FAR": "वादे की तारीख एक साल के अंदर होनी चाहिए",
+    "NOTE_REQUIRED": "विज़िट पर क्या हुआ, लिखें"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -2039,7 +2043,8 @@
       "paymentOut": "सप्लायर को भुगतान",
       "order": "ऑर्डर",
       "customer": "नया ग्राहक",
-      "customer-edit": "ग्राहक का ब्योरा"
+      "customer-edit": "ग्राहक का ब्योरा",
+      "collection-note": "विज़िट नोट"
     },
     "removeEntryConfirm": "यह {{what}} ({{name}}) हटाएँ? यह खातों में नहीं जाएगा।",
     "removeCustomerConfirm": "नया ग्राहक {{name}} हटाएँ? फिर उनके लिए रुके बिल, भुगतान और ऑर्डर नहीं भेजे जा सकेंगे।",
@@ -2297,7 +2302,8 @@
       "amount": "सबसे ज़्यादा बकाया पहले",
       "overdue": "सबसे ज़्यादा देरी वाला पहले",
       "oldest": "सबसे पुराना बकाया पहले",
-      "name": "नाम अ–ज्ञ"
+      "name": "नाम अ–ज्ञ",
+      "promise": "वादे की तारीख पहले"
     },
     "bills_one": "{{count}} बिल",
     "bills_other": "{{count}} बिल",
@@ -2338,6 +2344,41 @@
     "balance": "बाकी",
     "total": "कुल",
     "downloadFailed": "डाउनलोड नहीं हुआ",
-    "allRoutes": "सभी रूट"
+    "allRoutes": "सभी रूट",
+    "notPaid": "पैसा नहीं मिला? नोट या वादा",
+    "noteTitle": "विज़िट नोट",
+    "kindPromise": "भुगतान का वादा",
+    "kindNote": "नोट",
+    "promisedOn": "कब तक देंगे",
+    "promisedAmount": "कितना देंगे",
+    "amountHint": "पूरी रकम के लिए खाली छोड़ें",
+    "noteText": "क्या हुआ",
+    "noteOptional": "नोट (ज़रूरी नहीं)",
+    "when": {
+      "tomorrow": "कल",
+      "in3": "3 दिन में",
+      "nextWeek": "अगले हफ्ते"
+    },
+    "reasons": {
+      "closed": "दुकान बंद थी",
+      "away": "मालिक नहीं थे",
+      "later": "बाद में आने को कहा",
+      "dispute": "बिल पर विवाद",
+      "noCash": "पैसे तैयार नहीं थे"
+    },
+    "noteSaved": "नोट सेव हुआ",
+    "promiseSaved": "वादा सेव हुआ",
+    "promised": "{{date}} तक {{amount}} का वादा",
+    "promisedFull": "{{date}} तक भुगतान का वादा",
+    "promiseMissed": "वादा टूटा: {{date}}",
+    "promiseDue": "वादे की तारीख आई",
+    "promisedCol": "वादा",
+    "visits": "विज़िट और वादे",
+    "noVisits": "अभी कोई विज़िट नोट नहीं",
+    "byName": "{{name}} द्वारा",
+    "provisional": "अस्थायी रसीद",
+    "provisionalHint": "इस फ़ोन पर सेव है। सिंक होने पर रसीद नंबर मिलेगा; ग्राहक को अभी यह दे सकते हैं।",
+    "pendingNumber": "(सिंक के बाद नंबर)",
+    "shareReceipt": "व्हाट्सऐप पर भेजें"
   }
 }

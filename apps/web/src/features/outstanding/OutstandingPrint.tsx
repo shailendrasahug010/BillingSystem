@@ -44,6 +44,11 @@ export function OutstandingListPrint({ rows, title, filters, asOf }: { rows: Out
               <td className={cellL}>
                 <span className="font-semibold">{r.name}</span>
                 {r.mobile && <span className="block text-[#4a5570]">{r.mobile}</span>}
+                {r.promise && (
+                  <span className="block text-[#1450b4]">
+                    {r.promise.amount !== null ? t("collect.promised", { amount: money(r.promise.amount, 0), date: date(r.promise.date) }) : t("collect.promisedFull", { date: date(r.promise.date) })}
+                  </span>
+                )}
               </td>
               <td className={cellL}>{[r.city, r.route].filter(Boolean).join(" · ")}</td>
               <td className={cellR}>{r.openBills ?? ""}</td>

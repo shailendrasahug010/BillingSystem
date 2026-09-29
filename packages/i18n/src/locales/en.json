@@ -936,7 +936,11 @@
     "ACCOUNT_PASSWORD_REQUIRED": "Type your Digital Bahi password to restore.",
     "ACCOUNT_PASSWORD_WRONG": "That is not your Digital Bahi password.",
     "BACKUP_SCHEDULE_NO_PASSWORD": "Automatic backups need a password for the file (at least 8 characters).",
-    "BACKUP_SCHEDULE_NO_ACCESS": "The person who set up automatic backups can no longer download backups, so they were turned off. Turn them on again."
+    "BACKUP_SCHEDULE_NO_ACCESS": "The person who set up automatic backups can no longer download backups, so they were turned off. Turn them on again.",
+    "PROMISE_DATE_REQUIRED": "Choose the date the customer promised to pay by",
+    "PROMISE_DATE_PAST": "The promised date cannot be before today",
+    "PROMISE_DATE_TOO_FAR": "The promised date must be within a year",
+    "NOTE_REQUIRED": "Write what happened on the visit"
   },
   "validation": {
     "required": "This field is required",
@@ -2039,7 +2043,8 @@
       "paymentOut": "Payment to supplier",
       "order": "Order",
       "customer": "New customer",
-      "customer-edit": "Customer details"
+      "customer-edit": "Customer details",
+      "collection-note": "Visit note"
     },
     "removeEntryConfirm": "Remove this {{what}} ({{name}})? It will not reach the books.",
     "removeCustomerConfirm": "Remove the new customer {{name}}? Bills, payments and orders for them that are still waiting cannot be sent then.",
@@ -2297,7 +2302,8 @@
       "amount": "Largest due first",
       "overdue": "Most overdue first",
       "oldest": "Oldest due first",
-      "name": "Name A–Z"
+      "name": "Name A–Z",
+      "promise": "Promise date first"
     },
     "bills_one": "{{count}} bill",
     "bills_other": "{{count}} bills",
@@ -2338,6 +2344,41 @@
     "balance": "Balance",
     "total": "Total",
     "downloadFailed": "Could not download",
-    "allRoutes": "All routes"
+    "allRoutes": "All routes",
+    "notPaid": "Not paid? Note or promise",
+    "noteTitle": "Visit note",
+    "kindPromise": "Promise to pay",
+    "kindNote": "Note",
+    "promisedOn": "Will pay by",
+    "promisedAmount": "Amount promised",
+    "amountHint": "Leave empty for the full amount",
+    "noteText": "What happened",
+    "noteOptional": "Note (optional)",
+    "when": {
+      "tomorrow": "Tomorrow",
+      "in3": "In 3 days",
+      "nextWeek": "Next week"
+    },
+    "reasons": {
+      "closed": "Shop closed",
+      "away": "Owner not there",
+      "later": "Asked to come later",
+      "dispute": "Dispute on a bill",
+      "noCash": "Money not ready"
+    },
+    "noteSaved": "Note saved",
+    "promiseSaved": "Promise saved",
+    "promised": "Promised {{amount}} by {{date}}",
+    "promisedFull": "Promised to pay by {{date}}",
+    "promiseMissed": "Promise missed: {{date}}",
+    "promiseDue": "Promise due",
+    "promisedCol": "Promised",
+    "visits": "Visits and promises",
+    "noVisits": "No visit notes yet",
+    "byName": "by {{name}}",
+    "provisional": "Provisional receipt",
+    "provisionalHint": "Saved on this phone. The receipt number comes when it syncs; the customer can be given this now.",
+    "pendingNumber": "(number after sync)",
+    "shareReceipt": "Share on WhatsApp"
   }
 }

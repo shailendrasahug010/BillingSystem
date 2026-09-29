@@ -82,16 +82,27 @@ export function invalidateMoney(qc: ReturnType<typeof useQueryClient>) {
  * oldest open bills first (editable per bill); anything left over stays on the
  * party's account as an advance. Cheques need a number and start as pending.
  */
+/** What was saved: the server's payment, or one kept on this device to send later. */
+export type SavedPayment =
+  | { id: string; paymentNumber: string }
+  | { offline: { partyName: string; date: string; amount: number; method: PaymentMethod; referenceNumber: string | null } };
+
 export function PaymentDialog({
   direction,
   partyId: initialParty,
+  initialAmount,
   open,
   onOpenChange,
+  onSaved,
 }: {
   direction: "in" | "out";
   partyId?: string | null;
+  /** The amount to start with (e.g. what is overdue); editable. */
+  initialAmount?: string;
   open: boolean;
   onOpenChange(v: boolean): void;
+  /** Called once the payment is saved, before the dialog closes (to show its receipt). */
+  onSaved?(saved: SavedPayment): void;
 }) {
   const { t, money, dateMedium } = useI18n();
   const toast = useToast();
@@ -112,11 +123,12 @@ export function PaymentDialog({
   useEffect(() => {
     if (!open) return;
     setParty(initialParty ?? null);
-    setForm({ amount: "", method: "cash", date: TODAY, reference: "", chequeDate: "", chequeBank: "", notes: "" });
+    setForm({ amount: initialAmount ?? "", method: "cash", date: TODAY, reference: "", chequeDate: "", chequeBank: "", notes: "" });
     setManual(null);
     setKey(newIdempotencyKey());
     setError(null);
     setTouched(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialParty]);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -186,11 +198,12 @@ export function PaymentDialog({
         }));
       if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
       toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("payment.saved")} · ${money(amount)} · ${t("offline.sendsLater")}` });
+      onSaved?.({ offline: { partyName: name ?? "", date: form.date, amount, method: form.method, referenceNumber: form.reference.trim() || null } });
       onOpenChange(false);
     };
     try {
       if (keepHere || workingOffline()) return await keep();
-      const res = await api.post<{ paymentNumber: string; amount: string }>(
+      const res = await api.post<{ id: string; paymentNumber: string; amount: string }>(
         "/payments",
         {
           ...body,
@@ -203,6 +216,7 @@ export function PaymentDialog({
       await (direction === "in" ? refreshCustomer(party!) : refreshSupplier(party!)).catch(() => undefined);
       invalidateMoney(qc);
       toast({ tone: "success", title: t("payment.saved"), body: `${res.paymentNumber} · ${money(res.amount)}` });
+      onSaved?.({ id: res.id, paymentNumber: res.paymentNumber });
       onOpenChange(false);
     } catch (e) {
       if (unreachable(e)) {

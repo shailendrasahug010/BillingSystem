@@ -1,4 +1,4 @@
-import { ChevronRight, MessageCircle, Phone, Printer, UserRound, Wallet } from "lucide-react";
+import { CalendarClock, ChevronRight, MessageCircle, NotebookPen, Phone, Printer, UserRound, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -8,13 +8,32 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Avatar, Skeleton } from "../../components/ui/misc";
 import { ErrorNote } from "../../components/ui/Page";
 import { PrintPortal } from "../../components/ui/PrintPortal";
-import { allowed, BUSINESS } from "../../data/db";
+import { allowed, BUSINESS, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { cn } from "../../lib/cn";
 import { shareOnWhatsApp, whatsappNumber } from "../../lib/share";
-import { PaymentDialog } from "../payments/PaymentDialog";
-import { useOutstandingDetail, type OutstandingRow } from "./data";
+import { PaymentDialog, type SavedPayment } from "../payments/PaymentDialog";
+import { PaymentDetailDialog } from "../payments/PaymentsPage";
+import { CollectionNoteDialog } from "./CollectionNoteDialog";
+import { useOutstandingDetail, type OutstandingRow, type PayPromise } from "./data";
 import { OutstandingStatementPrint } from "./OutstandingPrint";
+import { ProvisionalReceiptDialog } from "./ProvisionalReceiptDialog";
+
+/** "Promised ₹1,000 by 3 Oct", or "Promise missed: 28 Sep" once the day has passed. */
+export function PromiseLine({ promise, className }: { promise: PayPromise; className?: string }) {
+  const { t, money, date } = useI18n();
+  const missed = promise.date < TODAY;
+  return (
+    <span className={cn("inline-flex items-center gap-1", missed ? "text-danger" : "text-accent-ink", className)}>
+      <CalendarClock size={13} className="shrink-0" aria-hidden />
+      {missed
+        ? t("collect.promiseMissed", { date: date(promise.date) })
+        : promise.amount !== null
+          ? t("collect.promised", { amount: money(promise.amount, 0), date: date(promise.date) })
+          : t("collect.promisedFull", { date: date(promise.date) })}
+    </span>
+  );
+}
 
 function Figure({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "danger" | "accent" }) {
   return (
@@ -38,9 +57,14 @@ function SectionTitle({ children }: { children: string }) {
 export function OutstandingDetailDialog({ row, source, onOpenChange }: { row: OutstandingRow | null; source: "server" | "device"; onOpenChange(open: boolean): void }) {
   const { t, money, date, dateMedium } = useI18n();
   const { navigate } = useRouter();
-  const [collecting, setCollecting] = useState(false);
+  const [stage, setStage] = useState<"sheet" | "collect" | "note">("sheet");
+  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [provisional, setProvisional] = useState<Extract<SavedPayment, { offline: unknown }>["offline"] | null>(null);
   const { detail: d, loading, error } = useOutstandingDetail(row, source);
   const open = row !== null;
+  const onSheet = open && stage === "sheet" && !receiptId && !provisional;
+  const canCollect = LIVE && allowed("payment.collect");
+  const promise = d?.promise ?? row?.promise ?? null;
   const c = d?.customer;
   const mobile = c?.mobile ?? row?.mobile ?? null;
 
@@ -60,7 +84,7 @@ export function OutstandingDetailDialog({ row, source, onOpenChange }: { row: Ou
   return (
     <>
       <Dialog
-        open={open && !collecting}
+        open={onSheet}
         onOpenChange={onOpenChange}
         size="lg"
         closeLabel={t("common.close")}
@@ -77,8 +101,8 @@ export function OutstandingDetailDialog({ row, source, onOpenChange }: { row: Ou
                   {t("collect.openCustomer")}
                 </Button>
               )}
-              {LIVE && allowed("payment.collect") && (
-                <Button variant="primary" icon={<Wallet size={16} />} onClick={() => setCollecting(true)}>
+              {canCollect && (
+                <Button variant="primary" icon={<Wallet size={16} />} onClick={() => setStage("collect")}>
                   {t("payment.receive")}
                 </Button>
               )}
@@ -103,7 +127,18 @@ export function OutstandingDetailDialog({ row, source, onOpenChange }: { row: Ou
               <Button size="sm" icon={<MessageCircle size={15} />} disabled={!whatsappNumber(mobile)} onClick={remind}>
                 {t("collect.remind")}
               </Button>
+              {canCollect && (
+                <Button size="sm" icon={<NotebookPen size={15} />} onClick={() => setStage("note")}>
+                  {t("collect.notPaid")}
+                </Button>
+              )}
             </div>
+            {promise && (
+              <p className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl px-3.5 py-2.5 text-[13.5px] font-medium", promise.date < TODAY ? "bg-danger-soft" : "bg-accent-soft")}>
+                <PromiseLine promise={promise} />
+                {promise.note && <span className="font-normal text-ink-2">· {promise.note}</span>}
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Figure label={t("collect.toCollect")} value={money(d?.outstanding ?? row.outstanding)} tone="accent" />
@@ -199,6 +234,37 @@ export function OutstandingDetailDialog({ row, source, onOpenChange }: { row: Ou
                     )}
                   </section>
 
+                  {source === "server" && (
+                    <section>
+                      <SectionTitle>{t("collect.visits")}</SectionTitle>
+                      {d.notes.length === 0 ? (
+                        <p className="text-[13px] text-ink-3">{t("collect.noVisits")}</p>
+                      ) : (
+                        <ul className="flex flex-col gap-2">
+                          {d.notes.map((n) => (
+                            <li key={n.id} className="flex gap-3 text-[13px]">
+                              <span className={cn("mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full", n.kind === "promise" ? "bg-accent-soft text-accent-ink" : "bg-surface-2 text-ink-3")}>
+                                {n.kind === "promise" ? <CalendarClock size={14} /> : <NotebookPen size={14} />}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                {n.kind === "promise" && n.promisedOn && (
+                                  <p className="font-medium text-ink">
+                                    {n.promisedAmount ? t("collect.promised", { amount: money(n.promisedAmount, 0), date: date(n.promisedOn) }) : t("collect.promisedFull", { date: date(n.promisedOn) })}
+                                  </p>
+                                )}
+                                {n.note && <p className={n.kind === "promise" ? "text-ink-2" : "text-ink"}>{n.note}</p>}
+                                <p className="num text-[12px] text-ink-3">
+                                  {date(n.visitedOn)}
+                                  {n.by && ` · ${t("collect.byName", { name: n.by })}`}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  )}
+
                   <section>
                     <SectionTitle>{t("collect.recentPayments")}</SectionTitle>
                     {d.payments.length === 0 ? (
@@ -223,21 +289,26 @@ export function OutstandingDetailDialog({ row, source, onOpenChange }: { row: Ou
           </div>
         )}
       </Dialog>
-      {open && d && !collecting && (
+      {onSheet && d && (
         <PrintPortal>
           <OutstandingStatementPrint detail={d} />
         </PrintPortal>
       )}
-      {row && collecting && (
+      {row && stage === "collect" && (
         <PaymentDialog
           direction="in"
           partyId={row.customerId}
+          initialAmount={(Number(d?.overdue ?? row.overdue) > 0 ? Number(d?.overdue ?? row.overdue) : Number(d?.outstanding ?? row.outstanding)).toFixed(2)}
           open
           onOpenChange={(v) => {
-            if (!v) setCollecting(false);
+            if (!v) setStage("sheet");
           }}
+          onSaved={(saved) => ("offline" in saved ? setProvisional(saved.offline) : setReceiptId(saved.id))}
         />
       )}
+      <CollectionNoteDialog customer={row && { id: row.customerId, name: row.name }} open={Boolean(row) && stage === "note"} onOpenChange={(v) => !v && setStage("sheet")} />
+      {receiptId && <PaymentDetailDialog paymentId={receiptId} onClose={() => setReceiptId(null)} />}
+      <ProvisionalReceiptDialog payment={provisional} mobile={mobile} onClose={() => setProvisional(null)} />
     </>
   );
 }
