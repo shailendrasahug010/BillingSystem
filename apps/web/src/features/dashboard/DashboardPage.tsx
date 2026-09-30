@@ -17,6 +17,10 @@ import {
   Users,
   Wallet,
   ChartLine,
+  CalendarCheck,
+  CalendarPlus,
+  HandCoins,
+  UserRoundPlus,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
@@ -34,6 +38,8 @@ import { BUSINESS, PRODUCTS, TODAY, allowed } from "../../data/db";
 import { useStoreVersion, type RangeKey } from "../../data/store";
 import { useSession } from "../../app/session";
 import { useDashboardView, type Grain } from "./data";
+import { LIVE } from "../../data/source";
+import { ExpensesCard, LeaveCard, PayrollCard, PeopleCard, PromisesCard, QueueCard, roleHeroFigures, useHome } from "./RoleHome";
 import { cn } from "../../lib/cn";
 
 
@@ -129,6 +135,25 @@ function HeroFigure({ label, value, format, previous, foot }: { label: string; v
   );
 }
 
+/** A banner figure without a comparison (roles without the sales dashboard). */
+function PlainFigure({ label, value, format, foot }: { label: string; value: number; format(v: number): string; foot?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm md:min-w-[190px]">
+      <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
+      <span className="num font-display text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[30px]">
+        <CountUp value={value} format={format} />
+      </span>
+      {foot && <span className="text-[12px] text-ink-2">{foot}</span>}
+    </div>
+  );
+}
+
+/**
+ * Home for every role. With the sales dashboard (dashboard.view): today's
+ * money, trends, top sellers, dues and stock. Everyone also gets the parts
+ * of their own work the role covers: what to pack and send, who is in and
+ * the leave to decide, the salary run, the promises to pay due today.
+ */
 export function DashboardPage() {
   const { t, money, compact, date, dateMedium, locale } = useI18n();
   const { navigate } = useRouter();
@@ -139,9 +164,11 @@ export function DashboardPage() {
   const [asTable, setAsTable] = useState(false);
 
   const session = useSession();
+  // Live: the sales dashboard only for roles that have it; the demo shows everything.
+  const full = !LIVE || allowed("dashboard.view");
   const view = useDashboardView(range, grain);
-  const low = PRODUCTS.filter((p) => stockLevel(p.stock, p.minStock) === "low");
-  const out = PRODUCTS.filter((p) => stockLevel(p.stock, p.minStock) === "out_of_stock");
+  const home = useHome().data;
+  const heroFigures = full ? [] : roleHeroFigures(home, t, money);
   const shown = ready && view !== null;
 
   const trend = useMemo(() => {
@@ -180,8 +207,23 @@ export function DashboardPage() {
       { label: t("dashboard.actions.stockAdjustment"), icon: <Boxes size={19} />, route: { name: "planned", module: "inventory" }, tint: "amber", permission: "inventory.adjust" },
       { label: t("dashboard.actions.addProduct"), icon: <Package size={19} />, route: { name: "products" }, tint: "violet", permission: "product.create" },
       { label: t("dashboard.actions.addExpense"), icon: <BadgeIndianRupee size={19} />, route: { name: "planned", module: "expenses" }, tint: "rose", permission: "expense.create" },
-    ] as Array<{ label: string; icon: ReactNode; route: Route; keys?: string; primary?: boolean; tint: Tint; permission: string }>
-  ).filter((a) => allowed(a.permission));
+      { label: t("dashboard.actions.collect"), icon: <HandCoins size={19} />, route: { name: "outstanding" }, tint: "green", permission: "customer.view_ledger", extra: true },
+      { label: t("dashboard.actions.packOrders"), icon: <PackageCheck size={19} />, route: { name: "planned", module: "packing" }, tint: "amber", permission: "packing.pack", extra: true },
+      { label: t("dashboard.actions.dispatch"), icon: <Truck size={19} />, route: { name: "planned", module: "dispatch" }, tint: "teal", permission: "dispatch.dispatch", extra: true },
+      { label: t("dashboard.actions.markAttendance"), icon: <CalendarCheck size={19} />, route: { name: "planned", module: "employees" }, tint: "green", permission: "employee.update", extra: true },
+      { label: t("dashboard.actions.addEmployee"), icon: <UserRoundPlus size={19} />, route: { name: "planned", module: "employees" }, tint: "blue", permission: "employee.create", extra: true },
+      { label: t("dashboard.actions.applyLeave"), icon: <CalendarPlus size={19} />, route: { name: "planned", module: "leave" }, tint: "violet", permission: "leave.apply", extra: true },
+    ] as Array<{ label: string; icon: ReactNode; route: Route; keys?: string; primary?: boolean; tint: Tint; permission: string; extra?: boolean }>
+  )
+    // The work actions (collect, pack, attendance…) for roles without the sales dashboard; the rest keep the billing actions.
+    .filter((a) => allowed(a.permission) && (!a.extra || !full));
+
+  // Orders, packing and dispatch counts, each for the roles that see that stage.
+  const operations = [
+    { label: t("dashboard.kpi.pendingOrders"), n: view?.orders.pending ?? 0, icon: <ClipboardList size={16} />, tint: "violet" as Tint, route: { name: "planned", module: "orders" } as Route, show: allowed("order.view") },
+    { label: t("dashboard.kpi.toPack"), n: view?.orders.toPack ?? 0, icon: <PackageCheck size={16} />, tint: "amber" as Tint, route: { name: "planned", module: "packing" } as Route, show: allowed("order.view") || allowed("packing.view") },
+    { label: t("dashboard.kpi.toDispatch"), n: view?.orders.toDispatch ?? 0, icon: <Truck size={16} />, tint: "teal" as Tint, route: { name: "planned", module: "dispatch" } as Route, show: allowed("order.view") || allowed("dispatch.view") },
+  ].filter((row) => row.show);
 
   const agingLabels: Record<string, string> = {
     notDue: t("dashboard.charts.notDue"),
@@ -207,7 +249,15 @@ export function DashboardPage() {
             <h1 className="mt-1 text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[32px]">{t("dashboard.greeting", { name: session.user?.name.split(" ")[0] ?? "Anil" })}</h1>
             {BUSINESS.name && <p className="mt-1 truncate text-[13.5px] text-ink-2">{BUSINESS.name}</p>}
           </div>
-          {shown ? (
+          {!full ? (
+            heroFigures.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 md:flex">
+                {heroFigures.map((f) => (
+                  <PlainFigure key={f.label} {...f} />
+                ))}
+              </div>
+            )
+          ) : shown ? (
             <div className="grid grid-cols-2 gap-3 md:flex">
               <HeroFigure label={t("dashboard.kpi.todaySales")} value={view.today.sales} previous={view.today.salesPrev} format={(v) => money(v, 0)} foot={`${t("common.yesterday")} ${money(view.today.salesPrev, 0)}`} />
               <HeroFigure label={t("dashboard.kpi.todayCollection")} value={view.today.collections} previous={view.today.collectionsPrev} format={(v) => money(v, 0)} foot={`${t("common.yesterday")} ${money(view.today.collectionsPrev, 0)}`} />
@@ -226,7 +276,7 @@ export function DashboardPage() {
       </section>
 
       {/* Quick actions: a grid of icons on phones, a row of tiles on bigger screens. */}
-      <section aria-label={t("dashboard.quickActions")}>
+      {actions.length > 0 && <section aria-label={t("dashboard.quickActions")}>
         <div className="grid grid-cols-4 gap-x-1.5 gap-y-4 sm:flex sm:flex-wrap sm:gap-2.5">
           {actions.map((a) => (
             <button
@@ -251,8 +301,29 @@ export function DashboardPage() {
             </button>
           ))}
         </div>
-      </section>
+      </section>}
 
+      {/* The person's own work today, from what their role covers. */}
+      {LIVE && home && (() => {
+        const cards = [
+          !full && home.orders?.packNext && <QueueCard key="pack" stage="pack" rows={home.orders.packNext} count={home.orders.toPack ?? 0} />,
+          !full && home.orders?.dispatchNext && <QueueCard key="dispatch" stage="dispatch" rows={home.orders.dispatchNext} count={home.orders.toDispatch ?? 0} />,
+          home.collections && <PromisesCard key="promises" data={home.collections} />,
+          home.people && <PeopleCard key="people" data={home.people} />,
+          home.leave && <LeaveCard key="leave" data={home.leave} />,
+          home.payroll && <PayrollCard key="payroll" data={home.payroll} />,
+          !full && home.expenses && <ExpensesCard key="expenses" data={home.expenses} />,
+          !full && allowed("product.view") && <StockCard key="stock" />,
+        ].filter(Boolean);
+        return cards.length > 0 ? (
+          <section aria-labelledby="work-h" className="flex flex-col gap-3">
+            <h2 id="work-h" className="eyebrow">{t("home.workToday")}</h2>
+            <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">{cards}</div>
+          </section>
+        ) : null;
+      })()}
+
+      {full && <>
       {/* Today */}
       <section aria-labelledby="today-h" className="flex flex-col gap-3">
         <h2 id="today-h" className="eyebrow">{t("dashboard.section.today")}</h2>
@@ -261,7 +332,7 @@ export function DashboardPage() {
             <>
               {view.today.purchases !== null && <StatTile label={t("dashboard.kpi.todayPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view.today.purchases} format={(v) => money(v, 0)} />} />}
               {view.today.expenses !== null && <StatTile label={t("dashboard.kpi.todayExpenses")} tint="rose" icon={<BadgeIndianRupee size={17} />} value={<CountUp value={view.today.expenses} format={(v) => money(v, 0)} />} />}
-              <StatTile label={t("dashboard.kpi.todayOrders")} tint="violet" icon={<ClipboardList size={17} />} value={<CountUp value={view.today.orders} format={(v) => String(Math.round(v))} />} onClick={() => navigate({ name: "planned", module: "orders" })} />
+              {allowed("order.view") && <StatTile label={t("dashboard.kpi.todayOrders")} tint="violet" icon={<ClipboardList size={17} />} value={<CountUp value={view.today.orders} format={(v) => String(Math.round(v))} />} onClick={() => navigate({ name: "planned", module: "orders" })} />}
             </>
           ) : (
             Array.from({ length: 3 }, (_, i) => (
@@ -349,19 +420,15 @@ export function DashboardPage() {
               value={<CountUp value={view?.receivable.total ?? 0} format={(v) => compact(v)} />}
               tone={(view?.receivable.overdue ?? 0) > 0 ? "danger" : undefined}
               foot={<span className="text-danger">{t("dashboard.kpi.overdue", { amount: compact(view?.receivable.overdue ?? 0) })}</span>}
-              onClick={() => navigate({ name: "customers" })}
+              {...(canOpen({ name: "outstanding" }) ? { onClick: () => navigate({ name: "outstanding" }) } : canOpen({ name: "customers" }) ? { onClick: () => navigate({ name: "customers" }) } : {})}
             />
             {view?.payable !== null && (
               <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={17} />} tint="orange" value={<CountUp value={view?.payable ?? 0} format={(v) => compact(v)} />} {...(allowed("supplier.view") ? { onClick: () => navigate({ name: "planned", module: "suppliers" }) } : {})} />
             )}
           </div>
-          <Card className="p-2">
+          {operations.length > 0 && <Card className="p-2">
             <p className="eyebrow px-3 pt-2 pb-1">{t("dashboard.section.operations")}</p>
-            {[
-              { label: t("dashboard.kpi.pendingOrders"), n: view?.orders.pending ?? 0, icon: <ClipboardList size={16} />, tint: "violet" as Tint, route: { name: "planned", module: "orders" } as Route },
-              { label: t("dashboard.kpi.toPack"), n: view?.orders.toPack ?? 0, icon: <PackageCheck size={16} />, tint: "amber" as Tint, route: { name: "planned", module: "packing" } as Route },
-              { label: t("dashboard.kpi.toDispatch"), n: view?.orders.toDispatch ?? 0, icon: <Truck size={16} />, tint: "teal" as Tint, route: { name: "planned", module: "dispatch" } as Route },
-            ].map((row) => (
+            {operations.map((row) => (
               <button
                 key={row.label}
                 type="button"
@@ -375,7 +442,7 @@ export function DashboardPage() {
                 <span className="num font-display text-[18px] font-semibold">{row.n}</span>
               </button>
             ))}
-          </Card>
+          </Card>}
         </div>
       </div>
 
@@ -433,7 +500,7 @@ export function DashboardPage() {
       </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <Card>
+        {allowed("customer.view_ledger") && <Card>
           <CardHeader title={t("dashboard.charts.outstandingAging")} subtitle={`${t("dashboard.charts.daysPastDue")} · ${t("dashboard.kpi.receivable")} ${money(view?.receivable.total ?? 0, 0)}`} />
           <div className="px-4 pt-4 pb-5 sm:px-5">
             <AgingColumns
@@ -446,8 +513,8 @@ export function DashboardPage() {
               ]}
             />
           </div>
-        </Card>
-        <Card>
+        </Card>}
+        {allowed("customer.view_ledger") && <Card>
           <CardHeader title={t("dashboard.needsAttention")} subtitle={t("customer.filters.overdue")} />
           <ul className="px-2 pt-2 pb-3">
             {(view?.attention ?? []).map((c) => (
@@ -467,8 +534,33 @@ export function DashboardPage() {
               </li>
             ))}
           </ul>
-        </Card>
-        <Card className="p-2 lg:col-span-2 xl:col-span-1">
+        </Card>}
+        {allowed("product.view") && <StockCard className="lg:col-span-2 xl:col-span-1" />}
+      </div>
+
+      <section aria-labelledby="month-h" className="flex flex-col gap-3">
+        <h2 id="month-h" className="eyebrow">{t("dashboard.section.month")}</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatTile label={t("dashboard.kpi.monthSales")} tint="blue" icon={<Receipt size={17} />} value={<CountUp value={view?.month.sales ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.sales ?? 0} previous={view?.month.salesPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          <StatTile label={t("dashboard.kpi.monthCollection")} tint="green" icon={<Wallet size={17} />} value={<CountUp value={view?.month.collections ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.collections ?? 0} previous={view?.month.collectionsPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          {view?.month.purchases !== null && (
+            <StatTile label={t("dashboard.kpi.monthPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view?.month.purchases ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.purchases ?? 0} previous={view?.month.purchasesPrev ?? 0} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
+          )}
+        </div>
+      </section>
+      </>}
+    </div>
+  );
+}
+
+/** Products at or under their minimum, and those out of stock. */
+function StockCard({ className }: { className?: string }) {
+  const { t, locale } = useI18n();
+  useStoreVersion();
+  const low = PRODUCTS.filter((p) => stockLevel(p.stock, p.minStock) === "low");
+  const out = PRODUCTS.filter((p) => stockLevel(p.stock, p.minStock) === "out_of_stock");
+  return (
+        <Card className={cn("p-2", className)}>
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-2 pb-1">
             <p className="eyebrow">{t("dashboard.section.stock")}</p>
             <div className="flex flex-wrap gap-1.5">
@@ -492,18 +584,5 @@ export function DashboardPage() {
             ))}
           </ul>
         </Card>
-      </div>
-
-      <section aria-labelledby="month-h" className="flex flex-col gap-3">
-        <h2 id="month-h" className="eyebrow">{t("dashboard.section.month")}</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatTile label={t("dashboard.kpi.monthSales")} tint="blue" icon={<Receipt size={17} />} value={<CountUp value={view?.month.sales ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.sales ?? 0} previous={view?.month.salesPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
-          <StatTile label={t("dashboard.kpi.monthCollection")} tint="green" icon={<Wallet size={17} />} value={<CountUp value={view?.month.collections ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.collections ?? 0} previous={view?.month.collectionsPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
-          {view?.month.purchases !== null && (
-            <StatTile label={t("dashboard.kpi.monthPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view?.month.purchases ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.purchases ?? 0} previous={view?.month.purchasesPrev ?? 0} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
-          )}
-        </div>
-      </section>
-    </div>
   );
 }

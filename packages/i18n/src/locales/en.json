@@ -252,7 +252,13 @@
       "paySupplier": "Pay Supplier",
       "stockAdjustment": "Stock Adjustment",
       "addProduct": "Add Product",
-      "addExpense": "Add Expense"
+      "addExpense": "Add Expense",
+      "markAttendance": "Mark attendance",
+      "addEmployee": "Add employee",
+      "applyLeave": "Leave request",
+      "packOrders": "Pack orders",
+      "dispatch": "Send out",
+      "collect": "Collect dues"
     },
     "needsAttention": "Needs attention"
   },
@@ -2380,5 +2386,35 @@
     "provisionalHint": "Saved on this phone. The receipt number comes when it syncs; the customer can be given this now.",
     "pendingNumber": "(number after sync)",
     "shareReceipt": "Share on WhatsApp"
+  },
+  "home": {
+    "workToday": "Today's work",
+    "promisesDue": "Promises due today",
+    "noPromises": "No payment promises due today",
+    "peopleToday": "Staff today",
+    "present": "Present",
+    "absent": "Absent",
+    "onLeave": "On leave",
+    "halfDay": "Half day",
+    "off": "Day off",
+    "notMarked": "Not marked",
+    "ofEmployees_one": "of {{count}} employee",
+    "ofEmployees_other": "of {{count}} employees",
+    "markAttendance": "Mark attendance",
+    "leaveToDecide": "Leave to decide",
+    "noLeave": "No leave requests waiting",
+    "leaveLine_one": "{{type}} · {{from}} – {{to}} · {{count}} day",
+    "leaveLine_other": "{{type}} · {{from}} – {{to}} · {{count}} days",
+    "salaryFor": "Salary for {{month}}",
+    "salaryNotRun": "Not worked out yet",
+    "packNext": "Pack next",
+    "dispatchNext": "Ready to send",
+    "nothingWaiting": "Nothing waiting",
+    "expensesMonth": "Expenses this month",
+    "entries_one": "{{count}} entry",
+    "entries_other": "{{count}} entries",
+    "onLeaveToday_one": "{{count}} on leave today",
+    "onLeaveToday_other": "{{count}} on leave today",
+    "open": "Open"
   }
 }

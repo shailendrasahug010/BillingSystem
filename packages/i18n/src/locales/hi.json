@@ -252,7 +252,13 @@
       "paySupplier": "सप्लायर को भुगतान",
       "stockAdjustment": "स्टॉक एडजस्टमेंट",
       "addProduct": "प्रोडक्ट जोड़ें",
-      "addExpense": "खर्च जोड़ें"
+      "addExpense": "खर्च जोड़ें",
+      "markAttendance": "हाज़िरी लगाएँ",
+      "addEmployee": "कर्मचारी जोड़ें",
+      "applyLeave": "छुट्टी आवेदन",
+      "packOrders": "ऑर्डर पैक करें",
+      "dispatch": "माल भेजें",
+      "collect": "बकाया वसूली"
     },
     "needsAttention": "ध्यान दें"
   },
@@ -2380,5 +2386,35 @@
     "provisionalHint": "इस फ़ोन पर सेव है। सिंक होने पर रसीद नंबर मिलेगा; ग्राहक को अभी यह दे सकते हैं।",
     "pendingNumber": "(सिंक के बाद नंबर)",
     "shareReceipt": "व्हाट्सऐप पर भेजें"
+  },
+  "home": {
+    "workToday": "आज का काम",
+    "promisesDue": "आज के भुगतान वादे",
+    "noPromises": "आज कोई भुगतान वादा नहीं",
+    "peopleToday": "आज स्टाफ़",
+    "present": "हाज़िर",
+    "absent": "गैरहाज़िर",
+    "onLeave": "छुट्टी पर",
+    "halfDay": "आधा दिन",
+    "off": "छुट्टी का दिन",
+    "notMarked": "हाज़िरी नहीं लगी",
+    "ofEmployees_one": "{{count}} कर्मचारी में से",
+    "ofEmployees_other": "{{count}} कर्मचारियों में से",
+    "markAttendance": "हाज़िरी लगाएँ",
+    "leaveToDecide": "छुट्टी के आवेदन",
+    "noLeave": "कोई आवेदन बाकी नहीं",
+    "leaveLine_one": "{{type}} · {{from}} – {{to}} · {{count}} दिन",
+    "leaveLine_other": "{{type}} · {{from}} – {{to}} · {{count}} दिन",
+    "salaryFor": "{{month}} का वेतन",
+    "salaryNotRun": "अभी नहीं बना",
+    "packNext": "अगला पैक करें",
+    "dispatchNext": "भेजने को तैयार",
+    "nothingWaiting": "कुछ बाकी नहीं",
+    "expensesMonth": "इस महीने के खर्च",
+    "entries_one": "{{count}} एंट्री",
+    "entries_other": "{{count}} एंट्री",
+    "onLeaveToday_one": "आज {{count}} छुट्टी पर",
+    "onLeaveToday_other": "आज {{count}} छुट्टी पर",
+    "open": "खोलें"
   }
 }

@@ -5,7 +5,8 @@
  * (no OTP) -> sees only what the Sales role allows: the menu, the dashboard's
  * actions, no product editing or exports, the rate-list rate fixed on the
  * bill, a clear message on a screen outside the role -> a warehouse worker
- * (no dashboard in the role) lands on their first screen, Sales orders.
+ * (no sales dashboard in the role) lands on a home of their own: orders to
+ * pack and send, stock alerts, no sales figures, a menu of their screens.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/team-access-flow.mjs
@@ -108,7 +109,7 @@ log("salesperson signed in with the user ID");
 
 // 4. Only what the Sales role allows: the menu, the dashboard's actions, the buttons on each screen.
 const menu = (await staffPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Outstanding", "Messages", "Products", "Notifications"];
+const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Outstanding", "Messages", "Products"];
 if (JSON.stringify(menu) !== JSON.stringify(expectedMenu)) errors.push(`sales menu: ${menu.join(", ")}`);
 const quick = (await staffPage.getByRole("region", { name: "Quick actions" }).getByRole("button").allTextContents()).map((s) => s.replace(/(Ctrl|Alt).*$/, "").trim());
 if (JSON.stringify(quick) !== JSON.stringify(["Create Invoice", "New Order", "Receive Payment", "Add Customer"])) errors.push(`sales quick actions: ${quick.join(", ")}`);
@@ -133,9 +134,9 @@ await staffPage.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 15
 await staffPage.goto(`${WEB}/#settings`);
 await staffPage.getByText("Not part of your role").waitFor({ timeout: 15000 });
 await staffPage.screenshot({ path: `${OUT}/team-5-no-access.png` });
-log("sales sees its nine screens, its four actions, no product editing or exports, a fixed rate; Settings says no access");
+log("sales sees its eight screens, its four actions, no product editing or exports, a fixed rate; Settings says no access");
 
-// 5. A warehouse worker has no dashboard: they land on their first screen.
+// 5. A warehouse worker has no sales dashboard: their home shows what to pack and send.
 const packer = await api("POST", "/members", token, { name: "Pappu Packer", mobile: `98778${run}`, roleId: (await api("GET", "/roles", token)).data.find((r) => r.key === "warehouse").id, username: `pappu${run}`, password: "Pappu-pass-2026" });
 if (packer.username !== `pappu${run}`) errors.push("packer user ID");
 const packerPage = await browser.newPage({ viewport: { width: 1360, height: 900 } });
@@ -147,11 +148,33 @@ await packerPage.fill("#auth-password", "Pappu-pass-2026");
 await packerPage.getByRole("button", { name: "Sign in", exact: true }).click();
 await packerPage.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
 packerState.signedIn = true;
-await packerPage.getByRole("heading", { name: "Sales orders", exact: true }).waitFor({ timeout: 15000 });
+await packerPage.getByRole("heading", { name: "Pack next" }).waitFor({ timeout: 15000 });
+for (const figure of ["Orders to Pack", "Orders to Dispatch"]) if ((await packerPage.getByText(figure, { exact: true }).count()) === 0) errors.push(`warehouse home lacks ${figure}`);
+if ((await packerPage.getByText("Today's Sales").count()) !== 0) errors.push("warehouse sees the sales figures");
 const packerMenu = (await packerPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-if (packerMenu.includes("Dashboard") || !packerMenu.includes("Packing") || packerMenu.includes("New Invoice")) errors.push(`warehouse menu: ${packerMenu.join(", ")}`);
+if (JSON.stringify(packerMenu) !== JSON.stringify(["Dashboard", "Sales Orders", "Products", "Inventory", "Purchases", "Packing", "Dispatch"])) errors.push(`warehouse menu: ${packerMenu.join(", ")}`);
 await packerPage.screenshot({ path: `${OUT}/team-6-warehouse.png` });
-log("warehouse worker lands on Sales orders; menu:", packerMenu.join(", "));
+log("warehouse worker lands on their own home (to pack, to send); menu:", packerMenu.join(", "));
+
+// 6. HR: staff today, leave to decide, the salary run; their own screens only.
+await api("POST", "/members", token, { name: "Hema HR", mobile: `98773${run}`, roleId: (await api("GET", "/roles", token)).data.find((r) => r.key === "hr").id, username: `hema${run}`, password: "Hema-pass-2026" });
+const hrPage = await browser.newPage({ viewport: { width: 1360, height: 900 } });
+const hrState = { signedIn: false };
+watch(hrPage, hrState);
+await hrPage.goto(WEB);
+await hrPage.fill("#auth-id", `hema${run}`);
+await hrPage.fill("#auth-password", "Hema-pass-2026");
+await hrPage.getByRole("button", { name: "Sign in", exact: true }).click();
+await hrPage.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
+hrState.signedIn = true;
+await hrPage.getByRole("heading", { name: "Staff today" }).waitFor({ timeout: 15000 });
+for (const h of ["Leave to decide", "Expenses this month"]) if ((await hrPage.getByRole("heading", { name: h }).count()) === 0) errors.push(`HR home lacks ${h}`);
+if ((await hrPage.getByRole("heading", { name: /^Salary for / }).count()) === 0) errors.push("HR home lacks the salary run");
+if ((await hrPage.getByText("Today's Sales").count()) !== 0 || (await hrPage.getByText("Pack next").count()) !== 0) errors.push("HR sees sales or warehouse parts");
+const hrMenu = (await hrPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
+if (JSON.stringify(hrMenu) !== JSON.stringify(["Dashboard", "Expenses", "Employees", "Salary", "Leave"])) errors.push(`HR menu: ${hrMenu.join(", ")}`);
+await hrPage.screenshot({ path: `${OUT}/team-7-hr.png` });
+log("HR lands on staff today, leave to decide, salary and expenses; menu:", hrMenu.join(", "));
 
 console.log(errors.length ? `ERRORS:\n${errors.join("\n")}` : "no errors");
 await browser.close();

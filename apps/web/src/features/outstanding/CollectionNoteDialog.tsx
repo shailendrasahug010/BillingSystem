@@ -78,6 +78,7 @@ export function CollectionNoteDialog({
       const detail = kind === "promise" ? (amount ? t("collect.promised", { amount: money(amount), date: date(on) }) : t("collect.promisedFull", { date: date(on) })) : note.trim();
       toast(here ? { tone: "offline", title: t("offline.savedHere"), body: `${title} · ${t("offline.sendsLater")}` } : { tone: "success", title, body: `${customer.name} · ${detail}` });
       void qc.invalidateQueries({ queryKey: ["collections"] });
+      void qc.invalidateQueries({ queryKey: ["home"] });
       onOpenChange(false);
     };
     /** Kept on this device with the same key, so an attempt that did reach the server is never counted twice. */

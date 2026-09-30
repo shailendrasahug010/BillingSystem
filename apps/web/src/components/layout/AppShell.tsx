@@ -1,5 +1,9 @@
 import {
+  BadgeIndianRupee,
   Bell,
+  Boxes,
+  CalendarCheck,
+  CalendarPlus,
   ClipboardList,
   Cloud,
   CloudOff,
@@ -18,7 +22,6 @@ import {
   ShoppingCart,
   Sun,
   UserPlus,
-  Users,
   Wallet,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -310,18 +313,37 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
       { label: t("dashboard.actions.addCustomer"), route: { name: "customers" }, icon: <UserPlus size={22} />, tint: "bg-tint-orange-soft text-tint-orange", permission: "customer.create" },
       { label: t("dashboard.actions.purchaseEntry"), route: { name: "planned", module: "purchases" }, icon: <ShoppingCart size={22} />, tint: "bg-tint-teal-soft text-tint-teal", permission: "purchase.create" },
       { label: t("dashboard.actions.addProduct"), route: { name: "products" }, icon: <Package size={22} />, tint: "bg-tint-amber-soft text-tint-amber", permission: "product.create" },
+      { label: t("dashboard.actions.stockAdjustment"), route: { name: "planned", module: "inventory" }, icon: <Boxes size={22} />, tint: "bg-tint-amber-soft text-tint-amber", permission: "inventory.adjust" },
+      { label: t("dashboard.actions.markAttendance"), route: { name: "planned", module: "employees" }, icon: <CalendarCheck size={22} />, tint: "bg-tint-green-soft text-tint-green", permission: "employee.update" },
+      { label: t("dashboard.actions.applyLeave"), route: { name: "planned", module: "leave" }, icon: <CalendarPlus size={22} />, tint: "bg-tint-violet-soft text-tint-violet", permission: "leave.apply" },
+      { label: t("dashboard.actions.addExpense"), route: { name: "planned", module: "expenses" }, icon: <BadgeIndianRupee size={22} />, tint: "bg-tint-rose-soft text-tint-rose", permission: "expense.create" },
     ] satisfies Array<{ label: string; route: Route; icon: ReactNode; tint: string; permission: string }>
-  ).filter((a) => allowed(a.permission));
+  )
+    .filter((a) => allowed(a.permission))
+    .slice(0, 8);
+
+  // The phone's bottom bar: Customers and Products for the roles that have
+  // them, otherwise that role's own main screens (Packing, Employees, Leave…).
+  const navModules = visibleModules();
+  const used = new Set<string>();
+  const slot = (prefs: string[]) => {
+    const m = prefs.map((k) => navModules.find((x) => x.key === k)).find((x) => x && !used.has(x.key));
+    if (m) used.add(m.key);
+    return m;
+  };
+  const slotA = slot(["customers", "packing", "employees", "orders", "payments", "purchases", "expenses", "reports", "gst"]);
+  const slotB = slot(["products", "dispatch", "leave", "inventory", "payroll", "suppliers", "reports", "audit", "settings"]);
+  const fromModule = (m: ModuleDef | undefined) => m && { key: m.key, label: t(m.label), icon: <m.icon size={20} />, route: m.route };
 
   const bottomItems = (
     [
       { key: "home", label: t("nav.home"), icon: <House size={20} />, route: homeRoute() },
-      { key: "customers", label: t("nav.customers"), icon: <Users size={20} />, route: { name: "customers" }, permission: "customer.view" },
+      fromModule(slotA),
       { key: "create", label: t("nav.create"), icon: <Plus size={24} strokeWidth={2.4} />, onClick: () => setCreateOpen(true), hidden: quickActions.length === 0 },
-      { key: "products", label: t("nav.products"), icon: <Package size={20} />, route: { name: "products" }, permission: "product.view" },
+      fromModule(slotB),
       { key: "more", label: t("nav.more"), icon: <LayoutGrid size={20} />, onClick: () => setMoreOpen(true) },
-    ] as Array<{ key: string; label: string; icon: ReactNode; route?: Route; onClick?(): void; permission?: string; hidden?: boolean }>
-  ).filter((b) => !b.hidden && (!b.permission || allowed(b.permission)));
+    ] as Array<{ key: string; label: string; icon: ReactNode; route?: Route; onClick?(): void; hidden?: boolean } | undefined>
+  ).filter((b): b is NonNullable<typeof b> => Boolean(b) && !b!.hidden);
 
   return (
     <div className="min-h-full lg:grid lg:grid-cols-[256px_1fr]">
@@ -394,7 +416,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             {LIVE ? <OfflineChip /> : <SyncChip />}
             <LanguageToggle className="hidden sm:inline-flex" />
             <ThemeToggle className="hidden sm:inline-flex" />
-            {allowed("notification.view") && <button
+            {/* Notifications are not built yet in the live app. */}
+            {!LIVE && allowed("notification.view") && <button
               type="button"
               className="press relative inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2"
               aria-label={t("nav.notifications")}

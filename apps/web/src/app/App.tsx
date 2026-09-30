@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
 import { Kbd, Skeleton } from "../components/ui/misc";
@@ -236,13 +236,9 @@ function Root() {
     { id: "help", keys: "shift+?", handler: () => setHelpOpen(true) },
   ]);
 
-  // Roles without the dashboard (warehouse, HR) start on their first screen.
   const needed = routePermission(route);
   const home = homeRoute();
   const blocked = LIVE && needed !== null && !allowed(needed);
-  useEffect(() => {
-    if (blocked && route.name === "dashboard" && home.name !== "dashboard") navigate(home);
-  }, [blocked, route.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (route.name === "login") return LIVE ? null : <LoginPage />;
 

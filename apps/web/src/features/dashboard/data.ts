@@ -10,6 +10,7 @@ import {
   PAYMENTS,
   PURCHASES_BY_DAY,
   TODAY,
+  allowed,
 } from "../../data/db";
 import { LIVE } from "../../data/source";
 import {
@@ -215,7 +216,8 @@ export function useDashboardView(range: RangeKey, grain: Grain): DashboardView |
   const live = useQuery({
     queryKey: ["dashboard", range, grain],
     queryFn: () => api.get<ApiDashboard>("/dashboard", { range, grain }).then(fromApi),
-    enabled: LIVE,
+    // Only roles with the sales dashboard; the others get their own parts from /home.
+    enabled: LIVE && allowed("dashboard.view"),
     placeholderData: (previous) => previous,
   });
   // eslint-disable-next-line react-hooks/exhaustive-deps

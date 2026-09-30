@@ -108,15 +108,24 @@ export const GROUP_LABELS: Record<ModuleDef["group"], TranslationKey> = {
   admin: "nav.groupAdmin",
 };
 
-/** Menu entries this person's role opens. */
+/**
+ * Menu entries this person's role opens. The dashboard is everyone's home
+ * (it shows each role its own work). In the live app, screens not built yet
+ * and the developers' design page stay out of the menu.
+ */
 export function visibleModules(): ModuleDef[] {
-  return MODULES.filter((m) => allowed(m.permission));
+  return MODULES.filter((m) => {
+    if (LIVE && m.route.name === "planned" && !LIVE_MODULES.has(m.route.module)) return false;
+    if (LIVE && m.route.name === "design-system") return false;
+    return m.key === "dashboard" || allowed(m.permission);
+  });
 }
 
 /** The permission a screen needs: what it shows, or for a create screen, what it saves. */
 export function routePermission(route: Route): Permission | null {
   switch (route.name) {
     case "login":
+    case "dashboard":
       return null;
     case "invoice-view":
       return "invoice.view";
@@ -140,9 +149,9 @@ export function routePermission(route: Route): Permission | null {
   }
 }
 
-/** Where to land when the dashboard is not part of the role (warehouse, HR). */
+/** Everyone lands on the dashboard: each role sees its own parts there. */
 export function homeRoute(): Route {
-  return visibleModules()[0]?.route ?? { name: "dashboard" };
+  return { name: "dashboard" };
 }
 
 export function moduleForRoute(route: Route): ModuleDef | undefined {
