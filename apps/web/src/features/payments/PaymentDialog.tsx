@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PaymentMethod } from "@vyapaar/core";
+import { addDays, type PaymentMethod } from "@vyapaar/core";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
@@ -111,6 +111,9 @@ export function PaymentDialog({
   const [form, setForm] = useState({ amount: "", method: "cash" as PaymentMethod, date: TODAY, reference: "", chequeDate: "", chequeBank: "", notes: "" });
   const [manual, setManual] = useState<Record<string, string> | null>(null);
   const [key, setKey] = useState(newIdempotencyKey);
+  // Part payment: the day the customer says they will pay the rest (kept as a promise to pay).
+  const [promiseOn, setPromiseOn] = useState("");
+  const [promiseKey, setPromiseKey] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [touched, setTouched] = useState(false);
@@ -126,6 +129,8 @@ export function PaymentDialog({
     setForm({ amount: initialAmount ?? "", method: "cash", date: TODAY, reference: "", chequeDate: "", chequeBank: "", notes: "" });
     setManual(null);
     setKey(newIdempotencyKey());
+    setPromiseOn("");
+    setPromiseKey(newIdempotencyKey());
     setError(null);
     setTouched(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,7 +154,12 @@ export function PaymentDialog({
           return s ? { label: supplierLabel(s), sub: `${s.code}${s.city ? ` · ${s.city}` : ""}`, balance: s.balance } : null;
         })();
 
+  // What the customer still owes after this payment; a date for it can be noted as a promise.
+  const rest = direction === "in" && partyInfo ? Math.round((partyInfo.balance - amount) * 100) / 100 : 0;
+  const askPromise = direction === "in" && amount > 0 && rest > 0.5;
+
   const problems = {
+    promiseOn: askPromise && promiseOn && promiseOn < TODAY ? t("errors.PROMISE_DATE_PAST") : null,
     party: party ? null : t("validation.required"),
     amount: !form.amount ? t("validation.required") : !MONEY.test(form.amount) ? t("validation.amount") : amount <= 0 ? t("validation.positive") : null,
     reference: form.method === "cheque" && !form.reference.trim() ? t("validation.required") : null,
@@ -163,6 +173,29 @@ export function PaymentDialog({
     if (Object.values(problems).some(Boolean)) return;
     setBusy(true);
     setError(null);
+    const promise = askPromise && promiseOn ? { on: promiseOn, amount: rest } : null;
+    // The receipt says it too: "Rest ₹570 promised by 5 Oct 2026".
+    const notes = [form.notes.trim(), promise ? t("collect.restNote", { amount: money(promise.amount), date: dateMedium(promise.on) }) : ""].filter(Boolean).join(" · ");
+    const promiseBody = promise ? { customerId: party!, kind: "promise", promisedOn: promise.on, promisedAmount: promise.amount.toFixed(2) } : null;
+    const keepPromise = async (customerName: string) => {
+      const scope = offlineScope();
+      if (!promiseBody || !scope) return;
+      await queueEntry({
+        kind: "collection-note",
+        id: promiseKey,
+        userId: scope.userId,
+        businessId: scope.businessId,
+        savedAt: new Date().toISOString(),
+        status: "pending",
+        error: null,
+        customerId: party!,
+        customerName,
+        noteKind: "promise",
+        date: promise!.on,
+        amount: promise!.amount,
+        body: promiseBody,
+      });
+    };
     const body = {
       direction,
       ...(direction === "in" ? { customerId: party } : { supplierId: party }),
@@ -172,7 +205,7 @@ export function PaymentDialog({
       ...(form.reference.trim() ? { referenceNumber: form.reference.trim() } : {}),
       ...(form.method === "cheque" && form.chequeDate ? { chequeDate: form.chequeDate } : {}),
       ...(form.method === "cheque" && form.chequeBank.trim() ? { chequeBank: form.chequeBank.trim() } : {}),
-      ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+      ...(notes ? { notes } : {}),
     };
     /** Kept on this device with the same key, so an attempt that did reach the server is never counted twice. */
     const keep = async () => {
@@ -197,6 +230,8 @@ export function PaymentDialog({
           body,
         }));
       if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      // After the payment in the queue, so the server takes the promise as made after it.
+      await keepPromise(name ?? "");
       toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("payment.saved")} · ${money(amount)} · ${t("offline.sendsLater")}` });
       onSaved?.({ offline: { partyName: name ?? "", date: form.date, amount, method: form.method, referenceNumber: form.reference.trim() || null } });
       onOpenChange(false);
@@ -213,6 +248,14 @@ export function PaymentDialog({
         },
         { idempotencyKey: key },
       );
+      if (promiseBody) {
+        try {
+          await api.post("/collections/notes", promiseBody, { idempotencyKey: promiseKey });
+        } catch (e) {
+          if (unreachable(e)) await keepPromise(customerById.get(party!)?.businessName ?? "").catch(() => undefined);
+          else toast({ tone: "danger", title: t("collect.promiseNotSaved") });
+        }
+      }
       await (direction === "in" ? refreshCustomer(party!) : refreshSupplier(party!)).catch(() => undefined);
       invalidateMoney(qc);
       toast({ tone: "success", title: t("payment.saved"), body: `${res.paymentNumber} · ${money(res.amount)}` });
@@ -316,6 +359,35 @@ export function PaymentDialog({
             </>
           )}
         </div>
+
+        {askPromise && (
+          <div className="flex flex-col gap-2 rounded-2xl border border-accent/25 bg-accent-soft/50 px-3.5 py-3">
+            <p className="num text-[13px] font-medium text-ink">{t("collect.restAfter", { amount: money(rest) })}</p>
+            <Field label={t("collect.restBy")} htmlFor="pay-promise" hint={t("common.optional")} error={show("promiseOn")}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input id="pay-promise" type="date" min={TODAY} value={promiseOn} onChange={(e) => setPromiseOn(e.target.value)} className="w-auto" />
+                {([
+                  [1, "collect.when.tomorrow"],
+                  [3, "collect.when.in3"],
+                  [7, "collect.when.nextWeek"],
+                ] as const).map(([days, label]) => {
+                  const on = addDays(TODAY, days);
+                  return (
+                    <button
+                      key={days}
+                      type="button"
+                      aria-pressed={promiseOn === on}
+                      onClick={() => setPromiseOn(promiseOn === on ? "" : on)}
+                      className={cn("press h-8 rounded-full border px-3 text-[12.5px] font-medium", promiseOn === on ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong")}
+                    >
+                      {t(label)}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          </div>
+        )}
 
         {party && !keepHere && (
           <div className="flex flex-col gap-2">

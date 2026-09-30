@@ -4,8 +4,9 @@
  * phone opens Outstanding from the menu -> a chip per city with its total ->
  * Dewas narrows the list (Dewas and DEWAS are one place) -> search and "only
  * overdue" -> a customer opens with the open bills, days late, the last
- * payments, Call and WhatsApp -> he takes a payment there, gets its receipt
- * at once (print, PDF, WhatsApp) and the dues drop -> another customer
+ * payments, Call and WhatsApp -> he takes part of the dues there with the
+ * customer's date for the rest, gets the receipt at once (print, PDF,
+ * WhatsApp, the promised date on it) and the dues drop -> another customer
  * promises to pay today: shown on the list, under "Promise due" and in the
  * visit history -> the Dewas list downloads as PDF and Excel and prints
  * with a "Collected" column -> without a connection the list still shows
@@ -134,21 +135,30 @@ await page.screenshot({ path: `${OUT}/outstanding-3-sheet.png` });
 await sheet.getByRole("button", { name: "Receive payment" }).click();
 if ((await page.inputValue("#pay-amount")) !== "980.00") errors.push(`amount to collect starts at ${await page.inputValue("#pay-amount")}, not the overdue 980.00`);
 await page.fill("#pay-amount", "1000");
+// A part payment: the customer says when the rest will come.
+await page.getByText("Left to pay after this: ₹570.00").waitFor();
+await page.getByRole("dialog").getByRole("button", { name: "Tomorrow" }).click();
+const tomorrow = daysAgo(-1);
+if ((await page.inputValue("#pay-promise")) !== tomorrow) errors.push(`promise date ${await page.inputValue("#pay-promise")}`);
+await page.locator("#pay-promise").scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${OUT}/outstanding-3-part-payment.png` });
 await page.getByRole("dialog").getByRole("button", { name: /^Save/ }).click();
 await page.getByText("Payment saved").first().waitFor({ timeout: 15000 });
 // The receipt at once: print, PDF, WhatsApp.
 const receipt = page.getByRole("dialog");
 await receipt.getByRole("heading", { name: /^Receipt RCT\// }).waitFor({ timeout: 15000 });
 for (const b of ["Print receipt", "Download PDF"]) if ((await receipt.getByRole("button", { name: b }).count()) === 0) errors.push(`receipt lacks ${b}`);
-if (!(await page.locator(".print-root").textContent()).includes("1,000.00")) errors.push("printed receipt");
+const printedReceipt = await page.locator(".print-root").textContent();
+if (!printedReceipt.includes("1,000.00") || !printedReceipt.includes("Rest ₹570.00 promised by")) errors.push(`printed receipt: ${printedReceipt.slice(0, 300)}`);
 await page.screenshot({ path: `${OUT}/outstanding-3-receipt.png` });
 await page.keyboard.press("Escape");
 await page.getByRole("dialog").getByRole("heading", { name: "Gupta Kirana" }).waitFor();
 await page.getByRole("dialog").getByText("₹570.00").first().waitFor({ timeout: 15000 });
 if ((await page.getByRole("dialog").getByText("days late").count()) !== 0) errors.push("still overdue after paying the old bill");
+await page.getByRole("dialog").getByText(/Promised ₹570 by/).first().waitFor({ timeout: 15000 });
 await page.keyboard.press("Escape");
 await page.getByLabel("To collect").getByText("₹1,320").first().waitFor({ timeout: 15000 });
-log("sheet: bills, 25 days late, last payments; ₹1,000 taken there with its receipt, Dewas now ₹1,320");
+log("sheet: bills, 25 days late, last payments; ₹1,000 taken there with the rest (₹570) promised for tomorrow, on the receipt and the sheet; Dewas now ₹1,320");
 
 // 4b. Sharma cannot pay now: promises ₹500 by today.
 await cards().filter({ hasText: "Sharma Stores" }).click();
@@ -190,7 +200,7 @@ await page.emulateMedia({ media: "print" });
 await page.screenshot({ path: `${OUT}/outstanding-4-print.png`, fullPage: true });
 await page.emulateMedia({ media: "screen" });
 const audit = (await api("GET", "/audit-logs?action=outstanding.exported", token)).data;
-if ((await api("GET", "/audit-logs?action=collection.promise_noted", token)).data.length !== 1) errors.push("promise not in the audit log");
+if ((await api("GET", "/audit-logs?action=collection.promise_noted", token)).data.length !== 2) errors.push("promises not in the audit log");
 if (audit.length !== 2) errors.push(`audit: ${audit.length} downloads noted`);
 log("Dewas list downloaded as PDF and Excel (noted in the audit log); prints with a Collected column");
 

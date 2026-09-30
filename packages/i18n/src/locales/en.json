@@ -2385,7 +2385,11 @@
     "provisional": "Provisional receipt",
     "provisionalHint": "Saved on this phone. The receipt number comes when it syncs; the customer can be given this now.",
     "pendingNumber": "(number after sync)",
-    "shareReceipt": "Share on WhatsApp"
+    "shareReceipt": "Share on WhatsApp",
+    "restAfter": "Left to pay after this: {{amount}}",
+    "restBy": "Will pay the rest by",
+    "restNote": "Rest {{amount}} promised by {{date}}",
+    "promiseNotSaved": "Payment saved, but the promise date was not saved"
   },
   "home": {
     "workToday": "Today's work",
