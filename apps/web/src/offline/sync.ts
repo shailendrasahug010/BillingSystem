@@ -11,7 +11,8 @@ import { isSealed, seal, unseal, type Sealed } from "./vault";
 /**
  * Work done without a connection waits here (on the device, in IndexedDB)
  * until the server takes it: bills, payments, orders, new customers, changes
- * to customers and collectors' visit notes. Each is sent with its own Idempotency-Key, so a send
+ * to customers, collectors' visit notes, purchase bills, expenses and
+ * returns. Each is sent with its own Idempotency-Key, so a send
  * cut off half-way is simply sent again; the server keeps the number the
  * device gave a bill, and a new customer keeps the id it was billed under.
  */
@@ -100,7 +101,48 @@ export interface CollectionNoteEntry extends EntryBase {
   body: Record<string, unknown>;
 }
 
-export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry;
+/** A supplier's bill entered on this device: stock comes in and the supplier is owed at once. */
+export interface PurchaseEntry extends EntryBase {
+  kind: "purchase";
+  supplierId: string;
+  supplierName: string;
+  billNumber: string;
+  date: string;
+  total: number;
+  paid: number;
+  lineCount: number;
+  /** Stock brought in on this device (base units), taken back out if the entry is removed. */
+  stock: Array<{ productId: string; qty: number }>;
+  body: Record<string, unknown>;
+}
+
+/** An expense (money spent: rent, tea, fuel…). */
+export interface ExpenseEntry extends EntryBase {
+  kind: "expense";
+  categoryName: string;
+  paidTo: string;
+  date: string;
+  total: number;
+  body: Record<string, unknown>;
+}
+
+/** Goods back from a customer (credit note) or back to a supplier (debit note), against a kept bill. */
+export interface ReturnEntry extends EntryBase {
+  kind: "return";
+  side: "sale" | "purchase";
+  documentId: string;
+  documentNumber: string;
+  partyId: string;
+  partyName: string;
+  date: string;
+  /** The device's estimate; the server works out the exact amounts. */
+  estimate: number;
+  /** Stock moved on this device (base units, signed). */
+  stock: Array<{ productId: string; qty: number }>;
+  body: Record<string, unknown>;
+}
+
+export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | PurchaseEntry | ExpenseEntry | ReturnEntry;
 export type QueuedKind = NonNullable<QueuedEntry["kind"]>;
 export const kindOf = (e: { kind?: QueuedKind }): QueuedKind => e.kind ?? "invoice";
 
@@ -248,10 +290,12 @@ export function setOfflineMode(value: boolean): void {
 
 export const refreshDevice = () => reload();
 
-/** The customer an entry belongs to (null for a supplier payment). */
+/** The customer an entry belongs to (null for a supplier payment, a purchase or an expense). */
 function customerOf(e: QueuedEntry): string | null {
   const kind = kindOf(e);
   if (kind === "payment") return (e as PaymentEntry).direction === "in" ? (e as PaymentEntry).partyId : null;
+  if (kind === "purchase" || kind === "expense") return null;
+  if (kind === "return") return (e as ReturnEntry).side === "sale" ? (e as ReturnEntry).partyId : null;
   return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry).customerId;
 }
 
@@ -293,8 +337,23 @@ function applyEffects(e: QueuedEntry, sign: 1 | -1): void {
       showCustomerDetails(sign === 1 ? { ...c.after, balance: customerRow(c.customerId)?.balance ?? c.after.balance } : { ...c.before, balance: customerRow(c.customerId)?.balance ?? c.before.balance });
       return;
     }
+    case "purchase": {
+      const p = e as PurchaseEntry;
+      for (const x of p.stock) adjustStock(x.productId, sign * x.qty);
+      const s = supplierById.get(p.supplierId);
+      if (s) s.balance = (s.balance ?? 0) + sign * (p.total - p.paid);
+      return;
+    }
+    case "return": {
+      const r = e as ReturnEntry;
+      for (const x of r.stock) adjustStock(x.productId, sign * x.qty);
+      const party = r.side === "sale" ? customerById.get(r.partyId) : supplierById.get(r.partyId);
+      if (party) party.balance = (party.balance ?? 0) - sign * r.estimate;
+      return;
+    }
     case "order":
     case "collection-note":
+    case "expense":
       return;
   }
 }
@@ -396,6 +455,21 @@ async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt"
         res = now;
       }
       return { kind: "customer-edit", number: "", customerName: c.customerName, total: 0, serverId: res.id, serverNumber: res.code, serverTotal: 0 };
+    }
+    case "purchase": {
+      const p = e as PurchaseEntry;
+      const res = await api.post<{ id: string; purchaseNumber: string; grandTotal: string }>("/purchases", p.body, { idempotencyKey: p.id });
+      return { kind: "purchase", number: "", customerName: p.supplierName, total: p.total, serverId: res.id, serverNumber: res.purchaseNumber, serverTotal: Number(res.grandTotal) };
+    }
+    case "expense": {
+      const x = e as ExpenseEntry;
+      const res = await api.post<{ id: string; expenseNumber: string; totalAmount: string }>("/expenses", x.body, { idempotencyKey: x.id });
+      return { kind: "expense", number: "", customerName: x.paidTo || x.categoryName, total: x.total, serverId: res.id, serverNumber: res.expenseNumber, serverTotal: Number(res.totalAmount) };
+    }
+    case "return": {
+      const r = e as ReturnEntry;
+      const res = await api.post<{ id: string; noteNumber: string; grandTotal: string }>(`/${r.side === "sale" ? "invoices" : "purchases"}/${r.documentId}/returns`, r.body, { idempotencyKey: r.id });
+      return { kind: "return", number: "", customerName: r.partyName, total: r.estimate, serverId: res.id, serverNumber: res.noteNumber, serverTotal: Number(res.grandTotal) };
     }
     case "collection-note": {
       const n = e as CollectionNoteEntry;

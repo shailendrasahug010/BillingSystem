@@ -14,6 +14,7 @@ import { useToast } from "../../components/ui/Toast";
 import { allowed } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { usePaged } from "../../lib/usePaged";
+import { WaitingStrip } from "../../components/offline/OfflineBills";
 import { ExportButton, PeriodBar, usePeriod } from "../reports/period";
 import { ExpenseDialog, useCategoryLabel, useExpenseCategories } from "./ExpenseDialog";
 
@@ -148,6 +149,7 @@ function ExpenseList() {
 
   return (
     <div className="flex flex-col gap-4">
+      <WaitingStrip kinds={["expense"]} />
       <FilterBar>
         <Input className="flex-1" leading={<Search size={16} />} placeholder={t("expenses.search")} aria-label={t("expenses.search")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Select aria-label={t("expenses.category")} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="md:w-44">

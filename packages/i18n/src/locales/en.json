@@ -946,7 +946,8 @@
     "PROMISE_DATE_REQUIRED": "Choose the date the customer promised to pay by",
     "PROMISE_DATE_PAST": "The promised date cannot be before today",
     "PROMISE_DATE_TOO_FAR": "The promised date must be within a year",
-    "NOTE_REQUIRED": "Write what happened on the visit"
+    "NOTE_REQUIRED": "Write what happened on the visit",
+    "OFFLINE_NOT_KEPT": "This device cannot keep work offline (its storage is blocked). Connect to the internet and try again."
   },
   "validation": {
     "required": "This field is required",
@@ -2010,7 +2011,7 @@
   },
   "offline": {
     "notReady": "This device is not ready for offline bills yet. Open Digital Bahi once while connected to the internet.",
-    "banner": "No connection. Bills, payments, orders and customer changes are saved on this device and sent when the internet is back.",
+    "banner": "No connection. Bills, payments, orders, purchases, expenses, returns and customer changes are saved on this device and sent when the internet is back.",
     "title": "Waiting on this device",
     "description": "Work done without a connection waits here until the server takes it: bills keep the number printed on them, a new customer keeps what was billed to them.",
     "device": "This device: series {{code}} · next bill {{number}}",
@@ -2050,7 +2051,10 @@
       "order": "Order",
       "customer": "New customer",
       "customer-edit": "Customer details",
-      "collection-note": "Visit note"
+      "collection-note": "Visit note",
+      "purchase": "Purchase bill",
+      "expense": "Expense",
+      "return": "Return"
     },
     "removeEntryConfirm": "Remove this {{what}} ({{name}})? It will not reach the books.",
     "removeCustomerConfirm": "Remove the new customer {{name}}? Bills, payments and orders for them that are still waiting cannot be sent then.",
@@ -2068,7 +2072,12 @@
       "body": "When this device starts without internet it asks for your password. You signed in without it here, so confirm it once.",
       "confirm": "Confirm",
       "done": "This device now opens without internet with your password."
-    }
+    },
+    "deviceCopy": "Copy on this device",
+    "waitingHere_one": "{{count}} entry here is waiting on this device to be sent",
+    "waitingHere_other": "{{count}} entries here are waiting on this device to be sent",
+    "see": "See",
+    "keptPurchases": "No connection: purchase bills from the last 30 days kept on this device. Open one to record a return."
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"

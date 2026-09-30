@@ -8,7 +8,7 @@ import { TODAY } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { peekOfflineNumber } from "../../offline/device";
-import { kindOf, removeEntry, retryEntry, syncNow, useOffline, type OutboxEntry, type PaymentEntry, type QueuedEntry, type SyncedEntry } from "../../offline/sync";
+import { kindOf, removeEntry, retryEntry, syncNow, useOffline, type OutboxEntry, type PaymentEntry, type QueuedEntry, type QueuedKind, type SyncedEntry } from "../../offline/sync";
 import type { Route } from "../../app/router";
 import { passwordOpens, rememberPassword, vaultOpen } from "../../offline/vault";
 import { Field, Input } from "../ui/Field";
@@ -16,6 +16,25 @@ import { useToast } from "../ui/Toast";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
+
+/** On a list screen: its kind of work still waiting on this device, and the way to see it. */
+export function WaitingStrip({ kinds }: { kinds: QueuedKind[] }) {
+  const { t } = useI18n();
+  const state = useOffline();
+  const [open, setOpen] = useState(false);
+  const waiting = state.entries.filter((e) => kinds.includes(kindOf(e)));
+  if (!waiting.length) return null;
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="press flex items-center gap-2 rounded-xl bg-warn-soft px-3.5 py-2.5 text-left text-[13px] text-warn" role="status">
+        <CloudOff size={15} className="shrink-0" />
+        <span className="flex-1">{t("offline.waitingHere", { count: waiting.length })}</span>
+        <span className="font-semibold underline">{t("offline.see")}</span>
+      </button>
+      <OfflineBillsDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
 
 /** Online / offline / syncing, with the count of bills waiting; opens the list. */
 export function OfflineChip() {
@@ -77,9 +96,27 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const failed = entry.status === "failed";
   const kind = kindOf(entry);
   const bill = kind === "invoice" ? (entry as OutboxEntry) : null;
-  const name = entry.kind === "payment" ? entry.partyName : (entry as { customerName: string }).customerName;
-  const amount = entry.kind === "payment" ? entry.amount : entry.kind === "order" ? entry.estimate : entry.kind === "collection-note" ? entry.amount : bill ? bill.total : null;
-  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" ? entry.date : bill ? bill.date : null;
+  const name =
+    entry.kind === "payment" || entry.kind === "return"
+      ? entry.partyName
+      : entry.kind === "purchase"
+        ? `${entry.supplierName} · ${entry.billNumber}`
+        : entry.kind === "expense"
+          ? [entry.categoryName, entry.paidTo].filter(Boolean).join(" · ")
+          : (entry as { customerName: string }).customerName;
+  const amount =
+    entry.kind === "payment"
+      ? entry.amount
+      : entry.kind === "order" || entry.kind === "return"
+        ? entry.estimate
+        : entry.kind === "collection-note"
+          ? entry.amount
+          : entry.kind === "purchase" || entry.kind === "expense"
+            ? entry.total
+            : bill
+              ? bill.total
+              : null;
+  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" ? entry.date : bill ? bill.date : null;
   const conflict = kind === "customer-edit" && entry.error?.code === "VERSION_CONFLICT";
   const removeText =
     kind === "invoice" ? t("offline.removeConfirm", { number: bill!.number }) : kind === "customer" ? t("offline.removeCustomerConfirm", { name }) : t("offline.removeEntryConfirm", { what: label(entry).toLowerCase(), name });
@@ -98,7 +135,7 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
         </Badge>
         {amount !== null && amount > 0 && (
           <span className="num ml-auto text-[13.5px] font-medium text-ink">
-            {entry.kind === "order" ? "≈ " : ""}
+            {entry.kind === "order" || entry.kind === "return" ? "≈ " : ""}
             {money(amount)}
           </span>
         )}
@@ -200,6 +237,8 @@ function syncedRoute(s: SyncedEntry): Route | null {
     case "customer":
     case "customer-edit":
       return { name: "customer", customerId: s.serverId };
+    case "purchase":
+      return { name: "purchase-view", purchaseId: s.serverId };
     default:
       return null;
   }
@@ -256,7 +295,7 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
                       <button type="button" onClick={() => go(route)} className="font-mono font-medium text-accent hover:underline">
                         {s.serverNumber}
                       </button>
-                    ) : kind === "payment" ? (
+                    ) : kind === "payment" || kind === "expense" || kind === "return" ? (
                       <span className="font-mono font-medium text-ink-2">{s.serverNumber}</span>
                     ) : null}
                     {kind === "invoice" && s.serverNumber !== s.number && (

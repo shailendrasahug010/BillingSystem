@@ -45,7 +45,7 @@ const money = (d: { toFixed(n: number): string }) => d.toFixed(2);
 /** Registrations that charge GST on their bills. Composition / unregistered suppliers issue a bill of supply. */
 const CHARGES_GST = new Set(["regular", "sez", "deemed_export"]);
 
-async function purchaseDetail(tx: Tx, ctx: RequestCtx, id: string) {
+export async function purchaseDetail(tx: Tx, ctx: RequestCtx, id: string) {
   const [p] = await tx.select().from(schema.purchases).where(and(eq(schema.purchases.id, id), eq(schema.purchases.businessId, ctx.businessId)));
   if (!p) throw notFound("purchase");
   const items = await tx.select().from(schema.purchaseItems).where(eq(schema.purchaseItems.purchaseId, id)).orderBy(asc(schema.purchaseItems.lineNo));

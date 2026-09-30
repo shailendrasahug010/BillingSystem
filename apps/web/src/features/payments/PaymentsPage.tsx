@@ -19,6 +19,7 @@ import { refreshCustomer, refreshSupplier } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
+import { WaitingStrip } from "../../components/offline/OfflineBills";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
@@ -165,6 +166,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         }
       />
 
+      <WaitingStrip kinds={["payment"]} />
       <FilterBar>
         <Input className="flex-1" leading={<Search size={16} />} placeholder={t("payment.search")} aria-label={t("payment.search")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Segmented

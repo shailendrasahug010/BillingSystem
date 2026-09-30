@@ -6,6 +6,8 @@ import { customerById } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { customerInvoices, customerPayments, useStoreVersion } from "../../data/store";
 import { api } from "../../lib/api";
+import { deviceDocuments } from "../../offline/documents";
+import { unreachable, workingOffline } from "../../offline/sync";
 
 export interface HistoryInvoice {
   id: string;
@@ -51,21 +53,29 @@ export function useCustomerHistory(customerId: string) {
   const version = useStoreVersion();
   const invoices = useQuery({
     queryKey: ["customer-invoices", customerId],
-    queryFn: () =>
-      api
-        .get<{ data: Array<{ id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; grandTotal: string; amountPaid: string; status: string }> }>("/invoices", { customerId, limit: 50 })
-        .then((r) =>
-          r.data.map<HistoryInvoice>((i) => ({
-            id: i.id,
-            number: i.invoiceNumber,
-            date: i.invoiceDate,
-            dueDate: i.dueDate ?? i.invoiceDate,
-            total: Number(i.grandTotal),
-            paid: Number(i.amountPaid),
-            cancelled: i.status === "cancelled",
-          })),
-        ),
+    queryFn: async () => {
+      type Row = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; grandTotal: string; amountPaid: string; status: string; customerId?: string };
+      const toHistory = (i: Row): HistoryInvoice => ({
+        id: i.id,
+        number: i.invoiceNumber,
+        date: i.invoiceDate,
+        dueDate: i.dueDate ?? i.invoiceDate,
+        total: Number(i.grandTotal),
+        paid: Number(i.amountPaid),
+        cancelled: i.status === "cancelled",
+      });
+      // Without a connection: this customer's recent bills kept on the device (they open, print and take returns).
+      const onDevice = () => deviceDocuments<Row>("invoice").filter((i) => i.customerId === customerId).map(toHistory);
+      if (workingOffline()) return onDevice();
+      try {
+        return (await api.get<{ data: Row[] }>("/invoices", { customerId, limit: 50 })).data.map(toHistory);
+      } catch (e) {
+        if (unreachable(e)) return onDevice();
+        throw e;
+      }
+    },
     enabled: LIVE,
+    networkMode: "always",
   });
   const payments = useQuery({
     queryKey: ["customer-payments", customerId],
@@ -88,11 +98,13 @@ export function useCustomerHistory(customerId: string) {
           })),
         ),
     enabled: LIVE,
+    networkMode: "always",
   });
   const ledger = useQuery({
     queryKey: ["customer-ledger", customerId],
     queryFn: () => api.get<ApiLedger>(`/customers/${customerId}/ledger`),
     enabled: LIVE,
+    networkMode: "always",
   });
 
   return useMemo(() => {

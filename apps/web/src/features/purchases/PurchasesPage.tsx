@@ -1,4 +1,4 @@
-import { Download, FileSpreadsheet, Plus, Search } from "lucide-react";
+import { CloudOff, Download, FileSpreadsheet, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -10,6 +10,9 @@ import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, type Column } fr
 import { allowed } from "../../data/db";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
+import { WaitingStrip } from "../../components/offline/OfflineBills";
+import { deviceDocuments, useDeviceDocuments } from "../../offline/documents";
+import { unreachable, useOffline } from "../../offline/sync";
 import { BillImportDialog } from "./BillImportDialog";
 
 export interface PurchaseRow {
@@ -41,6 +44,20 @@ export function PurchasesPage() {
   const [to, setTo] = useState("");
   const [importing, setImporting] = useState(false);
   const list = usePaged<PurchaseRow>("purchases", "/purchases", { status, from, to, q: q.trim().length >= 2 ? q.trim() : undefined });
+  // No connection: the purchase bills kept on this device (last 30 days), to open and return against.
+  const offline = useOffline();
+  useDeviceDocuments();
+  const noServer = offline.offlineMode || !offline.online || (list.error !== null && unreachable(list.error));
+  const needle = q.trim().toLowerCase();
+  const rows = noServer
+    ? deviceDocuments<PurchaseRow>("purchase").filter(
+        (p) =>
+          (status === "all" || p.status === status) &&
+          (!from || p.supplierInvoiceDate >= from) &&
+          (!to || p.supplierInvoiceDate <= to) &&
+          (needle.length < 2 || `${p.supplierInvoiceNumber} ${p.purchaseNumber} ${p.partyName}`.toLowerCase().includes(needle)),
+      )
+    : list.rows;
 
   const columns: Column<PurchaseRow>[] = [
     { key: "date", header: t("purchase.billDate"), render: (p) => <span className="text-ink-2">{dateMedium(p.supplierInvoiceDate)}</span> },
@@ -60,7 +77,7 @@ export function PurchasesPage() {
     { key: "due", header: t("common.balance"), align: "right", render: (p) => (p.status === "posted" && Number(p.balanceDue) > 0 ? <span className="font-semibold text-ink">{money(p.balanceDue)}</span> : <span className="text-ink-3">—</span>) },
   ];
 
-  const posted = list.rows.filter((p) => p.status === "posted");
+  const posted = rows.filter((p) => p.status === "posted");
   const total = posted.reduce((s, p) => s + Number(p.grandTotal), 0);
   const due = posted.reduce((s, p) => s + Number(p.balanceDue), 0);
 
@@ -89,7 +106,7 @@ export function PurchasesPage() {
                     { label: t("common.total"), value: (p) => p.grandTotal },
                     { label: t("common.balance"), value: (p) => p.balanceDue },
                   ],
-                  list.rows,
+                  rows,
                 )
               }
             >
@@ -124,12 +141,20 @@ export function PurchasesPage() {
         <Input type="date" aria-label={t("common.from")} value={from} onChange={(e) => setFrom(e.target.value)} className="md:w-40" />
         <Input type="date" aria-label={t("common.to")} value={to} onChange={(e) => setTo(e.target.value)} className="md:w-40" />
       </FilterBar>
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      <WaitingStrip kinds={["purchase", "return"]} />
+      {noServer ? (
+        <p className="flex items-start gap-2 rounded-xl bg-surface-2 px-3.5 py-2.5 text-[13px] text-ink-2">
+          <CloudOff size={15} className="mt-0.5 shrink-0" />
+          {t("offline.keptPurchases")}
+        </p>
+      ) : list.error ? (
+        <ErrorNote error={list.error} />
+      ) : null}
       <DataTable
         columns={columns}
-        rows={list.rows}
+        rows={rows}
         rowKey={(p) => p.id}
-        loading={list.loading}
+        loading={!noServer && list.loading}
         onRowClick={(p) => navigate({ name: "purchase-view", purchaseId: p.id })}
         empty={
           <EmptyState
@@ -147,7 +172,7 @@ export function PurchasesPage() {
           />
         }
       />
-      <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
+      {!noServer && <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />}
       <BillImportDialog open={importing} onOpenChange={setImporting} />
     </div>
   );

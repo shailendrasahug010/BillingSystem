@@ -7,14 +7,18 @@ import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Skeleton } from "../../components/ui/misc";
 import { ErrorNote } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
-import { TODAY, WORKSPACE } from "../../data/db";
+import { customerById, supplierById, TODAY, WORKSPACE } from "../../data/db";
 import { refreshCatalog, refreshCustomer, refreshSupplier } from "../../data/live";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { serverOrDevice, updateDeviceDocument } from "../../offline/documents";
+import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { invalidateMoney } from "../payments/PaymentDialog";
 
 interface DocLine {
   id: string;
+  productId: string;
   productName: string;
+  conversionFactor: string;
   unitId: string;
   qty: string;
   returnedQty: string;
@@ -51,10 +55,13 @@ export function ReturnDialog({ kind, documentId, open, onOpenChange }: { kind: "
   const [key, setKey] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const docKind = kind === "sale" ? "invoice" : "purchase";
+  // The bill from the server, or the copy kept on this device without a connection.
   const doc = useQuery({
     queryKey: [kind === "sale" ? "invoice-raw" : "purchase", documentId],
-    queryFn: () => api.get<DocForReturn>(kind === "sale" ? `/invoices/${documentId}` : `/purchases/${documentId}`),
+    queryFn: () => serverOrDevice(docKind, documentId, () => api.get<DocForReturn>(kind === "sale" ? `/invoices/${documentId}` : `/purchases/${documentId}`)),
     enabled: open,
+    networkMode: "always",
   });
 
   useEffect(() => {
@@ -78,20 +85,53 @@ export function ReturnDialog({ kind, documentId, open, onOpenChange }: { kind: "
   const save = async () => {
     setBusy(true);
     setError(null);
+    const body = {
+      noteDate: date,
+      reason,
+      restock,
+      lines: chosen.map((l) => ({ lineId: l.id, qty: qty[l.id] })),
+      ...(partyNote.trim() ? { partyNoteNumber: partyNote.trim() } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+    };
+    const d = doc.data!;
+    /** Kept on this device with the same key: stock and the balance move now, the note comes when it syncs. */
+    const keep = async () => {
+      const scope = offlineScope();
+      const partyId = (d.customerId ?? d.supplierId)!;
+      const kept =
+        scope &&
+        (await queueEntry({
+          kind: "return",
+          id: key,
+          userId: scope.userId,
+          businessId: scope.businessId,
+          savedAt: new Date().toISOString(),
+          status: "pending",
+          error: null,
+          side: kind,
+          documentId,
+          documentNumber: d.invoiceNumber ?? d.supplierInvoiceNumber ?? "",
+          partyId,
+          partyName: (kind === "sale" ? customerById.get(partyId)?.businessName : supplierById.get(partyId)?.name) ?? "",
+          date,
+          estimate: Math.round(estimate * 100) / 100,
+          // Goods back in from a customer, or out to a supplier, when they go back on the shelf.
+          stock: restock ? chosen.map((l) => ({ productId: l.productId, qty: Math.round(Number(qty[l.id]) * Number(l.conversionFactor || 1) * 1000) / 1000 * (kind === "sale" ? 1 : -1) })) : [],
+          body,
+        }));
+      if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      // The kept bill shows what is already coming back, so it is not returned twice.
+      updateDeviceDocument<DocForReturn & { id: string }>(docKind, documentId, (x) => ({
+        ...x,
+        items: x.items.map((l) => (qty[l.id] ? { ...l, returnedQty: String(Number(l.returnedQty) + Number(qty[l.id])) } : l)),
+      }));
+      void qc.invalidateQueries({ queryKey: [kind === "sale" ? "invoice-raw" : "purchase", documentId] });
+      toast({ tone: "offline", title: t("offline.savedHere"), body: `${kind === "sale" ? t("notes.creditSaved") : t("notes.debitSaved")} · ≈ ${money(estimate)} · ${t("offline.sendsLater")}` });
+      onOpenChange(false);
+    };
     try {
-      const res = await api.post<{ noteNumber: string; grandTotal: string; warnings?: Array<{ code: string }> }>(
-        `/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/returns`,
-        {
-          noteDate: date,
-          reason,
-          restock,
-          lines: chosen.map((l) => ({ lineId: l.id, qty: qty[l.id] })),
-          ...(partyNote.trim() ? { partyNoteNumber: partyNote.trim() } : {}),
-          ...(notes.trim() ? { notes: notes.trim() } : {}),
-        },
-        { idempotencyKey: key },
-      );
-      const d = doc.data!;
+      if (workingOffline()) return await keep();
+      const res = await api.post<{ noteNumber: string; grandTotal: string; warnings?: Array<{ code: string }> }>(`/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/returns`, body, { idempotencyKey: key });
       await Promise.all([
         restock ? refreshCatalog() : Promise.resolve(),
         d.customerId ? refreshCustomer(d.customerId) : d.supplierId ? refreshSupplier(d.supplierId) : Promise.resolve(),
@@ -101,6 +141,10 @@ export function ReturnDialog({ kind, documentId, open, onOpenChange }: { kind: "
       toast({ tone: "success", title: kind === "sale" ? t("notes.creditSaved") : t("notes.debitSaved"), body: `${res.noteNumber} · ${money(res.grandTotal)}` });
       onOpenChange(false);
     } catch (e) {
+      if (unreachable(e)) {
+        await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));
+        return;
+      }
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
       setBusy(false);

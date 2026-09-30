@@ -132,7 +132,7 @@ await page.getByText("This password does not open the copy on this device.", { e
 await page.screenshot({ path: `${OUT}/offline-0-locked.png` });
 await page.fill("#unlock-password", password);
 await page.getByRole("button", { name: "Open", exact: true }).click();
-await page.getByText("No connection. Bills, payments, orders and customer changes are saved on this device").waitFor({ timeout: 15000 });
+await page.getByText("No connection. Bills, payments, orders, purchases, expenses, returns and customer changes are saved on this device").waitFor({ timeout: 15000 });
 await page.getByRole("heading", { name: /Mohan/ }).waitFor();
 await page.screenshot({ path: `${OUT}/offline-1-start.png` });
 log("opened offline from the saved copy");

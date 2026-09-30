@@ -13,6 +13,7 @@ import { PrintPortal } from "../../components/ui/PrintPortal";
 import { allowed, BUSINESS, customerById, INVOICES, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
+import { serverOrDevice } from "../../offline/documents";
 import { api } from "../../lib/api";
 import { shareOnWhatsApp } from "../../lib/share";
 import { printableFromApi, printableFromDemo, type ApiInvoice, type PrintableInvoice } from "./printable";
@@ -36,9 +37,12 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   }, [syncedId, navigate]);
   const live = useQuery({
     queryKey: ["invoice-raw", invoiceId],
-    queryFn: () => api.get<ApiInvoice & { returns: ReturnRow[] }>(`/invoices/${invoiceId}`),
+    // From the server, or the copy kept on this device when there is no connection.
+    queryFn: () => serverOrDevice("invoice", invoiceId, () => api.get<ApiInvoice & { returns: ReturnRow[] }>(`/invoices/${invoiceId}`)),
     enabled: LIVE && !offlineKey,
+    networkMode: "always",
   });
+  const deviceCopyAt = live.data?.deviceCopyAt;
   const demo = LIVE ? undefined : INVOICES.find((i) => i.id === invoiceId);
   const invoice: PrintableInvoice | undefined = offlineKey ? kept.entry?.printable : LIVE ? live.data && printableFromApi(live.data) : demo && printableFromDemo(demo);
   if (LIVE && !offlineKey && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
@@ -78,6 +82,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
               {kept.entry?.status === "failed" ? t("offline.failed") : t("offline.notSynced")}
             </Badge>
           )}
+          {deviceCopyAt && (
+            <Badge tone="warn" icon={<CloudOff size={13} />}>
+              {t("offline.deviceCopy")}
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
@@ -97,7 +106,7 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
             </Button>
           )}
           {/* The PDF is made on the server; a bill still waiting on this device shares as text. */}
-          {LIVE && !offlineKey ? (
+          {LIVE && !offlineKey && !deviceCopyAt ? (
             <>
               {(allowed("invoice.print") || allowed("invoice.share")) && <PdfActions path={`/invoices/${invoice.id}/pdf`} locale={printLocale} number={invoice.number} shareText={shareText} mobile={mobile} primaryShare />}
               <SendButton documentType="invoice" documentId={invoice.id} number={invoice.number} party={{ name: invoice.buyer.businessName, mobile}} locale={printLocale} />
@@ -116,7 +125,7 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
       </div>
       {LIVE && live.data && (
         <div className="no-print">
-          <ReturnsCard kind="sale" documentId={invoice.id} documentNumber={invoice.number} returns={live.data.returns ?? []} canReturn={status !== "cancelled"} />
+          <ReturnsCard kind="sale" documentId={invoice.id} documentNumber={invoice.number} returns={live.data.returns ?? []} canReturn={status !== "cancelled"} deviceCopy={Boolean(deviceCopyAt)} />
         </div>
       )}
       <PrintPortal>

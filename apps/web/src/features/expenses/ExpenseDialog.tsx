@@ -8,7 +8,9 @@ import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { BUSINESS, TODAY } from "../../data/db";
+import { EXPENSE_CATEGORIES } from "../../data/live";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { METHODS } from "../payments/PaymentDialog";
 
 export interface ExpenseCategory {
@@ -24,7 +26,21 @@ const ITC = ["input_services", "eligible", "capital_goods", "ineligible"] as con
 const AMOUNT = /^\d{1,13}(\.\d{1,2})?$/;
 
 export function useExpenseCategories() {
-  return useQuery({ queryKey: ["expense-categories"], queryFn: () => api.get<{ data: ExpenseCategory[] }>("/expense-categories").then((r) => r.data), staleTime: 60_000 });
+  return useQuery({
+    queryKey: ["expense-categories"],
+    // Without a connection: the categories kept with the business on this device.
+    queryFn: async () => {
+      if (workingOffline()) return EXPENSE_CATEGORIES as ExpenseCategory[];
+      try {
+        return await api.get<{ data: ExpenseCategory[] }>("/expense-categories").then((r) => r.data);
+      } catch (e) {
+        if (unreachable(e)) return EXPENSE_CATEGORIES as ExpenseCategory[];
+        throw e;
+      }
+    },
+    networkMode: "always",
+    staleTime: 60_000,
+  });
 }
 
 /** Category name in the current language. */
@@ -92,29 +108,56 @@ export function ExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const save = async () => {
     setBusy(true);
     setError(null);
+    const body = {
+      expenseDate: date,
+      categoryId,
+      amount,
+      amountIncludesTax: inclusive,
+      gstRate: rate,
+      ...(withGst ? { vendorGstin: gstin.trim().toUpperCase(), itcEligibility: itc } : {}),
+      paymentMethod: method,
+      ...(paidTo.trim() ? { paidTo: paidTo.trim() } : {}),
+      ...(reference.trim() ? { referenceNumber: reference.trim() } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+    };
+    /** Kept on this device with the same key, and sent when the connection is back. */
+    const keep = async () => {
+      const scope = offlineScope();
+      const category = active.find((c) => c.id === categoryId);
+      const total = breakdown ? Number(breakdown.taxable.plus(breakdown.taxTotal).toFixed(2)) : Number(amount);
+      const kept =
+        scope &&
+        (await queueEntry({
+          kind: "expense",
+          id: key,
+          userId: scope.userId,
+          businessId: scope.businessId,
+          savedAt: new Date().toISOString(),
+          status: "pending",
+          error: null,
+          categoryName: category ? label(category) : "",
+          paidTo: paidTo.trim(),
+          date,
+          total,
+          body,
+        }));
+      if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("expenses.saved")} · ${money(total)} · ${t("offline.sendsLater")}` });
+      onOpenChange(false);
+    };
     try {
-      const res = await api.post<{ expenseNumber: string; totalAmount: string }>(
-        "/expenses",
-        {
-          expenseDate: date,
-          categoryId,
-          amount,
-          amountIncludesTax: inclusive,
-          gstRate: rate,
-          ...(withGst ? { vendorGstin: gstin.trim().toUpperCase(), itcEligibility: itc } : {}),
-          paymentMethod: method,
-          ...(paidTo.trim() ? { paidTo: paidTo.trim() } : {}),
-          ...(reference.trim() ? { referenceNumber: reference.trim() } : {}),
-          ...(notes.trim() ? { notes: notes.trim() } : {}),
-        },
-        { idempotencyKey: key },
-      );
+      if (workingOffline()) return await keep();
+      const res = await api.post<{ expenseNumber: string; totalAmount: string }>("/expenses", body, { idempotencyKey: key });
       void qc.invalidateQueries({ queryKey: ["expenses"] });
       void qc.invalidateQueries({ queryKey: ["reports"] });
       void qc.invalidateQueries({ queryKey: ["gst"] });
       toast({ tone: "success", title: t("expenses.saved"), body: `${res.expenseNumber} · ${money(res.totalAmount)}` });
       onOpenChange(false);
     } catch (e) {
+      if (unreachable(e)) {
+        await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));
+        return;
+      }
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
       setBusy(false);

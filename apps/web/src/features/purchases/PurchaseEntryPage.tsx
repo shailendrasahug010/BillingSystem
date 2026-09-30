@@ -29,6 +29,7 @@ import { useSearchableProducts } from "../../data/hooks";
 import { refreshCatalog, refreshSupplier } from "../../data/live";
 import { useStoreVersion } from "../../data/store";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { cn } from "../../lib/cn";
 import { invalidateMoney, METHODS } from "../payments/PaymentDialog";
 import { ProductEditor, type ProductPrefill } from "../products/ProductEditor";
@@ -242,41 +243,74 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
     if (invalid) return;
     setBusy(true);
     setError(null);
+    const body = {
+      supplierId,
+      supplierInvoiceNumber: head.billNumber.trim(),
+      supplierInvoiceDate: head.billDate,
+      receivedDate: head.receivedDate,
+      itcEligibility: head.itc,
+      ...(godowns.length > 1 && warehouseId ? { warehouseId } : {}),
+      isReverseCharge: head.reverseCharge,
+      lines: lines.map((l) => {
+        const p = productById.get(l.productId)!;
+        return {
+          productId: l.productId,
+          ...(l.unitId && l.unitId !== p.unitId ? { unitId: l.unitId } : {}),
+          qty: l.qty,
+          ...(l.freeQty && Number(l.freeQty) > 0 ? { freeQty: l.freeQty } : {}),
+          rate: l.rate,
+          ...(l.discountPercent ? { discountPercent: l.discountPercent } : {}),
+          ...(l.gstRate ? { gstRate: l.gstRate } : {}),
+          ...(l.batchNumber.trim() ? { batchNumber: l.batchNumber.trim() } : {}),
+          ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
+          ...(l.mfgDate && l.batchNumber.trim() ? { mfgDate: l.mfgDate } : {}),
+          ...(l.mrp && RATE.test(l.mrp) ? { mrp: l.mrp } : {}),
+          ...(l.supplierItem ? { supplierItem: l.supplierItem } : {}),
+        };
+      }),
+      charges: charges
+        .filter((c) => MONEY.test(c.amount) && Number(c.amount) > 0)
+        .map((c) => ({ label: c.label.trim() || t("purchase.charge"), amount: c.amount, ...(c.gstRate && Number(c.gstRate) > 0 ? { gstRate: c.gstRate } : {}) })),
+      ...(paid.amount && Number(paid.amount) > 0 ? { payment: { amount: paid.amount, method: paid.method, ...(paid.reference.trim() ? { reference: paid.reference.trim() } : {}) } } : {}),
+      ...(head.notes.trim() ? { notes: head.notes.trim() } : {}),
+      clientTotals: { grandTotal: calc.totals!.grandTotal.toFixed(2) },
+    };
+    /** Kept on this device with the same key; stock comes in and the supplier is owed at once. */
+    const keep = async () => {
+      const scope = offlineScope();
+      const kept =
+        scope &&
+        (await queueEntry({
+          kind: "purchase",
+          id: key,
+          userId: scope.userId,
+          businessId: scope.businessId,
+          savedAt: new Date().toISOString(),
+          status: "pending",
+          error: null,
+          supplierId: supplierId!,
+          supplierName: supplier ? supplierLabel(supplier) : "",
+          billNumber: head.billNumber.trim(),
+          date: head.receivedDate,
+          total: Number(calc.totals!.grandTotal.toFixed(2)),
+          paid: paid.amount && MONEY.test(paid.amount) ? Number(paid.amount) : 0,
+          lineCount: lines.length,
+          stock: lines.map((l) => {
+            const p = productById.get(l.productId)!;
+            const factor = l.unitId && l.unitId !== p.unitId ? (p.packUnits?.find((u) => u.unitId === l.unitId)?.factor ?? 1) : 1;
+            return { productId: l.productId, qty: Math.round((Number(l.qty) + (Number(l.freeQty) || 0)) * factor * 1000) / 1000 };
+          }),
+          body,
+        }));
+      if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("purchase.saved")} · ${money(calc.totals!.grandTotal.toFixed(2))} · ${t("offline.sendsLater")}` });
+      navigate({ name: "planned", module: "purchases" });
+    };
     try {
+      if (workingOffline()) return await keep();
       const res = await api.post<{ id: string; purchaseNumber: string; grandTotal: string }>(
         "/purchases",
-        {
-          supplierId,
-          supplierInvoiceNumber: head.billNumber.trim(),
-          supplierInvoiceDate: head.billDate,
-          receivedDate: head.receivedDate,
-          itcEligibility: head.itc,
-          ...(godowns.length > 1 && warehouseId ? { warehouseId } : {}),
-          isReverseCharge: head.reverseCharge,
-          lines: lines.map((l) => {
-            const p = productById.get(l.productId)!;
-            return {
-              productId: l.productId,
-              ...(l.unitId && l.unitId !== p.unitId ? { unitId: l.unitId } : {}),
-              qty: l.qty,
-              ...(l.freeQty && Number(l.freeQty) > 0 ? { freeQty: l.freeQty } : {}),
-              rate: l.rate,
-              ...(l.discountPercent ? { discountPercent: l.discountPercent } : {}),
-              ...(l.gstRate ? { gstRate: l.gstRate } : {}),
-              ...(l.batchNumber.trim() ? { batchNumber: l.batchNumber.trim() } : {}),
-              ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
-              ...(l.mfgDate && l.batchNumber.trim() ? { mfgDate: l.mfgDate } : {}),
-              ...(l.mrp && RATE.test(l.mrp) ? { mrp: l.mrp } : {}),
-              ...(l.supplierItem ? { supplierItem: l.supplierItem } : {}),
-            };
-          }),
-          charges: charges
-            .filter((c) => MONEY.test(c.amount) && Number(c.amount) > 0)
-            .map((c) => ({ label: c.label.trim() || t("purchase.charge"), amount: c.amount, ...(c.gstRate && Number(c.gstRate) > 0 ? { gstRate: c.gstRate } : {}) })),
-          ...(paid.amount && Number(paid.amount) > 0 ? { payment: { amount: paid.amount, method: paid.method, ...(paid.reference.trim() ? { reference: paid.reference.trim() } : {}) } } : {}),
-          ...(head.notes.trim() ? { notes: head.notes.trim() } : {}),
-          clientTotals: { grandTotal: calc.totals!.grandTotal.toFixed(2) },
-        },
+        body,
         { idempotencyKey: key },
       );
       await Promise.all([refreshCatalog(), refreshSupplier(supplierId!)]).catch(() => undefined);
@@ -285,6 +319,10 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
       toast({ tone: "success", title: t("purchase.saved"), body: `${res.purchaseNumber} · ${money(res.grandTotal)}` });
       navigate({ name: "purchase-view", purchaseId: res.id });
     } catch (e) {
+      if (unreachable(e)) {
+        await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));
+        return;
+      }
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
       setBusy(false);

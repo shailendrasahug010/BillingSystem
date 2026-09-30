@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@vyapaar/core";
-import { Ban, Wallet } from "lucide-react";
+import { Ban, CloudOff, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
+import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Field, Input } from "../../components/ui/Field";
@@ -13,6 +14,7 @@ import { useToast } from "../../components/ui/Toast";
 import { allowed, WORKSPACE } from "../../data/db";
 import { refreshCatalog, refreshSupplier } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
+import { serverOrDevice } from "../../offline/documents";
 import { invalidateMoney, PaymentDialog } from "../payments/PaymentDialog";
 import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { PurchaseStatusBadge } from "./PurchasesPage";
@@ -78,7 +80,12 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const q = useQuery({ queryKey: ["purchase", purchaseId], queryFn: () => api.get<PurchaseDetail>(`/purchases/${purchaseId}`) });
+  // From the server, or the copy kept on this device when there is no connection.
+  const q = useQuery({
+    queryKey: ["purchase", purchaseId],
+    queryFn: () => serverOrDevice("purchase", purchaseId, () => api.get<PurchaseDetail>(`/purchases/${purchaseId}`)),
+    networkMode: "always",
+  });
 
   if (q.isPending) return <Skeleton className="h-60 w-full" />;
   if (q.error) return <ErrorNote error={q.error} />;
@@ -102,6 +109,7 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
   };
 
   const posted = p.status === "posted";
+  const deviceCopy = Boolean(p.deviceCopyAt);
   const returned = (p.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + Number(r.amountSettled), 0);
   const tax = (v: string) => (Number(v) ? money(v) : null);
 
@@ -112,11 +120,16 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
         title={
           <span className="flex flex-wrap items-center gap-2">
             {p.supplierInvoiceNumber} <PurchaseStatusBadge row={p} />
+            {deviceCopy && (
+              <Badge tone="warn" icon={<CloudOff size={13} />}>
+                {t("offline.deviceCopy")}
+              </Badge>
+            )}
           </span>
         }
         subtitle={`${p.purchaseNumber} · ${p.partyName}${p.partyGstin ? ` · ${p.partyGstin}` : ""}`}
         actions={
-          posted ? (
+          posted && !deviceCopy ? (
             <>
               {allowed("purchase.cancel") && !cancelling && (
                 <Button variant="ghost" icon={<Ban size={16} />} onClick={() => setCancelling(true)}>
@@ -258,7 +271,7 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
           </dl>
         </Card>
       </div>
-      <ReturnsCard kind="purchase" documentId={p.id} documentNumber={p.supplierInvoiceNumber} returns={p.returns ?? []} canReturn={posted && !p.isReverseCharge} />
+      <ReturnsCard kind="purchase" documentId={p.id} documentNumber={p.supplierInvoiceNumber} returns={p.returns ?? []} canReturn={posted && !p.isReverseCharge} deviceCopy={deviceCopy} />
       <PaymentDialog direction="out" partyId={p.supplierId} open={paying} onOpenChange={setPaying} />
     </div>
   );

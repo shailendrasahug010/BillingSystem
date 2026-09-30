@@ -6,6 +6,7 @@ import { applyMe, applyWorkspace, hydrateWorkspace, resetWorkspace, type Workspa
 import { LIVE } from "../data/source";
 import { api, ApiError, onSessionChange, refreshSession, setSession } from "../lib/api";
 import { ensureDevice } from "../offline/device";
+import { clearDeviceDocuments, openDeviceDocuments, refreshDeviceDocuments } from "../offline/documents";
 import { clearSnapshots, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
 import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
@@ -65,6 +66,9 @@ async function keepOnDevice(res: SessionResponse, me: MeResponse, data: Workspac
   setOfflineMode(false);
   // Bills still waiting (or refused) stay out of the stock and balances just loaded.
   applyPendingEffects();
+  // Recent bills for opening and returns without a connection, fetched in the background.
+  await openDeviceDocuments(userId, businessId);
+  void refreshDeviceDocuments(true);
   void saveSnapshot({ user: res.user, business: res.business ?? me.business!, businesses: res.businesses, me, data, savedAt: new Date().toISOString() });
   if (me.permissions.includes("invoice.create")) void ensureDevice(userId, businessId).then(refreshDevice);
   void syncNow();
@@ -79,6 +83,7 @@ async function openSaved(snapshot: Snapshot): Promise<MeResponse> {
   await setOfflineScope(snapshot.user.id, snapshot.business.id);
   setOfflineMode(true);
   applyPendingEffects();
+  await openDeviceDocuments(snapshot.user.id, snapshot.business.id);
   return me;
 }
 
@@ -141,6 +146,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!res) {
         // Signed out (or the session ended): forget the saved business; waiting work stays, locked, for the next sign-in.
         void clearSnapshots();
+        void clearDeviceDocuments();
         lockVault();
         clearOfflineScope();
         resetWorkspace();
@@ -229,6 +235,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const off = onSessionChange((res) => {
       if (!res) {
         void clearSnapshots();
+        void clearDeviceDocuments();
         lockVault();
         clearOfflineScope();
         offlineMode.current = false;

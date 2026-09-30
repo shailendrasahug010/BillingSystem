@@ -2,6 +2,7 @@ import { auditLogModule } from "./audit-log.js";
 import { businessModule } from "./business/routes.js";
 import { catalogMastersModule } from "./catalog/masters.js";
 import { productsModule } from "./catalog/products.js";
+import { offlineDocumentsModule } from "./devices/documents.js";
 import { devicesModule } from "./devices/routes.js";
 import { documentsModule } from "./documents/routes.js";
 import { messagingModule } from "./messaging/routes.js";
@@ -47,6 +48,7 @@ export const MODULES: ApiModule[] = [
   importsModule,
   invoicesModule,
   devicesModule,
+  offlineDocumentsModule,
   documentsModule,
   messagingModule,
   messagingStatusModule,

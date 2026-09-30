@@ -291,6 +291,17 @@ export async function refreshCustomers(): Promise<void> {
   touch();
 }
 
+export interface ExpenseCategoryRow {
+  id: string;
+  name: string;
+  nameHi: string | null;
+  isSystem: boolean;
+  isActive: boolean;
+}
+
+/** Expense categories, kept for entering expenses without a connection. */
+export const EXPENSE_CATEGORIES: ExpenseCategoryRow[] = [];
+
 /** Everything the app keeps in memory for a business: also saved on the device for offline use. */
 export interface WorkspaceData {
   catalog: Catalog | null;
@@ -298,22 +309,26 @@ export interface WorkspaceData {
   routes: Array<{ id: string; name: string }>;
   suppliers: SupplierRow[];
   warehouses: typeof WORKSPACE.warehouses;
+  /** Absent in copies saved before expenses could be entered offline. */
+  expenseCategories?: ExpenseCategoryRow[];
 }
 
 async function fetchWorkspace(): Promise<WorkspaceData> {
-  const [catalog, customers, routes, suppliers, warehouses] = await Promise.all([
+  const [catalog, customers, routes, suppliers, warehouses, expenseCategories] = await Promise.all([
     can("product.view") ? api.get<Catalog>("/catalog") : Promise.resolve(null),
     can("customer.view") ? fetchAll<CustomerRow>("/customers", { active: "true" }) : Promise.resolve([] as CustomerRow[]),
     can("customer.view") ? api.get<{ data: Array<{ id: string; name: string }> }>("/routes").then((r) => r.data) : Promise.resolve([]),
     can("supplier.view") ? fetchAll<SupplierRow>("/suppliers", { active: "true" }) : Promise.resolve([] as SupplierRow[]),
     can("product.view") ? api.get<{ data: typeof WORKSPACE.warehouses }>("/warehouses").then((r) => r.data) : Promise.resolve([]),
+    can("expense.view") ? api.get<{ data: ExpenseCategoryRow[] }>("/expense-categories").then((r) => r.data) : Promise.resolve([] as ExpenseCategoryRow[]),
   ]);
-  return { catalog, customers, routes, suppliers, warehouses };
+  return { catalog, customers, routes, suppliers, warehouses, expenseCategories };
 }
 
 /** Puts workspace data (fresh from the server, or saved on the device) in place. */
 export function applyWorkspace(data: WorkspaceData): void {
   WORKSPACE.warehouses = data.warehouses;
+  replaceAll(EXPENSE_CATEGORIES, data.expenseCategories ?? []);
   if (data.catalog) applyCatalog(data.catalog);
   const routeName = new Map(data.routes.map((r) => [r.id, r.name]));
   replaceAll(ROUTES, data.routes.map((r) => r.name));
@@ -409,6 +424,7 @@ export function resetWorkspace(): void {
   customerRows.clear();
   replaceAll(BRANDS, []);
   replaceAll(ROUTES, []);
+  replaceAll(EXPENSE_CATEGORIES, []);
   WORKSPACE.ready = false;
   WORKSPACE.permissions = new Set();
   touch();

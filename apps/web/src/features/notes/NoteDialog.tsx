@@ -167,7 +167,22 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
 }
 
 /** Returns recorded against an invoice or purchase, with the action to record one. */
-export function ReturnsCard({ kind, documentId, documentNumber, returns, canReturn }: { kind: "sale" | "purchase"; documentId: string; documentNumber: string; returns: ReturnRow[]; canReturn: boolean }) {
+export function ReturnsCard({
+  kind,
+  documentId,
+  documentNumber,
+  returns,
+  canReturn,
+  deviceCopy = false,
+}: {
+  kind: "sale" | "purchase";
+  documentId: string;
+  documentNumber: string;
+  returns: ReturnRow[];
+  canReturn: boolean;
+  /** Opened from the copy on this device: returns can be kept to send later; discounts and note details need the server. */
+  deviceCopy?: boolean;
+}) {
   const { t, money, dateMedium } = useI18n();
   const [open, setOpen] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -179,9 +194,11 @@ export function ReturnsCard({ kind, documentId, documentNumber, returns, canRetu
         action={
           canReturn && allowed("note.create") ? (
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" icon={<Percent size={14} />} onClick={() => setPricing(true)}>
-                {kind === "sale" ? t("notes.priceNote") : t("notes.supplierCreditNote")}
-              </Button>
+              {!deviceCopy && (
+                <Button size="sm" icon={<Percent size={14} />} onClick={() => setPricing(true)}>
+                  {kind === "sale" ? t("notes.priceNote") : t("notes.supplierCreditNote")}
+                </Button>
+              )}
               <Button size="sm" icon={<Undo2 size={14} />} onClick={() => setRecording(true)}>
                 {kind === "sale" ? t("notes.salesReturn") : t("notes.purchaseReturn")}
               </Button>
@@ -196,7 +213,7 @@ export function ReturnsCard({ kind, documentId, documentNumber, returns, canRetu
           <ul className="num divide-y divide-line text-[13.5px]">
             {returns.map((r) => (
               <li key={r.id}>
-                <button type="button" onClick={() => setOpen(r.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left hover:text-accent">
+                <button type="button" disabled={deviceCopy} onClick={() => setOpen(r.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left hover:text-accent">
                   <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "text-ink"}>
                     {r.noteNumber} · {dateMedium(r.noteDate)}
                   </span>
