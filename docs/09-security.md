@@ -114,6 +114,7 @@ Logged actions include: invoice create/update/cancel/print/share, price override
 * Security headers: strict Content-Security-Policy (no inline scripts in production), `X-Content-Type-Options`, `Referrer-Policy`, `frame-ancestors 'none'`.
 * CSRF: refresh endpoint uses `SameSite=Strict` cookies + origin check; all other endpoints use bearer tokens (not cookies).
 * CORS: allow-listed origins only.
+* Error log: request bodies, passwords, tokens and query values are never written (a database error keeps the query text without its values); the web app's source maps are built "hidden" and moved to the API, so the public site does not serve the source; `POST /client-errors` is rate-limited, size-limited and notes the person only from a valid token.
 * Dependencies: lockfile, automated update PRs, `pnpm audit` and secret scanning in CI; container images scanned.
 * Testing: permission tests for every endpoint (each role × each action), tenant-isolation tests, fuzzing of money inputs, periodic external penetration test before SaaS launch.
 * Incident response: runbook, on-call alerts for auth anomalies (spikes in failed logins, token reuse detections, unusual export volume).

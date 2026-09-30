@@ -1,5 +1,6 @@
 import { DomainError, ValidationError } from "@vyapaar/core";
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import type { RequestCtx } from "./context.js";
 import { hasZodFastifySchemaValidationErrors } from "fastify-type-provider-zod";
 
 type Params = Record<string, string | number>;
@@ -119,6 +120,18 @@ function fieldFromPath(path: string): string {
     .join("");
 }
 
+/** Codes that say the server is busy rather than that something is wrong: not written to the error log. */
+const EXPECTED = new Set(["OCR_BUSY"]);
+
+/** A failure of the API written to the error log, with the request and who made it. */
+function logFailure(err: unknown, request: FastifyRequest, status: number, code: string) {
+  const errors = request.server.deps?.errors;
+  if (!errors || EXPECTED.has(code)) return;
+  const ctx = request.ctx as RequestCtx | null;
+  const user = ctx ? { id: ctx.userId, name: ctx.userName, businessId: ctx.businessId } : request.user ? { id: request.user.userId, name: null, businessId: request.user.businessId } : undefined;
+  errors.record(err, { reference: request.id, source: "api", request: { method: request.method, url: request.url, status, code }, ...(user ? { user } : {}) });
+}
+
 export function errorHandler(err: FastifyError, request: FastifyRequest, reply: FastifyReply) {
   const requestId = request.id;
   if (hasZodFastifySchemaValidationErrors(err)) {
@@ -136,7 +149,10 @@ export function errorHandler(err: FastifyError, request: FastifyRequest, reply: 
   }
   const api = toApiError(err);
   if (api) {
-    if (api.status >= 500) request.log.error({ err }, "request failed");
+    if (api.status >= 500) {
+      request.log.error({ err }, "request failed");
+      logFailure(err, request, api.status, api.code);
+    }
     return reply.code(api.status).send({
       error: { code: api.code, params: api.params, ...(api.field ? { field: api.field } : {}), requestId },
     });
@@ -146,5 +162,6 @@ export function errorHandler(err: FastifyError, request: FastifyRequest, reply: 
     return reply.code(err.statusCode).send({ error: { code: err.code ?? "BAD_REQUEST", requestId } });
   }
   request.log.error({ err }, "unhandled error");
+  logFailure(err, request, 500, "INTERNAL");
   return reply.code(500).send({ error: { code: "INTERNAL", requestId } });
 }

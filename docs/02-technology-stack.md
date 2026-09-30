@@ -33,7 +33,7 @@ Supporting criteria, in order: data integrity for money and stock, cross-platfor
 | Excel/CSV export | ExcelJS / streaming CSV | 4.x | Phase 4 |
 | Object storage | S3-compatible (AWS S3, Cloudflare R2, or MinIO when self-hosted) | — | Phase 4 |
 | Auth crypto | argon2id (`@node-rs/argon2`), EdDSA JWT (`jose`), SHA-256 refresh/OTP hashes, AES-256-GCM field encryption | — | **Built** |
-| Observability | pino logs (built); OpenTelemetry, Sentry | — | Phase 6 |
+| Observability | pino logs and the error log files (built: every failure with its source file and line, browser errors mapped through the build's private source maps); OpenTelemetry, Sentry | — | Phase 6 |
 | Tests | Vitest (unit, DB integration, API integration against PostgreSQL), Playwright (end-to-end script) | 5.0 | **Running in CI** (E2E script run manually) |
 | Deployment | Docker multi-stage image (api, migrate, web), Compose, Caddy (TLS, same-origin `/api`) | — | **Built** |
 | CI | GitHub Actions (typecheck, tests with a Postgres service, build) | — | **Built** |

@@ -957,7 +957,8 @@
     "OCR_BUSY": "Other pages are being read right now. Try again in a moment.",
     "OCR_FAILED": "The page could not be read. Try again, or take a clearer photo.",
     "REPORT_VIEW_SETTINGS_INVALID": "This report has no such setting ({{field}}).",
-    "REPORT_VIEW_LIMIT": "You can keep up to {{max}} saved views. Delete one you no longer use."
+    "REPORT_VIEW_LIMIT": "You can keep up to {{max}} saved views. Delete one you no longer use.",
+    "reference": "Reference: {{ref}} — quote it if this keeps happening."
   },
   "validation": {
     "required": "This field is required",
@@ -2482,5 +2483,12 @@
     "deleteTitle": "Delete view “{{name}}”?",
     "deleteHint": "The report stays as it is; only this saved view goes.",
     "deleteShared": "It is shared: the team will no longer see it either. The report itself stays."
+  },
+  "crash": {
+    "title": "This screen stopped working",
+    "body": "Something went wrong while showing it. It has been noted so it can be fixed; your saved work is safe.",
+    "reference": "Reference: {{ref}}",
+    "retry": "Try again",
+    "reload": "Reload the app"
   }
 }

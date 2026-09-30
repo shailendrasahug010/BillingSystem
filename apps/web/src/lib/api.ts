@@ -13,6 +13,8 @@ export class ApiError extends Error {
     readonly params: Record<string, string | number> = {},
     readonly field?: string,
     readonly details?: Array<{ field: string; code: string; params?: Record<string, string | number> }>,
+    /** The server's reference for this request (its line in the error log, for a server failure). */
+    readonly requestId?: string,
   ) {
     super(code);
     this.name = "ApiError";
@@ -27,6 +29,11 @@ const sessionListeners = new Set<(session: SessionResponse | null) => void>();
 export function onSessionChange(listener: (session: SessionResponse | null) => void): () => void {
   sessionListeners.add(listener);
   return () => sessionListeners.delete(listener);
+}
+
+/** The signed-in person's access token, for the error reporter (which avoids this client to never loop). */
+export function currentAccessToken(): string | null {
+  return accessToken;
 }
 
 /** Called with every login / refresh / switch response (null = signed out). */
@@ -54,8 +61,8 @@ async function parse(res: Response): Promise<unknown> {
 }
 
 function toError(status: number, body: unknown): ApiError {
-  const e = (body as { error?: { code?: string; params?: Record<string, string | number>; field?: string; details?: ApiError["details"] } } | null)?.error;
-  return new ApiError(status, e?.code ?? (status === 0 ? "network" : "generic"), e?.params ?? {}, e?.field, e?.details);
+  const e = (body as { error?: { code?: string; params?: Record<string, string | number>; field?: string; details?: ApiError["details"]; requestId?: string } } | null)?.error;
+  return new ApiError(status, e?.code ?? (status === 0 ? "network" : "generic"), e?.params ?? {}, e?.field, e?.details, e?.requestId);
 }
 
 /** Exchanges the refresh cookie for a new session. Shared by every caller that hits a 401. */

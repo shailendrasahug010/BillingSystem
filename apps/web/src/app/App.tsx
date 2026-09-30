@@ -1,5 +1,6 @@
 import { translateError } from "@vyapaar/i18n";
 import { lazy, Suspense, useState } from "react";
+import { ScreenErrorBoundary } from "../components/ErrorBoundary";
 import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
 import { Kbd, Skeleton } from "../components/ui/misc";
@@ -24,6 +25,7 @@ import { allowed } from "../data/db";
 import { Button } from "../components/ui/Button";
 import { useStoreVersion } from "../data/store";
 import { LIVE } from "../data/source";
+import { setErrorScreen } from "../lib/errorReport";
 import { SessionProvider, useSession } from "./session";
 import { I18nProvider, useI18n } from "./i18n";
 import { RouterProvider, useRouter, type Route } from "./router";
@@ -248,6 +250,8 @@ function Root() {
 
   const needed = routePermission(route);
   const home = homeRoute();
+  // Errors sent to the error log say which screen they happened on.
+  setErrorScreen(route.name === "planned" ? `${route.module}${"action" in route && route.action ? ` (${route.action})` : ""}` : route.name);
   const blocked = LIVE && needed !== null && !allowed(needed);
 
   if (route.name === "login") return LIVE ? null : <LoginPage />;
@@ -256,7 +260,9 @@ function Root() {
     <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
       {/* Each screen rises in as it opens. */}
       <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className="animate-page">
-        <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
+        <ScreenErrorBoundary>
+          <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
+        </ScreenErrorBoundary>
       </div>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />

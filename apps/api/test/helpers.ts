@@ -6,6 +6,8 @@ import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { createFieldCipher } from "../src/lib/crypto.js";
 import { MemoryOtpSender } from "../src/lib/otp.js";
+import { ErrorLog } from "../src/lib/errorLog.js";
+import type { ApiModule } from "../src/modules/types.js";
 import { createTokenService } from "../src/lib/security.js";
 import { LogMessenger } from "../src/services/messaging/transport.js";
 
@@ -55,7 +57,8 @@ export interface TestApp {
  * A fresh database per test file: migrations applied as the owner, the API
  * connected as a non-owner role so row-level security is really enforced.
  */
-export async function createTestApp(): Promise<TestApp> {
+/** Options for tests that need them: folders for the error log and web source maps, routes of their own. */
+export async function createTestApp(options: { logDir?: string; webSourceMapsDir?: string; extraModules?: ApiModule[] } = {}): Promise<TestApp> {
   if (!ADMIN_URL) throw new Error("DATABASE_URL is required for API tests");
   const dbName = `vyapaar_api_${Date.now()}_${randomBytes(3).toString("hex")}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
@@ -91,7 +94,8 @@ export async function createTestApp(): Promise<TestApp> {
     clock: { now: () => new Date(Date.now() + offsetMs), today: () => TEST_TODAY },
     cipher: createFieldCipher(undefined, "test"),
     messenger,
-  });
+    errors: new ErrorLog({ ...config.errorLog, dir: options.logDir ?? null, webSourceMapsDir: options.webSourceMapsDir ?? null }),
+  }, { extraModules: options.extraModules ?? [] });
   await app.ready();
   const owner = new pg.Pool({ connectionString: ownerUrl, max: 2 });
 

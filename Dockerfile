@@ -20,8 +20,10 @@ COPY packages/i18n/package.json packages/i18n/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 COPY . .
 # The bill reader (tesseract.js) needs only the compact English model; the full one (11 MB) is dropped.
+# The web app's source maps go to the API (for the error log), never to the public site.
 RUN pnpm --filter @vyapaar/api build \
  && pnpm --filter @vyapaar/web build \
+ && mkdir -p /out/web-sourcemaps && find apps/web/dist -name "*.map" -exec mv {} /out/web-sourcemaps/ \; \
  && pnpm --filter @vyapaar/api deploy --legacy --prod /out/api \
  && cp -r packages/db/migrations /out/api/migrations \
  && rm -rf /out/api/assets && cp -r apps/api/assets /out/api/assets \
@@ -37,6 +39,9 @@ COPY --from=build --chown=node:node /out/api/dist ./dist
 COPY --from=build --chown=node:node /out/api/migrations ./migrations
 # Fonts for PDF reports (English, Hindi and the rupee sign).
 COPY --from=build --chown=node:node /out/api/assets ./assets
+COPY --from=build --chown=node:node /out/web-sourcemaps ./web-sourcemaps
+# Error log files (errors-YYYY-MM-DD.log): mount a volume here to keep them.
+RUN mkdir -p /app/logs && chown node:node /app/logs
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \

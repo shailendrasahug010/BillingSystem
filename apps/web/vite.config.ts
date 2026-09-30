@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -38,12 +39,26 @@ function serviceWorker(): Plugin {
   };
 }
 
+/** The build noted with each error sent to the error log: APP_BUILD, else the git commit, else the date. */
+function buildId(): string {
+  if (process.env.APP_BUILD) return process.env.APP_BUILD.slice(0, 40);
+  try {
+    return execSync("git rev-parse --short=12 HEAD", { cwd: here, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return new Date().toISOString().slice(0, 16);
+  }
+}
+
 // `vite build --mode singlefile` inlines everything into one HTML file: used to
 // publish a shareable, static preview of the prototype.
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), ...(mode === "singlefile" ? [viteSingleFile()] : [serviceWorker()])],
+  define: { __APP_BUILD__: JSON.stringify(buildId()) },
   build: {
     outDir: mode === "singlefile" ? "dist-singlefile" : "dist",
+    // Source maps for the error log (errors from the browser shown at their source line). "hidden":
+    // the scripts do not point to them; the Docker build moves them to the API, off the public site.
+    sourcemap: mode === "singlefile" ? false : "hidden",
     target: "es2022",
     // The prototype ships as one bundle; production code-splits each module route (React.lazy).
     chunkSizeWarningLimit: 800,

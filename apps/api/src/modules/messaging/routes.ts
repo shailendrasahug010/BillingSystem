@@ -182,8 +182,9 @@ function pump(deps: AppDeps, ctx: RequestCtx): void {
         if (!rows.length) break;
         for (const row of rows) await deliverLogged(deps, ctx, row, channels, null);
       }
-    } catch {
+    } catch (e) {
       // Left queued; the next send for this business picks them up.
+      deps.errors.record(e, { reference: uuidv7(), source: "job", job: "sending queued WhatsApp / email messages", user: { id: ctx.userId, name: ctx.userName, businessId: ctx.businessId } });
     } finally {
       pumping.delete(ctx.businessId);
     }

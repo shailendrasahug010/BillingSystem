@@ -1,4 +1,5 @@
 import { auditLogModule } from "./audit-log.js";
+import { clientErrorsModule } from "./client-errors.js";
 import { businessModule } from "./business/routes.js";
 import { catalogMastersModule } from "./catalog/masters.js";
 import { productsModule } from "./catalog/products.js";
@@ -40,6 +41,7 @@ import type { ApiModule } from "./types.js";
 /** Registered in order under /api/v1. Adding a module = one import and one entry. */
 export const MODULES: ApiModule[] = [
   healthModule,
+  clientErrorsModule,
   identityModule,
   teamModule,
   auditLogModule,

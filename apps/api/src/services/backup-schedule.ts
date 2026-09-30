@@ -1,4 +1,5 @@
 import { hasPermission } from "@vyapaar/core";
+import { uuidv7 } from "uuidv7";
 import { schema } from "@vyapaar/db";
 import { and, eq, lte, ne, sql } from "drizzle-orm";
 import { loadAccess } from "../lib/access.js";
@@ -89,6 +90,10 @@ export async function runDueBackups(deps: AppDeps): Promise<{ sent: number; fail
         await emailBackup(deps, actor, { passphrase: deps.cipher.decrypt(claimed.passphrase), to: claimed.emailTo, kind: "auto" });
       } catch (e) {
         error = failure(e);
+        // Not a refusal the Backup screen explains (mail server down, a bug): into the error log too.
+        if (!(e instanceof ApiError) || e.status >= 500) {
+          deps.errors.record(e, { reference: uuidv7(), source: "job", job: "automatic backup (emailed copy)", user: { id: userId, name: actor.userName, businessId } });
+        }
       }
     }
     await withTenant(deps.db, scope, async (tx) => {
@@ -116,6 +121,7 @@ export function startBackupScheduler(deps: AppDeps, seconds: number, log: { warn
       if (done.sent || done.failed) log.info(done, "automatic backups");
     } catch (e) {
       log.warn({ err: (e as Error).message }, "automatic backups could not run");
+      deps.errors.record(e, { reference: uuidv7(), source: "job", job: "automatic backups (looking for due backups)" });
     } finally {
       running = false;
     }

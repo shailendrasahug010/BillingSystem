@@ -46,6 +46,9 @@ services:
       COOKIE_SECURE: "true"
       CORS_ORIGINS: https://${DOMAIN:-localhost}
       LOG_LEVEL: info
+    # Error log files; read them with: docker compose exec api node dist/errors.js
+    volumes:
+      - api_logs:/app/logs
     depends_on:
       migrate: { condition: service_completed_successfully }
 
@@ -65,5 +68,6 @@ services:
 
 volumes:
   pgdata:
+  api_logs:
   caddy_data:
   caddy_config:

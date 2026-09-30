@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "keys": "tsx scripts/generate-keys.ts",
-    "deploy:db": "tsx src/deploy.ts"
+    "deploy:db": "tsx src/deploy.ts",
+    "errors": "tsx src/errors.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.2",
@@ -34,6 +35,7 @@
     "pdfkit": "0.20.2",
     "pg": "8.23.0",
     "pino": "10.3.1",
+    "source-map-js": "1.2.1",
     "tesseract.js": "7.0.0",
     "uuidv7": "1.2.1",
     "write-excel-file": "4.1.1",

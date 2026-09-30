@@ -10,13 +10,14 @@ import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "./lib/context.js";
 import { errorHandler } from "./lib/errors.js";
 import { MODULES } from "./modules/index.js";
+import type { ApiModule } from "./modules/types.js";
 
 /**
  * Builds the API. Every business module registers its routes under /api/v1;
  * modules only talk to each other through exported service functions that
  * take the caller's transaction.
  */
-export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
+export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModule[] } = {}): Promise<FastifyInstance> {
   const { config } = deps;
   const app = Fastify({
     logger:
@@ -71,7 +72,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   await app.register(
     async (api) => {
-      for (const register of MODULES) await register(api, deps);
+      for (const register of [...MODULES, ...(options.extraModules ?? [])]) await register(api, deps);
     },
     { prefix: "/api/v1" },
   );

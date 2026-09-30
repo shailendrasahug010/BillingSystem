@@ -110,6 +110,8 @@ export function ErrorNote({ error, className }: { error: unknown; className?: st
       <span>
         {translateError(i18n, e)}
         {e.field && <span className="ml-1 font-mono text-[12px] opacity-80">({e.field})</span>}
+        {/* A server failure is in the error log under this reference. */}
+        {e.status >= 500 && e.requestId && <span className="mt-0.5 block font-mono text-[11.5px] opacity-80">{i18n.t("errors.reference", { ref: e.requestId })}</span>}
       </span>
     </p>
   );

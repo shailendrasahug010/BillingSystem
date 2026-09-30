@@ -10,3 +10,4 @@ coverage/
 *.tsbuildinfo
 .vite/
 apps/web/dist-singlefile/
+logs/

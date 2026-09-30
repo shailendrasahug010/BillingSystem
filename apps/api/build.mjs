@@ -1,6 +1,7 @@
 // Bundles the API and the workspace packages it uses (@vyapaar/*, shipped as
 // TypeScript source) into dist/main.js (server) and dist/deploy.js
-// (migrations + app role + reference data, run once per release). Third-party dependencies declared by
+// (migrations + app role + reference data, run once per release) and dist/errors.js (reads the error
+// log: node dist/errors.js). Third-party dependencies declared by
 // this package stay external and are installed with `pnpm deploy --prod`.
 import { readFileSync } from "node:fs";
 import { build } from "esbuild";
@@ -9,7 +10,7 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 const external = Object.keys(pkg.dependencies).filter((d) => !d.startsWith("@vyapaar/"));
 
 await build({
-  entryPoints: ["src/main.ts", "src/deploy.ts"],
+  entryPoints: ["src/main.ts", "src/deploy.ts", "src/errors.ts"],
   bundle: true,
   platform: "node",
   target: "node22",

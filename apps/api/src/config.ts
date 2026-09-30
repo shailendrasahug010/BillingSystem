@@ -1,4 +1,6 @@
+import path from "node:path";
 import { z } from "zod";
+import { defaultWebSourceMapsDir } from "./lib/errorLog.js";
 
 const bool = z
   .enum(["true", "false", "1", "0"])
@@ -43,6 +45,14 @@ const Env = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().default(20),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+  /** Where the error log files go (errors-YYYY-MM-DD.log / .jsonl); "off" writes none. */
+  LOG_DIR: z.string().default("logs"),
+  /** Days of error log files kept. */
+  LOG_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+  /** Time zone of the times in the readable error log. */
+  LOG_TIME_ZONE: z.string().default("Asia/Kolkata"),
+  /** The built web app's source maps (kept off the public site), to show browser errors at their source line. */
+  WEB_SOURCEMAPS_DIR: z.string().optional(),
   DOCS_ENABLED: bool.optional(),
 });
 
@@ -63,6 +73,7 @@ export interface Config {
   backupSchedulerSeconds: number;
   rateLimit: { max: number; authMax: number };
   logLevel: string;
+  errorLog: { dir: string | null; retentionDays: number; timeZone: string; webSourceMapsDir: string | null };
   docsEnabled: boolean;
 }
 
@@ -106,6 +117,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     backupSchedulerSeconds: e.BACKUP_SCHEDULER_SECONDS,
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },
     logLevel: e.LOG_LEVEL,
+    errorLog: {
+      dir: e.LOG_DIR === "off" || e.LOG_DIR === "" ? null : path.resolve(e.LOG_DIR),
+      retentionDays: e.LOG_RETENTION_DAYS,
+      timeZone: e.LOG_TIME_ZONE,
+      webSourceMapsDir: e.WEB_SOURCEMAPS_DIR ? path.resolve(e.WEB_SOURCEMAPS_DIR) : defaultWebSourceMapsDir(),
+    },
     docsEnabled: e.DOCS_ENABLED ?? e.NODE_ENV !== "production",
   };
 }
