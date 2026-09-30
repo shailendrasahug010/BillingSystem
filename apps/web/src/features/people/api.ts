@@ -33,6 +33,11 @@ export interface Employee extends EmployeeRow {
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   notes: string | null;
+  pfMember: boolean;
+  epsMember: boolean;
+  uan: string | null;
+  esiNumber: string | null;
+  gender: "male" | "female" | "other" | null;
 }
 
 export interface SalaryComponent {

@@ -28,6 +28,14 @@ const EmployeeFields = {
   emergencyContactName: text(120).optional(),
   emergencyContactPhone: Mobile.optional(),
   notes: text(1000).optional(),
+  /** PF: a member (with a UAN once allotted) and in the pension scheme (EPS). */
+  pfMember: z.boolean().optional(),
+  epsMember: z.boolean().optional(),
+  uan: z.string().trim().regex(/^\d{12}$/).nullable().optional(),
+  /** ESI insurance (IP) number: 10 digits (17 in older cards). */
+  esiNumber: z.string().trim().regex(/^\d{10}(\d{7})?$/).nullable().optional(),
+  /** For professional tax slabs that differ for women. */
+  gender: z.enum(["male", "female", "other"]).nullable().optional(),
 };
 
 export const EmployeeBody = z.strictObject(EmployeeFields);

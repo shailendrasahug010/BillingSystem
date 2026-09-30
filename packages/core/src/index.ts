@@ -14,6 +14,7 @@ export * from "./inventory/stock.js";
 export * from "./payments/receivables.js";
 export * from "./orders/workflow.js";
 export * from "./payroll/salary.js";
+export * from "./payroll/statutory.js";
 export * from "./purchases/bill-file.js";
 
 export * from "./suggestions/stats.js";

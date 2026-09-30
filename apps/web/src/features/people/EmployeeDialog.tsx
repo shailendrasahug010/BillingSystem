@@ -3,16 +3,18 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
-import { Field, Input, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { TODAY } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { useDepartments, type Employee } from "./api";
 
-const FIELDS = ["name", "mobile", "joiningDate", "designation", "email", "city", "bankAccountName", "bankAccountNumber", "bankIfsc", "pan", "aadhaar", "emergencyContactName", "emergencyContactPhone", "notes"] as const;
-type Form = Record<(typeof FIELDS)[number], string> & { departmentId: string };
-const EMPTY: Form = { ...(Object.fromEntries(FIELDS.map((f) => [f, ""])) as Record<(typeof FIELDS)[number], string>), departmentId: "", joiningDate: TODAY };
+const FIELDS = ["name", "mobile", "joiningDate", "designation", "email", "city", "bankAccountName", "bankAccountNumber", "bankIfsc", "pan", "aadhaar", "emergencyContactName", "emergencyContactPhone", "notes", "uan", "esiNumber"] as const;
+/** Cleared on an edit by sending null (the others left blank stay as they are). */
+const CLEARABLE = new Set(["uan", "esiNumber"]);
+type Form = Record<(typeof FIELDS)[number], string> & { departmentId: string; gender: string; pfMember: boolean; epsMember: boolean };
+const EMPTY: Form = { ...(Object.fromEntries(FIELDS.map((f) => [f, ""])) as Record<(typeof FIELDS)[number], string>), departmentId: "", joiningDate: TODAY, gender: "", pfMember: true, epsMember: true };
 
 /** Add an employee, or edit one (bank, PAN and Aadhaar left blank stay unchanged). */
 export function EmployeeDialog({ open, onOpenChange, employee }: { open: boolean; onOpenChange(v: boolean): void; employee?: Employee | null }) {
@@ -46,6 +48,11 @@ export function EmployeeDialog({ open, onOpenChange, employee }: { open: boolean
             emergencyContactPhone: employee.emergencyContactPhone ?? "",
             notes: employee.notes ?? "",
             departmentId: employee.departmentId ?? "",
+            uan: employee.uan ?? "",
+            esiNumber: employee.esiNumber ?? "",
+            gender: employee.gender ?? "",
+            pfMember: employee.pfMember,
+            epsMember: employee.epsMember,
           }
         : EMPTY,
     );
@@ -61,11 +68,16 @@ export function EmployeeDialog({ open, onOpenChange, employee }: { open: boolean
         departmentId = (await api.post<{ id: string }>("/departments", { name: newDept.trim() })).id;
         void qc.invalidateQueries({ queryKey: ["departments"] });
       }
-      const body: Record<string, string> = {};
+      const body: Record<string, unknown> = {};
       for (const k of FIELDS) {
         const v = form[k].trim();
         if (v) body[k] = k === "pan" || k === "bankIfsc" ? v.toUpperCase() : v;
+        else if (employee && CLEARABLE.has(k) && employee[k as "uan" | "esiNumber"]) body[k] = null;
       }
+      if (form.gender) body.gender = form.gender;
+      else if (employee?.gender) body.gender = null;
+      if (!employee || form.pfMember !== employee.pfMember) body.pfMember = form.pfMember;
+      if (!employee || form.epsMember !== employee.epsMember) body.epsMember = form.epsMember;
       if (departmentId && departmentId !== "__new") body.departmentId = departmentId;
       const res = employee ? await api.patch<Employee>(`/employees/${employee.id}`, body) : await api.post<Employee>("/employees", body);
       void qc.invalidateQueries({ queryKey: ["employees"] });
@@ -133,6 +145,25 @@ export function EmployeeDialog({ open, onOpenChange, employee }: { open: boolean
           {input("pan", "PAN", { hint: employee?.panMasked ? t("people.keepBlankMasked", { masked: employee.panMasked }) : t("people.encrypted") })}
           {input("aadhaar", t("people.aadhaar"), { inputMode: "numeric", hint: employee?.aadhaarLast4 ? t("people.keepBlank", { last4: employee.aadhaarLast4 }) : t("people.aadhaarHint") })}
           {input("email", t("common.email"), { type: "email", hint: t("common.optional") })}
+        </fieldset>
+        <fieldset className="grid grid-cols-1 gap-4 rounded-lg border border-line p-3 sm:grid-cols-2">
+          <legend className="px-1 text-[12px] font-semibold tracking-wide text-ink-3 uppercase">{t("people.statutory")}</legend>
+          {input("uan", t("people.uan"), { inputMode: "numeric", hint: t("people.uanHint") })}
+          {input("esiNumber", t("people.esiNumber"), { inputMode: "numeric", hint: t("people.esiNumberHint") })}
+          <Field label={t("people.gender")} htmlFor="emp-gender" hint={t("people.genderHint")} error={fieldError("gender")}>
+            <Select id="emp-gender" value={form.gender} onChange={set("gender")}>
+              <option value="">—</option>
+              {(["male", "female", "other"] as const).map((g) => (
+                <option key={g} value={g}>
+                  {t(`people.genders.${g}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="flex flex-col justify-center gap-2">
+            <Checkbox label={t("people.pfMember")} checked={form.pfMember} onChange={(v) => setForm((f) => ({ ...f, pfMember: v }))} />
+            <Checkbox label={t("people.epsMember")} checked={form.pfMember && form.epsMember} disabled={!form.pfMember} onChange={(v) => setForm((f) => ({ ...f, epsMember: v }))} />
+          </div>
         </fieldset>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {input("emergencyContactName", t("people.emergencyName"), { hint: t("common.optional") })}

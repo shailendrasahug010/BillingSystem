@@ -12,7 +12,24 @@ export interface PrintableSlip {
   grossEarnings: string;
   totalDeductions: string;
   netPay: string;
-  employee: { employeeCode: string; name: string; designation: string | null; department: string | null; joiningDate: string; bankAccountLast4: string | null; bankIfsc: string | null; panMasked: string | null };
+  employee: {
+    employeeCode: string;
+    name: string;
+    designation: string | null;
+    department: string | null;
+    joiningDate: string;
+    bankAccountLast4: string | null;
+    bankIfsc: string | null;
+    panMasked: string | null;
+    uan?: string | null;
+    esiNumber?: string | null;
+  };
+  /** PF, ESI and PT as worked out by law, with the employer's shares. */
+  statutory?: {
+    pf?: { wages: string; epfWages: string; employee: string; employerEps: string; employerEpf: string };
+    esi?: { wages: string; employee: string; employer: string };
+    pt?: { amount: string; stateCode: string };
+  } | null;
   lines: Array<{ label: string; type: "earning" | "deduction"; amount: string; nameHi: string | null; code: string | null; componentId: string | null; advanceId: string | null }>;
   payment: { number: string | null; date: string; method: PaymentMethod } | null;
 }
@@ -52,6 +69,8 @@ export function SalarySlipDocument({ slip: s, locale }: { slip: PrintableSlip; l
           ...(Number(s.overtimeHours) ? [[t("people.overtime"), `${n(s.overtimeHours)} h`]] : []),
           ...(s.employee.bankAccountLast4 ? [[t("people.bank"), `•••• ${s.employee.bankAccountLast4}${s.employee.bankIfsc ? ` · ${s.employee.bankIfsc}` : ""}`]] : []),
           ...(s.employee.panMasked ? [["PAN", s.employee.panMasked]] : []),
+          ...(s.employee.uan ? [["UAN", s.employee.uan]] : []),
+          ...(s.employee.esiNumber ? [[t("payroll.slip.esiNumber"), s.employee.esiNumber]] : []),
         ].map(([k, v]) => (
           <div key={k}>
             <dt className="text-[11.5px] text-[#4a5570]">{k}</dt>
@@ -92,6 +111,16 @@ export function SalarySlipDocument({ slip: s, locale }: { slip: PrintableSlip; l
         <span className="text-[17px] font-bold">{m(s.netPay)}</span>
         <span className="w-full text-[12px] text-[#4a5570]">{amountInWords(s.netPay, locale)}</span>
       </div>
+      {(s.statutory?.pf || s.statutory?.esi) && (
+        <p className="mt-2 text-[12px] text-[#4a5570]">
+          {t("payroll.slip.employerShare", {
+            items: [
+              ...(s.statutory.pf ? [t("payroll.slip.employerPf", { epf: m(s.statutory.pf.employerEpf), eps: m(s.statutory.pf.employerEps), wages: m(s.statutory.pf.epfWages) })] : []),
+              ...(s.statutory.esi ? [t("payroll.slip.employerEsi", { amount: m(s.statutory.esi.employer), wages: m(s.statutory.esi.wages) })] : []),
+            ].join(" · "),
+          })}
+        </p>
+      )}
       {s.payment && (
         <p className="mt-2 text-[12px] text-[#4a5570]">
           {t("payroll.slip.paidOn", { date: formatDate(s.payment.date), method: t(`paymentMethod.${s.payment.method}`), number: s.payment.number ?? "" })}

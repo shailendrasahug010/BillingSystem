@@ -95,7 +95,8 @@
     "stateWithCode": "{{name}} (State code {{code}})",
     "noAccess": "Not part of your role",
     "noAccessHint": "Your role does not include this screen. Ask the owner to add it if you need it.",
-    "goHome": "Go to my screens"
+    "goHome": "Go to my screens",
+    "remove": "Remove"
   },
   "nav": {
     "groupDaily": "Daily work",
@@ -762,7 +763,44 @@
     "lutHint": "For exports and supplies to SEZ without paying IGST. Filed each financial year on the GST portal (form RFD-11). Leave empty if you have none.",
     "lutArn": "LUT ARN",
     "lutValidUntil": "Valid until",
-    "lutClear": "Remove LUT"
+    "lutClear": "Remove LUT",
+    "statutory": {
+      "title": "Salary: PF, ESI and professional tax",
+      "hint": "Worked out on every salary slip instead of entered by hand. Check the rates with your accountant.",
+      "savedHint": "Recalculate a draft payroll to use it.",
+      "pfOn": "Provident fund: 12% of PF wages from the employee, 12% from the employer (8.33% of it to pension)",
+      "establishmentCode": "PF establishment code",
+      "pfWages": "PF wages",
+      "pfWagesOptions": {
+        "codes": "Labour codes: basic + DA, at least half the pay",
+        "basic_da": "Basic + DA only"
+      },
+      "pfWagesHint": {
+        "codes": "Code on Social Security, 2020: allowances above half the pay count as wages",
+        "basic_da": "As before the labour codes"
+      },
+      "ceiling": "Contribute on at most ₹15,000 a month (the wage ceiling)",
+      "esiOn": "ESI: 0.75% from the employee and 3.25% from the employer, for pay up to ₹21,000",
+      "esiCode": "ESI employer code",
+      "esiHint": "Cover is decided at the start of each April–September and October–March period",
+      "ptOn": "Professional tax on the month's gross pay",
+      "ptState": "State",
+      "ptBasis": "Slabs on",
+      "ptBasisOptions": {
+        "monthly": "Monthly pay",
+        "annual": "Yearly pay (monthly × 12)"
+      },
+      "ptOwn": "Your own slabs.",
+      "ptBuiltIn": "Built-in slabs for {{state}}. Change them if your state's notification differs.",
+      "ptNone": "No built-in slabs for {{state}}: add the slabs from the state's notification.",
+      "ptAbove": "Pay above",
+      "ptAmount": "Tax a month",
+      "ptSpecialMonth": "Different in",
+      "ptSpecialAmount": "Tax that month",
+      "ptWomen": "Women: {{slabs}}",
+      "ptAddSlab": "Add slab",
+      "ptUseBuiltIn": "Use the built-in slabs"
+    }
   },
   "gst": {
     "b2b": "B2B",
@@ -1779,7 +1817,21 @@
     "onLeave": "on leave ({{type}})",
     "overtime": "Overtime (h)",
     "overtimeHours": "Overtime hours",
-    "days": "Days"
+    "days": "Days",
+    "statutory": "PF, ESI and professional tax",
+    "uan": "UAN (PF)",
+    "uanHint": "12 digits, for the PF return (ECR)",
+    "esiNumber": "ESI insurance number",
+    "esiNumberHint": "10 digits (IP number)",
+    "gender": "Gender",
+    "genderHint": "Some states' professional tax differs for women",
+    "genders": {
+      "male": "Male",
+      "female": "Female",
+      "other": "Other"
+    },
+    "pfMember": "PF member",
+    "epsMember": "In the pension scheme (EPS)"
   },
   "leave": {
     "title": "Leave",
@@ -1874,7 +1926,37 @@
       "paidOn": "Paid on {{date}} by {{method}} ({{number}})",
       "employeeSign": "Employee's signature",
       "advanceRecovery": "Advance recovery",
-      "loanRecovery": "Loan recovery"
+      "loanRecovery": "Loan recovery",
+      "esiNumber": "ESI no.",
+      "employerShare": "Paid by the employer, not deducted from pay: {{items}}",
+      "employerPf": "PF {{epf}} + pension {{eps}} on PF wages {{wages}}",
+      "employerEsi": "ESI {{amount}} on {{wages}}"
+    },
+    "statutory": {
+      "off": "PF, ESI and professional tax are entered by hand. To work them out on every slip, turn them on in Settings.",
+      "title": "PF, ESI and professional tax",
+      "hint": "What to pay on each challan this month, and the files to upload",
+      "noUan": "{{name}} has no UAN: left out of the ECR",
+      "noEsiNumber": "{{name}} has no ESI number",
+      "pf": "Provident fund (EPF)",
+      "members_one": "{{count}} member",
+      "members_other": "{{count}} members",
+      "employeeShare": "Employees' share",
+      "employerShare": "Employer's share",
+      "employerEpf": "Employer to EPF",
+      "eps": "Pension (EPS)",
+      "edli": "EDLI insurance",
+      "admin": "Admin charges",
+      "challan": "Challan total",
+      "accounts": "A/c 1 {{ac1}} · A/c 2 {{ac2}} · A/c 10 {{ac10}} · A/c 21 {{ac21}}",
+      "ecr": "Download ECR",
+      "esi": "ESI",
+      "esiSheet": "Download ESI sheet",
+      "pt": "Professional tax",
+      "noSlabs": "No slabs for {{state}} yet: add them in Settings.",
+      "ptPayers_one": "{{count}} person pays",
+      "ptPayers_other": "{{count}} people pay",
+      "ptList": "Download list"
     }
   },
   "packing": {

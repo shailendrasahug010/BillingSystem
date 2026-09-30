@@ -21,6 +21,11 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "backup.schedule": { frequency: "daily", time: "02:00", retainDays: 30 },
   "offline.wipe_after_days": 30,
   "gst.lut": null,
+  "payroll.statutory": {
+    pf: { enabled: false, establishmentCode: null, restrictToCeiling: true, wagesRule: "codes" },
+    esi: { enabled: false, employerCode: null },
+    pt: { enabled: false, stateCode: null, rule: null },
+  },
 };
 
 export const isSettingKey = (key: string): key is SettingKey => Object.hasOwn(SETTING_SCHEMAS, key);

@@ -65,6 +65,12 @@ export const employees = pgTable(
     aadhaarLast4: varchar({ length: 4 }),
     emergencyContactName: text(),
     emergencyContactPhone: varchar({ length: 15 }),
+    /** Statutory: PF member (UAN), in the pension scheme, ESI insurance number, and gender for professional tax slabs. */
+    pfMember: boolean().notNull().default(true),
+    epsMember: boolean().notNull().default(true),
+    uan: varchar({ length: 12 }),
+    esiNumber: varchar({ length: 17 }),
+    gender: varchar({ length: 6 }),
     userId: uuid().references(() => users.id),
     photoFileId: uuid().references(() => files.id),
     notes: text(),
@@ -77,6 +83,7 @@ export const employees = pgTable(
     index("employees_status_idx").on(t.businessId, t.status),
     check("employees_salary_chk", sql`${t.monthlySalary} >= 0`),
     check("employees_exit_chk", sql`${t.exitDate} is null or ${t.exitDate} >= ${t.joiningDate}`),
+    check("employees_gender_chk", sql`${t.gender} is null or ${t.gender} in ('male', 'female', 'other')`),
   ],
 );
 

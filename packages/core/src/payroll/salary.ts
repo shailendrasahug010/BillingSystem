@@ -1,5 +1,6 @@
 import { addDays } from "../dates.js";
 import { dec, type Dec, roundAmount, ZERO } from "../money/decimal.js";
+import { esiContribution, professionalTax, providentFund, type EsiResult, type PfOptions, type PfResult, type PtRule } from "./statutory.js";
 
 /**
  * Monthly salary for one employee. Pure and deterministic: the payroll run
@@ -64,6 +65,28 @@ export interface SlipInput {
   /** Amounts for "manual" components this month (incentive, bonus, TDS...), by component id. */
   manual?: ReadonlyMap<string, string>;
   advances?: readonly AdvanceDue[];
+  /** PF, ESI and professional tax worked out by law instead of the PF / ESI / PT components as set up. */
+  statutory?: StatutoryInput;
+}
+
+/**
+ * For each of PF, ESI and PT: left out, the component (PF, ESI, PT) is
+ * calculated as set up on the salary structure; null, it is worked out and
+ * this employee is not covered (no line); otherwise it is worked out.
+ */
+export interface StatutoryInput {
+  /** YYYY-MM: professional tax differs in some months (February in Maharashtra). */
+  month: string;
+  pf?: PfOptions | null;
+  /** Covered for this contribution period. */
+  esi?: { covered: true } | null;
+  pt?: { rule: PtRule; female: boolean } | null;
+}
+
+export interface StatutoryResult {
+  pf?: PfResult;
+  esi?: EsiResult;
+  pt?: { amount: string };
 }
 
 export interface SlipResult {
@@ -71,7 +94,11 @@ export interface SlipResult {
   grossEarnings: string;
   totalDeductions: string;
   netPay: string;
+  /** What PF, ESI and PT were worked out on (and the employer's shares), when they were. */
+  statutory?: StatutoryResult;
 }
+
+const STATUTORY_LABELS: Record<string, string> = { PF: "Provident Fund", ESI: "ESI", PT: "Professional Tax" };
 
 export function calculateSalarySlip(input: SlipInput): SlipResult {
   const working = dec(input.workingDays);
@@ -89,8 +116,10 @@ export function calculateSalarySlip(input: SlipInput): SlipResult {
   const basicEarned = roundAmount(basicComponent?.isProrated === false ? basicFull : basicFull.times(factor));
   if (basicComponent) push(basicComponent, basicEarned);
 
+  const st = input.statutory;
+  const byLaw = (code: string) => st !== undefined && ((code === "PF" && st.pf !== undefined) || (code === "ESI" && st.esi !== undefined) || (code === "PT" && st.pt !== undefined));
   for (const c of [...input.components].sort((a, b) => a.sortOrder - b.sortOrder)) {
-    if (c.code === "BASIC") continue;
+    if (c.code === "BASIC" || byLaw(c.code)) continue;
     const line = byId.get(c.id);
     const manual = input.manual?.get(c.id);
     switch (c.calcType) {
@@ -113,6 +142,7 @@ export function calculateSalarySlip(input: SlipInput): SlipResult {
   }
 
   const gross = lines.filter((l) => l.type === "earning").reduce((s, l) => s.plus(l.amount), ZERO);
+  const statutory = st ? addStatutory(input, st, lines, gross) : undefined;
   let deductions = lines.filter((l) => l.type === "deduction").reduce((s, l) => s.plus(l.amount), ZERO);
   // Advance / loan recovery never takes the net pay below zero.
   for (const a of input.advances ?? []) {
@@ -122,7 +152,33 @@ export function calculateSalarySlip(input: SlipInput): SlipResult {
     lines.push({ componentId: null, advanceId: a.advanceId, code: "ADV", label: a.label, type: "deduction", amount: take.toFixed(2), sortOrder: 1000 + lines.length });
     deductions = deductions.plus(take);
   }
-  return { lines, grossEarnings: gross.toFixed(2), totalDeductions: deductions.toFixed(2), netPay: gross.minus(deductions).toFixed(2) };
+  return { lines, grossEarnings: gross.toFixed(2), totalDeductions: deductions.toFixed(2), netPay: gross.minus(deductions).toFixed(2), ...(statutory ? { statutory } : {}) };
+}
+
+/** PF, ESI and PT on the month's earnings, as deduction lines under their components (or their own names). */
+function addStatutory(input: SlipInput, st: StatutoryInput, lines: SlipLine[], gross: Dec): StatutoryResult {
+  const earnings = lines.filter((l) => l.type === "earning").map((l) => ({ code: l.code, amount: l.amount }));
+  const out: StatutoryResult = {};
+  const deduct = (code: string, amount: string) => {
+    if (dec(amount).lte(0)) return;
+    const c = input.components.find((x) => x.code === code);
+    lines.push({ componentId: c?.id ?? null, advanceId: null, code, label: c?.name ?? STATUTORY_LABELS[code]!, type: "deduction", amount: dec(amount).toFixed(2), sortOrder: c?.sortOrder ?? 900 });
+  };
+  if (st.pf) {
+    out.pf = providentFund(earnings, st.pf);
+    deduct("PF", out.pf.employee);
+  }
+  if (st.esi) {
+    out.esi = esiContribution(earnings, input.paidDays);
+    deduct("ESI", out.esi.employee);
+  }
+  if (st.pt) {
+    out.pt = { amount: String(professionalTax(st.pt.rule, gross, st.month, st.pt.female)) };
+    deduct("PT", out.pt.amount);
+  }
+  // Keep the slip in component order: earnings, then deductions as set up.
+  lines.sort((a, b) => (a.type === b.type ? a.sortOrder - b.sortOrder : a.type === "earning" ? -1 : 1));
+  return out;
 }
 const Dec_min = (a: Dec, b: Dec) => (a.lt(b) ? a : b);
 

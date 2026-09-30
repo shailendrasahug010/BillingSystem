@@ -17,6 +17,7 @@ import { api, ApiError } from "../../lib/api";
 import { METHODS } from "../payments/PaymentDialog";
 import { useLocalName, useSalaryComponents } from "./api";
 import { SalarySlipDocument, type PrintableSlip } from "./SalarySlipDocument";
+import { StatutoryCard, type StatutorySummary } from "./StatutoryCard";
 
 type RunStatus = "draft" | "finalized" | "paid" | "cancelled";
 const TONE: Record<RunStatus, Tone> = { draft: "warn", finalized: "accent", paid: "good", cancelled: "neutral" };
@@ -233,6 +234,7 @@ function RunView({ runId, onBack }: { runId: string; onBack(): void }) {
           },
         ]}
       />
+      {allowed("payroll.view") && run.slips.length > 0 && <StatutoryCard runId={run.id} />}
       <AdjustDialog run={run} slip={adjusting} onClose={() => setAdjusting(null)} onSaved={() => void qc.invalidateQueries({ queryKey: ["payroll"] })} />
       <PayDialog open={paying} onOpenChange={setPaying} run={run} onPay={(body) => act(() => api.post(`/payroll/runs/${run.id}/pay`, body), t("payroll.paidDone"), () => setPaying(false))} busy={busy} />
       <SlipDialog slipId={viewing} onClose={() => setViewing(null)} />
@@ -245,7 +247,10 @@ function AdjustDialog({ run, slip, onClose, onSaved }: { run: RunDetail; slip: S
   const { t } = useI18n();
   const name = useLocalName();
   const components = useSalaryComponents();
-  const manual = (components.data ?? []).filter((c) => c.calcType === "manual");
+  // ESI and professional tax worked out by law are not entered by hand.
+  const statutory = useQuery({ queryKey: ["payroll", "statutory", run.id], queryFn: () => api.get<StatutorySummary>(`/payroll/runs/${run.id}/statutory`), enabled: Boolean(slip) });
+  const byLaw = new Set([...(statutory.data?.settings.esi.enabled ? ["ESI"] : []), ...(statutory.data?.settings.pt.enabled ? ["PT"] : [])]);
+  const manual = (components.data ?? []).filter((c) => c.calcType === "manual" && !byLaw.has(c.code));
   const [values, setValues] = useState<Record<string, string>>({});
   const [overtime, setOvertime] = useState("");
   const [busy, setBusy] = useState(false);

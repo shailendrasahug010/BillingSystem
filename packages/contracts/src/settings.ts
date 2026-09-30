@@ -3,6 +3,20 @@ import { Gstin, Pan, Pincode, StateCode } from "./common.js";
 
 const policy = z.enum(["allow", "warn", "block"]);
 
+const PtSlab = z.strictObject({
+  /** Tax for pay above this many rupees. */
+  above: z.number().int().min(0).max(10_000_000),
+  amount: z.number().int().min(0).max(2500),
+  /** A different amount in one month (₹300 in February in Maharashtra). */
+  special: z.strictObject({ month: z.number().int().min(1).max(12), amount: z.number().int().min(0).max(2500) }).optional(),
+});
+/** A state's professional tax slabs, on the month's pay or on the pay × 12. */
+export const PtRuleSchema = z.strictObject({
+  basis: z.enum(["monthly", "annual"]),
+  slabs: z.array(PtSlab).max(12),
+  femaleSlabs: z.array(PtSlab).max(12).optional(),
+});
+
 /**
  * Every configurable business rule, with its value schema. The API rejects
  * unknown keys and invalid values; clients use the same schemas for forms.
@@ -50,6 +64,21 @@ export const SETTING_SCHEMAS = {
   "gst.lut": z
     .strictObject({ arn: z.string().trim().min(5).max(20).regex(/^[A-Za-z0-9/-]+$/), validUntil: z.iso.date() })
     .nullable(),
+  /**
+   * PF, ESI and professional tax worked out on each salary slip instead of entered by hand.
+   * PF: the establishment code, contributions stopping at ₹15,000 (or on full wages) and how PF
+   * wages are read. PT: the state (null = the business's) and its slabs (null = the built-in ones).
+   */
+  "payroll.statutory": z.strictObject({
+    pf: z.strictObject({
+      enabled: z.boolean(),
+      establishmentCode: z.string().trim().toUpperCase().max(30).regex(/^[A-Z0-9/]*$/).nullable(),
+      restrictToCeiling: z.boolean(),
+      wagesRule: z.enum(["codes", "basic_da"]),
+    }),
+    esi: z.strictObject({ enabled: z.boolean(), employerCode: z.string().trim().max(20).regex(/^\d*$/).nullable() }),
+    pt: z.strictObject({ enabled: z.boolean(), stateCode: StateCode.nullable(), rule: PtRuleSchema.nullable() }),
+  }),
   /** Days a device may go without connecting before its saved copy is deleted (0 = never). */
   "offline.wipe_after_days": z.number().int().min(0).max(365),
   "backup.schedule": z.strictObject({

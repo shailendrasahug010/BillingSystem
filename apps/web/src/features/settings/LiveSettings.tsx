@@ -17,6 +17,7 @@ import { applyMe, refreshCatalog, refreshWarehouses } from "../../data/live";
 import { touch, useStoreVersion } from "../../data/store";
 import { api, ApiError } from "../../lib/api";
 import { prepareLogo } from "./firmLogo";
+import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
 import { stateOptions } from "../../lib/states";
 
 interface BusinessRow {
@@ -120,6 +121,7 @@ export function LiveSettings() {
     <>
       <BusinessProfileCard />
       <RulesCard />
+      <PayrollStatutoryCard />
       <WarehousesCard />
       <PriceListsCard />
       <SeriesCard />

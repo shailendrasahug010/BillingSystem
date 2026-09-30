@@ -1,6 +1,23 @@
 import { PayrollPayBody, PayrollRunBody, SlipInputsBody } from "@vyapaar/contracts";
-import { addDays, calculateSalarySlip, dec, monthBounds, payableDays, type AttendanceStatus, type SalaryComponent } from "@vyapaar/core";
+import {
+  addDays,
+  calculateSalarySlip,
+  dec,
+  esiCovered,
+  esiPeriodStart,
+  monthBounds,
+  payableDays,
+  pfEmployerCharges,
+  PT_RULES,
+  sum,
+  type AttendanceStatus,
+  type PtRule,
+  type SalaryComponent,
+  type StatutoryInput,
+  type StatutoryResult,
+} from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
+import { formatDate } from "@vyapaar/i18n";
 import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -11,6 +28,8 @@ import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { recordEmployeePayment } from "../../services/payments.js";
+import { getSettings } from "../../services/settings.js";
+import { toCsv } from "../reports/reports.js";
 import type { ApiModule } from "../types.js";
 import { structureOn } from "./employees.js";
 
@@ -26,6 +45,41 @@ type Employee = typeof schema.employees.$inferSelect;
 async function components(tx: Tx, businessId: string): Promise<SalaryComponent[]> {
   const rows = await tx.select().from(schema.salaryComponents).where(and(eq(schema.salaryComponents.businessId, businessId), eq(schema.salaryComponents.isActive, true)));
   return rows.map((c) => ({ id: c.id, code: c.code, name: c.name, type: c.type, calcType: c.calcType, defaultValue: c.defaultValue, defaultPercent: c.defaultPercent, isProrated: c.isProrated, sortOrder: c.sortOrder }));
+}
+
+/** The business's PF / ESI / PT settings, with the professional tax state and its slabs worked out. */
+async function statutorySetup(tx: Tx, businessId: string) {
+  const settings = (await getSettings(tx, businessId, ["payroll.statutory"] as const))["payroll.statutory"];
+  const [biz] = await tx.select({ stateCode: schema.businesses.stateCode }).from(schema.businesses).where(eq(schema.businesses.id, businessId));
+  const ptState = settings.pt.stateCode ?? biz!.stateCode;
+  const ptRule: PtRule | null = settings.pt.rule ?? PT_RULES[ptState] ?? null;
+  return { ...settings, ptState, ptRule };
+}
+type Statutory = Awaited<ReturnType<typeof statutorySetup>>;
+
+/** What the law asks of this employee this month (see StatutoryInput); undefined when nothing is worked out by law. */
+async function statutoryFor(tx: Tx, stat: Statutory, employee: Employee, month: string, monthlyGross: string): Promise<StatutoryInput | undefined> {
+  if (!stat.pf.enabled && !stat.esi.enabled && !stat.pt.enabled) return undefined;
+  let esi: { covered: true } | null = null;
+  if (stat.esi.enabled) {
+    // Covered for the whole contribution period if the pay at its start (or on joining) was within the limit.
+    const start = esiPeriodStart(month);
+    const from = employee.joiningDate > start ? employee.joiningDate : start;
+    const atStart = await structureOn(tx, employee.id, from);
+    if (esiCovered(atStart?.monthlyGross ?? monthlyGross)) esi = { covered: true };
+  }
+  return {
+    month,
+    ...(stat.pf.enabled ? { pf: employee.pfMember ? { restrictToCeiling: stat.pf.restrictToCeiling, wagesRule: stat.pf.wagesRule, epsMember: employee.epsMember } : null } : {}),
+    ...(stat.esi.enabled ? { esi } : {}),
+    ...(stat.pt.enabled ? { pt: stat.ptRule ? { rule: stat.ptRule, female: employee.gender === "female" } : null } : {}),
+  };
+}
+
+/** The slip's statutory figures as stored: professional tax with the state it was worked out for. */
+function storedStatutory(st: StatutoryResult, ptState: string): NonNullable<(typeof slips.$inferInsert)["statutory"]> {
+  const { pt, ...rest } = st;
+  return { ...rest, ...(pt ? { pt: { amount: pt.amount, stateCode: ptState } } : {}) };
 }
 
 /** Employees paid for (part of) the month. */
@@ -49,6 +103,7 @@ async function computeSlip(
   run: Run,
   employee: Employee,
   comps: SalaryComponent[],
+  stat: Statutory,
   opts: { manual?: ReadonlyMap<string, string>; overtimeHours?: string } = {},
 ): Promise<"computed" | "no_structure"> {
   const { start, end } = monthBounds(run.periodMonth.slice(0, 7));
@@ -87,7 +142,9 @@ async function computeSlip(
     .from(schema.employeeAdvances)
     .where(and(eq(schema.employeeAdvances.employeeId, employee.id), eq(schema.employeeAdvances.isClosed, false), lte(schema.employeeAdvances.issuedOn, end)))
     .orderBy(asc(schema.employeeAdvances.issuedOn));
+  const statutory = await statutoryFor(tx, stat, employee, run.periodMonth.slice(0, 7), structure.monthlyGross);
   const slip = calculateSalarySlip({
+    ...(statutory ? { statutory } : {}),
     components: comps,
     structure: { basic: structure.basic, overtimeRatePerHour: structure.overtimeRatePerHour, lines: structure.lines },
     workingDays: days.workingDays,
@@ -111,6 +168,7 @@ async function computeSlip(
     grossEarnings: slip.grossEarnings,
     totalDeductions: slip.totalDeductions,
     netPay: slip.netPay,
+    statutory: slip.statutory && Object.keys(slip.statutory).length ? storedStatutory(slip.statutory, stat.ptState) : null,
     updatedBy: ctx.userId,
   };
   if (existing) {
@@ -151,6 +209,85 @@ async function runDetail(tx: Tx, ctx: RequestCtx, id: string) {
   const skipped = (await employeesOf(tx, ctx.businessId, start, end)).filter((e) => !withSlip.has(e.id)).map((e) => ({ id: e.id, employeeCode: e.employeeCode, name: e.name }));
   const { businessId: _b, ...rest } = run;
   return { ...rest, month: run.periodMonth.slice(0, 7), slips: rows.rows, skipped };
+}
+
+const rupees = (v: string | number) => dec(v).toDecimalPlaces(0).toFixed(0);
+
+/**
+ * The month's PF, ESI and professional tax: each covered employee's figures
+ * and what the business pays (the PF challan by account, ESI and PT totals),
+ * with the numbers still missing for the filings.
+ */
+async function statutorySummary(tx: Tx, ctx: RequestCtx, id: string) {
+  const [run] = await tx.select().from(runs).where(and(eq(runs.id, id), eq(runs.businessId, ctx.businessId)));
+  if (!run) throw notFound("payroll_run");
+  const stat = await statutorySetup(tx, ctx.businessId);
+  const rows = await tx
+    .select({ slip: slips, e: schema.employees })
+    .from(slips)
+    .innerJoin(schema.employees, eq(schema.employees.id, slips.employeeId))
+    .where(eq(slips.payrollRunId, id))
+    .orderBy(asc(schema.employees.name));
+  const who = (r: (typeof rows)[number]) => ({ employeeId: r.e.id, employeeCode: r.e.employeeCode, name: r.e.name });
+  const { start, end } = monthBounds(run.periodMonth.slice(0, 7));
+  const pfMembers = rows.flatMap((r) =>
+    r.slip.statutory?.pf
+      ? [{ ...who(r), uan: r.e.uan, grossWages: rupees(r.slip.grossEarnings), ncpDays: rupees(r.slip.unpaidLeaveDays), ...r.slip.statutory.pf }]
+      : [],
+  );
+  const esiMembers = rows.flatMap((r) =>
+    r.slip.statutory?.esi
+      ? [
+          {
+            ...who(r),
+            esiNumber: r.e.esiNumber,
+            days: rupees(r.slip.paidDays),
+            ...r.slip.statutory.esi,
+            // Left during the month: the reason (2, left service) and the last day go with the return.
+            leftOn: r.e.exitDate && r.e.exitDate >= start && r.e.exitDate <= end ? r.e.exitDate : null,
+          },
+        ]
+      : [],
+  );
+  const ptRows = rows.flatMap((r) => (r.slip.statutory?.pt ? [{ ...who(r), gross: r.slip.grossEarnings, amount: r.slip.statutory.pt.amount }] : []));
+  const total = (xs: ReadonlyArray<Record<string, unknown>>, k: string) => sum(xs.map((x) => String(x[k] ?? 0))).toFixed(0);
+  const charges = pfEmployerCharges(pfMembers);
+  const pf = {
+    employee: total(pfMembers, "employee"),
+    employerEpf: total(pfMembers, "employerEpf"),
+    employerEps: total(pfMembers, "employerEps"),
+    epfWages: total(pfMembers, "epfWages"),
+    epsWages: total(pfMembers, "epsWages"),
+    edliWages: total(pfMembers, "edliWages"),
+    ...charges,
+  };
+  // The PF challan by account: 1 (both shares to EPF), 2 (admin), 10 (pension), 21 (EDLI), 22 (EDLI admin, nil).
+  const accounts = { ac1: dec(pf.employee).plus(pf.employerEpf).toFixed(0), ac2: pf.adminCharges, ac10: pf.employerEps, ac21: pf.edli, ac22: "0" };
+  const esi = { wages: sum(esiMembers.map((m) => m.wages)).toFixed(2), employee: total(esiMembers, "employee"), employer: total(esiMembers, "employer") };
+  return {
+    month: run.periodMonth.slice(0, 7),
+    status: run.status,
+    settings: {
+      pf: { enabled: stat.pf.enabled, establishmentCode: stat.pf.establishmentCode, restrictToCeiling: stat.pf.restrictToCeiling, wagesRule: stat.pf.wagesRule },
+      esi: { enabled: stat.esi.enabled, employerCode: stat.esi.employerCode },
+      pt: { enabled: stat.pt.enabled, stateCode: stat.ptState, hasSlabs: stat.ptRule !== null },
+    },
+    pf: { members: pfMembers, totals: { ...pf, ...accounts, total: sum(Object.values(accounts)).toFixed(0) } },
+    esi: { members: esiMembers, totals: { ...esi, total: dec(esi.employee).plus(esi.employer).toFixed(0) } },
+    pt: { stateCode: stat.ptState, rows: ptRows, total: total(ptRows, "amount") },
+    missing: [
+      ...pfMembers.filter((m) => !m.uan).map((m) => ({ employeeId: m.employeeId, name: m.name, what: "uan" as const })),
+      ...esiMembers.filter((m) => !m.esiNumber).map((m) => ({ employeeId: m.employeeId, name: m.name, what: "esiNumber" as const })),
+    ],
+  };
+}
+
+/** EPFO's electronic challan-cum-return (ECR 2.0): one line per member with a UAN, fields joined by #~#, whole rupees. */
+function ecrText(summary: Awaited<ReturnType<typeof statutorySummary>>): string {
+  return summary.pf.members
+    .filter((m) => m.uan)
+    .map((m) => [m.uan, m.name.toUpperCase(), m.grossWages, m.epfWages, m.epsWages, m.edliWages, m.employee, m.employerEps, m.employerEpf, m.ncpDays, "0"].join("#~#"))
+    .join("\n");
 }
 
 export const payrollModule: ApiModule = async (app, deps) => {
@@ -196,7 +333,8 @@ export const payrollModule: ApiModule = async (app, deps) => {
       const [run] = await tx.insert(runs).values({ id, businessId: ctx.businessId, periodMonth: `${month}-01`, createdBy: ctx.userId, updatedBy: ctx.userId }).returning();
       const { start, end } = monthBounds(month);
       const comps = await components(tx, ctx.businessId);
-      for (const e of await employeesOf(tx, ctx.businessId, start, end)) await computeSlip(tx, ctx, run!, e, comps);
+      const stat = await statutorySetup(tx, ctx.businessId);
+      for (const e of await employeesOf(tx, ctx.businessId, start, end)) await computeSlip(tx, ctx, run!, e, comps, stat);
       await refreshTotals(tx, id, ctx.userId);
       await audit(tx, ctx, { action: "payroll.run_created", entityType: "payroll_run", entityId: id, entityLabel: month });
       return runDetail(tx, ctx, id);
@@ -216,7 +354,8 @@ export const payrollModule: ApiModule = async (app, deps) => {
       if (run.status !== "draft") throw conflict("PAYROLL_NOT_DRAFT", { status: run.status });
       const { start, end } = monthBounds(run.periodMonth.slice(0, 7));
       const comps = await components(tx, ctx.businessId);
-      for (const e of await employeesOf(tx, ctx.businessId, start, end)) await computeSlip(tx, ctx, run, e, comps);
+      const stat = await statutorySetup(tx, ctx.businessId);
+      for (const e of await employeesOf(tx, ctx.businessId, start, end)) await computeSlip(tx, ctx, run, e, comps, stat);
       await refreshTotals(tx, run.id, ctx.userId);
       await audit(tx, ctx, { action: "payroll.recalculated", entityType: "payroll_run", entityId: run.id, entityLabel: run.periodMonth.slice(0, 7) });
       return runDetail(tx, ctx, run.id);
@@ -238,7 +377,7 @@ export const payrollModule: ApiModule = async (app, deps) => {
       const current = await tx.select({ componentId: lines.componentId, amount: lines.amount }).from(lines).where(eq(lines.salarySlipId, slip.id));
       const manual = new Map(current.filter((l) => l.componentId && manualIds.has(l.componentId)).map((l) => [l.componentId!, l.amount]));
       for (const m of request.body.manual) manual.set(m.componentId, m.amount);
-      await computeSlip(tx, ctx, run, employee!, comps, { manual, ...(request.body.overtimeHours ? { overtimeHours: request.body.overtimeHours } : {}) });
+      await computeSlip(tx, ctx, run, employee!, comps, await statutorySetup(tx, ctx.businessId), { manual, ...(request.body.overtimeHours ? { overtimeHours: request.body.overtimeHours } : {}) });
       await refreshTotals(tx, run.id, ctx.userId);
       await audit(tx, ctx, { action: "payroll.slip_adjusted", entityType: "payroll_run", entityId: run.id, entityLabel: `${run.periodMonth.slice(0, 7)} ${employee!.name}`, changes: { manual: request.body.manual, overtimeHours: request.body.overtimeHours ?? null } });
       return runDetail(tx, ctx, run.id);
@@ -324,6 +463,52 @@ export const payrollModule: ApiModule = async (app, deps) => {
     });
   });
 
+  r.get("/payroll/runs/:id/statutory", { preHandler: guard(deps, "payroll.view"), schema: { tags: ["payroll"], params: IdParams } }, async (request) =>
+    tenant(request.ctx, (tx) => statutorySummary(tx, request.ctx, request.params.id)),
+  );
+
+  /** The month's filings: the PF ECR text file, the ESI monthly contribution sheet and the professional tax list. */
+  r.get(
+    "/payroll/runs/:id/statutory/:file",
+    { preHandler: guard(deps, "payroll.view"), schema: { tags: ["payroll"], params: IdParams.extend({ file: z.enum(["ecr", "esi", "pt"]) }) } },
+    async (request, reply) => {
+      const ctx = request.ctx;
+      const summary = await tenant(ctx, (tx) => statutorySummary(tx, ctx, request.params.id));
+      const [y, m] = summary.month.split("-");
+      await tenant(ctx, (tx) => audit(tx, ctx, { action: "payroll.statutory_downloaded", entityType: "payroll_run", entityId: request.params.id, entityLabel: `${summary.month} ${request.params.file}` }));
+      if (request.params.file === "ecr") {
+        reply.header("content-type", "text/plain; charset=utf-8");
+        reply.header("content-disposition", `attachment; filename="ECR_${m}${y}.txt"`);
+        return ecrText(summary);
+      }
+      reply.header("content-type", "text/csv; charset=utf-8");
+      if (request.params.file === "esi") {
+        reply.header("content-disposition", `attachment; filename="ESI_${m}${y}.csv"`);
+        return toCsv(
+          [
+            { key: "ip", label: "IP Number" },
+            { key: "name", label: "IP Name" },
+            { key: "days", label: "No of Days for which wages paid/payable during the month" },
+            { key: "wages", label: "Total Monthly Wages" },
+            { key: "reason", label: "Reason Code for Zero workings days" },
+            { key: "last", label: "Last Working Day" },
+          ],
+          summary.esi.members.map((x) => ({ ip: x.esiNumber ?? "", name: x.name, days: x.days, wages: rupees(x.wages), reason: x.leftOn ? "2" : "", last: x.leftOn ? formatDate(x.leftOn) : "" })),
+        );
+      }
+      reply.header("content-disposition", `attachment; filename="PT_${summary.pt.stateCode}_${m}${y}.csv"`);
+      return toCsv(
+        [
+          { key: "employeeCode", label: "Employee code" },
+          { key: "name", label: "Name" },
+          { key: "gross", label: "Gross salary" },
+          { key: "amount", label: "Professional tax" },
+        ],
+        summary.pt.rows,
+      );
+    },
+  );
+
   /** One salary slip with its lines, for viewing and printing. */
   r.get("/payroll/slips/:id", { preHandler: guard(deps, "payroll.view"), schema: { tags: ["payroll"], params: IdParams } }, async (request) => {
     const ctx = request.ctx;
@@ -359,6 +544,8 @@ export const payrollModule: ApiModule = async (app, deps) => {
           bankAccountLast4: row.e.bankAccountLast4,
           bankIfsc: row.e.bankIfsc,
           panMasked: row.e.panMasked,
+          uan: row.e.uan,
+          esiNumber: row.e.esiNumber,
         },
         lines: slipLines,
         payment,

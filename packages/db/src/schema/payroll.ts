@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, date, index, pgTable, smallint, text, unique, uuid, varchar } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, jsonb, pgTable, smallint, text, unique, uuid, varchar } from "drizzle-orm/pg-core";
 import { auditColumns, money, percent, pk, qty, tstz, versioned } from "./columns.js";
 import { advanceType, payrollStatus, salaryCalcType, salaryComponentType } from "./enums.js";
 import { employees } from "./hr.js";
@@ -129,6 +129,15 @@ export const salarySlips = pgTable(
     grossEarnings: money().notNull(),
     totalDeductions: money().notNull(),
     netPay: money().notNull(),
+    /**
+     * PF, ESI and professional tax as worked out by law, with the wages they were
+     * worked out on and the employer's shares (for the challans); null when not.
+     */
+    statutory: jsonb().$type<{
+      pf?: { wages: string; epfWages: string; epsWages: string; edliWages: string; employee: string; employerEps: string; employerEpf: string };
+      esi?: { wages: string; employee: string; employer: string };
+      pt?: { amount: string; stateCode: string };
+    }>(),
     paymentId: uuid().references(() => payments.id),
     paidAt: tstz(),
     ...auditColumns,
