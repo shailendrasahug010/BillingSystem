@@ -1,4 +1,4 @@
-import type { Permission } from "@vyapaar/core";
+import { zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
 import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@vyapaar/i18n";
 import { inArray, eq } from "drizzle-orm";
@@ -105,6 +105,17 @@ const addressText = (a: Address) => [a?.line1, a?.line2, [a?.city, a?.pincode].f
 const pickLocale = (asked: string | undefined, stored: string | null | undefined, fallback: unknown): LocaleCode =>
   isLocaleCode(asked) ? asked : isLocaleCode(stored) ? stored : isLocaleCode(fallback as string) ? (fallback as LocaleCode) : "en";
 
+/** The lines an export or SEZ invoice carries: its declaration, the LUT it was made under, the shipping bill. */
+function zeroRatedPrint(inv: Awaited<ReturnType<typeof invoiceDetail>>, locale: LocaleCode) {
+  const { t } = createTranslator(locale);
+  const sb = [inv.shippingBillNumber, inv.shippingBillDate ? formatDate(inv.shippingBillDate) : null, inv.portCode].filter(Boolean).join(" · ");
+  return {
+    declaration: zeroRatedDeclaration(inv.zeroRatedType as ZeroRatedType),
+    lut: inv.lutArn ? t("invoice.export.lutLine", { arn: inv.lutArn }) : null,
+    shippingBill: sb ? t("invoice.export.shippingBillLine", { bill: sb }) : null,
+  };
+}
+
 export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string, asked?: string): Promise<PdfFile> {
   const letterhead = await loadLetterhead(deps, ctx);
   const data = await withTenant(deps.db, ctx, async (tx) => {
@@ -139,6 +150,7 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     balance: inv.balanceDue,
     reason: null,
     terms: (data.settings["invoice.terms"] as string) || null,
+    zeroRated: inv.zeroRatedType ? zeroRatedPrint(inv, locale) : null,
   });
   const { t } = createTranslator(locale);
   const money = (v: string) => formatCurrency(v, locale);

@@ -51,6 +51,19 @@ export const InvoiceBody = z.strictObject({
   printLocale: z.enum(["en", "hi"]).optional(),
   clientTotals: ClientTotals.optional(),
   /**
+   * An export (customer registered as overseas) or supply to an SEZ unit: on payment of IGST, or
+   * under bond / LUT without it (left out: under the business's LUT while it is valid, else with
+   * payment). The shipping bill can be given now or added later.
+   */
+  zeroRated: z
+    .strictObject({
+      withPayment: z.boolean(),
+      shippingBillNumber: z.string().trim().regex(/^[0-9]{3,20}$/).optional(),
+      shippingBillDate: IsoDate.optional(),
+      portCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{6}$/).optional(),
+    })
+    .optional(),
+  /**
    * A bill made while the device was offline, synced now: numbered from the
    * device's own series. Stock and credit "block" rules only warn, since the
    * customer already has the bill.
@@ -62,6 +75,13 @@ export const InvoiceBody = z.strictObject({
       savedAt: z.iso.datetime({ offset: true }).optional(),
     })
     .optional(),
+});
+
+/** An export's shipping bill, added or corrected after the invoice (null clears a field). */
+export const ShippingBillBody = z.strictObject({
+  shippingBillNumber: z.string().trim().regex(/^[0-9]{3,20}$/).nullable(),
+  shippingBillDate: IsoDate.nullable(),
+  portCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{6}$/).nullable(),
 });
 
 export const DeviceBody = z.strictObject({

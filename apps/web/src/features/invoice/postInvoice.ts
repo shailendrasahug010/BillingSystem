@@ -3,7 +3,7 @@ import { customerById } from "../../data/db";
 import { adjustStock } from "../../data/live";
 import { dropLiveInsight, touch } from "../../data/store";
 import { api } from "../../lib/api";
-import type { DraftView } from "./useInvoiceDraft";
+import { zeroRatedBody, type DraftView } from "./useInvoiceDraft";
 
 export interface SavedInvoice {
   id: string;
@@ -48,6 +48,7 @@ export async function postInvoice(view: DraftView, idempotencyKey: string): Prom
         discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),
       })),
       ...(received > 0 ? { payment: { amount: received.toFixed(2), method: draft.method } } : {}),
+      ...zeroRatedBody(view),
       clientTotals: { grandTotal: totals!.grandTotal.toFixed(2) },
     },
     { idempotencyKey },

@@ -361,7 +361,33 @@
     "saveFailed": "Invoice not saved",
     "saving": "Saving…",
     "savedWithWarnings": "Saved with warnings",
-    "keysHint": "Enter moves on: qty → rate → back to product search · F2 product search"
+    "keysHint": "Enter moves on: qty → rate → back to product search · F2 product search",
+    "export": {
+      "lutLine": "Under LUT, ARN {{arn}}",
+      "shippingBillLine": "Shipping bill {{bill}}",
+      "titleExport": "Export",
+      "titleSez": "Supply to an SEZ unit",
+      "hint": "Zero-rated: IGST is either paid now (and refunded later) or not charged under your letter of undertaking (LUT) or bond.",
+      "withPayment": "With payment of IGST",
+      "underLut": "Under LUT / bond, no IGST",
+      "lutSaved": "LUT {{arn}}, valid till {{until}}",
+      "noLut": "No valid LUT in Settings: without IGST needs a LUT or bond for this date.",
+      "shippingBillNumber": "Shipping bill no.",
+      "shippingBillDate": "Shipping bill date",
+      "portCode": "Port code",
+      "later": "Not known yet? Add the shipping bill on the invoice later.",
+      "types": {
+        "EXPWP": "Export · with IGST",
+        "EXPWOP": "Export · under LUT",
+        "SEZWP": "SEZ · with IGST",
+        "SEZWOP": "SEZ · under LUT"
+      },
+      "shippingBill": "Shipping bill",
+      "addShippingBill": "Add shipping bill",
+      "editShippingBill": "Change shipping bill",
+      "shippingBillSaved": "Shipping bill saved",
+      "shippingBillMissing": "Shipping bill not added yet"
+    }
   },
   "suggestions": {
     "title": "Smart suggestions",
@@ -459,7 +485,11 @@
     "priceListHint": "The rate list this shop buys on: Price A, B or C",
     "priceListChanged": "Now bills at {{name}}",
     "edit": "Edit customer",
-    "updated": "Customer updated"
+    "updated": "Customer updated",
+    "sez": "SEZ",
+    "export": "Export",
+    "exportHint": "A buyer outside India: bills are exports (place of supply 96, other country).",
+    "sezHint": "A unit or developer in a Special Economic Zone: bills are zero-rated supplies to SEZ."
   },
   "supplier": {
     "title": "Suppliers",
@@ -727,7 +757,12 @@
       "teal": "Teal"
     },
     "offlineWipe": "Delete a device's copy after",
-    "offlineWipeHint": "Days without connecting (0 = never). A phone or PC that stays offline longer deletes its saved copy; work waiting on it is sent at the next sign-in. A device you remove in the list below deletes its copy as soon as it connects."
+    "offlineWipeHint": "Days without connecting (0 = never). A phone or PC that stays offline longer deletes its saved copy; work waiting on it is sent at the next sign-in. A device you remove in the list below deletes its copy as soon as it connects.",
+    "lut": "Letter of undertaking (LUT)",
+    "lutHint": "For exports and supplies to SEZ without paying IGST. Filed each financial year on the GST portal (form RFD-11). Leave empty if you have none.",
+    "lutArn": "LUT ARN",
+    "lutValidUntil": "Valid until",
+    "lutClear": "Remove LUT"
   },
   "gst": {
     "b2b": "B2B",
@@ -958,7 +993,11 @@
     "OCR_FAILED": "The page could not be read. Try again, or take a clearer photo.",
     "REPORT_VIEW_SETTINGS_INVALID": "This report has no such setting ({{field}}).",
     "REPORT_VIEW_LIMIT": "You can keep up to {{max}} saved views. Delete one you no longer use.",
-    "reference": "Reference: {{ref}} — quote it if this keeps happening."
+    "reference": "Reference: {{ref}} — quote it if this keeps happening.",
+    "ZERO_RATED_NOT_ALLOWED": "Export / SEZ details are only for a customer registered as SEZ or abroad.",
+    "SHIPPING_BILL_NOT_EXPORT": "A shipping bill is only for an export invoice.",
+    "SHIPPING_BILL_BEFORE_INVOICE": "The shipping bill date cannot be before the invoice date.",
+    "INVOICE_CANCELLED": "This invoice is cancelled."
   },
   "validation": {
     "required": "This field is required",
@@ -1215,17 +1254,19 @@
       "hsn_b2b": "HSN (B2B)",
       "hsn_b2c": "HSN (B2C)",
       "hsn": "HSN",
-      "docs": "Documents"
+      "docs": "Documents",
+      "exp": "EXP"
     },
     "sectionHints": {
-      "b2b": "4A · Sales to registered buyers",
+      "b2b": "4A, 6B · Sales to registered buyers and SEZ units",
       "b2cl": "5 · Large inter-state sales to consumers",
       "b2cs": "7 · Other sales to consumers (net of their returns)",
       "cdnr": "9B · Credit / debit notes to registered buyers",
       "cdnur": "9B · Notes on large inter-state consumer sales",
       "nil": "8 · Nil-rated, exempt and non-GST sales",
       "hsn_b2b": "12 · HSN summary, B2B",
-      "hsn_b2c": "12 · HSN summary, B2C"
+      "hsn_b2c": "12 · HSN summary, B2C",
+      "exp": "6A · Exports, with and without payment of IGST"
     },
     "documents": "Documents issued (Table 13)",
     "documentsHint": "Every number used in the month, cancelled ones included",
@@ -1247,8 +1288,10 @@
       "HSN_MISSING": "{{doc}}: a product has no HSN code.",
       "HSN_TOO_SHORT": "HSN {{hsn}} has fewer than {{digits}} digits.",
       "UQC_MISSING": "HSN {{hsn}}: the unit has no GST unit code (UQC); OTH is used.",
-      "ZERO_RATED_NOT_SUPPORTED": "{{doc}}: exports and SEZ supplies are not in this file yet.",
-      "NOTE_ORIGINAL_NOT_FOUND": "{{doc}}: original invoice {{original}} was not found; the note is placed by its own value."
+      "ZERO_RATED_NOT_SUPPORTED": "{{doc}}: a zero-rated product sold to a buyer who is not abroad or in an SEZ; it is left out.",
+      "NOTE_ORIGINAL_NOT_FOUND": "{{doc}}: original invoice {{original}} was not found; the note is placed by its own value.",
+      "SHIPPING_BILL_MISSING": "{{doc}}: export without its shipping bill yet (it can be added on the invoice).",
+      "SEZ_GSTIN_MISSING": "{{doc}}: supply to SEZ without the buyer's GSTIN; it is left out."
     },
     "period": {
       "lock": "Lock month",
@@ -1286,7 +1329,8 @@
       "paidFromCredit": "Paid from credit",
       "cash": "To pay in cash",
       "carryForward": "Credit carried forward",
-      "cashHint": "Indicative; interest and late fee not included"
+      "cashHint": "Indicative; interest and late fee not included",
+      "zeroRated": "(b) Zero-rated (exports, SEZ)"
     },
     "downloadCsv": "Download CSV"
   },

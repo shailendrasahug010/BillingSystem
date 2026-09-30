@@ -1,4 +1,4 @@
-import { dec } from "@vyapaar/core";
+import { dec, type ZeroRatedType } from "@vyapaar/core";
 import { BUSINESS, customerById, invoiceTotals, productById, WORKSPACE } from "../../data/db";
 import type { Invoice } from "../../data/types";
 
@@ -47,6 +47,14 @@ export interface PrintableInvoice {
   /** Credited by returns (credit notes) against this invoice. */
   credited?: number;
   balance: number;
+  /** Export or supply to SEZ: printed with its declaration, the LUT it was made under and the shipping bill. */
+  zeroRated?: ZeroRatedPrint | null;
+}
+
+export interface ZeroRatedPrint {
+  type: ZeroRatedType;
+  lutArn: string | null;
+  shippingBill: { number: string | null; date: string | null; portCode: string | null };
 }
 
 function summarise(lines: PrintableInvoice["lines"]): PrintableInvoice["hsnSummary"] {
@@ -140,6 +148,11 @@ export interface ApiInvoice {
   grandTotal: string;
   amountPaid: string;
   balanceDue: string;
+  zeroRatedType?: ZeroRatedType | null;
+  shippingBillNumber?: string | null;
+  shippingBillDate?: string | null;
+  portCode?: string | null;
+  lutArn?: string | null;
   returns?: Array<{ status: string; amountSettled: string }>;
   items: Array<{
     productId: string;
@@ -213,6 +226,9 @@ export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
     paid: num(inv.amountPaid) - credited,
     credited,
     balance: num(inv.balanceDue),
+    zeroRated: inv.zeroRatedType
+      ? { type: inv.zeroRatedType, lutArn: inv.lutArn ?? null, shippingBill: { number: inv.shippingBillNumber ?? null, date: inv.shippingBillDate ?? null, portCode: inv.portCode ?? null } }
+      : null,
   };
 }
 

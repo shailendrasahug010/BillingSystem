@@ -56,7 +56,7 @@ describe.skipIf(!hasDatabase)("GST returns", () => {
   it("previews GSTR-1 by table with the document summary", async () => {
     const res = await get("/gst/returns/gstr1?period=2026-09");
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ gstin: BUSINESS_GSTIN, version: "gstr1-json@2025.05", b2clThreshold: "100000.00", hsnMinDigits: 4, warnings: [], status: { GSTR1: { status: "open" } } });
+    expect(res.body).toMatchObject({ gstin: BUSINESS_GSTIN, version: "gstr1-json@2026.10", b2clThreshold: "100000.00", hsnMinDigits: 4, warnings: [], status: { GSTR1: { status: "open" } } });
     const by = Object.fromEntries(res.body.summary.map((s: { section: string }) => [s.section, s]));
     expect(by.b2b).toMatchObject({ records: 1, taxable: "1000.00", cgst: "90.00", sgst: "90.00" });
     expect(by.b2cl).toMatchObject({ records: 1, value: "118000.00", taxable: "100000.00", igst: "18000.00" });
@@ -88,7 +88,7 @@ describe.skipIf(!hasDatabase)("GST returns", () => {
     expect(String(csv.headers["content-type"])).toContain("text/csv");
     expect(csv.body.split("\r\n")[1]).toBe(`${B2B_GSTIN},Mehta Stores,INV/26-27/00001,24-Sep-2026,1180,23-Madhya Pradesh,N,,Regular B2B,,18,1000,0`);
     const exports = (await get("/gst/exports?period=2026-09")).body.data;
-    expect(exports.map((e: { format: string; formatterVersion: string }) => `${e.format} ${e.formatterVersion}`)).toEqual(["csv gstr1-json@2025.05/csv-b2b", "json gstr1-json@2025.05"]);
+    expect(exports.map((e: { format: string; formatterVersion: string }) => `${e.format} ${e.formatterVersion}`)).toEqual(["csv gstr1-json@2026.10/csv-b2b", "json gstr1-json@2026.10"]);
     expect((await raw("/gst/returns/gstr1/file?period=2026-09", salesToken)).statusCode).toBe(403);
   });
 

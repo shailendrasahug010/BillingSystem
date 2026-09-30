@@ -49,6 +49,8 @@ export interface DocumentPdfInput {
   balance: string | null;
   reason: string | null;
   terms: string | null;
+  /** Export / supply to SEZ: the declaration the law asks for, the LUT and the shipping bill. */
+  zeroRated?: { declaration: string; lut: string | null; shippingBill: string | null } | null;
 }
 
 export interface ReceiptPdfInput {
@@ -184,6 +186,17 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
   y = Math.max(firmEnd, titleEnd) + 6;
   doc.moveTo(left, y).lineTo(left + width, y).lineWidth(1.5).strokeColor(BLUE).stroke();
   y += 8;
+
+  // ---- export / SEZ: the declaration, in capitals as it must appear, with the LUT and shipping bill
+  if (input.zeroRated) {
+    const z = input.zeroRated;
+    doc.font("b").fontSize(8.5).fillColor(INK).text(z.declaration, left, y, { width, align: "center" });
+    const more = [z.lut, z.shippingBill].filter(Boolean).join("   ·   ");
+    if (more) doc.font("r").fontSize(8).fillColor(INK_2).text(more, left, doc.y + 2, { width, align: "center" });
+    y = doc.y + 6;
+    doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor(LINE).stroke();
+    y += 8;
+  }
 
   // ---- bill to / ship to
   const half = (width - 16) / 2;

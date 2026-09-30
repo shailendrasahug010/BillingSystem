@@ -3,7 +3,7 @@ import { takeOfflineNumber } from "../../offline/device";
 import { getOfflineState, queueBill, refreshDevice, type OutboxEntry } from "../../offline/sync";
 import type { SavedInvoice } from "./postInvoice";
 import type { PrintableInvoice } from "./printable";
-import { factorOf, unitSymbolOf, type DraftView } from "./useInvoiceDraft";
+import { factorOf, lutValidOn, unitSymbolOf, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
 
 export class OfflineNotReady extends Error {
   constructor() {
@@ -38,13 +38,15 @@ function printable(view: DraftView, id: string, number: string): PrintableInvoic
   });
   const grandTotal = t.grandTotal.toNumber();
   const paid = Math.min(t.amountPaid.toNumber(), grandTotal);
+  const z = view.zeroRated;
+  const sb = draft.zeroRated;
   return {
     id,
     number,
     date: draft.date,
     dueDate,
-    placeOfSupply: c.stateCode,
-    intraState: c.stateCode === BUSINESS.stateCode,
+    placeOfSupply: z?.kind === "export" ? "96" : c.stateCode,
+    intraState: !z && c.stateCode === BUSINESS.stateCode,
     billOfSupply: !WORKSPACE.chargeTax,
     reverseCharge: false,
     status: t.paymentStatus,
@@ -61,6 +63,13 @@ function printable(view: DraftView, id: string, number: string): PrintableInvoic
     grandTotal,
     paid,
     balance: Math.max(0, grandTotal - paid),
+    zeroRated: z
+      ? {
+          type: z.type,
+          lutArn: !z.withPayment && lutValidOn(draft.date) ? WORKSPACE.lut!.arn : null,
+          shippingBill: z.kind === "export" ? { number: sb.shippingBillNumber.trim() || null, date: sb.shippingBillDate || null, portCode: sb.portCode.trim() || null } : { number: null, date: null, portCode: null },
+        }
+      : null,
   };
 }
 
@@ -102,6 +111,7 @@ export async function saveOffline(view: DraftView, idempotencyKey: string): Prom
         discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),
       })),
       ...(received > 0 ? { payment: { amount: received.toFixed(2), method: draft.method } } : {}),
+      ...zeroRatedBody(view),
       offline: { deviceId: taken.device.id, invoiceNumber: taken.number, savedAt },
     },
     printable: doc,

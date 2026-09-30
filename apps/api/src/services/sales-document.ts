@@ -11,12 +11,15 @@ import {
   roundRate,
   taxAt,
   todayIn,
+  zeroRatedKindFor,
+  zeroRatedTypeOf,
   type BusinessGstRegistration,
   type DocumentLineInput,
   type DocumentTotals,
   type PartyGstRegistration,
   type TaxCategory,
   type TaxRateRule,
+  type ZeroRatedType,
 } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -60,12 +63,17 @@ export interface PreparedSale {
   priceLevelId: string | null;
   lines: PreparedLine[];
   totals: DocumentTotals;
+  /** Export / supply to SEZ, with or without payment of IGST; null for other sales. */
+  zeroRatedType: ZeroRatedType | null;
+  shippingBill: { number: string | null; date: string | null; portCode: string | null };
+  /** Without payment of IGST under the business's LUT: its ARN, to print on the invoice. */
+  lutArn: string | null;
   rateOverridden: boolean;
   settings: Awaited<ReturnType<typeof loadSaleSettings>>;
 }
 
 const loadSaleSettings = (tx: Tx, businessId: string) =>
-  getSettings(tx, businessId, ["invoice.round_off", "stock.negative_policy", "credit.policy", "invoice.default_print_locale"] as const);
+  getSettings(tx, businessId, ["invoice.round_off", "stock.negative_policy", "credit.policy", "invoice.default_print_locale", "gst.lut"] as const);
 
 /**
  * Turns an invoice request into a fully priced, GST-resolved document using
@@ -108,13 +116,18 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
   if (!wh) throw warehouseId ? badRequest("REFERENCE_NOT_FOUND", {}, "warehouseId") : new ApiError(409, "NO_DEFAULT_WAREHOUSE");
   warehouseId = wh.id;
 
-  const placeOfSupply = body.shipToStateCode ?? customer.stateCode;
+  const registration = business!.gstRegistration as BusinessGstRegistration;
+  // Exports (a buyer abroad) and supplies to SEZ are zero-rated; only a regular registrant makes them.
+  const zeroRatedKind = chargesGst(registration) ? zeroRatedKindFor(customer.gstRegistration) : null;
+  if (body.zeroRated && !zeroRatedKind) throw badRequest("ZERO_RATED_NOT_ALLOWED", {}, "zeroRated");
+  if (body.zeroRated?.shippingBillDate && body.zeroRated.shippingBillDate < invoiceDate) throw badRequest("SHIPPING_BILL_BEFORE_INVOICE", {}, "zeroRated.shippingBillDate");
+  // An export's place of supply is outside India (96).
+  const placeOfSupply = zeroRatedKind === "export" ? "96" : (body.shipToStateCode ?? customer.stateCode);
   const supplyType = determineSupplyType({
     supplierStateCode: business!.stateCode,
     placeOfSupplyStateCode: placeOfSupply,
     recipientRegistration: customer.gstRegistration as PartyGstRegistration,
   });
-  const registration = business!.gstRegistration as BusinessGstRegistration;
 
   // Rate list: the customer's, else the business default.
   let priceLevelId = customer.priceLevelId;
@@ -243,10 +256,17 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
   if (rateOverridden && !can(ctx, "invoice.override_price")) throw forbidden("invoice.override_price");
 
   const settings = await loadSaleSettings(tx, businessId);
+  // Without payment of IGST (under the LUT) unless asked otherwise, while the LUT is valid on the invoice date.
+  const lut = settings["gst.lut"];
+  const withPayment = body.zeroRated?.withPayment ?? !(lut && lut.validUntil >= invoiceDate);
+  const zeroRatedType = zeroRatedKind ? zeroRatedTypeOf(zeroRatedKind, withPayment) : null;
+  // Without IGST and no valid LUT on that day: under a bond, which has no ARN to print.
+  const lutArn = zeroRatedKind && !withPayment && lut && lut.validUntil >= invoiceDate ? lut.arn : null;
   const totals = calculateDocument({
     lines: engineLines,
     supplyType,
     chargeTax: chargesGst(registration),
+    withoutPayment: zeroRatedKind !== null && !withPayment,
     documentDiscount: body.documentDiscount ?? null,
     charges: body.charges.map((c, i) => ({ key: `C${i + 1}`, label: c.label, amount: c.amount, tax: c.gstRate ? taxAt(c.gstRate) : null })),
     roundOff: settings["invoice.round_off"],
@@ -272,6 +292,12 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     priceLevelId,
     lines: prepared,
     totals,
+    zeroRatedType,
+    shippingBill:
+      zeroRatedKind === "export"
+        ? { number: body.zeroRated?.shippingBillNumber ?? null, date: body.zeroRated?.shippingBillDate ?? null, portCode: body.zeroRated?.portCode ?? null }
+        : { number: null, date: null, portCode: null },
+    lutArn,
     rateOverridden,
     settings,
   };

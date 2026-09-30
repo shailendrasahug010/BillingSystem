@@ -21,6 +21,7 @@ import { EMBEDDED } from "../../lib/embedded";
 import { findOfflineBill, useOffline } from "../../offline/sync";
 import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { InvoiceDocument } from "./InvoiceDocument";
+import { ShippingBillCard } from "./ShippingBillCard";
 
 export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const { t, locale, money } = useI18n();
@@ -77,6 +78,7 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
           <Badge tone={status === "paid" ? "good" : status === "partial" ? "warn" : status === "cancelled" ? "neutral" : "danger"} dot>
             {status === "cancelled" ? t("status.document.cancelled") : t(`status.payment.${status}`)}
           </Badge>
+          {invoice.zeroRated && <Badge tone="accent">{t(`invoice.export.types.${invoice.zeroRated.type}`)}</Badge>}
           {offlineKey && (
             <Badge tone="warn" icon={<CloudOff size={13} />}>
               {kept.entry?.status === "failed" ? t("offline.failed") : t("offline.notSynced")}
@@ -120,6 +122,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
           )}
         </div>
       </div>
+      {LIVE && live.data?.zeroRatedType?.startsWith("EXP") && !deviceCopyAt && (
+        <div className="no-print">
+          <ShippingBillCard invoice={live.data} cancelled={status === "cancelled"} />
+        </div>
+      )}
       <div className="-mx-4 overflow-x-auto bg-surface-2 px-4 py-6 sm:mx-0 sm:rounded-[var(--radius-card)] sm:px-6">
         <InvoiceDocument invoice={invoice} locale={printLocale} />
       </div>

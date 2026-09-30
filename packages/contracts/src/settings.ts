@@ -43,6 +43,13 @@ export const SETTING_SCHEMAS = {
     last_order: z.number().min(0).max(5),
   }),
   "suggestions.window_days": z.number().int().min(30).max(1095),
+  /**
+   * Letter of undertaking for exports and supplies to SEZ without payment of IGST (form GST RFD-11):
+   * its ARN and the last day it is valid (the end of the financial year); null when the business has none.
+   */
+  "gst.lut": z
+    .strictObject({ arn: z.string().trim().min(5).max(20).regex(/^[A-Za-z0-9/-]+$/), validUntil: z.iso.date() })
+    .nullable(),
   /** Days a device may go without connecting before its saved copy is deleted (0 = never). */
   "offline.wipe_after_days": z.number().int().min(0).max(365),
   "backup.schedule": z.strictObject({

@@ -139,6 +139,17 @@ export const invoices = pgTable(
     terms: text(),
     /** Language the invoice is printed in (can differ from the user's UI language). */
     printLocale: varchar({ length: 10 }).notNull().default("en"),
+    /**
+     * Zero-rated supply: an export or a supply to an SEZ unit, with or without payment
+     * of IGST (EXPWP, EXPWOP, SEZWP, SEZWOP, as GSTR-1 names them); null for other sales.
+     */
+    zeroRatedType: varchar({ length: 6 }),
+    /** Exports: the shipping bill and port (often known only after the invoice; can be added later). */
+    shippingBillNumber: varchar({ length: 20 }),
+    shippingBillDate: date({ mode: "string" }),
+    portCode: varchar({ length: 6 }),
+    /** Without payment of IGST: the letter of undertaking (ARN) it was made under, printed on the invoice. */
+    lutArn: varchar({ length: 20 }),
     // e-invoicing (IRP) and e-way bill; filled by integration adapters when enabled.
     irn: varchar({ length: 64 }),
     irnAckNumber: varchar({ length: 20 }),
@@ -170,6 +181,7 @@ export const invoices = pgTable(
     check("invoices_posted_number_chk", sql`${t.status} = 'draft' or ${t.invoiceNumber} is not null`),
     check("invoices_totals_chk", sql`${t.grandTotal} >= 0 and ${t.amountPaid} >= 0 and ${t.balanceDue} >= 0`),
     check("invoices_number_format_chk", sql`${t.invoiceNumber} is null or ${t.invoiceNumber} ~ '^[A-Za-z0-9/-]{1,16}$'`),
+    check("invoices_zero_rated_chk", sql`${t.zeroRatedType} is null or ${t.zeroRatedType} in ('EXPWP', 'EXPWOP', 'SEZWP', 'SEZWOP')`),
   ],
 );
 

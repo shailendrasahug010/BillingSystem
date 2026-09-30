@@ -9,6 +9,8 @@ export interface CustomerInput {
   name: string;
   businessName: string;
   customerType: "b2b" | "b2c";
+  /** regular, consumer, sez or overseas (the server works it out from the GSTIN when left out). */
+  gstRegistration?: string;
   mobile?: string;
   stateCode: string;
   gstin?: string;
@@ -84,6 +86,7 @@ export async function createCustomer(body: CustomerInput): Promise<{ customer: C
     name: body.name,
     businessName: body.businessName || null,
     customerType: body.customerType,
+    ...(body.gstRegistration ? { gstRegistration: body.gstRegistration } : {}),
     mobile: body.mobile?.replace(/\D/g, "").slice(-10) || null,
     city: body.city ?? null,
     gstin: body.gstin ?? null,

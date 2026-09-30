@@ -19,7 +19,7 @@ const FiledBody = z.strictObject({ returnType: ReturnType.default("GSTR1"), arn:
 const FileQuery = z.object({
   period: Period,
   format: z.enum(["json", "csv"]).default("json"),
-  section: z.enum(["b2b", "b2cl", "b2cs", "cdnr", "cdnur", "hsn", "docs"]).default("b2b"),
+  section: z.enum(["b2b", "b2cl", "b2cs", "exp", "cdnr", "cdnur", "hsn", "docs"]).default("b2b"),
 });
 
 type RegisterSqlRow = {
@@ -48,6 +48,10 @@ type RegisterSqlRow = {
   document_value: string;
   itc_eligibility: string | null;
   is_cancelled: boolean;
+  zero_rated_type: GstRegisterRow["zeroRatedType"];
+  shipping_bill_number: string | null;
+  shipping_bill_date: string | null;
+  port_code: string | null;
 };
 
 const toRow = (r: RegisterSqlRow): GstRegisterRow => ({
@@ -76,17 +80,22 @@ const toRow = (r: RegisterSqlRow): GstRegisterRow => ({
   documentValue: r.document_value,
   itcEligibility: r.itc_eligibility,
   isCancelled: r.is_cancelled,
+  zeroRatedType: r.zero_rated_type,
+  shippingBill: r.zero_rated_type?.startsWith("EXP") ? { number: r.shipping_bill_number, date: r.shipping_bill_date, portCode: r.port_code } : null,
 });
 
 async function register(tx: Tx, businessId: string, period: string, direction?: "outward"): Promise<GstRegisterRow[]> {
   const rows = await tx.execute<RegisterSqlRow>(sql`
-    select direction::text, doc_type::text, doc_id, doc_number, doc_date::text, original_doc_number, original_doc_date::text,
-           party_name, party_gstin, place_of_supply, supply_type::text, is_reverse_charge, taxability::text, hsn_code, uqc,
-           qty::text, taxable_value::text, gst_rate::text, cgst_amount::text, sgst_amount::text, igst_amount::text, cess_amount::text,
-           document_value::text, itc_eligibility::text, is_cancelled
-    from gst_transactions
-    where business_id = ${businessId} and return_period = ${period} ${direction ? sql`and direction = ${direction}` : sql``}
-    order by doc_date, doc_number, id`);
+    select g.direction::text, g.doc_type::text, g.doc_id, g.doc_number, g.doc_date::text, g.original_doc_number, g.original_doc_date::text,
+           g.party_name, g.party_gstin, g.place_of_supply, g.supply_type::text, g.is_reverse_charge, g.taxability::text, g.hsn_code, g.uqc,
+           g.qty::text, g.taxable_value::text, g.gst_rate::text, g.cgst_amount::text, g.sgst_amount::text, g.igst_amount::text, g.cess_amount::text,
+           g.document_value::text, g.itc_eligibility::text, g.is_cancelled, g.zero_rated_type,
+           i.shipping_bill_number, i.shipping_bill_date::text, i.port_code
+    from gst_transactions g
+    -- An export's shipping bill is kept on the invoice (it can be added after posting).
+    left join invoices i on g.doc_type = 'invoice' and g.zero_rated_type like 'EXP%' and i.id = g.doc_id
+    where g.business_id = ${businessId} and g.return_period = ${period} ${direction ? sql`and g.direction = ${direction}` : sql``}
+    order by g.doc_date, g.doc_number, g.id`);
   return rows.rows.map(toRow);
 }
 

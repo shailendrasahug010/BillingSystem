@@ -102,3 +102,23 @@ describe("calculateDocument", () => {
     ]);
   });
 });
+
+describe("zero-rated supply under bond / LUT", () => {
+  it("charges no tax, takes the price as the taxable value and keeps the GST rate", async () => {
+    const { calculateDocument, taxAt } = await import("../src/index.js");
+    const doc = calculateDocument({
+      lines: [{ key: "a", qty: 10, rate: 118, rateIncludesTax: true, tax: taxAt("18") }],
+      supplyType: "inter_state",
+      chargeTax: true,
+      withoutPayment: true,
+    });
+    const line = doc.lines[0]!;
+    expect(line.taxable.toFixed(2)).toBe("1180.00");
+    expect(line.gstRate.toFixed(2)).toBe("18.00");
+    expect([line.igst, line.cgst, line.sgst, line.cess].map((d) => d.toFixed(2))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
+    expect(doc.grandTotal.toFixed(2)).toBe("1180.00");
+    // With payment of IGST it is an ordinary inter-state line.
+    const paid = calculateDocument({ lines: [{ key: "a", qty: 10, rate: 100, tax: taxAt("18") }], supplyType: "inter_state", chargeTax: true });
+    expect(paid.lines[0]!.igst.toFixed(2)).toBe("180.00");
+  });
+});

@@ -16,6 +16,7 @@ import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 import { searchCustomers } from "../invoice/CustomerPicker";
 import { ImportDialog } from "../imports/ImportDialog";
 import { AddCustomerDialog } from "./AddCustomerDialog";
+import { customerKind, kindLabel } from "./customerKind";
 
 type Sort = "outstanding" | "name" | "last";
 
@@ -182,7 +183,7 @@ export function CustomersPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-3">{c.gstin ? <span className="font-mono text-[12px] text-ink-2">{c.gstin}</span> : <Badge>{t("customer.b2c")}</Badge>}</td>
+                    <td className="px-3 py-3">{c.gstin ? <span className="font-mono text-[12px] text-ink-2">{c.gstin}</span> : <Badge tone={customerKind(c) === "export" ? "accent" : "neutral"}>{t(kindLabel(c))}</Badge>}</td>
                     <td className="px-3 py-3 text-ink-2">{c.route}</td>
                     <td className="num px-3 py-3 text-ink-2">
                       {ins.lastPurchase ? (

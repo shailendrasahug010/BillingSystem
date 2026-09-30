@@ -19,7 +19,7 @@ interface Tax {
 interface Gstr3b {
   period: string;
   version: string;
-  outward: { taxable: { taxable: string } & Tax; nilExempt: { taxable: string }; reverseChargeInward: { taxable: string } & Tax; nonGst: { taxable: string } };
+  outward: { taxable: { taxable: string } & Tax; zeroRated: { taxable: string } & Tax; nilExempt: { taxable: string }; reverseChargeInward: { taxable: string } & Tax; nonGst: { taxable: string } };
   interStateUnregistered: Array<{ placeOfSupply: string; taxable: string; igst: string }>;
   itc: { reverseCharge: Tax; allOther: Tax; reversed: Tax; net: Tax };
   payment: { liability: Tax; paidFromCredit: Tax; cash: Tax; creditCarriedForward: Tax };
@@ -50,6 +50,7 @@ export function Gstr3bTab({ period }: { period: string }) {
   const outward: Line[] = d
     ? [
         { key: "a", label: t("gstPage.r3b.outwardTaxable"), ...d.outward.taxable },
+        { key: "b", label: t("gstPage.r3b.zeroRated"), ...d.outward.zeroRated },
         { key: "c", label: t("gstPage.r3b.nilExempt"), taxable: d.outward.nilExempt.taxable },
         { key: "d", label: t("gstPage.r3b.reverseCharge"), ...d.outward.reverseChargeInward },
         { key: "e", label: t("gstPage.r3b.nonGst"), taxable: d.outward.nonGst.taxable },

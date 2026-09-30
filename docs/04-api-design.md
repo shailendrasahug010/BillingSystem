@@ -74,7 +74,7 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 
 | Method & path | Purpose |
 |---|---|
-| `GET /settings` ★ · `PATCH /settings/:key` ★ [settings.update] | Typed business rules (negative stock, round-off, credit policy, workflow, reminders…) |
+| `GET /settings` ★ · `PUT /settings/:key` ★ [settings.update] | Typed business rules (negative stock, round-off, credit policy, workflow, reminders, `gst.lut` = the letter of undertaking's ARN and last valid day…); a value set to null goes back to the default |
 | `GET/POST/PATCH /document-series` ★ | Number series per document type / FY / device; pattern validated against GST limits |
 | `GET /members` · `POST /members/invite` · `PATCH /members/:id` [user.*] | Staff logins and their roles |
 | `GET/POST/PATCH /roles` · `PUT /roles/:id/permissions` [user.manage_roles] | Configurable roles; every change is audit-logged |
@@ -102,7 +102,8 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 
 | Method & path | Purpose |
 |---|---|
-| `POST /invoices` ★ [invoice.create] | Create **and post** an invoice in one transaction (or `?draft=true`). Body: customer, date, lines, charges, discount, payment received, client totals |
+| `POST /invoices` ★ [invoice.create] | Create **and post** an invoice in one transaction (or `?draft=true`). Body: customer, date, lines, charges, discount, payment received, client totals; for an export or SEZ customer optionally `zeroRated` (`withPayment`, and for exports the shipping bill number, date and port code; left out: under the business's LUT while it is valid on the invoice date, else with payment of IGST). The detail returns `zeroRatedType` (EXPWP / EXPWOP / SEZWP / SEZWOP), the shipping bill and `lutArn` |
+| `PATCH /invoices/:id/shipping-bill` ★ [invoice.update] | An export's shipping bill number, date and port code, added or corrected after the invoice (null clears a field; not part of the tax, so allowed in a locked month; audited) |
 | `POST /invoices/preview` ★ | Totals, tax breakup, credit and stock checks without saving (used while editing if the device cache is stale) |
 | `GET /invoices` ★ · `GET /invoices/:id` ★ | List (filters: customer, date, status, payment status, salesperson) and detail |
 | `PATCH /invoices/:id` [invoice.update] | Edit a posted invoice within the configured window; stores a revision, writes reversing + new ledger rows; blocked if the GST period is locked |

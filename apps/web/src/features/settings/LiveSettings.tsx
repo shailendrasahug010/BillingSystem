@@ -12,7 +12,7 @@ import { Segmented, Skeleton } from "../../components/ui/misc";
 import { DataTable, ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { Badge } from "../../components/ui/Badge";
-import { allowed, BUSINESS, WORKSPACE } from "../../data/db";
+import { allowed, BUSINESS, TODAY, WORKSPACE } from "../../data/db";
 import { applyMe, refreshCatalog, refreshWarehouses } from "../../data/live";
 import { touch, useStoreVersion } from "../../data/store";
 import { api, ApiError } from "../../lib/api";
@@ -46,6 +46,67 @@ interface Settings {
   "invoice.terms": string;
   "reports.aging_buckets": number[];
   "offline.wipe_after_days"?: number;
+  "gst.lut"?: { arn: string; validUntil: string } | null;
+}
+
+/** The last day of the financial year a date falls in (an LUT is filed for one year). */
+function yearEnd(day: string): string {
+  const [y, m] = day.split("-").map(Number) as [number, number];
+  return `${m >= 4 ? y + 1 : y}-03-31`;
+}
+
+/**
+ * The letter of undertaking (form RFD-11) that lets exports and supplies to
+ * SEZ go without IGST: its ARN and the day it runs out. Bills made while it
+ * is valid default to "under LUT".
+ */
+function LutRow({ value, canEdit, onSave }: { value: Settings["gst.lut"]; canEdit: boolean; onSave(v: Settings["gst.lut"]): Promise<void> }) {
+  const { t } = useI18n();
+  const [arn, setArn] = useState(value?.arn ?? "");
+  const [until, setUntil] = useState(value?.validUntil ?? yearEnd(TODAY));
+  const [busy, setBusy] = useState(false);
+  const arnOk = /^[A-Za-z0-9/-]{5,20}$/.test(arn.trim());
+  const changed = arn.trim() !== (value?.arn ?? "") || until !== (value?.validUntil ?? "");
+  const run = async (v: Settings["gst.lut"]) => {
+    setBusy(true);
+    try {
+      await onSave(v);
+      if (!v) {
+        setArn("");
+        setUntil(yearEnd(TODAY));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 border-b border-line py-3">
+      <div>
+        <p className="text-[14px] font-medium text-ink">{t("settings.lut")}</p>
+        <p className="text-[12.5px] text-ink-3">{t("settings.lutHint")}</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label={t("settings.lutArn")} htmlFor="lut-arn">
+          <Input id="lut-arn" inputSize="sm" disabled={!canEdit} maxLength={20} className="w-52 [&_input]:font-mono [&_input]:uppercase" placeholder="AD2303260001234" value={arn} onChange={(e) => setArn(e.target.value.toUpperCase().replace(/\s/g, ""))} />
+        </Field>
+        <Field label={t("settings.lutValidUntil")} htmlFor="lut-until">
+          <Input id="lut-until" inputSize="sm" type="date" disabled={!canEdit} className="w-40" value={until} onChange={(e) => setUntil(e.target.value)} />
+        </Field>
+        {canEdit && (
+          <>
+            <Button size="sm" variant="primary" disabled={busy || !arnOk || !until || !changed} onClick={() => void run({ arn: arn.trim(), validUntil: until })}>
+              {t("common.save")}
+            </Button>
+            {value && (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(null)}>
+                {t("settings.lutClear")}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /** Business header, rules and permissions in the running app follow the saved values at once. */
@@ -418,6 +479,7 @@ function RulesCard() {
             className="w-full rounded-[var(--radius-control)] border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:bg-surface-2"
           />
         </div>
+        {WORKSPACE.chargeTax && <LutRow value={s["gst.lut"] ?? null} canEdit={canEdit} onSave={(v) => put("gst.lut", v)} />}
         {row(
           t("settings.expiryWarning"),
           t("settings.expiryWarningHint"),

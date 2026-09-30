@@ -243,8 +243,9 @@ export const partiesModule: ApiModule = async (app, deps) => {
           version: number;
           created_at: string;
           overdue: string;
+          gst_registration: string;
         }>(sql`
-          select c.id, c.code, c.name, c.business_name, c.customer_type, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
+          select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
                  c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
                  c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue
           from customers c
@@ -263,6 +264,8 @@ export const partiesModule: ApiModule = async (app, deps) => {
       name: c.name,
       businessName: c.business_name,
       customerType: c.customer_type,
+      /** regular, consumer, sez, overseas…: exports and supplies to SEZ are billed differently. */
+      gstRegistration: c.gst_registration,
       mobile: c.mobile,
       city: c.city,
       gstin: c.gstin,

@@ -1,6 +1,7 @@
 import { dec, type Dec, ZERO } from "../money/decimal.js";
 import { isValidGstin } from "../validation/identifiers.js";
 import { findState } from "./states.js";
+import type { ZeroRatedType } from "./supply.js";
 
 /**
  * GST return formatters. They turn rows of the GST register (facts written
@@ -14,10 +15,10 @@ import { findState } from "./states.js";
  * change with an advisory, and the version constants below then need a
  * new formatter version.
  */
-export const GSTR1_FORMATTER_VERSION = "gstr1-json@2025.05";
+export const GSTR1_FORMATTER_VERSION = "gstr1-json@2026.10";
 /** Value written to the file's "version" field. */
 export const GSTR1_SCHEMA_VERSION = "GST3.2.2";
-export const GSTR3B_FORMATTER_VERSION = "gstr3b-summary@2025.1";
+export const GSTR3B_FORMATTER_VERSION = "gstr3b-summary@2026.10";
 
 export type RegisterDocType = "invoice" | "credit_note" | "debit_note" | "purchase" | "purchase_credit_note" | "purchase_debit_note" | "expense";
 export type Taxability = "taxable" | "exempt" | "nil_rated" | "non_gst" | "zero_rated";
@@ -50,6 +51,10 @@ export interface GstRegisterRow {
   documentValue: string;
   itcEligibility: string | null;
   isCancelled: boolean;
+  /** Export or supply to an SEZ, with or without payment of IGST (a note carries its invoice's). */
+  zeroRatedType?: ZeroRatedType | null;
+  /** Exports: the shipping bill, when known (it often comes after the invoice). */
+  shippingBill?: { number: string | null; date: string | null; portCode: string | null } | null;
 }
 
 export interface ReturnWarning {
@@ -59,7 +64,9 @@ export interface ReturnWarning {
     | "HSN_TOO_SHORT"
     | "UQC_MISSING"
     | "ZERO_RATED_NOT_SUPPORTED"
-    | "NOTE_ORIGINAL_NOT_FOUND";
+    | "NOTE_ORIGINAL_NOT_FOUND"
+    | "SHIPPING_BILL_MISSING"
+    | "SEZ_GSTIN_MISSING";
   docNumber?: string;
   params?: Record<string, string>;
 }
@@ -127,7 +134,7 @@ export interface Gstr1Input {
 }
 
 export interface SectionSummary {
-  section: "b2b" | "b2cl" | "b2cs" | "cdnr" | "cdnur" | "nil" | "hsn_b2b" | "hsn_b2c";
+  section: "b2b" | "b2cl" | "b2cs" | "exp" | "cdnr" | "cdnur" | "nil" | "hsn_b2b" | "hsn_b2c";
   records: number;
   value: string;
   taxable: string;
@@ -168,6 +175,7 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
   const b2cs = new Map<B2csKey, { sply_ty: "INTRA" | "INTER"; pos: string; rt: number; h: Heads }>();
   const cdnr = new Map<string, GstRegisterRow[]>();
   const cdnur: GstRegisterRow[] = [];
+  const exp = new Map<"WPAY" | "WOPAY", GstRegisterRow[]>();
   const nil = new Map<string, { expt: Dec; nil: Dec; ngsup: Dec }>();
   const hsnB2b = new Map<string, { hsn: string; uqc: string; rt: number; qty: Dec; h: Heads }>();
   const hsnB2c = new Map<string, { hsn: string; uqc: string; rt: number; qty: Dec; h: Heads }>();
@@ -203,13 +211,30 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
   };
 
   for (const r of live) {
-    if (r.taxability === "zero_rated") {
+    if (r.taxability === "zero_rated" && !r.zeroRatedType) {
       warnOnce({ code: "ZERO_RATED_NOT_SUPPORTED", docNumber: r.docNumber });
       continue;
     }
     const isNote = r.docType === "credit_note" || r.docType === "debit_note";
     const sign = r.docType === "credit_note" ? -1 : 1;
     addHsn(r, sign);
+    // Exports (6A) and supplies to SEZ (6B, with B2B); their notes go to CDNUR and CDNR.
+    if (r.zeroRatedType) {
+      const isExport = r.zeroRatedType.startsWith("EXP");
+      if (!isExport && !r.partyGstin) {
+        warnOnce({ code: "SEZ_GSTIN_MISSING", docNumber: r.docNumber });
+        continue;
+      }
+      if (!isNote) {
+        if (isExport) {
+          if (!r.shippingBill?.number) warnOnce({ code: "SHIPPING_BILL_MISSING", docNumber: r.docNumber });
+          const typ = r.zeroRatedType === "EXPWP" ? "WPAY" : "WOPAY";
+          exp.set(typ, [...(exp.get(typ) ?? []), r]);
+        } else b2b.set(r.partyGstin!, [...(b2b.get(r.partyGstin!) ?? []), r]);
+      } else if (isExport) cdnur.push(r);
+      else cdnr.set(r.partyGstin!, [...(cdnr.get(r.partyGstin!) ?? []), r]);
+      continue;
+    }
     if (r.taxability !== "taxable") {
       addNil(r, sign);
       continue;
@@ -235,6 +260,8 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
   }
 
   // ---- JSON sections
+  /** B2B invoice type: regular, or a supply to an SEZ with (SEWP) or without (SEWOP) payment of IGST. */
+  const invType = (r: GstRegisterRow) => (r.zeroRatedType === "SEZWP" ? "SEWP" : r.zeroRatedType === "SEZWOP" ? "SEWOP" : "R");
   const invoiceOf = (rows: GstRegisterRow[], withIntra: boolean) =>
     [...groupBy(rows, (r) => r.docId).values()]
       .sort((a, b) => a[0]!.docDate.localeCompare(b[0]!.docDate) || a[0]!.docNumber.localeCompare(b[0]!.docNumber))
@@ -250,8 +277,23 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
         val: n2(dec(first.documentValue)),
         pos: first.placeOfSupply,
         rchrg: first.isReverseCharge ? "Y" : "N",
-        inv_typ: "R",
+        inv_typ: invType(first),
         itms,
+      })),
+    }));
+  const expJson = (["WPAY", "WOPAY"] as const)
+    .filter((typ) => exp.has(typ))
+    .map((typ) => ({
+      exp_typ: typ,
+      inv: invoiceOf(exp.get(typ)!, false).map(({ first, itms }) => ({
+        inum: first.docNumber,
+        idt: portalDate(first.docDate),
+        val: n2(dec(first.documentValue)),
+        ...(first.shippingBill?.portCode ? { sbpcode: first.shippingBill.portCode } : {}),
+        ...(first.shippingBill?.number ? { sbnum: first.shippingBill.number } : {}),
+        ...(first.shippingBill?.date ? { sbdt: portalDate(first.shippingBill.date) } : {}),
+        // Exports list their items flat (no num / itm_det).
+        itms: itms.map((it) => ({ txval: it.itm_det.txval, rt: it.itm_det.rt, iamt: it.itm_det.iamt, csamt: it.itm_det.csamt })),
       })),
     }));
   const b2clJson = [...b2cl.entries()]
@@ -273,18 +315,24 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
       ...(x.sply_ty === "INTRA" ? { camt: n2(x.h.camt), samt: n2(x.h.samt) } : {}),
       csamt: n2(x.h.csamt),
     }));
-  const noteOf = (rows: GstRegisterRow[], withIntra: boolean) =>
-    invoiceOf(rows, withIntra).map(({ first, itms }) => ({
+  const noteEntry = (first: GstRegisterRow, itms: ReturnType<typeof items>, withIntra: boolean) => ({
       ntty: first.docType === "credit_note" ? "C" : "D",
       nt_num: first.docNumber,
       nt_dt: portalDate(first.docDate),
       val: n2(dec(first.documentValue)),
-      pos: first.placeOfSupply,
-      ...(withIntra ? { rchrg: "N", inv_typ: "R" } : {}),
+      // A note on an export has no place of supply in India.
+      ...(first.zeroRatedType?.startsWith("EXP") ? {} : { pos: first.placeOfSupply }),
+      ...(withIntra ? { rchrg: "N", inv_typ: invType(first) } : {}),
       itms,
-    }));
-  const cdnrJson = [...cdnr.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([ctin, rows]) => ({ ctin, nt: noteOf(rows, true) }));
-  const cdnurJson = noteOf(cdnur, false).map((nt) => ({ typ: "B2CL", ...nt }));
+    });
+  const cdnrJson = [...cdnr.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ctin, rows]) => ({ ctin, nt: invoiceOf(rows, true).map(({ first, itms }) => noteEntry(first, itms, true)) }));
+  // Unregistered notes: on a large inter-state B2C invoice (B2CL), or on an export (EXPWP / EXPWOP).
+  const cdnurJson = invoiceOf(cdnur, false).map(({ first, itms }) => ({
+    typ: first.zeroRatedType === "EXPWP" || first.zeroRatedType === "EXPWOP" ? first.zeroRatedType : "B2CL",
+    ...noteEntry(first, itms, false),
+  }));
   const hsnJson = (m: typeof hsnB2b) =>
     [...m.values()]
       .sort((a, b) => a.hsn.localeCompare(b.hsn) || a.rt - b.rt)
@@ -318,6 +366,7 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
   if (b2bJson.length) json.b2b = b2bJson;
   if (b2clJson.length) json.b2cl = b2clJson;
   if (b2csJson.length) json.b2cs = b2csJson;
+  if (expJson.length) json.exp = expJson;
   if (cdnrJson.length) json.cdnr = cdnrJson;
   if (cdnurJson.length) json.cdnur = cdnurJson;
   if (hsnB2b.size || hsnB2c.size) json.hsn = { ...(hsnB2b.size ? { hsn_b2b: hsnJson(hsnB2b) } : {}), ...(hsnB2c.size ? { hsn_b2c: hsnJson(hsnB2c) } : {}) };
@@ -332,6 +381,7 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
   };
   const docValue = (rows: readonly GstRegisterRow[]) => [...groupBy(rows, (r) => r.docId).values()].reduce((s, rs) => s.plus(rs[0]!.documentValue), ZERO);
   const b2bRows = [...b2b.values()].flat();
+  const expRows = [...exp.values()].flat();
   const b2clRows = [...b2cl.values()].flat();
   const cdnrRows = [...cdnr.values()].flat();
   const b2csTotals = [...b2cs.values()].reduce((acc, x) => ({ txval: acc.txval.plus(x.h.txval), iamt: acc.iamt.plus(x.h.iamt), camt: acc.camt.plus(x.h.camt), samt: acc.samt.plus(x.h.samt), csamt: acc.csamt.plus(x.h.csamt) }), zeroHeads());
@@ -353,6 +403,7 @@ export function buildGstr1(input: Gstr1Input): Gstr1Result {
       sgst: b2csTotals.samt.toFixed(2),
       cess: b2csTotals.csamt.toFixed(2),
     },
+    sum("exp", new Set(expRows.map((r) => r.docId)).size, expRows, docValue(expRows)),
     sum("cdnr", new Set(cdnrRows.map((r) => r.docId)).size, cdnrRows, docValue(cdnrRows)),
     sum("cdnur", new Set(cdnur.map((r) => r.docId)).size, cdnur, docValue(cdnur)),
     { section: "nil", records: nilJson.length, value: nilTotal.toFixed(2), taxable: nilTotal.toFixed(2), igst: "0.00", cgst: "0.00", sgst: "0.00", cess: "0.00" },
@@ -370,7 +421,10 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** 2026-09-24 -> 24-Sep-2026 (the offline tool's CSV date format) */
 export const offlineToolDate = (iso: string) => `${iso.slice(8, 10)}-${MONTHS[Number(iso.slice(5, 7)) - 1]}-${iso.slice(0, 4)}`;
 
-export type Gstr1CsvSection = "b2b" | "b2cl" | "b2cs" | "cdnr" | "cdnur" | "hsn" | "docs";
+export type Gstr1CsvSection = "b2b" | "b2cl" | "b2cs" | "exp" | "cdnr" | "cdnur" | "hsn" | "docs";
+
+/** The offline tool's names for B2B invoice types. */
+const INVOICE_TYPE: Record<string, string> = { R: "Regular B2B", SEWP: "SEZ supplies with payment", SEWOP: "SEZ supplies without payment", DE: "Deemed Exp" };
 
 /** Rows for one GSTR-1 section in the offline tool's CSV layout (header row first). */
 export function gstr1Csv(result: Gstr1Result, section: Gstr1CsvSection, names: ReadonlyMap<string, string> = new Map()): string[][] {
@@ -380,7 +434,7 @@ export function gstr1Csv(result: Gstr1Result, section: Gstr1CsvSection, names: R
       return [
         ["GSTIN/UIN of Recipient", "Receiver Name", "Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Reverse Charge", "Applicable % of Tax Rate", "Invoice Type", "E-Commerce GSTIN", "Rate", "Taxable Value", "Cess Amount"],
         ...((j.b2b ?? []) as any[]).flatMap((p) =>
-          p.inv.flatMap((inv: any) => inv.itms.map((it: any) => [p.ctin, names.get(p.ctin) ?? "", inv.inum, offlineToolDate(isoFromPortal(inv.idt)), inv.val, stateLabel(inv.pos), inv.rchrg, "", "Regular B2B", "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt])),
+          p.inv.flatMap((inv: any) => inv.itms.map((it: any) => [p.ctin, names.get(p.ctin) ?? "", inv.inum, offlineToolDate(isoFromPortal(inv.idt)), inv.val, stateLabel(inv.pos), inv.rchrg, "", INVOICE_TYPE[inv.inv_typ] ?? "Regular B2B", "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt])),
         ),
       ].map(strings);
     case "b2cl":
@@ -390,17 +444,24 @@ export function gstr1Csv(result: Gstr1Result, section: Gstr1CsvSection, names: R
       ].map(strings);
     case "b2cs":
       return [["Type", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"], ...((j.b2cs ?? []) as any[]).map((x) => [x.typ, stateLabel(x.pos), "", x.rt, x.txval, x.csamt, ""])].map(strings);
+    case "exp":
+      return [
+        ["Export Type", "Invoice Number", "Invoice date", "Invoice Value", "Port Code", "Shipping Bill Number", "Shipping Bill Date", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount"],
+        ...((j.exp ?? []) as any[]).flatMap((e) =>
+          e.inv.flatMap((inv: any) => inv.itms.map((it: any) => [e.exp_typ, inv.inum, offlineToolDate(isoFromPortal(inv.idt)), inv.val, inv.sbpcode ?? "", inv.sbnum ?? "", inv.sbdt ? offlineToolDate(isoFromPortal(inv.sbdt)) : "", "", it.rt, it.txval, it.csamt])),
+        ),
+      ].map(strings);
     case "cdnr":
       return [
         ["GSTIN/UIN of Recipient", "Receiver Name", "Note Number", "Note Date", "Note Type", "Place Of Supply", "Reverse Charge", "Note Supply Type", "Note Value", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount"],
         ...((j.cdnr ?? []) as any[]).flatMap((p) =>
-          p.nt.flatMap((nt: any) => nt.itms.map((it: any) => [p.ctin, names.get(p.ctin) ?? "", nt.nt_num, offlineToolDate(isoFromPortal(nt.nt_dt)), nt.ntty, stateLabel(nt.pos), nt.rchrg, "Regular B2B", nt.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt])),
+          p.nt.flatMap((nt: any) => nt.itms.map((it: any) => [p.ctin, names.get(p.ctin) ?? "", nt.nt_num, offlineToolDate(isoFromPortal(nt.nt_dt)), nt.ntty, stateLabel(nt.pos), nt.rchrg, INVOICE_TYPE[nt.inv_typ] ?? "Regular B2B", nt.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt])),
         ),
       ].map(strings);
     case "cdnur":
       return [
         ["UR Type", "Note Number", "Note Date", "Note Type", "Place Of Supply", "Note Value", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount"],
-        ...((j.cdnur ?? []) as any[]).flatMap((nt) => nt.itms.map((it: any) => [nt.typ, nt.nt_num, offlineToolDate(isoFromPortal(nt.nt_dt)), nt.ntty, stateLabel(nt.pos), nt.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt])),
+        ...((j.cdnur ?? []) as any[]).flatMap((nt) => nt.itms.map((it: any) => [nt.typ, nt.nt_num, offlineToolDate(isoFromPortal(nt.nt_dt)), nt.ntty, nt.pos ? stateLabel(nt.pos) : "", nt.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt])),
       ].map(strings);
     case "hsn": {
       const rows = (tab: string, list: any[] | undefined) => (list ?? []).map((x) => [tab, x.hsn_sc, x.desc, x.uqc, x.qty, x.txval + x.iamt + x.camt + x.samt + x.csamt, x.rt, x.txval, x.iamt, x.camt, x.samt, x.csamt]);
@@ -444,9 +505,10 @@ const plusRow = (h: HeadsDec, r: GstRegisterRow, sign: number): HeadsDec => ({
 export interface Gstr3bResult {
   version: string;
   period: string;
-  /** 3.1 (a) outward taxable supplies, (c) nil / exempt, (d) inward supplies liable to reverse charge, (e) non-GST. */
+  /** 3.1 (a) outward taxable supplies, (b) zero-rated (exports, SEZ), (c) nil / exempt, (d) inward supplies liable to reverse charge, (e) non-GST. */
   outward: {
     taxable: { taxable: string } & TaxHeads;
+    zeroRated: { taxable: string } & TaxHeads;
     nilExempt: { taxable: string };
     reverseChargeInward: { taxable: string } & TaxHeads;
     nonGst: { taxable: string };
@@ -505,12 +567,18 @@ export function buildGstr3b(period: string, rows: readonly GstRegisterRow[]): Gs
 
   let taxable = ZERO;
   let taxOut = zeroTax();
+  let zeroRated = ZERO;
+  let zeroRatedTax = zeroTax();
   let nilExempt = ZERO;
   let nonGst = ZERO;
   const unreg = new Map<string, { taxable: Dec; igst: Dec }>();
   for (const r of outward) {
     const s = noteSign(r);
-    if (r.taxability === "taxable") {
+    if (r.zeroRatedType) {
+      // 3.1 (b): exports and supplies to SEZ; IGST paid on those "with payment" is still due.
+      zeroRated = zeroRated.plus(dec(r.taxableValue).times(s));
+      zeroRatedTax = plusRow(zeroRatedTax, r, s);
+    } else if (r.taxability === "taxable") {
       taxable = taxable.plus(dec(r.taxableValue).times(s));
       taxOut = plusRow(taxOut, r, s);
       if (!r.partyGstin && r.supplyType === "inter_state") {
@@ -547,7 +615,8 @@ export function buildGstr3b(period: string, rows: readonly GstRegisterRow[]): Gs
   };
   const clamp = (h: HeadsDec): HeadsDec => ({ igst: Dec_max(ZERO, h.igst), cgst: Dec_max(ZERO, h.cgst), sgst: Dec_max(ZERO, h.sgst), cess: Dec_max(ZERO, h.cess) });
   // Reverse-charge tax is always paid in cash; forward-charge tax can use credit.
-  const u = utiliseCredit(fmtTax(clamp(taxOut)), fmtTax(clamp(net)));
+  const forward: HeadsDec = { igst: taxOut.igst.plus(zeroRatedTax.igst), cgst: taxOut.cgst.plus(zeroRatedTax.cgst), sgst: taxOut.sgst.plus(zeroRatedTax.sgst), cess: taxOut.cess.plus(zeroRatedTax.cess) };
+  const u = utiliseCredit(fmtTax(clamp(forward)), fmtTax(clamp(net)));
   const cash: HeadsDec = {
     igst: dec(u.remaining.igst).plus(rcmTax.igst),
     cgst: dec(u.remaining.cgst).plus(rcmTax.cgst),
@@ -560,6 +629,7 @@ export function buildGstr3b(period: string, rows: readonly GstRegisterRow[]): Gs
     period,
     outward: {
       taxable: { taxable: taxable.toFixed(2), ...fmtTax(taxOut) },
+      zeroRated: { taxable: zeroRated.toFixed(2), ...fmtTax(zeroRatedTax) },
       nilExempt: { taxable: nilExempt.toFixed(2) },
       reverseChargeInward: { taxable: rcmTaxable.toFixed(2), ...fmtTax(rcmTax) },
       nonGst: { taxable: nonGst.toFixed(2) },
@@ -567,7 +637,7 @@ export function buildGstr3b(period: string, rows: readonly GstRegisterRow[]): Gs
     interStateUnregistered: [...unreg.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([pos, v]) => ({ placeOfSupply: pos, taxable: v.taxable.toFixed(2), igst: v.igst.toFixed(2) })),
     itc: { reverseCharge: fmtTax(itcRcm), allOther: fmtTax(itcOther), reversed: fmtTax(reversed), net: fmtTax(net) },
     payment: {
-      liability: fmtTax({ igst: taxOut.igst.plus(rcmTax.igst), cgst: taxOut.cgst.plus(rcmTax.cgst), sgst: taxOut.sgst.plus(rcmTax.sgst), cess: taxOut.cess.plus(rcmTax.cess) }),
+      liability: fmtTax({ igst: forward.igst.plus(rcmTax.igst), cgst: forward.cgst.plus(rcmTax.cgst), sgst: forward.sgst.plus(rcmTax.sgst), cess: forward.cess.plus(rcmTax.cess) }),
       paidFromCredit: u.paidFromCredit,
       cash: fmtTax(cash),
       creditCarriedForward: u.creditLeft,

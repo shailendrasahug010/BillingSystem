@@ -354,7 +354,8 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
       igstAmount: toAmountString(l.share.igstAmount),
       cessAmount: toAmountString(l.share.cessAmount),
       documentValue: toAmountString(grandTotal),
-      ...(isSale ? {} : { itcEligibility: (doc as typeof schema.purchases.$inferSelect).itcEligibility }),
+      // A note on an export or a supply to SEZ is reported with it (CDNUR / CDNR, GSTR-3B 3.1(b)).
+      ...(isSale ? { zeroRatedType: (doc as typeof schema.invoices.$inferSelect).zeroRatedType } : { itcEligibility: (doc as typeof schema.purchases.$inferSelect).itcEligibility }),
     })),
   );
 
@@ -593,7 +594,8 @@ async function postPriceNote(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule
       igstAmount: toAmountString(l.share.igst),
       cessAmount: toAmountString(l.share.cess),
       documentValue: toAmountString(grandTotal),
-      ...(isSale ? {} : { itcEligibility: (doc as typeof schema.purchases.$inferSelect).itcEligibility }),
+      // A note on an export or a supply to SEZ is reported with it (CDNUR / CDNR, GSTR-3B 3.1(b)).
+      ...(isSale ? { zeroRatedType: (doc as typeof schema.invoices.$inferSelect).zeroRatedType } : { itcEligibility: (doc as typeof schema.purchases.$inferSelect).itcEligibility }),
     })),
   );
   await audit(tx, ctx, {

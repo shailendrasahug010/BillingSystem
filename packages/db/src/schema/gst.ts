@@ -50,6 +50,8 @@ export const gstTransactions = pgTable(
     itcEligibility: itcEligibility(),
     /** Set when the source document is cancelled; formatters exclude or report as cancelled. */
     isCancelled: boolean().notNull().default(false),
+    /** Export / supply to SEZ (EXPWP, EXPWOP, SEZWP, SEZWOP): reported in their own GSTR-1 tables and GSTR-3B 3.1(b). */
+    zeroRatedType: varchar({ length: 6 }),
     createdAt: tstz().notNull().defaultNow(),
   },
   (t) => [

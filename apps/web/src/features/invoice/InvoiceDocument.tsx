@@ -1,8 +1,8 @@
-import { amountInWords, findState } from "@vyapaar/core";
+import { amountInWords, findState, zeroRatedDeclaration } from "@vyapaar/core";
 import { createTranslator, formatAmount, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
 import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import { BUSINESS, WORKSPACE } from "../../data/db";
-import type { PrintableInvoice } from "./printable";
+import type { PrintableInvoice, ZeroRatedPrint } from "./printable";
 
 /**
  * Printable A4 tax invoice. It is paper, so it keeps a fixed black-on-white
@@ -10,6 +10,19 @@ import type { PrintableInvoice } from "./printable";
  * can print English invoices and vice versa). In production the same template
  * renders to PDF on the server (headless Chromium, correct Devanagari shaping).
  */
+/** An export or SEZ invoice's declaration, in capitals as the rules word it, with the LUT and the shipping bill. */
+function ZeroRatedLines({ z, locale }: { z: ZeroRatedPrint; locale: LocaleCode }) {
+  const { t } = createTranslator(locale);
+  const sb = [z.shippingBill.number, z.shippingBill.date ? formatDate(z.shippingBill.date) : null, z.shippingBill.portCode].filter(Boolean).join(" · ");
+  const more = [z.lutArn ? t("invoice.export.lutLine", { arn: z.lutArn }) : null, sb ? t("invoice.export.shippingBillLine", { bill: sb }) : null].filter(Boolean);
+  return (
+    <section className="border-b border-[#c8d1e0] py-2.5 text-center">
+      <p className="text-[11.5px] font-bold tracking-wide">{zeroRatedDeclaration(z.type)}</p>
+      {more.length > 0 && <p className="mt-0.5 text-[11px] text-[#4a5570]">{more.join("   ·   ")}</p>}
+    </section>
+  );
+}
+
 export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice; locale: LocaleCode }) {
   const { t } = createTranslator(locale);
   const customer = invoice.buyer;
@@ -80,6 +93,8 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
           </table>
         </div>
       </header>
+
+      {invoice.zeroRated && <ZeroRatedLines z={invoice.zeroRated} locale={locale} />}
 
       <section className="grid grid-cols-1 gap-4 border-b border-[#c8d1e0] py-3 sm:grid-cols-2">
         {[t("invoice.print.billTo"), t("invoice.print.shipTo")].map((label) => (

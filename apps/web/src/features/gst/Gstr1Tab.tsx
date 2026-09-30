@@ -20,7 +20,7 @@ export interface PeriodStatus {
 }
 
 interface SectionRow {
-  section: "b2b" | "b2cl" | "b2cs" | "cdnr" | "cdnur" | "nil" | "hsn_b2b" | "hsn_b2c";
+  section: "b2b" | "b2cl" | "b2cs" | "exp" | "cdnr" | "cdnur" | "nil" | "hsn_b2b" | "hsn_b2c";
   records: number;
   value: string;
   taxable: string;
@@ -42,7 +42,7 @@ interface Gstr1Preview {
   status: { GSTR1: PeriodStatus; GSTR3B: PeriodStatus };
 }
 
-const CSV_SECTIONS = ["b2b", "b2cl", "b2cs", "cdnr", "cdnur", "hsn", "docs"] as const;
+const CSV_SECTIONS = ["b2b", "b2cl", "b2cs", "exp", "cdnr", "cdnur", "hsn", "docs"] as const;
 
 export function Gstr1Tab({ period }: { period: string }) {
   const { t, money, dateTime } = useI18n();

@@ -18,6 +18,10 @@ import {
   type CreditCheck,
   type PartyGstRegistration,
   type SuggestionProduct,
+  type ZeroRatedKind,
+  type ZeroRatedType,
+  zeroRatedKindFor,
+  zeroRatedTypeOf,
 } from "@vyapaar/core";
 import { useMemo, useReducer, type Dispatch } from "react";
 import { BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
@@ -43,6 +47,15 @@ export interface Draft {
   method: PaymentMethod;
   /** Line to focus after an add (qty field). */
   focusKey: string | null;
+  /** Export or supply to SEZ: paying IGST or not (null = under the LUT while it is valid), and the shipping bill. */
+  zeroRated: ZeroRatedChoice;
+}
+
+export interface ZeroRatedChoice {
+  withPayment: boolean | null;
+  shippingBillNumber: string;
+  shippingBillDate: string;
+  portCode: string;
 }
 
 type Action =
@@ -54,6 +67,7 @@ type Action =
   | { type: "received"; value: string }
   | { type: "method"; value: PaymentMethod }
   | { type: "focused" }
+  | { type: "zeroRated"; patch: Partial<ZeroRatedChoice> }
   | { type: "reset"; customerId?: string | null };
 
 let lineSeq = 0;
@@ -149,13 +163,35 @@ function reducer(state: Draft, action: Action): Draft {
       return { ...state, method: action.value };
     case "focused":
       return { ...state, focusKey: null };
+    case "zeroRated":
+      return { ...state, zeroRated: { ...state.zeroRated, ...action.patch } };
     case "reset":
       return initialDraft(action.customerId ?? null);
   }
 }
 
 function initialDraft(customerId: string | null): Draft {
-  return { customerId, date: TODAY, lines: [], received: "", method: "cash", focusKey: null };
+  return { customerId, date: TODAY, lines: [], received: "", method: "cash", focusKey: null, zeroRated: { withPayment: null, shippingBillNumber: "", shippingBillDate: "", portCode: "" } };
+}
+
+/** Under the LUT (no IGST) by default while it is valid on the invoice date, as the server decides. */
+export function lutValidOn(day: string): boolean {
+  return WORKSPACE.lut !== null && WORKSPACE.lut.validUntil >= day;
+}
+
+/** The body's `zeroRated` part: the choice made, and the shipping bill for an export when given. */
+export function zeroRatedBody(view: DraftView) {
+  const z = view.zeroRated;
+  if (!z) return {};
+  const c = view.draft.zeroRated;
+  return {
+    zeroRated: {
+      withPayment: z.withPayment,
+      ...(z.kind === "export" && c.shippingBillNumber.trim() ? { shippingBillNumber: c.shippingBillNumber.trim() } : {}),
+      ...(z.kind === "export" && c.shippingBillDate ? { shippingBillDate: c.shippingBillDate } : {}),
+      ...(z.kind === "export" && c.portCode.trim() ? { portCode: c.portCode.trim().toUpperCase() } : {}),
+    },
+  };
 }
 
 
@@ -172,6 +208,8 @@ export interface DraftView {
   reorder: ReorderRow[];
   credit: CreditCheck | null;
   dueDate: string;
+  /** An export or supply to SEZ (zero-rated), and whether IGST is paid on it; null for other sales. */
+  zeroRated: { kind: ZeroRatedKind; withPayment: boolean; type: ZeroRatedType } | null;
 }
 
 export function useInvoiceDraft(initialCustomerId: string | null = null): DraftView {
@@ -179,7 +217,12 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
   const version = useStoreVersion();
   const customer = draft.customerId ? customerById.get(draft.customerId) ?? null : null;
   const insight = useCustomerInsight(customer?.id ?? null);
-  const placeOfSupply = customer?.stateCode ?? BUSINESS.stateCode;
+  // Only a regular registrant makes zero-rated supplies; an export's place of supply is abroad (96).
+  const zeroRatedKind = WORKSPACE.chargeTax ? zeroRatedKindFor(customer?.gstRegistration) : null;
+  const withPayment = draft.zeroRated.withPayment ?? !lutValidOn(draft.date);
+  const zeroRated = zeroRatedKind ? { kind: zeroRatedKind, withPayment, type: zeroRatedTypeOf(zeroRatedKind, withPayment) } : null;
+  const withoutPayment = zeroRated !== null && !zeroRated.withPayment;
+  const placeOfSupply = zeroRatedKind === "export" ? "96" : (customer?.stateCode ?? BUSINESS.stateCode);
   const supplyType = determineSupplyType({
     supplierStateCode: BUSINESS.stateCode,
     placeOfSupplyStateCode: placeOfSupply,
@@ -198,6 +241,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
       const t = calculateDocument({
         supplyType,
         chargeTax: WORKSPACE.chargeTax,
+        withoutPayment,
         roundOff: WORKSPACE.roundOff,
         amountPaid: draft.received.trim() === "" ? 0 : Number(draft.received) || 0,
         lines: draft.lines.map((l) => {
@@ -225,7 +269,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
     } catch (e) {
       return { totals: null, error: e instanceof DomainError ? e : new DomainError("generic", String(e)) };
     }
-  }, [draft.lines, draft.received, draft.date, supplyType]);
+  }, [draft.lines, draft.received, draft.date, supplyType, withoutPayment]);
 
   const suggestions = useMemo(() => {
     if (!insight) return [];
@@ -270,5 +314,6 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
     reorder,
     credit,
     dueDate: addDays(draft.date, customer?.creditDays ?? 0),
+    zeroRated,
   };
 }

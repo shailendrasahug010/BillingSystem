@@ -63,7 +63,7 @@ describe("GSTR-1", () => {
   const result = buildGstr1({ gstin: "23AAPFK1234K1ZX", period: "2026-09", b2clThreshold: "100000", hsnMinDigits: 4, rows: OUTWARD, originalInvoices: originals });
 
   it("sorts each document into its table (golden file)", () => {
-    expect(result.version).toBe("gstr1-json@2025.05");
+    expect(result.version).toBe("gstr1-json@2026.10");
     expect(result.json).toEqual({
       gstin: "23AAPFK1234K1ZX",
       fp: "092026",
@@ -192,5 +192,73 @@ describe("GSTR-3B", () => {
     const v = utiliseCredit({ igst: "0", cgst: "0", sgst: "50", cess: "0" }, { igst: "0", cgst: "80", sgst: "0", cess: "0" });
     expect(v.remaining.sgst).toBe("50.00");
     expect(v.creditLeft.cgst).toBe("80.00");
+  });
+});
+
+describe("exports and supplies to SEZ (zero-rated)", () => {
+  const SEZ = "27AABCS1429B1ZB";
+  const rows: GstRegisterRow[] = [
+    // Export on payment of IGST, shipping bill known.
+    row({ docNumber: "EXP/1", partyName: "Gulf Traders LLC", placeOfSupply: "96", supplyType: "inter_state", zeroRatedType: "EXPWP", shippingBill: { number: "7894561", date: "2026-09-12", portCode: "INMUN1" }, hsnCode: "1905", qty: "500", taxableValue: "50000", gstRate: "18", igst: "9000", documentValue: "59000" }),
+    // Export under LUT: no tax, the rate kept; shipping bill not yet in.
+    row({ docNumber: "EXP/2", placeOfSupply: "96", supplyType: "inter_state", zeroRatedType: "EXPWOP", hsnCode: "1905", qty: "200", taxableValue: "20000", gstRate: "18", documentValue: "20000" }),
+    // Supplies to an SEZ unit (in Maharashtra), with and without payment.
+    row({ docNumber: "INV/9", partyGstin: SEZ, placeOfSupply: "27", supplyType: "inter_state", zeroRatedType: "SEZWP", hsnCode: "3402", qty: "10", taxableValue: "10000", gstRate: "18", igst: "1800", documentValue: "11800" }),
+    row({ docNumber: "INV/10", partyGstin: SEZ, placeOfSupply: "27", supplyType: "inter_state", zeroRatedType: "SEZWOP", hsnCode: "3402", qty: "5", taxableValue: "5000", gstRate: "18", documentValue: "5000" }),
+    // Notes on them carry the invoice's type.
+    row({ docNumber: "CN/7", docType: "credit_note", originalDocNumber: "EXP/2", placeOfSupply: "96", supplyType: "inter_state", zeroRatedType: "EXPWOP", hsnCode: "1905", qty: "10", taxableValue: "1000", gstRate: "18", documentValue: "1000" }),
+    row({ docNumber: "CN/8", docType: "credit_note", originalDocNumber: "INV/9", partyGstin: SEZ, placeOfSupply: "27", supplyType: "inter_state", zeroRatedType: "SEZWP", hsnCode: "3402", qty: "1", taxableValue: "1000", gstRate: "18", igst: "180", documentValue: "1180" }),
+    // An ordinary local sale in the same month.
+    row({ docNumber: "INV/11", hsnCode: "1905", qty: "10", taxableValue: "100", gstRate: "18", cgst: "9", sgst: "9", documentValue: "118" }),
+  ];
+  const result = buildGstr1({ gstin: "23AAGFG5678G1ZA", period: "2026-09", b2clThreshold: "100000", hsnMinDigits: 4, rows });
+  const j = result.json as Record<string, any>;
+
+  it("files exports in the EXP table, by with and without payment of IGST, with the shipping bill", () => {
+    expect(j.exp).toEqual([
+      { exp_typ: "WPAY", inv: [{ inum: "EXP/1", idt: "10-09-2026", val: 59000, sbpcode: "INMUN1", sbnum: "7894561", sbdt: "12-09-2026", itms: [{ txval: 50000, rt: 18, iamt: 9000, csamt: 0 }] }] },
+      { exp_typ: "WOPAY", inv: [{ inum: "EXP/2", idt: "10-09-2026", val: 20000, itms: [{ txval: 20000, rt: 18, iamt: 0, csamt: 0 }] }] },
+    ]);
+    expect(j.b2cl).toBeUndefined();
+    expect(j.b2cs).toEqual([{ sply_ty: "INTRA", pos: "23", typ: "OE", txval: 100, rt: 18, iamt: 0, camt: 9, samt: 9, csamt: 0 }]);
+    expect(result.warnings).toContainEqual({ code: "SHIPPING_BILL_MISSING", docNumber: "EXP/2" });
+  });
+
+  it("files supplies to SEZ with B2B as SEWP / SEWOP, and the notes in CDNR / CDNUR by the invoice's type", () => {
+    expect(j.b2b).toEqual([
+      {
+        ctin: SEZ,
+        inv: [
+          { inum: "INV/10", idt: "10-09-2026", val: 5000, pos: "27", rchrg: "N", inv_typ: "SEWOP", itms: [{ num: 1, itm_det: { txval: 5000, rt: 18, iamt: 0, camt: 0, samt: 0, csamt: 0 } }] },
+          { inum: "INV/9", idt: "10-09-2026", val: 11800, pos: "27", rchrg: "N", inv_typ: "SEWP", itms: [{ num: 1, itm_det: { txval: 10000, rt: 18, iamt: 1800, camt: 0, samt: 0, csamt: 0 } }] },
+        ],
+      },
+    ]);
+    expect(j.cdnr[0].nt).toEqual([{ ntty: "C", nt_num: "CN/8", nt_dt: "10-09-2026", val: 1180, pos: "27", rchrg: "N", inv_typ: "SEWP", itms: [{ num: 1, itm_det: { txval: 1000, rt: 18, iamt: 180, camt: 0, samt: 0, csamt: 0 } }] }]);
+    expect(j.cdnur).toEqual([{ typ: "EXPWOP", ntty: "C", nt_num: "CN/7", nt_dt: "10-09-2026", val: 1000, itms: [{ num: 1, itm_det: { txval: 1000, rt: 18, iamt: 0, csamt: 0 } }] }]);
+  });
+
+  it("puts exports in the B2C HSN table and SEZ in B2B, and sums the EXP section", () => {
+    expect(j.hsn.hsn_b2b).toEqual([{ num: 1, hsn_sc: "3402", desc: "", uqc: "PCS", qty: 14, rt: 18, txval: 14000, iamt: 1620, camt: 0, samt: 0, csamt: 0 }]);
+    expect(j.hsn.hsn_b2c.find((h: { hsn_sc: string; rt: number }) => h.hsn_sc === "1905" && h.rt === 18)).toMatchObject({ qty: 700, txval: 69100, iamt: 9000 });
+    expect(result.summary.find((s) => s.section === "exp")).toEqual({ section: "exp", records: 2, value: "79000.00", taxable: "70000.00", igst: "9000.00", cgst: "0.00", sgst: "0.00", cess: "0.00" });
+  });
+
+  it("writes the offline tool's export sheet and names SEZ invoice types", () => {
+    expect(gstr1Csv(result, "exp")).toEqual([
+      ["Export Type", "Invoice Number", "Invoice date", "Invoice Value", "Port Code", "Shipping Bill Number", "Shipping Bill Date", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount"],
+      ["WPAY", "EXP/1", "10-Sep-2026", "59000", "INMUN1", "7894561", "12-Sep-2026", "", "18", "50000", "0"],
+      ["WOPAY", "EXP/2", "10-Sep-2026", "20000", "", "", "", "", "18", "20000", "0"],
+    ]);
+    expect(gstr1Csv(result, "b2b").slice(1).map((r) => r[8])).toEqual(["SEZ supplies without payment", "SEZ supplies with payment"]);
+    expect(gstr1Csv(result, "cdnur")[1]!.slice(0, 5)).toEqual(["EXPWOP", "CN/7", "10-Sep-2026", "C", ""]);
+  });
+
+  it("shows exports and SEZ in GSTR-3B 3.1(b), with the IGST paid on them due, and not in 3.2", () => {
+    const r3b = buildGstr3b("2026-09", rows);
+    expect(r3b.outward.zeroRated).toEqual({ taxable: "83000.00", igst: "10620.00", cgst: "0.00", sgst: "0.00", cess: "0.00" });
+    expect(r3b.outward.taxable).toEqual({ taxable: "100.00", igst: "0.00", cgst: "9.00", sgst: "9.00", cess: "0.00" });
+    expect(r3b.interStateUnregistered).toEqual([]);
+    expect(r3b.payment.liability).toEqual({ igst: "10620.00", cgst: "9.00", sgst: "9.00", cess: "0.00" });
   });
 });

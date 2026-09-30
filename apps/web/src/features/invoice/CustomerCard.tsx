@@ -8,6 +8,7 @@ import { TODAY, WORKSPACE } from "../../data/db";
 import type { CustomerInsight } from "../../data/store";
 import type { Customer } from "../../data/types";
 import { cn } from "../../lib/cn";
+import { customerKind, kindLabel } from "../customers/customerKind";
 
 export const BEHAVIOUR_TONE: Record<string, Tone> = { excellent: "good", good: "good", slow: "warn", risky: "danger", new: "neutral" };
 
@@ -45,7 +46,7 @@ export function CustomerCard({
             <button type="button" className="truncate text-left font-display text-[17px] font-semibold text-ink hover:underline" onClick={() => navigate({ name: "customer", customerId: customer.id })}>
               {customer.businessName}
             </button>
-            <Badge tone={customer.type === "b2b" ? "accent" : "neutral"}>{customer.type === "b2b" ? t("customer.b2b") : t("customer.b2c")}</Badge>
+            <Badge tone={customer.type === "b2b" || customerKind(customer) === "export" ? "accent" : "neutral"}>{t(kindLabel(customer))}</Badge>
             <Badge tone={BEHAVIOUR_TONE[insight.behaviour.rating]} dot>
               {t(`behaviour.${insight.behaviour.rating}`)}
             </Badge>
@@ -65,7 +66,7 @@ export function CustomerCard({
             </span>
             <span className="inline-flex items-center gap-1">
               <MapPin size={12} />
-              {customer.city}, {locale === "hi" ? state?.nameHi : state?.name}
+              {[customer.city, locale === "hi" ? state?.nameHi : state?.name].filter(Boolean).join(", ")}
             </span>
             {customer.gstin && <span className="font-mono text-[12px]">GSTIN {customer.gstin}</span>}
           </p>

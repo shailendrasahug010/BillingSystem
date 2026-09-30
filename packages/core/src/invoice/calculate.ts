@@ -50,6 +50,8 @@ export interface DocumentInput {
   lines: readonly DocumentLineInput[];
   supplyType: SupplyType;
   chargeTax: boolean;
+  /** Export / SEZ supply under bond or LUT: no tax, rates kept (see TaxLineOptions.withoutPayment). */
+  withoutPayment?: boolean;
   /** Pre-tax invoice discount, apportioned across lines so GST is charged on the reduced value. */
   documentDiscount?: DocumentDiscount | null;
   charges?: readonly ChargeInput[];
@@ -142,6 +144,7 @@ function lineNetBeforeDocumentDiscount(line: DocumentLineInput): Dec {
 
 export function calculateDocument(input: DocumentInput): DocumentTotals {
   const { supplyType, chargeTax } = input;
+  const withoutPayment = input.withoutPayment === true;
   const nets = input.lines.map(lineNetBeforeDocumentDiscount);
   const netTotal = sum(nets);
 
@@ -168,7 +171,7 @@ export function calculateDocument(input: DocumentInput): DocumentTotals {
 
   const lines: LineResult[] = input.lines.map((line, i) => {
     const share = shares[i] ?? ZERO;
-    const result = calculateTaxLine({ ...line, apportionedDiscount: share }, { supplyType, chargeTax });
+    const result = calculateTaxLine({ ...line, apportionedDiscount: share }, { supplyType, chargeTax, withoutPayment });
     return {
       ...result,
       key: line.key,
@@ -185,7 +188,7 @@ export function calculateDocument(input: DocumentInput): DocumentTotals {
     if (!charge.tax || amount.isZero()) {
       return { key: charge.key, label: charge.label, taxable: amount, cgst: ZERO, sgst: ZERO, igst: ZERO, cess: ZERO, gstRate: ZERO, total: amount };
     }
-    const r = calculateTaxLine({ qty: 1, rate: amount, tax: charge.tax }, { supplyType, chargeTax });
+    const r = calculateTaxLine({ qty: 1, rate: amount, tax: charge.tax }, { supplyType, chargeTax, withoutPayment });
     return { key: charge.key, label: charge.label, taxable: r.taxable, cgst: r.cgst, sgst: r.sgst, igst: r.igst, cess: r.cess, gstRate: r.gstRate, total: r.total };
   });
 

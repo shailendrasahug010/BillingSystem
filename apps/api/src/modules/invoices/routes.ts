@@ -1,4 +1,4 @@
-import { CancelBody, InvoiceBody, InvoiceListQuery } from "@vyapaar/contracts";
+import { CancelBody, InvoiceBody, InvoiceListQuery, ShippingBillBody } from "@vyapaar/contracts";
 import { addDays, amountInWords, dec, evaluateCredit, taxComponentLabels, toAmountString, toQtyString, toRateString, type DocumentTotals, type OpenDocument } from "@vyapaar/core";
 import { schema, type Tx } from "@vyapaar/db";
 import { and, asc, eq, gt, sql, type SQL } from "drizzle-orm";
@@ -236,6 +236,11 @@ export async function postInvoice(
     costTotal: toAmountString(costTotal),
     notes: body.notes ?? null,
     printLocale: body.printLocale ?? sale.settings["invoice.default_print_locale"],
+    zeroRatedType: sale.zeroRatedType,
+    shippingBillNumber: sale.shippingBill.number,
+    shippingBillDate: sale.shippingBill.date,
+    portCode: sale.shippingBill.portCode,
+    lutArn: sale.lutArn,
     postedAt: deps.clock.now().toISOString(),
     postedBy: ctx.userId,
     clientId,
@@ -358,6 +363,7 @@ export async function postInvoice(
     placeOfSupply: sale.placeOfSupply,
     supplyType: sale.supplyType,
     documentValue: toAmountString(t.grandTotal),
+    zeroRatedType: sale.zeroRatedType,
   };
   await tx.insert(schema.gstTransactions).values([
     ...sale.lines.map((p, i) => {
@@ -466,6 +472,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
         documentKind: sale.documentKind,
         placeOfSupply: sale.placeOfSupply,
         supplyType: sale.supplyType,
+        zeroRatedType: sale.zeroRatedType,
         taxLabels: taxComponentLabels(sale.placeOfSupply),
         lines: sale.lines.map((l) => ({ key: l.key, productId: l.productId, productName: l.productName, unitId: l.unitId, listRate: l.listRate, hsnCode: l.hsnCode })),
         totals: totalsOut(sale.totals),
@@ -537,6 +544,38 @@ export const invoicesModule: ApiModule = async (app, deps) => {
     );
     return page(rows, q.limit, (x) => ({ v: x.invoiceDate, id: x.id }));
   });
+
+  /**
+   * An export's shipping bill (number, date, port), usually known only after the invoice.
+   * It is not part of the tax: changing it is allowed after the month's GSTR-1 is locked.
+   */
+  r.patch(
+    "/invoices/:id/shipping-bill",
+    { preHandler: guard(deps, "invoice.update"), schema: { tags: ["invoices"], params: IdParams, body: ShippingBillBody } },
+    async (request) => {
+      const ctx = request.ctx;
+      const body = request.body;
+      return tenant(ctx, async (tx) => {
+        const [inv] = await tx
+          .select()
+          .from(schema.invoices)
+          .where(and(eq(schema.invoices.id, request.params.id), eq(schema.invoices.businessId, ctx.businessId)));
+        if (!inv) throw notFound("invoice");
+        if (!inv.zeroRatedType?.startsWith("EXP")) throw badRequest("SHIPPING_BILL_NOT_EXPORT");
+        if (inv.status === "cancelled") throw new ApiError(409, "INVOICE_CANCELLED");
+        if (body.shippingBillDate && body.shippingBillDate < inv.invoiceDate) throw badRequest("SHIPPING_BILL_BEFORE_INVOICE", {}, "shippingBillDate");
+        const next = { shippingBillNumber: body.shippingBillNumber, shippingBillDate: body.shippingBillDate, portCode: body.portCode };
+        const changes = Object.fromEntries(
+          (Object.keys(next) as Array<keyof typeof next>).flatMap((k) => (inv[k] !== next[k] ? [[k, [inv[k], next[k]]]] : [])),
+        );
+        if (Object.keys(changes).length) {
+          await tx.update(schema.invoices).set({ ...next, updatedAt: sql`now()`, updatedBy: ctx.userId }).where(eq(schema.invoices.id, inv.id));
+          await audit(tx, ctx, { action: "invoice.shipping_bill_updated", entityType: "invoice", entityId: inv.id, entityLabel: inv.invoiceNumber ?? undefined, changes });
+        }
+        return invoiceDetail(tx, ctx, inv.id);
+      });
+    },
+  );
 
   r.get("/invoices/:id", { preHandler: guard(deps, "invoice.view"), schema: { tags: ["invoices"], params: IdParams } }, async (request) =>
     tenant(request.ctx, (tx) => invoiceDetail(tx, request.ctx, request.params.id)),

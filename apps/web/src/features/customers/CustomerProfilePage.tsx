@@ -22,6 +22,7 @@ import { AddCustomerDialog } from "./AddCustomerDialog";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
 import { translateError } from "@vyapaar/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
+import { customerKind, kindLabel } from "./customerKind";
 
 /** What each tab shows, and the permission it needs. */
 const TAB_PERMISSION = { overview: "customer.view", invoices: "invoice.view", payments: "payment.view", ledger: "customer.view_ledger", products: "customer.view" } as const;
@@ -121,7 +122,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-[24px] leading-tight font-semibold text-ink">{customer.businessName}</h1>
-              <Badge tone={customer.type === "b2b" ? "accent" : "neutral"}>{customer.type === "b2b" ? t("customer.b2b") : t("customer.b2c")}</Badge>
+              <Badge tone={customer.type === "b2b" || customerKind(customer) === "export" ? "accent" : "neutral"}>{t(kindLabel(customer))}</Badge>
               <Badge>{customer.category}</Badge>
             </div>
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-ink-3">

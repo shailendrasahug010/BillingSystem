@@ -20,6 +20,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "suggestions.window_days": 365,
   "backup.schedule": { frequency: "daily", time: "02:00", retainDays: 30 },
   "offline.wipe_after_days": 30,
+  "gst.lut": null,
 };
 
 export const isSettingKey = (key: string): key is SettingKey => Object.hasOwn(SETTING_SCHEMAS, key);

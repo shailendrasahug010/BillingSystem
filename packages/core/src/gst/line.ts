@@ -61,6 +61,12 @@ export interface TaxLineOptions {
   supplyType: SupplyType;
   /** False for Bill of Supply (composition / unregistered supplier): no tax is charged. */
   chargeTax: boolean;
+  /**
+   * A zero-rated supply (export, supply to an SEZ) under bond or letter of
+   * undertaking: no tax is charged, the price is the taxable value (never
+   * back-calculated), and the GST rate is kept because the returns report it.
+   */
+  withoutPayment?: boolean;
 }
 
 /**
@@ -106,8 +112,9 @@ export function calculateTaxLine(input: TaxLineInput, options: TaxLineOptions): 
   const cessRate = tax ? tax.cessRate : ZERO;
   const specificCess = tax ? roundAmount(qtyBase.times(tax.cessPerUnit)) : ZERO;
 
+  const lut = options.withoutPayment === true && tax !== null;
   let taxable: Dec;
-  if (input.rateIncludesTax && tax) {
+  if (input.rateIncludesTax && tax && !lut) {
     const divisor = HUNDRED.plus(gstRate).plus(cessRate).dividedBy(HUNDRED);
     taxable = roundAmount(net.minus(specificCess).dividedBy(divisor));
     if (taxable.isNegative()) taxable = ZERO;
@@ -116,14 +123,14 @@ export function calculateTaxLine(input: TaxLineInput, options: TaxLineOptions): 
   }
 
   const intra = options.supplyType === "intra_state";
-  const halfRate = gstRate.dividedBy(2);
+  const halfRate = lut ? ZERO : gstRate.dividedBy(2);
   const cgstRate = intra ? halfRate : ZERO;
   const sgstRate = intra ? halfRate : ZERO;
-  const igstRate = intra ? ZERO : gstRate;
+  const igstRate = intra || lut ? ZERO : gstRate;
   const cgst = roundAmount(pct(taxable, cgstRate));
   const sgst = roundAmount(pct(taxable, sgstRate));
   const igst = roundAmount(pct(taxable, igstRate));
-  const cess = roundAmount(pct(taxable, cessRate)).plus(specificCess);
+  const cess = lut ? ZERO : roundAmount(pct(taxable, cessRate)).plus(specificCess);
   const taxTotal = cgst.plus(sgst).plus(igst).plus(cess);
 
   return {

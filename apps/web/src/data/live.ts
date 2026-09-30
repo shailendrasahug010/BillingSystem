@@ -73,6 +73,8 @@ export interface CustomerRow {
   name: string;
   businessName: string | null;
   customerType: "b2b" | "b2c";
+  /** regular, consumer, sez (an SEZ unit), overseas (a buyer abroad)… */
+  gstRegistration?: string;
   mobile: string | null;
   city: string | null;
   gstin: string | null;
@@ -119,7 +121,7 @@ function mapCustomer(c: CustomerRow, routeName: Map<string, string>): Customer {
     priceLevel: level?.name.toLowerCase() === "wholesale" ? "wholesale" : "retail",
     openingBalance: 0,
     priceLevelId: c.priceLevelId,
-    gstRegistration: c.gstin ? "regular" : "consumer",
+    gstRegistration: c.gstRegistration ?? (c.gstin ? "regular" : "consumer"),
     balance: Number(c.balance),
     overdue: Number(c.overdue),
     ...(c.version !== undefined ? { version: c.version } : {}),
@@ -207,6 +209,7 @@ export function applyMe(me: MeResponse): void {
     permissions: new Set(me.permissions),
     printLocale: (me.settings["invoice.default_print_locale"] as string | undefined) ?? "en",
     invoiceTerms: (me.settings["invoice.terms"] as string | undefined) ?? "",
+    lut: (me.settings["gst.lut"] as typeof WORKSPACE.lut | undefined) ?? null,
     role: b.role,
     ...(roundOff ? { roundOff } : {}),
     ...(creditPolicy ? { creditPolicy } : {}),

@@ -3,10 +3,11 @@ import { MessageCircle, Printer, Save } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
+import { Field, Input } from "../../components/ui/Field";
 import { Kbd } from "../../components/ui/misc";
-import { allowed, BUSINESS } from "../../data/db";
+import { allowed, BUSINESS, WORKSPACE } from "../../data/db";
 import { cn } from "../../lib/cn";
-import type { DraftView } from "./useInvoiceDraft";
+import { lutValidOn, type DraftView } from "./useInvoiceDraft";
 import { stateName } from "../../lib/states";
 
 function Row({ label, value, strong, muted, negative }: { label: ReactNode; value: string; strong?: boolean; muted?: boolean; negative?: boolean }) {
@@ -39,6 +40,64 @@ export function PaymentModes({ value, onChange, size = "md" }: { value: PaymentM
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * An export or a supply to an SEZ unit: IGST paid now (refunded later) or not
+ * charged under the LUT / bond, and for an export the shipping bill, which can
+ * also be added on the invoice later.
+ */
+function ZeroRatedChoice({ view }: { view: DraftView }) {
+  const { t, date, locale } = useI18n();
+  const { draft, dispatch } = view;
+  const z = view.zeroRated!;
+  const c = draft.zeroRated;
+  const lut = WORKSPACE.lut;
+  const set = (patch: Partial<typeof c>) => dispatch({ type: "zeroRated", patch });
+  const option = (withPayment: boolean, label: string) => (
+    <label className="flex cursor-pointer items-center gap-2 text-[13px] text-ink">
+      <input type="radio" name="zero-rated" className="size-4 accent-[var(--accent)]" checked={z.withPayment === withPayment} onChange={() => set({ withPayment })} />
+      {label}
+    </label>
+  );
+  return (
+    <section className="flex flex-col gap-2.5 rounded-xl bg-accent-soft/60 px-3 py-2.5 text-[12.5px] text-ink-2" aria-labelledby="zero-rated-h">
+      <div>
+        <p id="zero-rated-h" className="font-medium text-ink">
+          {t(z.kind === "export" ? "invoice.export.titleExport" : "invoice.export.titleSez")} · {t("invoice.supplyInter")}
+        </p>
+        <p>
+          {t("invoice.placeOfSupply")}: {stateName(z.kind === "export" ? "96" : (view.customer?.stateCode ?? ""), locale)}
+        </p>
+        <p className="mt-1 text-ink-3">{t("invoice.export.hint")}</p>
+      </div>
+      <div role="radiogroup" aria-labelledby="zero-rated-h" className="flex flex-col gap-1.5">
+        {option(false, t("invoice.export.underLut"))}
+        {option(true, t("invoice.export.withPayment"))}
+      </div>
+      {!z.withPayment &&
+        (lut && lutValidOn(draft.date) ? (
+          <p className="text-ink-3">{t("invoice.export.lutSaved", { arn: lut.arn, until: date(lut.validUntil) })}</p>
+        ) : (
+          <p className="rounded-lg bg-warn-soft px-2.5 py-1.5 text-warn">{t("invoice.export.noLut")}</p>
+        ))}
+      {z.kind === "export" && (
+        <div className="grid grid-cols-2 gap-2 border-t border-line/70 pt-2.5">
+          <Field label={t("invoice.export.shippingBillNumber")} htmlFor="sb-number">
+            <Input id="sb-number" inputSize="sm" inputMode="numeric" maxLength={20} value={c.shippingBillNumber} onChange={(e) => set({ shippingBillNumber: e.target.value.replace(/\D/g, "") })} />
+          </Field>
+          <Field label={t("invoice.export.portCode")} htmlFor="sb-port">
+            <Input id="sb-port" inputSize="sm" maxLength={6} className="[&_input]:font-mono [&_input]:uppercase" placeholder="INNSA1" value={c.portCode} onChange={(e) => set({ portCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} />
+          </Field>
+          <div className="col-span-2">
+            <Field label={t("invoice.export.shippingBillDate")} htmlFor="sb-date" hint={t("invoice.export.later")}>
+              <Input id="sb-date" inputSize="sm" type="date" min={draft.date} value={c.shippingBillDate} onChange={(e) => set({ shippingBillDate: e.target.value })} />
+            </Field>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -76,12 +135,16 @@ export function SummaryPanel({
         </div>
       </div>
 
-      <div className="rounded-xl bg-accent-soft/60 px-3 py-2 text-[12.5px] text-ink-2">
-        <p className="font-medium text-ink">{intra ? t("invoice.supplyIntra", { state: stateComponent }) : t("invoice.supplyInter")}</p>
-        <p>
-          {t("invoice.placeOfSupply")}: {pos ? stateName(pos.code, locale) : "—"}
-        </p>
-      </div>
+      {view.zeroRated ? (
+        <ZeroRatedChoice view={view} />
+      ) : (
+        <div className="rounded-xl bg-accent-soft/60 px-3 py-2 text-[12.5px] text-ink-2">
+          <p className="font-medium text-ink">{intra ? t("invoice.supplyIntra", { state: stateComponent }) : t("invoice.supplyInter")}</p>
+          <p>
+            {t("invoice.placeOfSupply")}: {pos ? stateName(pos.code, locale) : "—"}
+          </p>
+        </div>
+      )}
 
       <dl className="flex flex-col gap-2">
         <Row label={t("invoice.lineCount", { count: totals?.lineCount ?? 0, qty: totals ? totals.totalQty.toString() : "0" })} value="" muted />

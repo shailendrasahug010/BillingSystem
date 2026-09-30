@@ -151,13 +151,16 @@ export const businessModule: ApiModule = async (app, deps) => {
           .select({ value: schema.settings.value })
           .from(schema.settings)
           .where(and(eq(schema.settings.businessId, ctx.businessId), eq(schema.settings.key, key)));
-        await tx
-          .insert(schema.settings)
-          .values({ businessId: ctx.businessId, key, value: parsed.data, updatedBy: ctx.userId })
-          .onConflictDoUpdate({
-            target: [schema.settings.businessId, schema.settings.key],
-            set: { value: parsed.data, updatedBy: ctx.userId, updatedAt: deps.clock.now().toISOString() },
-          });
+        // Cleared (null, e.g. no LUT any more): the stored row goes and the default, none, applies.
+        if (parsed.data === null) await tx.delete(schema.settings).where(and(eq(schema.settings.businessId, ctx.businessId), eq(schema.settings.key, key)));
+        else
+          await tx
+            .insert(schema.settings)
+            .values({ businessId: ctx.businessId, key, value: parsed.data, updatedBy: ctx.userId })
+            .onConflictDoUpdate({
+              target: [schema.settings.businessId, schema.settings.key],
+              set: { value: parsed.data, updatedBy: ctx.userId, updatedAt: deps.clock.now().toISOString() },
+            });
         await audit(tx, ctx, { action: "setting.changed", entityType: "setting", entityLabel: key, changes: { [key]: [before?.value ?? null, parsed.data] } });
         return { key, value: parsed.data };
       });

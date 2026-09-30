@@ -13,7 +13,11 @@ import type { Customer } from "../../data/types";
 import { ApiError } from "../../lib/api";
 import { stateOptions } from "../../lib/states";
 import { useOffline } from "../../offline/sync";
+import { customerKind as kindOf, type CustomerKind } from "./customerKind";
 import { createCustomer, editCustomer, NotKeptOffline, type CustomerInput } from "./saveCustomer";
+
+const REGISTRATION: Record<CustomerKind, string> = { b2b: "regular", b2c: "consumer", sez: "sez", export: "overseas" };
+const FOREIGN = "96";
 
 /**
  * Only the fields a counter clerk needs to start billing, and the selling
@@ -43,7 +47,9 @@ export function AddCustomerDialog({
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<ApiError | null>(null);
   const toast = useToast();
-  const [type, setType] = useState<"b2b" | "b2c">("b2b");
+  const [kind, setKind] = useState<CustomerKind>("b2b");
+  const type: "b2b" | "b2c" = kind === "b2b" || kind === "sez" ? "b2b" : "b2c";
+  const abroad = kind === "export";
   const offline = useOffline();
   const workingOffline = offline.offlineMode || !offline.online;
   const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "", address: "", city: "" });
@@ -67,7 +73,7 @@ export function AddCustomerDialog({
   // Editing: start from the customer as they are.
   useEffect(() => {
     if (!open || !customer) return;
-    setType(customer.type);
+    setKind(kindOf(customer));
     setForm(fromCustomer(customer));
     setTouched({});
     setServerError(null);
@@ -80,7 +86,7 @@ export function AddCustomerDialog({
     const digits = typed.replace(/\D/g, "");
     const gstin = normalizeGstin(typed);
     if (/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
-      setType("b2b");
+      setKind("b2b");
       setForm({ ...blank(), gstin, stateCode: GST_STATES.some((x) => x.code === stateCodeFromGstin(gstin)) ? stateCodeFromGstin(gstin) : blank().stateCode });
     } else if (digits.length >= 10 && digits.length === typed.replace(/[\s+-]/g, "").length) setForm({ ...blank(), mobile: digits.slice(-10) });
     else setForm({ ...blank(), businessName: typed });
@@ -99,7 +105,7 @@ export function AddCustomerDialog({
   const errors = {
     businessName: form.businessName.trim() ? null : t("validation.required"),
     mobile: issueText(validateMobile(form.mobile), "mobile"),
-    pincode: form.pincode ? issueText(validatePincode(form.pincode), "pincode") : null,
+    pincode: form.pincode && !abroad ? issueText(validatePincode(form.pincode), "pincode") : null,
     gstin: type === "b2b" ? issueText(gstinIssues, "gstin") : null,
   };
   const valid = Object.values(errors).every((e) => !e);
@@ -111,10 +117,11 @@ export function AddCustomerDialog({
     name: form.name.trim() || form.businessName.trim(),
     businessName: form.businessName.trim(),
     customerType: type,
+    gstRegistration: REGISTRATION[kind],
     ...(form.mobile ? { mobile: form.mobile } : {}),
-    stateCode: form.stateCode,
+    stateCode: abroad ? FOREIGN : form.stateCode,
     ...(type === "b2b" && form.gstin ? { gstin: form.gstin } : {}),
-    ...(form.pincode ? { pincode: form.pincode } : {}),
+    ...(form.pincode && !abroad ? { pincode: form.pincode } : {}),
     ...(form.creditLimit ? { creditLimit: form.creditLimit } : {}),
     ...(form.priceLevelId ? { priceLevelId: form.priceLevelId } : {}),
     ...(form.address.trim() ? { addressLine1: form.address.trim() } : {}),
@@ -128,8 +135,9 @@ export function AddCustomerDialog({
     if (now.businessName !== c.businessName) patch.businessName = now.businessName;
     if (now.name !== c.name) patch.name = now.name;
     if (type !== c.type) patch.customerType = type;
+    if (kind !== kindOf(c)) patch.gstRegistration = now.gstRegistration!;
     if (form.mobile !== was.mobile && now.mobile) patch.mobile = now.mobile;
-    if (form.stateCode !== was.stateCode) patch.stateCode = form.stateCode;
+    if (now.stateCode !== was.stateCode) patch.stateCode = now.stateCode;
     if (type === "b2b" && form.gstin !== was.gstin && now.gstin) patch.gstin = now.gstin;
     if (form.pincode !== was.pincode && now.pincode) patch.pincode = now.pincode;
     if (form.creditLimit !== was.creditLimit) patch.creditLimit = form.creditLimit || null;
@@ -204,13 +212,21 @@ export function AddCustomerDialog({
         <div className="sm:col-span-2">
           <Segmented
             label={t("customer.type")}
-            value={type}
-            onChange={setType}
+            value={kind}
+            onChange={(k) => {
+              setKind(k);
+              // Back from export: a place in India again.
+              if (k !== "export" && form.stateCode === FOREIGN) set("stateCode", BUSINESS.stateCode || "23");
+            }}
+            size="sm"
             options={[
               { value: "b2b", label: `${t("customer.b2b")} · GSTIN` },
               { value: "b2c", label: t("customer.b2c") },
+              { value: "sez", label: t("customer.sez") },
+              { value: "export", label: t("customer.export") },
             ]}
           />
+          {(kind === "sez" || abroad) && <p className="mt-1.5 text-[12.5px] text-ink-3">{t(abroad ? "customer.exportHint" : "customer.sezHint")}</p>}
         </div>
         <Field label={t("customer.businessName")} htmlFor="c-business" error={show("businessName")}>
           <Input id="c-business" value={form.businessName} onChange={(e) => set("businessName", e.target.value)} onBlur={() => setTouched((x) => ({ ...x, businessName: true }))} invalid={Boolean(show("businessName"))} />
@@ -239,18 +255,24 @@ export function AddCustomerDialog({
             />
           </Field>
         )}
-        <Field label={t("common.state")} htmlFor="c-state">
-          <Select id="c-state" value={form.stateCode} onChange={(e) => set("stateCode", e.target.value)}>
-            {stateOptions(locale).map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={t("customer.pincode")} htmlFor="c-pin" error={show("pincode")}>
-          <Input id="c-pin" inputMode="numeric" maxLength={6} value={form.pincode} onChange={(e) => set("pincode", e.target.value)} onBlur={() => setTouched((x) => ({ ...x, pincode: true }))} invalid={Boolean(show("pincode"))} />
-        </Field>
+        {!abroad && (
+          <>
+            <Field label={t("common.state")} htmlFor="c-state">
+              <Select id="c-state" value={form.stateCode} onChange={(e) => set("stateCode", e.target.value)}>
+                {stateOptions(locale)
+                  .filter((s) => s.code !== FOREIGN)
+                  .map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t("customer.pincode")} htmlFor="c-pin" error={show("pincode")}>
+              <Input id="c-pin" inputMode="numeric" maxLength={6} value={form.pincode} onChange={(e) => set("pincode", e.target.value)} onBlur={() => setTouched((x) => ({ ...x, pincode: true }))} invalid={Boolean(show("pincode"))} />
+            </Field>
+          </>
+        )}
         {customer && (
           <>
             <Field label={t("customer.address")} htmlFor="c-address">
