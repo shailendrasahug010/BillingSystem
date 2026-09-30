@@ -19,6 +19,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "suggestions.weights": { reorder: 1, frequent: 0.6, together: 0.5, last_order: 0.3 },
   "suggestions.window_days": 365,
   "backup.schedule": { frequency: "daily", time: "02:00", retainDays: 30 },
+  "offline.wipe_after_days": 30,
 };
 
 export const isSettingKey = (key: string): key is SettingKey => Object.hasOwn(SETTING_SCHEMAS, key);

@@ -24,7 +24,15 @@ export interface SnapshotMeta {
   businessId: string;
   userName: string;
   businessName: string;
+  /** When the copy was last saved from the server (the device last connected). */
+  savedAt?: string;
+  /** The business's rule: delete the copy after this many days without connecting (0 = never). */
+  wipeAfterDays?: number;
 }
+
+/** The copy went longer without connecting than the business allows: it is deleted instead of opened. */
+export const copyExpired = (meta: SnapshotMeta, now = Date.now()) =>
+  Boolean(meta.wipeAfterDays && meta.savedAt && now - Date.parse(meta.savedAt) > meta.wipeAfterDays * 86_400_000);
 
 interface Stored {
   userId: string;
@@ -41,7 +49,15 @@ export async function saveSnapshot(snapshot: Snapshot): Promise<boolean> {
   const sealed = await seal(snapshot, k);
   if (!sealed) return false;
   if (!(await idbPut("kv", { userId: snapshot.user.id, businessId: snapshot.business.id, sealed } satisfies Stored, k))) return false;
-  const meta: SnapshotMeta = { userId: snapshot.user.id, businessId: snapshot.business.id, userName: snapshot.user.name, businessName: snapshot.business.tradeName ?? snapshot.business.legalName };
+  const days = snapshot.me.settings["offline.wipe_after_days"];
+  const meta: SnapshotMeta = {
+    userId: snapshot.user.id,
+    businessId: snapshot.business.id,
+    userName: snapshot.user.name,
+    businessName: snapshot.business.tradeName ?? snapshot.business.legalName,
+    savedAt: snapshot.savedAt,
+    wipeAfterDays: typeof days === "number" ? days : 30,
+  };
   return idbPut("kv", meta, LAST);
 }
 

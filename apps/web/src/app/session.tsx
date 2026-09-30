@@ -5,9 +5,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { applyMe, applyWorkspace, hydrateWorkspace, resetWorkspace, type WorkspaceData } from "../data/live";
 import { LIVE } from "../data/source";
 import { api, ApiError, onSessionChange, refreshSession, setSession } from "../lib/api";
-import { ensureDevice } from "../offline/device";
+import { ensureDevice, removedDevices } from "../offline/device";
 import { clearDeviceDocuments, openDeviceDocuments, refreshDeviceDocuments } from "../offline/documents";
-import { clearSnapshots, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
+import { wipeBusinessCopy } from "../offline/wipe";
+import { clearSnapshots, copyExpired, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
 import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
 
@@ -45,6 +46,8 @@ interface SessionValue {
   locked: (SnapshotMeta & { passwordOpens: boolean }) | null;
   /** Opens the locked copy with the person's password. */
   unlock(password: string): Promise<"ok" | "wrong" | "none">;
+  /** The owner removed this device: what was deleted from it at start. */
+  wiped: { business: string | null; waiting: number } | null;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -70,7 +73,8 @@ async function keepOnDevice(res: SessionResponse, me: MeResponse, data: Workspac
   await openDeviceDocuments(userId, businessId);
   void refreshDeviceDocuments(true);
   void saveSnapshot({ user: res.user, business: res.business ?? me.business!, businesses: res.businesses, me, data, savedAt: new Date().toISOString() });
-  if (me.permissions.includes("invoice.create")) void ensureDevice(userId, businessId).then(refreshDevice);
+  // Every device that keeps a copy is registered, so the owner can remove it (a series only for those who bill).
+  void ensureDevice(userId, businessId).then(refreshDevice);
   void syncNow();
 }
 
@@ -111,6 +115,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<ApiError | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [locked, setLocked] = useState<SessionValue["locked"]>(null);
+  const [wiped, setWiped] = useState<SessionValue["wiped"]>(null);
   const offlineMode = useRef(false);
   const current = useRef<{ session: SessionResponse | null; me: MeResponse | null }>({ session: null, me: null });
   current.current = { session, me };
@@ -128,6 +133,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   /** No server: opens the copy on this device if it is open already, else asks for the password. */
   const openOffline = useCallback(
     async (meta: SnapshotMeta) => {
+      // Too long without connecting: the copy is deleted instead of opened (waiting work stays, encrypted, for the next sign-in).
+      if (copyExpired(meta)) {
+        await wipeBusinessCopy(meta.userId, meta.businessId, { removedDevice: false });
+        setError(new ApiError(0, "OFFLINE_COPY_EXPIRED", { days: meta.wipeAfterDays!, business: meta.businessName }));
+        setStatus("error");
+        return;
+      }
       const saved = vaultOpen(meta.userId) ? await loadSnapshot(meta.userId, meta.businessId) : undefined;
       if (saved) return showSaved(saved);
       setLocked({ ...meta, passwordOpens: await passwordOpens(meta.userId) });
@@ -216,7 +228,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!LIVE) return;
     let cancelled = false;
-    void refreshSession().then(
+    // A device the owner removed deletes its copy and waiting work first (it asks the server, signed in or not).
+    void removedDevices()
+      .then(async (removed) => {
+        if (!removed.length) return;
+        const last = await lastSnapshotMeta();
+        let waiting = 0;
+        let business: string | null = null;
+        for (const d of removed) {
+          if (last?.userId === d.userId && last.businessId === d.businessId) business = last.businessName;
+          waiting += await wipeBusinessCopy(d.userId, d.businessId, { removedDevice: true });
+        }
+        if (!cancelled) setWiped({ business, waiting });
+      })
+      .catch(() => undefined)
+      .then(() => (cancelled ? Promise.reject(new Error("cancelled")) : refreshSession()))
+      .then(
       (res) => {
         if (!cancelled) void enter(res);
       },
@@ -320,6 +347,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       error,
       locked,
       unlock,
+      wiped,
       login: (identifier, password) => withSession(() => api.post<SessionResponse>("/auth/login", { identifier, password }), password),
       requestOtp: (mobile, purpose) => api.post<{ devCode?: string }>("/auth/otp", { mobile, purpose }),
       loginWithOtp: (mobile, otp) => withSession(() => api.post<SessionResponse>("/auth/login/otp", { mobile, otp })),
@@ -341,7 +369,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       },
       retry: () => setAttempt((n) => n + 1),
     }),
-    [status, session, me, error, locked, unlock, withSession, enter],
+    [status, session, me, error, locked, unlock, wiped, withSession, enter],
   );
 
   return (

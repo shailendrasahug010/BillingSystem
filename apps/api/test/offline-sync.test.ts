@@ -8,6 +8,7 @@ describe.skipIf(!hasDatabase)("offline bills from devices", () => {
   const ids: Record<string, string> = {};
   const post = (url: string, body: unknown, token = owner.token, headers?: Record<string, string>) => call(t.app, "POST", url, { token, body, ...(headers ? { headers } : {}) });
   const get = (url: string, token = owner.token) => call(t.app, "GET", url, { token });
+  const put = (url: string, body: unknown, token = owner.token) => call(t.app, "PUT", url, { token, body });
   const bill = (number: string, qty: string, key: string, token = owner.token, deviceId = ids.device) =>
     post("/invoices", { customerId: ids.shop, invoiceDate: "2026-09-20", lines: [{ productId: ids.soap, qty }], offline: { deviceId, invoiceNumber: number, savedAt: "2026-09-20T10:15:00+05:30" } }, token, { "idempotency-key": key });
 
@@ -89,6 +90,39 @@ describe.skipIf(!hasDatabase)("offline bills from devices", () => {
       ["A2", 2, true],
       ["A3", 0, false],
     ]);
+  });
+
+  it("registers every device that keeps a copy, and tells a removed one to wipe itself, signed in or not", async () => {
+    const roles = Object.fromEntries((await get("/roles")).body.data.map((r: { key: string; id: string }) => [r.key, r.id]));
+    const mobile = nextMobile();
+    await post("/members", { name: "Wasim Warehouse", mobile, roleId: roles.warehouse });
+    await call(t.app, "POST", "/auth/otp", { body: { mobile, purpose: "login" } });
+    const warehouseToken = (await call(t.app, "POST", "/auth/login/otp", { body: { mobile, otp: t.otp.last(mobile) } })).body.accessToken;
+    // Someone who does not bill: registered (so it can be removed), without a code or series.
+    const tablet = await post("/devices", { name: "Godown tablet", platform: "android" }, warehouseToken);
+    expect(tablet.status).toBe(200);
+    expect(tablet.headers["cache-control"]).toBe("no-store");
+    expect(tablet.body).toMatchObject({ seriesCode: null, series: null, wipeAfterDays: 30 });
+    expect(tablet.body.checkSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const check = (deviceId: string, secret: string) => call(t.app, "POST", "/devices/check", { body: { deviceId, secret } });
+    expect((await check(tablet.body.id, tablet.body.checkSecret)).body).toEqual({ status: "active" });
+    expect((await check(tablet.body.id, "x".repeat(43))).body).toEqual({ status: "unknown" });
+    expect((await check("0199a0d6-0000-7000-8000-00000000ffff", tablet.body.checkSecret)).body).toEqual({ status: "unknown" });
+    // Each registration renews the secret; the old one no longer answers.
+    await put("/settings/offline.wipe_after_days", { value: 7 });
+    const renewed = await post("/devices", { name: "Godown tablet", platform: "android", deviceId: tablet.body.id }, warehouseToken);
+    expect(renewed.body).toMatchObject({ id: tablet.body.id, wipeAfterDays: 7 });
+    expect((await check(tablet.body.id, tablet.body.checkSecret)).body.status).toBe("unknown");
+    expect((await check(tablet.body.id, renewed.body.checkSecret)).body.status).toBe("active");
+    // The owner removes it: the next check tells it to wipe, and the list shows when.
+    const signIn = `select count(*) filter (where rt.revoked_at is null)::int as live from devices d join refresh_tokens rt on rt.family_id = d.session_id where d.id = $1`;
+    expect((await t.owner.query(signIn, [tablet.body.id])).rows[0].live).toBeGreaterThan(0);
+    await post(`/devices/${tablet.body.id}/revoke`, {});
+    // Its sign-in ends with it.
+    expect((await t.owner.query(signIn, [tablet.body.id])).rows[0].live).toBe(0);
+    expect((await get("/devices")).body.data.find((d: { id: string }) => d.id === tablet.body.id).wipedAt).toBeNull();
+    expect((await check(tablet.body.id, renewed.body.checkSecret)).body.status).toBe("removed");
+    expect((await get("/devices")).body.data.find((d: { id: string }) => d.id === tablet.body.id).wipedAt).not.toBeNull();
   });
 
   it("adds a customer made offline under the device's id, once, and takes its bill, payment and order", async () => {

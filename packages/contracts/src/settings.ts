@@ -43,6 +43,8 @@ export const SETTING_SCHEMAS = {
     last_order: z.number().min(0).max(5),
   }),
   "suggestions.window_days": z.number().int().min(30).max(1095),
+  /** Days a device may go without connecting before its saved copy is deleted (0 = never). */
+  "offline.wipe_after_days": z.number().int().min(0).max(365),
   "backup.schedule": z.strictObject({
     frequency: z.enum(["daily", "weekly", "off"]),
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),

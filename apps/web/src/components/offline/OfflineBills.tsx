@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { useSession } from "../../app/session";
-import { TODAY } from "../../data/db";
+import { allowed, TODAY } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { peekOfflineNumber } from "../../offline/device";
@@ -257,9 +257,12 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={t("offline.title")} description={t("offline.description")} size="md" closeLabel={t("common.close")}>
       <div className="flex flex-col gap-4">
-        <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
-          {state.device ? t("offline.device", { code: state.device.seriesCode, number: peekOfflineNumber(state.device, TODAY) }) : t("offline.noDevice")}
-        </p>
+        {/* Only people who bill have a device series. */}
+        {allowed("invoice.create") && (
+          <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
+            {state.device?.seriesCode ? t("offline.device", { code: state.device.seriesCode, number: peekOfflineNumber(state.device, TODAY) }) : t("offline.noDevice")}
+          </p>
+        )}
         {!offline && <OpenOfflineSetup />}
         {state.entries.length === 0 ? (
           <p className="text-[13.5px] text-ink-3">{t("offline.empty")}</p>

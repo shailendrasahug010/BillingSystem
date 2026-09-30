@@ -127,6 +127,13 @@
       "when": 1790718158307,
       "tag": "0017_collection_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790741898465,
+      "tag": "0018_device_wipe",
+      "breakpoints": true
     }
   ]
 }

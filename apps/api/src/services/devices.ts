@@ -16,24 +16,52 @@ export const DEVICE_INVOICE_PATTERN = "{DEVICE}/{FYS}/{SEQ:4}";
 
 const CODES = "ABCDEFGHJKLMNPQRSTUVWXYZ".split("").flatMap((l) => "123456789".split("").map((d) => `${l}${d}`));
 
-export async function registerDevice(tx: Tx, ctx: RequestCtx, input: { name: string; platform: string; deviceId?: string | undefined }) {
+/**
+ * Registers a device (or confirms the one it already is). Only devices of
+ * people who bill get a code and an invoice series; every device that keeps
+ * a copy of the business is registered, so the owner can remove it. Each
+ * registration renews the secret the device checks in with.
+ */
+export async function registerDevice(
+  tx: Tx,
+  ctx: RequestCtx,
+  input: { name: string; platform: string; deviceId?: string | undefined },
+  options: { withSeries: boolean; checkHash: string },
+) {
   const d = schema.devices;
+  const freeCode = async () => {
+    const used = new Set((await tx.select({ code: d.seriesCode }).from(d).where(eq(d.businessId, ctx.businessId))).map((r) => r.code));
+    return CODES.filter((c) => !used.has(c));
+  };
   if (input.deviceId) {
     const [known] = await tx
       .select()
       .from(d)
       .where(and(eq(d.id, input.deviceId), eq(d.businessId, ctx.businessId), eq(d.userId, ctx.userId), isNull(d.revokedAt)));
     if (known) {
-      await tx.update(d).set({ lastSeenAt: sql`now()`, name: input.name, platform: input.platform }).where(eq(d.id, known.id));
-      return known;
+      const set = { lastSeenAt: sql`now()`, name: input.name, platform: input.platform, checkHash: options.checkHash, sessionId: ctx.sessionId };
+      // Now allowed to bill: the device gets its code and series.
+      if (options.withSeries && !known.seriesCode) {
+        const [code] = await freeCode();
+        if (!code) throw new ApiError(409, "DEVICE_LIMIT_REACHED");
+        const [updated] = await tx.update(d).set({ ...set, seriesCode: code }).where(eq(d.id, known.id)).returning();
+        return updated!;
+      }
+      const [updated] = await tx.update(d).set(set).where(eq(d.id, known.id)).returning();
+      return updated!;
     }
   }
-  const used = new Set((await tx.select({ code: d.seriesCode }).from(d).where(eq(d.businessId, ctx.businessId))).map((r) => r.code));
-  for (const code of CODES) {
-    if (used.has(code)) continue;
+  if (!options.withSeries) {
     const [created] = await tx
       .insert(d)
-      .values({ id: uuidv7(), businessId: ctx.businessId, userId: ctx.userId, name: input.name, platform: input.platform, seriesCode: code, lastSeenAt: sql`now()` })
+      .values({ id: uuidv7(), businessId: ctx.businessId, userId: ctx.userId, name: input.name, platform: input.platform, seriesCode: null, lastSeenAt: sql`now()`, checkHash: options.checkHash, sessionId: ctx.sessionId })
+      .returning();
+    return created!;
+  }
+  for (const code of await freeCode()) {
+    const [created] = await tx
+      .insert(d)
+      .values({ id: uuidv7(), businessId: ctx.businessId, userId: ctx.userId, name: input.name, platform: input.platform, seriesCode: code, lastSeenAt: sql`now()`, checkHash: options.checkHash, sessionId: ctx.sessionId })
       .onConflictDoNothing()
       .returning();
     if (created) return created;

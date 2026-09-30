@@ -45,6 +45,7 @@ interface Settings {
   "payments.allocation": "oldest_first" | "manual";
   "invoice.terms": string;
   "reports.aging_buckets": number[];
+  "offline.wipe_after_days"?: number;
 }
 
 /** Business header, rules and permissions in the running app follow the saved values at once. */
@@ -433,6 +434,22 @@ function RulesCard() {
             }}
           />,
         )}
+        {row(
+          t("settings.offlineWipe"),
+          t("settings.offlineWipeHint"),
+          <Input
+            aria-label={t("settings.offlineWipe")}
+            disabled={!canEdit}
+            inputSize="sm"
+            inputMode="numeric"
+            className="w-24 [&_input]:text-right"
+            defaultValue={s["offline.wipe_after_days"] ?? 30}
+            onBlur={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isInteger(v) && v >= 0 && v <= 365 && v !== (s["offline.wipe_after_days"] ?? 30)) void put("offline.wipe_after_days", v);
+            }}
+          />,
+        )}
       </div>
     </Card>
   );
@@ -778,10 +795,11 @@ interface DeviceRow {
   lastSeenAt: string | null;
   lastSyncAt: string | null;
   revokedAt: string | null;
+  wipedAt: string | null;
   offlineBills: number;
 }
 
-/** Phones and PCs that bill offline, each with its own series; a lost one can be removed. */
+/** Phones and PCs that keep a copy of the business (those that bill, with their own series); a lost one can be removed. */
 function DevicesCard() {
   const { t, dateTime } = useI18n();
   const toast = useToast();
@@ -795,7 +813,7 @@ function DevicesCard() {
     try {
       await api.post(`/devices/${d.id}/revoke`);
       await q.refetch();
-      toast({ tone: "success", title: t("offline.devices.removedToast"), body: `${d.name} · ${d.seriesCode ?? ""}` });
+      toast({ tone: "success", title: t("offline.devices.removedToast"), body: [d.name, d.seriesCode].filter(Boolean).join(" · ") });
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     }
@@ -823,7 +841,7 @@ function DevicesCard() {
                 </span>
               ),
             },
-            { key: "series", header: t("offline.devices.series"), render: (d) => <span className="font-mono">{d.seriesCode}</span> },
+            { key: "series", header: t("offline.devices.series"), render: (d) => (d.seriesCode ? <span className="font-mono">{d.seriesCode}</span> : <span className="text-ink-3">{t("offline.devices.noSeries")}</span>) },
             { key: "seen", header: t("offline.devices.lastSeen"), render: (d) => <span className="text-ink-2">{d.lastSeenAt ? dateTime(d.lastSeenAt) : "—"}</span> },
             { key: "bills", header: t("offline.devices.bills"), align: "right", render: (d) => d.offlineBills },
             {
@@ -832,7 +850,10 @@ function DevicesCard() {
               align: "right",
               render: (d) =>
                 d.revokedAt ? (
-                  <Badge tone="neutral">{t("offline.devices.removed")}</Badge>
+                  <span className="flex flex-col items-end gap-0.5">
+                    <Badge tone="neutral">{t("offline.devices.removed")}</Badge>
+                    <span className="text-[11.5px] text-ink-3">{d.wipedAt ? t("offline.devices.wipedOn", { when: dateTime(d.wipedAt) }) : t("offline.devices.wipePending")}</span>
+                  </span>
                 ) : canEdit ? (
                   <Button size="sm" variant="ghost" onClick={() => void revoke(d)}>
                     {t("offline.devices.remove")}

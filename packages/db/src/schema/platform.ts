@@ -201,6 +201,12 @@ export const devices = pgTable(
     lastSyncAt: tstz(),
     lastSeenAt: tstz(),
     revokedAt: tstz(),
+    /** SHA-256 of the secret the device checks in with (renewed at each registration), so a removed device learns it must wipe itself. */
+    checkHash: text(),
+    /** When a removed device was told to delete its copy (it did so on hearing it). */
+    wipedAt: tstz(),
+    /** The sign-in (refresh token family) the device last registered with: removing the device ends it. */
+    sessionId: uuid(),
     ...timestamps,
   },
   (t) => [unique("devices_series_code_uq").on(t.businessId, t.seriesCode)],

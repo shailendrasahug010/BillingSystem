@@ -725,7 +725,9 @@
       "violet": "Violet",
       "saffron": "Saffron",
       "teal": "Teal"
-    }
+    },
+    "offlineWipe": "Delete a device's copy after",
+    "offlineWipeHint": "Days without connecting (0 = never). A phone or PC that stays offline longer deletes its saved copy; work waiting on it is sent at the next sign-in. A device you remove in the list below deletes its copy as soon as it connects."
   },
   "gst": {
     "b2b": "B2B",
@@ -947,7 +949,8 @@
     "PROMISE_DATE_PAST": "The promised date cannot be before today",
     "PROMISE_DATE_TOO_FAR": "The promised date must be within a year",
     "NOTE_REQUIRED": "Write what happened on the visit",
-    "OFFLINE_NOT_KEPT": "This device cannot keep work offline (its storage is blocked). Connect to the internet and try again."
+    "OFFLINE_NOT_KEPT": "This device cannot keep work offline (its storage is blocked). Connect to the internet and try again.",
+    "OFFLINE_COPY_EXPIRED": "The copy of {{business}} on this device was deleted: it went more than {{days}} days without connecting. Connect to the internet and sign in; work still waiting on this device is sent then."
   },
   "validation": {
     "required": "This field is required",
@@ -2031,9 +2034,9 @@
     "signOutPending_one": "{{count}} change is still waiting to sync. It stays on this device and is sent the next time you sign in here. Sign out anyway?",
     "signOutPending_other": "{{count}} changes are still waiting to sync. They stay on this device and are sent the next time you sign in here. Sign out anyway?",
     "devices": {
-      "title": "Devices for offline billing",
-      "help": "Phones and computers that can make bills without internet. Each has its own bill series (A1, A2 …). Remove a lost or old device so it cannot send bills.",
-      "empty": "No device has been set up yet. A phone or computer is added when someone who makes bills signs in on it.",
+      "title": "Devices",
+      "help": "Phones and computers that keep a copy of the business. Those that bill have their own bill series (A1, A2 …). Remove a lost or old device: it is signed out, its unsent bills are refused, and it deletes its copy as soon as it connects.",
+      "empty": "No device yet. A phone or computer is added when someone signs in on it.",
       "name": "Device",
       "series": "Series",
       "user": "Used by",
@@ -2041,8 +2044,11 @@
       "bills": "Offline bills",
       "removed": "Removed",
       "remove": "Remove device",
-      "removeConfirm": "Remove {{name}} (series {{code}})? Bills it has not sent yet will be refused.",
-      "removedToast": "Device removed"
+      "removeConfirm": "Remove {{name}}? It is signed out, bills it has not sent are refused, and it deletes the business's copy when it next connects.",
+      "removedToast": "Device removed",
+      "wipedOn": "Copy deleted {{when}}",
+      "wipePending": "Deletes its copy when it next connects",
+      "noSeries": "No bills"
     },
     "kinds": {
       "invoice": "Bill",
@@ -2077,7 +2083,11 @@
     "waitingHere_one": "{{count}} entry here is waiting on this device to be sent",
     "waitingHere_other": "{{count}} entries here are waiting on this device to be sent",
     "see": "See",
-    "keptPurchases": "No connection: purchase bills from the last 30 days kept on this device. Open one to record a return."
+    "keptPurchases": "No connection: purchase bills from the last 30 days kept on this device. Open one to record a return.",
+    "wiped": "The owner removed this device, so the copy of {{business}} kept on it has been deleted.",
+    "theBusiness": "the business",
+    "wipedWaiting_one": "{{count}} entry that had not been sent was deleted with it.",
+    "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them."
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"

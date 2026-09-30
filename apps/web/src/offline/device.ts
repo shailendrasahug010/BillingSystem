@@ -1,6 +1,6 @@
 import { financialYearOf, formatDocumentNumber } from "@vyapaar/core";
 import { api } from "../lib/api";
-import { idbGet, idbPut } from "./idb";
+import { idbGet, idbKeys, idbPut } from "./idb";
 
 /**
  * This phone or PC as the server knows it: a short code (A1, A2 …) and its
@@ -16,14 +16,18 @@ export interface DeviceRecord {
   financialYearStartMonth: number;
   /** Next number per financial year ("2026-27" → 4). */
   counters: Record<string, number>;
+  /** Asks the server, signed in or not, whether the owner removed this device (then its copy is wiped). */
+  checkSecret?: string;
 }
 
 interface DeviceResponse {
   id: string;
-  seriesCode: string;
+  /** Null for people who do not bill: the device is registered only so it can be removed. */
+  seriesCode: string | null;
   pattern: string;
   financialYearStartMonth: number;
-  series: { financialYear: string; nextNumber: number };
+  series: { financialYear: string; nextNumber: number } | null;
+  checkSecret: string;
 }
 
 type Platform = "web" | "android" | "ios" | "windows" | "mac" | "linux";
@@ -77,11 +81,40 @@ export async function ensureDevice(userId: string, businessId: string): Promise<
     const current = await loadDevice(userId, businessId);
     const sameDevice = current?.id === res.id;
     const counters = sameDevice ? { ...current.counters } : {};
-    counters[res.series.financialYear] = Math.max(counters[res.series.financialYear] ?? 1, res.series.nextNumber);
-    const record: DeviceRecord = { id: res.id, userId, businessId, seriesCode: res.seriesCode, pattern: res.pattern, financialYearStartMonth: res.financialYearStartMonth, counters };
+    if (res.series) counters[res.series.financialYear] = Math.max(counters[res.series.financialYear] ?? 1, res.series.nextNumber);
+    const record: DeviceRecord = {
+      id: res.id,
+      userId,
+      businessId,
+      seriesCode: res.seriesCode ?? "",
+      pattern: res.pattern,
+      financialYearStartMonth: res.financialYearStartMonth,
+      counters,
+      checkSecret: res.checkSecret,
+    };
     await idbPut("kv", record, key(userId, businessId));
     return record;
   });
+}
+
+/**
+ * Asks the server about each device record kept here (signed in or not) and
+ * returns those the owner removed: their copy is to be wiped. Without a
+ * server nothing is learnt.
+ */
+export async function removedDevices(): Promise<DeviceRecord[]> {
+  const out: DeviceRecord[] = [];
+  for (const k of (await idbKeys("kv")).filter((x) => x.startsWith("device:"))) {
+    const device = await idbGet<DeviceRecord>("kv", k);
+    if (!device?.checkSecret) continue;
+    try {
+      const res = await api.post<{ status: string }>("/devices/check", { deviceId: device.id, secret: device.checkSecret }, { signal: AbortSignal.timeout(5000) });
+      if (res.status === "removed") out.push(device);
+    } catch {
+      return out;
+    }
+  }
+  return out;
 }
 
 /** Hands out the device's next invoice number for a bill dated `date`, and remembers it is used. */

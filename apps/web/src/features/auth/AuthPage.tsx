@@ -158,6 +158,12 @@ export function AuthPage() {
         <p className="mt-1 text-[14px] text-ink-3">{mode === "signup" ? t("auth.signUpSubtitle") : t("auth.subtitle")}</p>
       </div>
       {notice && <p className="rounded-lg bg-good-soft px-3 py-2 text-[13px] text-good" role="status">{notice}</p>}
+      {session.wiped && (
+        <p className="rounded-lg bg-warn-soft px-3 py-2 text-[13px] text-warn" role="status">
+          {t("offline.wiped", { business: session.wiped.business ?? t("offline.theBusiness") })}
+          {session.wiped.waiting > 0 && ` ${t("offline.wipedWaiting", { count: session.wiped.waiting })}`}
+        </p>
+      )}
       <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
         {mode === "password" && (
           <>

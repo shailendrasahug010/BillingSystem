@@ -1,3 +1,4 @@
+import { translateError } from "@vyapaar/i18n";
 import { lazy, Suspense, useState } from "react";
 import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
@@ -175,7 +176,8 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v
 /** Live mode: nothing renders until the session and the business workspace are ready. */
 function SessionGate() {
   const session = useSession();
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const { t } = i18n;
   useStoreVersion();
   if (!LIVE || session.status === "ready") return <Root />;
   if (session.status === "signed-out") return <AuthPage />;
@@ -185,7 +187,15 @@ function SessionGate() {
   return (
     <AuthLayout>
       <div className="flex flex-col gap-4" role="status" aria-live="polite">
-        <p className="text-[16px] text-ink-2">{offline ? t("auth.offlineStart") : session.status === "error" ? t("auth.loadFailed") : t("auth.loadingWorkspace")}</p>
+        <p className="text-[16px] text-ink-2">
+          {offline
+            ? t("auth.offlineStart")
+            : session.error?.code === "OFFLINE_COPY_EXPIRED"
+              ? translateError(i18n, session.error)
+              : session.status === "error"
+                ? t("auth.loadFailed")
+                : t("auth.loadingWorkspace")}
+        </p>
         {session.status === "error" && (
           <div className="flex gap-2">
             <Button variant="primary" onClick={session.retry}>
