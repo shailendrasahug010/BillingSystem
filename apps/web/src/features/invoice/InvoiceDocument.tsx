@@ -255,6 +255,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
             <dt>{t("invoice.grandTotal")}</dt>
             <dd className="num">{m(totals.grandTotal)}</dd>
           </div>
+          {invoice.reverseCharge && <p className="max-w-[16rem] text-right text-[10.5px] text-[#4a5570]">{t("invoice.print.rcmNotIncluded")}</p>}
           {!isNote && (
             <>
               <div className="flex justify-between gap-3">

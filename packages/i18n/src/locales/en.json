@@ -356,7 +356,8 @@
       "computerGenerated": "This is a computer-generated invoice.",
       "paid": "Paid",
       "reverseCharge": "Reverse charge",
-      "no": "No"
+      "no": "No",
+      "rcmNotIncluded": "GST under reverse charge is paid by the recipient and is not included in this total."
     },
     "numberOnSave": "Assigned on save",
     "saveFailed": "Invoice not saved",
@@ -932,7 +933,6 @@
     "DOCUMENT_HAS_RETURNS": "This bill has returns ({{notes}}). Cancel those returns first.",
     "RETURN_LINE_NOT_ON_DOCUMENT": "This item is not on the bill.",
     "RETURN_QTY_EXCEEDS": "You can return at most {{max}} of {{product}}.",
-    "RETURN_NOT_SUPPORTED_RCM": "Returns against reverse-charge bills are not supported yet. Record a credit note from the supplier with your CA.",
     "NOTE_NOT_POSTED": "This note is already cancelled.",
     "NOTE_BEFORE_DOCUMENT": "The return date cannot be before the bill date ({{date}}).",
     "IMPORT_REQUIRED": "This column is required.",
@@ -1584,7 +1584,8 @@
     "priceMode": "How much",
     "percentOfBill": "Percent of the bill",
     "amountBeforeGst": "Amount before GST",
-    "priceSpread": "Spread over the bill's items by value; GST at each item's rate is added"
+    "priceSpread": "Spread over the bill's items by value; GST at each item's rate is added",
+    "rcmHint": "Reverse-charge bill: a return or credit note takes back the goods' value from the supplier; its GST lowers the reverse-charge tax you pay and its credit."
   },
   "imports": {
     "import": "Import",

@@ -250,6 +250,8 @@ export interface ApiNote {
   placeOfSupply: string;
   supplyType: "intra_state" | "inter_state";
   status: "posted" | "cancelled";
+  /** A note on a reverse-charge purchase: its GST is ours to pay, not part of the note's total. */
+  isReverseCharge?: boolean;
   taxableTotal: string;
   cgstTotal: string;
   sgstTotal: string;
@@ -278,7 +280,7 @@ export function printableFromNote(note: ApiNote): PrintableInvoice {
     billingAddress: note.billingAddress,
     placeOfSupply: note.placeOfSupply,
     supplyType: note.supplyType,
-    isReverseCharge: false,
+    isReverseCharge: note.isReverseCharge ?? false,
     status: note.status,
     paymentStatus: "unpaid",
     taxableTotal: note.taxableTotal,

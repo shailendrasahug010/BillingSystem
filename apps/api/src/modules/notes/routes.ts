@@ -110,7 +110,9 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
   const docDate = "invoiceDate" in doc ? doc.invoiceDate : doc.supplierInvoiceDate;
   const docNumber = ("invoiceNumber" in doc ? doc.invoiceNumber : doc.supplierInvoiceNumber) ?? "";
   if (noteDate < docDate) throw badRequest("NOTE_BEFORE_DOCUMENT", { date: docDate }, "noteDate");
-  if (!isSale && doc.isReverseCharge) throw conflict("RETURN_NOT_SUPPORTED_RCM");
+  // A reverse-charge bill: the supplier charged no GST (we paid it); the note takes back only the
+  // goods' value from the supplier, and its GST lowers our reverse-charge tax and its credit.
+  const rcm = !isSale && doc.isReverseCharge;
 
   // Merge repeated lines, then lock the original lines in a stable order.
   const wanted = new Map<string, Dec>();
@@ -164,7 +166,7 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
         const factor = dec(item.taxableValue).minus(credited).dividedBy(item.taxableValue);
         for (const k of AMOUNTS) share[k] = roundAmount(share[k].times(factor));
       }
-      const total = share.taxableValue.plus(share.cgstAmount).plus(share.sgstAmount).plus(share.igstAmount).plus(share.cessAmount);
+      const total = rcm ? share.taxableValue : share.taxableValue.plus(share.cgstAmount).plus(share.sgstAmount).plus(share.igstAmount).plus(share.cessAmount);
       return { item, qty, qtyBase: qty.times(item.conversionFactor), share, total, index };
     })
     .sort((a, b) => a.index - b.index);
@@ -211,7 +213,7 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
     billingAddress: doc.billingAddress,
     placeOfSupply: doc.placeOfSupply,
     supplyType: doc.supplyType,
-    isReverseCharge: false,
+    isReverseCharge: rcm,
     taxEngineVersion: doc.taxEngineVersion,
     status: "posted",
     grossTotal: toAmountString(sumOf("grossAmount")),
@@ -343,6 +345,7 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
       partyStateCode: doc.partyStateCode,
       placeOfSupply: doc.placeOfSupply,
       supplyType: doc.supplyType,
+      isReverseCharge: rcm,
       taxability: l.item.taxability,
       hsnCode: l.item.hsnCode,
       uqc: l.item.uqc,
@@ -402,7 +405,8 @@ async function postPriceNote(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule
   const docDate = "invoiceDate" in doc ? doc.invoiceDate : doc.supplierInvoiceDate;
   const docNumber = ("invoiceNumber" in doc ? doc.invoiceNumber : doc.supplierInvoiceNumber) ?? "";
   if (noteDate < docDate) throw badRequest("NOTE_BEFORE_DOCUMENT", { date: docDate }, "noteDate");
-  if (!isSale && doc.isReverseCharge) throw conflict("RETURN_NOT_SUPPORTED_RCM");
+  // A reverse-charge bill: the supplier's credit is on the value only; the GST part lowers our reverse-charge tax.
+  const rcm = !isSale && doc.isReverseCharge;
 
   const itemTable = isSale ? schema.invoiceItems : schema.purchaseItems;
   const parentColumn = isSale ? schema.invoiceItems.invoiceId : schema.purchaseItems.purchaseId;
@@ -443,7 +447,7 @@ async function postPriceNote(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule
       if (taxable.gt(left.get(item.id)!)) throw badRequest("NOTE_EXCEEDS_LINE", { product: item.productName, max: toAmountString(left.get(item.id)!) }, "lines");
       const pct = (r: string) => roundAmount(taxable.times(r).dividedBy(100));
       const share = { taxable, cgst: pct(item.cgstRate), sgst: pct(item.sgstRate), igst: pct(item.igstRate), cess: pct(item.cessRate) };
-      return { item, share, total: taxable.plus(share.cgst).plus(share.sgst).plus(share.igst).plus(share.cess) };
+      return { item, share, total: rcm ? taxable : taxable.plus(share.cgst).plus(share.sgst).plus(share.igst).plus(share.cess) };
     });
   if (!lines.length) throw badRequest("NOTE_AMOUNT_REQUIRED", {}, "amount");
 
@@ -486,7 +490,7 @@ async function postPriceNote(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule
     billingAddress: doc.billingAddress,
     placeOfSupply: doc.placeOfSupply,
     supplyType: doc.supplyType,
-    isReverseCharge: false,
+    isReverseCharge: rcm,
     taxEngineVersion: doc.taxEngineVersion,
     status: "posted",
     grossTotal: toAmountString(sum("taxable")),
@@ -583,6 +587,7 @@ async function postPriceNote(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule
       partyStateCode: doc.partyStateCode,
       placeOfSupply: doc.placeOfSupply,
       supplyType: doc.supplyType,
+      isReverseCharge: rcm,
       taxability: l.item.taxability,
       hsnCode: l.item.hsnCode,
       uqc: l.item.uqc,

@@ -174,6 +174,7 @@ export function ReturnsCard({
   returns,
   canReturn,
   deviceCopy = false,
+  reverseCharge = false,
 }: {
   kind: "sale" | "purchase";
   documentId: string;
@@ -182,6 +183,8 @@ export function ReturnsCard({
   canReturn: boolean;
   /** Opened from the copy on this device: returns can be kept to send later; discounts and note details need the server. */
   deviceCopy?: boolean;
+  /** A reverse-charge purchase: notes take back the value only; their GST lowers the reverse-charge tax. */
+  reverseCharge?: boolean;
 }) {
   const { t, money, dateMedium } = useI18n();
   const [open, setOpen] = useState<string | null>(null);
@@ -207,6 +210,7 @@ export function ReturnsCard({
         }
       />
       <div className="p-4 sm:px-5">
+        {reverseCharge && canReturn && <p className="mb-2 text-[12.5px] text-ink-3">{t("notes.rcmHint")}</p>}
         {returns.length === 0 ? (
           <p className="text-[13px] text-ink-3">{t("notes.none")}</p>
         ) : (

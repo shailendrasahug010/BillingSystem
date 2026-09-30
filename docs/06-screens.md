@@ -99,7 +99,7 @@ Designed for "customer → items → save" in under 30 seconds with the keyboard
 * Delivery: per order *Delivered / Partly delivered / Returned*, received by, proof of delivery photo, remarks; delivery date recorded; print dispatch note.
 
 ## 14. Purchase entry — **Built** (live)
-* **Built:** supplier search, bill number and dates, ITC eligibility, reverse charge, lines (search/scan, unit or case, qty, free qty, rate, discount, supplier's GST override, batch/expiry when tracked), freight and other charges, payment at entry, live totals from the shared engine (the server rejects any difference), purchase detail with payments and cancel. *Bill photo, duplicate check as you type, landed-cost preview, purchase returns:* Phase 4.
+* **Built:** supplier search, bill number and dates, ITC eligibility, reverse charge, lines (search/scan, unit or case, qty, free qty, rate, discount, supplier's GST override, batch/expiry when tracked), freight and other charges, payment at entry, live totals from the shared engine (the server rejects any difference), purchase detail with payments and cancel; returns and suppliers' credit notes, reverse-charge bills included (the value back from the supplier, the GST off the reverse-charge tax). *Duplicate check as you type, landed-cost preview:* later.
 * Supplier (with outstanding and last purchase), supplier invoice number and date (duplicate check as you type), received date, godown.
 * Lines: product search/scan, qty, free qty, purchase rate, discount, GST (from tax category, editable for supplier's rate), batch, mfg/expiry, MRP; landed cost preview; other charges (freight, loading) apportioned.
 * Totals: taxable, CGST/SGST or IGST (from the supplier's state), round-off, total; ITC eligibility; attach bill photo/PDF.

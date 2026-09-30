@@ -192,7 +192,7 @@ export async function notePdfFile(deps: AppDeps, ctx: RequestCtx, id: string, as
     dueDate: null,
     against: note.original ? { number: note.original.number ?? "", date: note.original.date } : null,
     placeOfSupply: note.placeOfSupply,
-    reverseCharge: false,
+    reverseCharge: note.isReverseCharge,
     intraState: note.supplyType === "intra_state",
     buyer: { businessName: note.partyName, name: data.party?.name ?? null, address: addressText(note.billingAddress as Address), stateCode: note.partyStateCode ?? note.placeOfSupply, gstin: note.partyGstin },
     lines: pdfLines(note.items, data.extras, locale),

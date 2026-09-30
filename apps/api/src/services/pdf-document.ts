@@ -300,6 +300,10 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
   for (const [k, v] of totalRows) line(k, v);
   ty += 2;
   line(t("invoice.grandTotal"), m(input.totals.grandTotal), { bold: true, big: true, rule: true });
+  if (input.reverseCharge) {
+    doc.font("r").fontSize(7.5).fillColor(INK_2).text(t("invoice.print.rcmNotIncluded"), tx, ty, { width: totalsW, align: "right" });
+    ty = doc.y + 4;
+  }
   if (!isNote && input.paid !== null) {
     line(t("invoice.print.paid"), m(input.paid));
     if (input.credited && num(input.credited) > 0) line(t("notes.lessReturns"), m(input.credited));
