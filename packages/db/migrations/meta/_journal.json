@@ -155,6 +155,13 @@
       "when": 1790777279022,
       "tag": "0021_payroll_statutory",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790780328443,
+      "tag": "0022_einvoice_ewaybill",
+      "breakpoints": true
     }
   ]
 }

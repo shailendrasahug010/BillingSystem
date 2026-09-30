@@ -56,7 +56,7 @@ async function dispatchDetail(tx: Tx, ctx: RequestCtx, id: string) {
   const stopRows = await tx.execute<Record<string, unknown>>(sql`
     select s.id, s.delivery_sequence as "sequence", s.status::text as status, s.delivered_at as "deliveredAt", s.received_by as "receivedBy", s.remarks,
            s.invoice_id as "invoiceId", i.invoice_number as "invoiceNumber", i.invoice_date::text as "invoiceDate", i.grand_total::text as "grandTotal",
-           i.balance_due::text as "balanceDue", s.sales_order_id as "salesOrderId", o.order_number as "orderNumber",
+           i.balance_due::text as "balanceDue", i.eway_bill_number as "ewayBillNumber", s.sales_order_id as "salesOrderId", o.order_number as "orderNumber",
            coalesce(c.business_name, c.name) as "customerName", c.address_line1 as address, c.city, c.mobile
     from dispatch_orders s
     left join invoices i on i.id = s.invoice_id

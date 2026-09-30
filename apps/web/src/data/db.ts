@@ -49,6 +49,10 @@ export const WORKSPACE = {
   /** null = everything allowed (demo). */
   permissions: null as Set<string> | null,
   printLocale: "en",
+  /** E-invoicing applies (IRNs for B2B, SEZ and export bills). */
+  einvoice: false,
+  /** Value above which a bill needs an e-way bill. */
+  ewayThreshold: 50000,
   /** Letter of undertaking for exports and supplies to SEZ without IGST (null = none). */
   lut: null as { arn: string; validUntil: string } | null,
   /** Terms printed on invoices ("" = none). */

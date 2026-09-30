@@ -49,6 +49,9 @@ export interface PrintableInvoice {
   balance: number;
   /** Export or supply to SEZ: printed with its declaration, the LUT it was made under and the shipping bill. */
   zeroRated?: ZeroRatedPrint | null;
+  /** The IRN, acknowledgement and signed QR code from the e-invoice portal. */
+  einvoice?: { irn: string; ackNumber: string | null; ackDate: string | null; signedQrCode: string | null } | null;
+  ewayBill?: { number: string; date: string | null; validUntil: string | null } | null;
 }
 
 export interface ZeroRatedPrint {
@@ -153,6 +156,13 @@ export interface ApiInvoice {
   shippingBillDate?: string | null;
   portCode?: string | null;
   lutArn?: string | null;
+  irn?: string | null;
+  irnAckNumber?: string | null;
+  irnAckDate?: string | null;
+  signedQrCode?: string | null;
+  ewayBillNumber?: string | null;
+  ewayBillDate?: string | null;
+  ewayBillValidUntil?: string | null;
   returns?: Array<{ status: string; amountSettled: string }>;
   items: Array<{
     productId: string;
@@ -229,6 +239,8 @@ export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
     zeroRated: inv.zeroRatedType
       ? { type: inv.zeroRatedType, lutArn: inv.lutArn ?? null, shippingBill: { number: inv.shippingBillNumber ?? null, date: inv.shippingBillDate ?? null, portCode: inv.portCode ?? null } }
       : null,
+    einvoice: inv.irn ? { irn: inv.irn, ackNumber: inv.irnAckNumber ?? null, ackDate: inv.irnAckDate ?? null, signedQrCode: inv.signedQrCode ?? null } : null,
+    ewayBill: inv.ewayBillNumber ? { number: inv.ewayBillNumber, date: inv.ewayBillDate ?? null, validUntil: inv.ewayBillValidUntil ?? null } : null,
   };
 }
 
@@ -252,6 +264,10 @@ export interface ApiNote {
   status: "posted" | "cancelled";
   /** A note on a reverse-charge purchase: its GST is ours to pay, not part of the note's total. */
   isReverseCharge?: boolean;
+  irn?: string | null;
+  irnAckNumber?: string | null;
+  irnAckDate?: string | null;
+  signedQrCode?: string | null;
   taxableTotal: string;
   cgstTotal: string;
   sgstTotal: string;
@@ -281,6 +297,10 @@ export function printableFromNote(note: ApiNote): PrintableInvoice {
     placeOfSupply: note.placeOfSupply,
     supplyType: note.supplyType,
     isReverseCharge: note.isReverseCharge ?? false,
+    irn: note.irn ?? null,
+    irnAckNumber: note.irnAckNumber ?? null,
+    irnAckDate: note.irnAckDate ?? null,
+    signedQrCode: note.signedQrCode ?? null,
     status: note.status,
     paymentStatus: "unpaid",
     taxableTotal: note.taxableTotal,

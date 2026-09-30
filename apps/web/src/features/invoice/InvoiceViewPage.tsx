@@ -21,6 +21,7 @@ import { EMBEDDED } from "../../lib/embedded";
 import { findOfflineBill, useOffline } from "../../offline/sync";
 import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { InvoiceDocument } from "./InvoiceDocument";
+import { EInvoiceCard } from "./EInvoiceCard";
 import { ShippingBillCard } from "./ShippingBillCard";
 
 export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
@@ -122,6 +123,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
           )}
         </div>
       </div>
+      {LIVE && live.data && !deviceCopyAt && (
+        <div className="no-print">
+          <EInvoiceCard invoice={live.data} cancelled={status === "cancelled"} />
+        </div>
+      )}
       {LIVE && live.data?.zeroRatedType?.startsWith("EXP") && !deviceCopyAt && (
         <div className="no-print">
           <ShippingBillCard invoice={live.data} cancelled={status === "cancelled"} />

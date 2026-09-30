@@ -151,6 +151,8 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     reason: null,
     terms: (data.settings["invoice.terms"] as string) || null,
     zeroRated: inv.zeroRatedType ? zeroRatedPrint(inv, locale) : null,
+    einvoice: inv.irn ? { irn: inv.irn, ackNumber: inv.irnAckNumber, ackDate: inv.irnAckDate, signedQrCode: inv.signedQrCode } : null,
+    ewayBill: inv.ewayBillNumber ? { number: inv.ewayBillNumber, date: inv.ewayBillDate, validUntil: inv.ewayBillValidUntil } : null,
   });
   const { t } = createTranslator(locale);
   const money = (v: string) => formatCurrency(v, locale);
@@ -193,6 +195,7 @@ export async function notePdfFile(deps: AppDeps, ctx: RequestCtx, id: string, as
     against: note.original ? { number: note.original.number ?? "", date: note.original.date } : null,
     placeOfSupply: note.placeOfSupply,
     reverseCharge: note.isReverseCharge,
+    einvoice: note.irn ? { irn: note.irn, ackNumber: note.irnAckNumber, ackDate: note.irnAckDate, signedQrCode: note.signedQrCode } : null,
     intraState: note.supplyType === "intra_state",
     buyer: { businessName: note.partyName, name: data.party?.name ?? null, address: addressText(note.billingAddress as Address), stateCode: note.partyStateCode ?? note.placeOfSupply, gstin: note.partyGstin },
     lines: pdfLines(note.items, data.extras, locale),

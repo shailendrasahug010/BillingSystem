@@ -79,6 +79,10 @@ export const SETTING_SCHEMAS = {
     esi: z.strictObject({ enabled: z.boolean(), employerCode: z.string().trim().max(20).regex(/^\d*$/).nullable() }),
     pt: z.strictObject({ enabled: z.boolean(), stateCode: StateCode.nullable(), rule: PtRuleSchema.nullable() }),
   }),
+  /** E-invoicing applies (aggregate turnover above ₹5 crore): B2B, SEZ and export bills need an IRN. */
+  "einvoice.enabled": z.boolean(),
+  /** An e-way bill is due above this value of goods (₹50,000 in most states). */
+  "ewaybill.threshold": z.number().int().min(0).max(10_000_000),
   /** Days a device may go without connecting before its saved copy is deleted (0 = never). */
   "offline.wipe_after_days": z.number().int().min(0).max(365),
   "backup.schedule": z.strictObject({

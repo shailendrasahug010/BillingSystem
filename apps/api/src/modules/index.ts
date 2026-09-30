@@ -10,6 +10,7 @@ import { messagingModule } from "./messaging/routes.js";
 import { messagingStatusModule } from "./messaging/status-webhook.js";
 import { backupsModule } from "./backups/routes.js";
 import { expensesModule } from "./expenses/routes.js";
+import { eInvoiceModule } from "./gst/einvoice.js";
 import { gstModule } from "./gst/routes.js";
 import { healthModule } from "./health.js";
 import { identityModule } from "./identity/routes.js";
@@ -70,6 +71,7 @@ export const MODULES: ApiModule[] = [
   notesModule,
   expensesModule,
   gstModule,
+  eInvoiceModule,
   employeesModule,
   leaveModule,
   payrollModule,

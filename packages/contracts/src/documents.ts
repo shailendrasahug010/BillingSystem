@@ -77,6 +77,39 @@ export const InvoiceBody = z.strictObject({
     .optional(),
 });
 
+/**
+ * The e-invoice's IRN, acknowledgement and signed QR code as the IRP returned them (entered
+ * after uploading the JSON on the portal); an IRN of null removes them (entered by mistake).
+ */
+export const IrnBody = z.union([
+  z.strictObject({
+    irn: z.string().trim().regex(/^[0-9a-fA-F]{64}$/),
+    ackNumber: z.string().trim().regex(/^\d{10,20}$/),
+    ackDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/),
+    signedQrCode: z.string().trim().max(4000).nullable().optional(),
+  }),
+  z.strictObject({ irn: z.null() }),
+]);
+
+/** The e-way bill number (12 digits) and its date and validity from the portal; a number of null removes it. */
+export const EwayBillBody = z.union([
+  z.strictObject({
+    number: z.string().trim().regex(/^\d{12}$/),
+    date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/),
+    validUntil: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/).nullable().optional(),
+  }),
+  z.strictObject({ number: z.null() }),
+]);
+
+/** Transport for e-way bills (Part B); left out, the dispatch trip's vehicle and transporter are used. */
+export const EwayFileQuery = z.object({
+  ids: z.string().regex(/^[0-9a-f-]{36}(,[0-9a-f-]{36}){0,199}$/),
+  vehicleNo: z.string().trim().max(15).optional(),
+  transporterId: z.string().trim().max(15).optional(),
+  transporterName: z.string().trim().max(100).optional(),
+  distance: z.coerce.number().int().min(0).max(4000).optional(),
+});
+
 /** An export's shipping bill, added or corrected after the invoice (null clears a field). */
 export const ShippingBillBody = z.strictObject({
   shippingBillNumber: z.string().trim().regex(/^[0-9]{3,20}$/).nullable(),

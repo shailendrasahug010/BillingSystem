@@ -24,6 +24,8 @@ export interface PrintableTrip {
     receivedBy: string | null;
     remarks: string | null;
     invoiceNumber: string | null;
+    /** The invoice's e-way bill, carried with the goods. */
+    ewayBillNumber?: string | null;
     invoiceDate: string | null;
     grandTotal: string | null;
     balanceDue: string | null;
@@ -80,7 +82,10 @@ export function DispatchSheetDocument({ trip }: { trip: PrintableTrip }) {
                   <p className="font-semibold">{s.customerName}</p>
                   <p>{[s.address, s.city, s.mobile].filter(Boolean).join(", ")}</p>
                 </td>
-                <td className={cell}>{s.invoiceNumber}</td>
+                <td className={cell}>
+                  {s.invoiceNumber}
+                  {s.ewayBillNumber && <p className="font-mono text-[10.5px]">{t("einvoice.print.ewayBill", { number: s.ewayBillNumber })}</p>}
+                </td>
                 <td className={`${cell} text-right`}>{money(s.grandTotal ?? "0")}</td>
                 <td className={`${cell} text-right`}>{Number(s.balanceDue ?? 0) > 0 ? money(s.balanceDue!) : "—"}</td>
                 <td className={`${cell} w-32`} />

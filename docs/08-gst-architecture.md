@@ -148,8 +148,8 @@ Outputs: GSTR-1 JSON (for the GST offline tool / portal upload), GSTR-1 Excel an
 | Integration | Route | Notes |
 |---|---|---|
 | GST returns (save/submit) | Through a licensed **GST Suvidha Provider (GSP)** API | Taxpayer authorises with the portal's OTP flow; session tokens stored encrypted server-side, never on clients |
-| **E-invoicing** (IRN, signed QR) | Invoice Registration Portal (IRP) API via a GSP or directly where permitted | Required above the configured aggregate-turnover threshold; IRN, ack number/date and signed QR stored on the invoice; cancellation within the IRP's allowed window; reporting time limits kept in config |
-| **E-way bill** | E-way bill API (often combined with IRN generation) | Triggered for consignments above the configured value threshold; number and validity stored on the invoice/dispatch |
+| **E-invoicing** (IRN, signed QR) | **Built without a GSP:** the IRP's bulk-upload JSON (INV-01 v1.1) is downloaded, uploaded with the firm's login and the IRN / acknowledgement / signed QR entered back. Later: the IRP API via a GSP or directly where permitted | Required above the configured aggregate-turnover threshold; IRN, ack number/date and signed QR stored on the invoice; cancellation within the IRP's allowed window; reporting time limits kept in config |
+| **E-way bill** | **Built without a GSP:** the portal's bulk-generation JSON (from the bill and its dispatch trip) and the number entered back. Later: the e-way bill API (often combined with IRN generation) | Triggered for consignments above the configured value threshold; number and validity stored on the invoice/dispatch |
 | GSTR-2B reconciliation (Phase 5+) | Download via GSP | Match supplier invoices to purchase entries; flag missing ITC |
 
 Each adapter implements one interface (`GstFilingProvider`, `EInvoiceProvider`, `EwayBillProvider`) so the provider can be switched. Credentials (GSP client secret, GST portal username, API tokens) live in the server's secret store, encrypted at rest, accessible only to the worker that calls the provider, and are never sent to clients or written to logs.

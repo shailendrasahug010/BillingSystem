@@ -210,6 +210,8 @@ export function applyMe(me: MeResponse): void {
     printLocale: (me.settings["invoice.default_print_locale"] as string | undefined) ?? "en",
     invoiceTerms: (me.settings["invoice.terms"] as string | undefined) ?? "",
     lut: (me.settings["gst.lut"] as typeof WORKSPACE.lut | undefined) ?? null,
+    einvoice: me.settings["einvoice.enabled"] === true,
+    ewayThreshold: typeof me.settings["ewaybill.threshold"] === "number" ? me.settings["ewaybill.threshold"] : 50000,
     role: b.role,
     ...(roundOff ? { roundOff } : {}),
     ...(creditPolicy ? { creditPolicy } : {}),

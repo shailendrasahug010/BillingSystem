@@ -150,12 +150,13 @@ export const invoices = pgTable(
     portCode: varchar({ length: 6 }),
     /** Without payment of IGST: the letter of undertaking (ARN) it was made under, printed on the invoice. */
     lutArn: varchar({ length: 20 }),
-    // e-invoicing (IRP) and e-way bill; filled by integration adapters when enabled.
+    // e-invoicing (IRP) and e-way bill: entered from the portals' replies (or filled by an adapter).
     irn: varchar({ length: 64 }),
     irnAckNumber: varchar({ length: 20 }),
     irnAckDate: tstz(),
     signedQrCode: text(),
     ewayBillNumber: varchar({ length: 12 }),
+    ewayBillDate: tstz(),
     ewayBillValidUntil: tstz(),
     postedAt: tstz(),
     postedBy: uuid(),

@@ -74,6 +74,13 @@ export function formatDate(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** 24/09/2026 14:05 in India time: a moment stamped by a government portal (IRN acknowledgement, e-way bill). */
+export function formatDateTimeIst(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
+}
+
 /** 24 Sep 2026 / 24 सित॰ 2026 */
 export function formatDateMedium(iso: string, locale: LocaleCode = "en"): string {
   const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);

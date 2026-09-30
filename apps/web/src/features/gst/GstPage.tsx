@@ -12,6 +12,7 @@ import { DataTable, ErrorNote, FilterBar, PageHeader, TAB_TRIGGER, Tile, type Co
 import { allowed, TODAY } from "../../data/db";
 import { api } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
+import { EInvoiceTab } from "./EInvoiceTab";
 import { Gstr1Tab } from "./Gstr1Tab";
 import { Gstr3bTab } from "./Gstr3bTab";
 import { PeriodActions } from "./PeriodActions";
@@ -64,6 +65,9 @@ export function GstPage() {
           <Tabs.Trigger value="gstr3b" className={TAB_TRIGGER}>
             GSTR-3B
           </Tabs.Trigger>
+          <Tabs.Trigger value="einvoice" className={TAB_TRIGGER}>
+            {t("einvoice.tab")}
+          </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="summary">
           <SummaryTab period={period} />
@@ -73,6 +77,9 @@ export function GstPage() {
         </Tabs.Content>
         <Tabs.Content value="gstr3b">
           <Gstr3bTab period={period} />
+        </Tabs.Content>
+        <Tabs.Content value="einvoice">
+          <EInvoiceTab period={period} />
         </Tabs.Content>
       </Tabs.Root>
       <p className="flex items-start gap-2 text-[12.5px] text-ink-3">

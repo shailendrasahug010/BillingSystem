@@ -1,5 +1,5 @@
-import { amountInWords, findState } from "@vyapaar/core";
-import { createTranslator, formatAmount, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { amountInWords, findState, qrMatrix } from "@vyapaar/core";
+import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@vyapaar/i18n";
 import { BLUE, drawFirm, drawFooters, HEAD_BG, INK, INK_2, LINE, newPdf, RED, type Letterhead, type Pdf } from "./pdf-kit.js";
 
 /**
@@ -51,6 +51,18 @@ export interface DocumentPdfInput {
   terms: string | null;
   /** Export / supply to SEZ: the declaration the law asks for, the LUT and the shipping bill. */
   zeroRated?: { declaration: string; lut: string | null; shippingBill: string | null } | null;
+  /** The IRN, acknowledgement and signed QR code from the e-invoice portal. */
+  einvoice?: { irn: string; ackNumber: string | null; ackDate: string | null; signedQrCode: string | null } | null;
+  ewayBill?: { number: string; date: string | null; validUntil: string | null } | null;
+}
+
+/** A QR code drawn module by module (no image), `size` points square. */
+export function drawQr(doc: Pdf, text: string, x: number, y: number, size: number) {
+  const m = qrMatrix(text);
+  const cell = size / m.length;
+  doc.save().fillColor("#000000");
+  m.forEach((row, r) => row.forEach((dark, c) => dark && doc.rect(x + c * cell, y + r * cell, cell + 0.02, cell + 0.02).fill()));
+  doc.restore();
 }
 
 export interface ReceiptPdfInput {
@@ -186,6 +198,28 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
   y = Math.max(firmEnd, titleEnd) + 6;
   doc.moveTo(left, y).lineTo(left + width, y).lineWidth(1.5).strokeColor(BLUE).stroke();
   y += 8;
+
+  // ---- e-invoice (IRN, acknowledgement, signed QR code) and e-way bill
+  if (input.einvoice || input.ewayBill) {
+    const e = input.einvoice;
+    const qr = e?.signedQrCode ? 84 : 0;
+    const textW = width - (qr ? qr + 12 : 0);
+    const top = y;
+    if (e) {
+      doc.font("b").fontSize(8).fillColor(INK).text(`IRN: ${e.irn}`, left, y, { width: textW });
+      const ack = [e.ackNumber ? t("einvoice.print.ackNumber", { number: e.ackNumber }) : null, e.ackDate ? t("einvoice.print.ackDate", { date: formatDateTimeIst(e.ackDate) }) : null].filter(Boolean).join("   ·   ");
+      if (ack) doc.font("r").fontSize(8).fillColor(INK_2).text(ack, left, doc.y + 2, { width: textW });
+    }
+    if (input.ewayBill) {
+      const w = input.ewayBill;
+      const line = [t("einvoice.print.ewayBill", { number: w.number }), w.date ? formatDateTimeIst(w.date) : null, w.validUntil ? t("einvoice.print.validUntil", { date: formatDateTimeIst(w.validUntil) }) : null].filter(Boolean).join("   ·   ");
+      doc.font("r").fontSize(8).fillColor(INK_2).text(line, left, e ? doc.y + 2 : y, { width: textW });
+    }
+    if (e?.signedQrCode) drawQr(doc, e.signedQrCode, left + width - qr, top, qr);
+    y = Math.max(doc.y, top + qr) + 6;
+    doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor(LINE).stroke();
+    y += 8;
+  }
 
   // ---- export / SEZ: the declaration, in capitals as it must appear, with the LUT and shipping bill
   if (input.zeroRated) {

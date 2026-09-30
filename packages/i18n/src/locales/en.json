@@ -801,7 +801,15 @@
       "ptWomen": "Women: {{slabs}}",
       "ptAddSlab": "Add slab",
       "ptUseBuiltIn": "Use the built-in slabs"
-    }
+    },
+    "einvoice": "E-invoicing",
+    "einvoiceHint": "Turnover above ₹5 crore: bills to registered buyers, SEZ units and abroad need an IRN (GST Reports → E-invoice).",
+    "einvoiceOptions": {
+      "off": "Not needed",
+      "on": "We e-invoice"
+    },
+    "ewayThreshold": "E-way bill above",
+    "ewayThresholdHint": "₹50,000 in most states; some states set more for movement within the state"
   },
   "gst": {
     "b2b": "B2B",
@@ -1035,7 +1043,12 @@
     "ZERO_RATED_NOT_ALLOWED": "Export / SEZ details are only for a customer registered as SEZ or abroad.",
     "SHIPPING_BILL_NOT_EXPORT": "A shipping bill is only for an export invoice.",
     "SHIPPING_BILL_BEFORE_INVOICE": "The shipping bill date cannot be before the invoice date.",
-    "INVOICE_CANCELLED": "This invoice is cancelled."
+    "INVOICE_CANCELLED": "This invoice is cancelled.",
+    "EINVOICE_HAS_ERRORS": "{{number}} cannot be uploaded yet: see what to fix in GST Reports → E-invoice.",
+    "EINVOICE_NOT_APPLICABLE": "{{number}} is not e-invoiced: only bills to registered buyers, SEZ units and abroad are.",
+    "EWAY_BILL_HAS_ERRORS": "{{number}} cannot go to the e-way bill portal yet: see what to fix in GST Reports → E-way bill.",
+    "NO_EWAY_BILLS_DUE": "No bill on this trip needs an e-way bill.",
+    "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice."
   },
   "validation": {
     "required": "This field is required",
@@ -1269,7 +1282,7 @@
     "section": "Section",
     "noOutward": "No sales in this month",
     "noInward": "No purchases in this month",
-    "disclaimer": "Prepared from the bills in Digital Bahi. Check it with your CA before filing; e-invoicing and direct filing come later.",
+    "disclaimer": "Prepared from the bills in Digital Bahi. Check it with your CA before filing; direct filing comes later.",
     "notes": "Returns (credit and debit notes)",
     "notesHint": "Sales returns reduce output tax; purchase returns reduce ITC. Both are already netted in the figures above.",
     "hsnNet": "Net of sales returns",
@@ -2617,5 +2630,83 @@
     "reference": "Reference: {{ref}}",
     "retry": "Try again",
     "reload": "Reload the app"
+  },
+  "einvoice": {
+    "print": {
+      "ackNumber": "Ack. no. {{number}}",
+      "ackDate": "Ack. date {{date}}",
+      "ewayBill": "E-way bill {{number}}",
+      "validUntil": "valid until {{date}}"
+    },
+    "tab": "E-invoice & e-way bill",
+    "title": "E-invoice (IRN)",
+    "cardTitle": "E-invoice and e-way bill",
+    "hint": "Download the JSON, upload it on the e-invoice portal (bulk upload) with your GST login, then enter the IRN and acknowledgement it gives.",
+    "off": "E-invoicing is off. Turn it on in Settings if your turnover is above ₹5 crore.",
+    "downloadJson_one": "Download JSON ({{count}})",
+    "downloadJson_other": "Download JSON ({{count}})",
+    "pickAll_one": "Pick the {{count}} ready",
+    "pickAll_other": "Pick all {{count}} ready",
+    "pickNone": "Clear",
+    "pick": "Pick",
+    "none": "No bills to registered buyers, SEZ units or abroad this month",
+    "document": "Document",
+    "party": "Party",
+    "kinds": {
+      "invoice": "Invoice",
+      "credit_note": "Credit note"
+    },
+    "irnDone": "IRN received",
+    "toUpload": "To upload",
+    "toGenerate": "To generate",
+    "fixFirst": "Fix first",
+    "line": "line {{line}}",
+    "enterIrn": "Enter IRN",
+    "changeIrn": "Change IRN",
+    "irnHint": "As shown by the e-invoice portal after the upload. The signed QR code prints on the invoice.",
+    "irnFormat": "64 letters and digits",
+    "ackNumber": "Ack. no.",
+    "ackDate": "Ack. date and time",
+    "signedQr": "Signed QR code",
+    "signedQrHint": "Optional: paste the signed QR code text to print the QR on the invoice",
+    "irnSaved": "IRN saved",
+    "irnRemoved": "IRN removed",
+    "noIrnYet": "No IRN yet",
+    "json": "JSON",
+    "cancelOnPortal": "This bill is cancelled: cancel its IRN on the e-invoice portal too (within 24 hours).",
+    "ewayTitle": "E-way bill",
+    "ewayHint": "Bills above {{amount}}. Download the JSON, upload it on the e-way bill portal (bulk generation), then enter the e-way bill number.",
+    "noEway": "No bills above the e-way bill limit this month",
+    "noEwayYet": "No e-way bill yet",
+    "vehicle": "Vehicle no.",
+    "vehicleHint": "Left empty: each bill's dispatch trip, or Part B later",
+    "distance": "Distance (km)",
+    "distanceHint": "Left empty: the portal works it out from the PIN codes",
+    "trip": "Trip",
+    "enterEwayBill": "Enter e-way bill no.",
+    "changeEwayBill": "Change e-way bill",
+    "ewayBillNumber": "E-way bill no.",
+    "ewayBillFormat": "12 digits",
+    "ewayBillDate": "Generated on",
+    "validUntil": "Valid until",
+    "validTill": "valid till {{date}}",
+    "ewayBillSaved": "E-way bill saved",
+    "ewayBillRemoved": "E-way bill removed",
+    "tripEwayBills": "E-way bills (JSON)",
+    "issues": {
+      "SELLER_GSTIN": "Your GSTIN is missing (Settings)",
+      "SELLER_ADDRESS": "Your address or city is missing (Settings)",
+      "SELLER_PINCODE": "Your PIN code is missing (Settings)",
+      "BUYER_GSTIN": "The buyer's GSTIN is missing",
+      "BUYER_ADDRESS": "The buyer's address or city is missing",
+      "BUYER_PINCODE": "The buyer's PIN code is missing",
+      "HSN_MISSING": "HSN code missing (at least 4 digits)",
+      "HSN_SHORT": "HSN code shorter than 6 digits",
+      "NUMBER_FORMAT": "Bill number the portal does not take",
+      "CHARGE_AS_SERVICE": "A taxed charge goes as a service line (SAC 996511): check it",
+      "SHIPPING_BILL": "Shipping bill not added yet",
+      "VEHICLE_FORMAT": "Vehicle number looks wrong",
+      "EXPORT_PORT_STATE": "Export: the port's state is taken as yours; change it on the portal if not"
+    }
   }
 }

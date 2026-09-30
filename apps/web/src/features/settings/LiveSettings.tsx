@@ -48,6 +48,8 @@ interface Settings {
   "reports.aging_buckets": number[];
   "offline.wipe_after_days"?: number;
   "gst.lut"?: { arn: string; validUntil: string } | null;
+  "einvoice.enabled"?: boolean;
+  "ewaybill.threshold"?: number;
 }
 
 /** The last day of the financial year a date falls in (an LUT is filed for one year). */
@@ -482,6 +484,38 @@ function RulesCard() {
           />
         </div>
         {WORKSPACE.chargeTax && <LutRow value={s["gst.lut"] ?? null} canEdit={canEdit} onSave={(v) => put("gst.lut", v)} />}
+        {WORKSPACE.chargeTax &&
+          row(
+            t("settings.einvoice"),
+            t("settings.einvoiceHint"),
+            <Segmented
+              size="sm"
+              label={t("settings.einvoice")}
+              value={s["einvoice.enabled"] ? "on" : "off"}
+              onChange={(v) => canEdit && void put("einvoice.enabled", v === "on")}
+              options={[
+                { value: "off", label: t("settings.einvoiceOptions.off") },
+                { value: "on", label: t("settings.einvoiceOptions.on") },
+              ]}
+            />,
+          )}
+        {row(
+          t("settings.ewayThreshold"),
+          t("settings.ewayThresholdHint"),
+          <Input
+            aria-label={t("settings.ewayThreshold")}
+            disabled={!canEdit}
+            inputSize="sm"
+            inputMode="numeric"
+            className="w-32 [&_input]:text-right"
+            leading={<span className="text-[13px]">₹</span>}
+            defaultValue={s["ewaybill.threshold"] ?? 50000}
+            onBlur={(e) => {
+              const v = Number(e.target.value.replace(/\D/g, ""));
+              if (Number.isInteger(v) && v >= 0 && v !== (s["ewaybill.threshold"] ?? 50000)) void put("ewaybill.threshold", v);
+            }}
+          />,
+        )}
         {row(
           t("settings.expiryWarning"),
           t("settings.expiryWarningHint"),

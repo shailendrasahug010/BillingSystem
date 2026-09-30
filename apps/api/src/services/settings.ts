@@ -21,6 +21,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "backup.schedule": { frequency: "daily", time: "02:00", retainDays: 30 },
   "offline.wipe_after_days": 30,
   "gst.lut": null,
+  "einvoice.enabled": false,
+  "ewaybill.threshold": 50000,
   "payroll.statutory": {
     pf: { enabled: false, establishmentCode: null, restrictToCeiling: true, wagesRule: "codes" },
     esi: { enabled: false, employerCode: null },

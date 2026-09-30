@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Printer, Truck } from "lucide-react";
+import { ArrowDown, ArrowUp, FileJson, Printer, Truck } from "lucide-react";
+import { downloadPortalFile, fileName } from "../gst/einvoiceDialogs";
 import { Tabs } from "radix-ui";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -11,7 +12,7 @@ import { EmptyState, Segmented, Skeleton } from "../../components/ui/misc";
 import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, Stat, TAB_TRIGGER, useFieldError } from "../../components/ui/Page";
 import { PrintPortal } from "../../components/ui/PrintPortal";
 import { useToast } from "../../components/ui/Toast";
-import { allowed, TODAY } from "../../data/db";
+import { allowed, TODAY, WORKSPACE } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { usePaged } from "../../lib/usePaged";
 import { useEmployeeOptions } from "../people/api";
@@ -340,6 +341,15 @@ function TripDialog({ id, onClose }: { id: string | null; onClose(): void }) {
     }
   };
   const onRoad = trip?.status === "dispatched" || trip?.status === "in_transit";
+  /** The trip's invoices above the limit without an e-way bill, with its vehicle and transporter, for the e-way bill portal. */
+  const ewayBills = async () => {
+    setError(null);
+    try {
+      await downloadPortalFile(`/dispatches/${id}/ewaybills`, {}, fileName("EWB", trip?.dispatchNumber ?? "trip"));
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    }
+  };
   const value = useMemo(() => (trip?.stops ?? []).reduce((s, x) => s + Number(x.grandTotal ?? 0), 0), [trip]);
   return (
     <Dialog
@@ -361,6 +371,11 @@ function TripDialog({ id, onClose }: { id: string | null; onClose(): void }) {
                   {t("dispatch.start")}
                 </Button>
               </>
+            )}
+            {trip.status !== "cancelled" && trip.stops.some((s) => !s.ewayBillNumber && Number(s.grandTotal ?? 0) > WORKSPACE.ewayThreshold) && (
+              <Button icon={<FileJson size={16} />} disabled={busy} onClick={() => void ewayBills()}>
+                {t("einvoice.tripEwayBills")}
+              </Button>
             )}
             <Button icon={<Printer size={16} />} onClick={() => window.print()}>
               {t("dispatch.printSheet")}
@@ -390,6 +405,7 @@ function TripDialog({ id, onClose }: { id: string | null; onClose(): void }) {
                   <p className="font-medium text-ink">
                     {s.customerName} <span className="font-normal text-ink-3">· {s.invoiceNumber}</span>
                   </p>
+                  {s.ewayBillNumber && <p className="font-mono text-[12px] text-ink-2">{t("einvoice.print.ewayBill", { number: s.ewayBillNumber })}</p>}
                   <p className="text-[12px] text-ink-3">
                     {[s.address, s.city, s.mobile].filter(Boolean).join(" · ")}
                     {s.deliveredAt && ` · ${dateTime(s.deliveredAt)}`}

@@ -43,6 +43,11 @@ export const creditDebitNotes = pgTable(
     amountSettled: money().notNull().default("0"),
     settlementStatus: paymentStatus().notNull().default("unpaid"),
     notes: text(),
+    /** A credit note to a registered buyer: the e-invoice IRN, acknowledgement and signed QR code from the IRP. */
+    irn: varchar({ length: 64 }),
+    irnAckNumber: varchar({ length: 20 }),
+    irnAckDate: tstz(),
+    signedQrCode: text(),
     postedAt: tstz(),
     cancelledAt: tstz(),
     cancelReason: text(),

@@ -1,5 +1,5 @@
-import { amountInWords, findState, zeroRatedDeclaration } from "@vyapaar/core";
-import { createTranslator, formatAmount, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { amountInWords, findState, qrMatrix, zeroRatedDeclaration } from "@vyapaar/core";
+import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@vyapaar/i18n";
 import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import { BUSINESS, WORKSPACE } from "../../data/db";
 import type { PrintableInvoice, ZeroRatedPrint } from "./printable";
@@ -10,6 +10,45 @@ import type { PrintableInvoice, ZeroRatedPrint } from "./printable";
  * can print English invoices and vice versa). In production the same template
  * renders to PDF on the server (headless Chromium, correct Devanagari shaping).
  */
+/** The e-invoice's signed QR code as an SVG (no image files, sharp in print). */
+function QrCode({ text, size = 96 }: { text: string; size?: number }) {
+  const m = qrMatrix(text);
+  const path = m.flatMap((row, r) => row.flatMap((dark, c) => (dark ? [`M${c} ${r}h1v1h-1z`] : []))).join("");
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${m.length} ${m.length}`} role="img" aria-label="E-invoice QR code" shapeRendering="crispEdges">
+      <rect width={m.length} height={m.length} fill="#fff" />
+      <path d={path} fill="#000" />
+    </svg>
+  );
+}
+
+/** IRN, acknowledgement and QR code from the e-invoice portal; the e-way bill number. */
+function EInvoiceLines({ invoice, locale }: { invoice: PrintableInvoice; locale: LocaleCode }) {
+  const { t } = createTranslator(locale);
+  const e = invoice.einvoice;
+  const w = invoice.ewayBill;
+  return (
+    <section className="flex items-start justify-between gap-4 border-b border-[#c8d1e0] py-2.5 text-[11px]">
+      <div className="min-w-0">
+        {e && (
+          <>
+            <p className="font-mono font-semibold break-all">IRN: {e.irn}</p>
+            <p className="text-[#4a5570]">
+              {[e.ackNumber ? t("einvoice.print.ackNumber", { number: e.ackNumber }) : null, e.ackDate ? t("einvoice.print.ackDate", { date: formatDateTimeIst(e.ackDate) }) : null].filter(Boolean).join("   ·   ")}
+            </p>
+          </>
+        )}
+        {w && (
+          <p className="text-[#4a5570]">
+            {[t("einvoice.print.ewayBill", { number: w.number }), w.date ? formatDateTimeIst(w.date) : null, w.validUntil ? t("einvoice.print.validUntil", { date: formatDateTimeIst(w.validUntil) }) : null].filter(Boolean).join("   ·   ")}
+          </p>
+        )}
+      </div>
+      {e?.signedQrCode && <QrCode text={e.signedQrCode} />}
+    </section>
+  );
+}
+
 /** An export or SEZ invoice's declaration, in capitals as the rules word it, with the LUT and the shipping bill. */
 function ZeroRatedLines({ z, locale }: { z: ZeroRatedPrint; locale: LocaleCode }) {
   const { t } = createTranslator(locale);
@@ -94,6 +133,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
         </div>
       </header>
 
+      {(invoice.einvoice || invoice.ewayBill) && <EInvoiceLines invoice={invoice} locale={locale} />}
       {invoice.zeroRated && <ZeroRatedLines z={invoice.zeroRated} locale={locale} />}
 
       <section className="grid grid-cols-1 gap-4 border-b border-[#c8d1e0] py-3 sm:grid-cols-2">
