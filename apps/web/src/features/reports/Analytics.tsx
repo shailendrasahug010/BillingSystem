@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge, type Tone } from "../../components/ui/Badge";
 import { Card, CardHeader } from "../../components/ui/Card";
@@ -7,7 +6,8 @@ import { Select } from "../../components/ui/Field";
 import { EmptyState, ProgressBar } from "../../components/ui/misc";
 import { DataTable, ErrorNote, Tile } from "../../components/ui/Page";
 import { api } from "../../lib/api";
-import { ExportButton, PeriodBar, usePeriod } from "./period";
+import { ExportButton, PeriodBar, settingsPeriod } from "./period";
+import type { ReportProps } from "./ReportsPage";
 
 const PROFIT_GROUPS = ["product", "brand", "category", "customer", "salesperson", "month"] as const;
 type ProfitGroup = (typeof PROFIT_GROUPS)[number];
@@ -23,10 +23,11 @@ interface ProfitRow {
 }
 
 /** Margin by product, company, category, customer, salesperson or month. */
-export function ProfitReport({ initialGroup = "product" }: { initialGroup?: ProfitGroup }) {
+export function ProfitReport({ settings, onChange }: ReportProps) {
   const { t, money, number } = useI18n();
-  const period = usePeriod();
-  const [groupBy, setGroupBy] = useState<ProfitGroup>(initialGroup);
+  const period = settingsPeriod(settings, onChange);
+  const groupBy = (settings.groupBy ?? "product") as ProfitGroup;
+  const setGroupBy = (g: ProfitGroup) => onChange({ groupBy: g });
   const query = { from: period.from, to: period.to, groupBy };
   const q = useQuery({
     queryKey: ["reports", "profit", query],
@@ -103,9 +104,9 @@ interface Pnl {
 }
 
 /** A plain profit and loss statement for the period. */
-export function PnlReport() {
+export function PnlReport({ settings, onChange }: ReportProps) {
   const { t, money, locale } = useI18n();
-  const period = usePeriod();
+  const period = settingsPeriod(settings, onChange);
   const q = useQuery({
     queryKey: ["reports", "pnl", period.from, period.to],
     queryFn: () => api.get<Pnl>("/reports/pnl", { from: period.from, to: period.to }),
@@ -169,10 +170,11 @@ interface ProductRow {
 const MOVEMENT_TONE: Record<ProductRow["movement"], Tone> = { fast: "good", slow: "warn", not_moving: "danger", no_stock: "neutral" };
 
 /** Fast, slow and not-moving products with stock, value and days of cover. */
-export function ProductsReport() {
+export function ProductsReport({ settings, onChange }: ReportProps) {
   const { t, money, number, dateMedium } = useI18n();
-  const period = usePeriod();
-  const [movement, setMovement] = useState<"" | ProductRow["movement"]>("");
+  const period = settingsPeriod(settings, onChange);
+  const movement: "" | ProductRow["movement"] = settings.movement ?? "";
+  const setMovement = (m: typeof movement) => onChange({ movement: m === "" ? undefined : (m as "fast" | "slow" | "not_moving") });
   const query = { from: period.from, to: period.to };
   const q = useQuery({
     queryKey: ["reports", "products", query],

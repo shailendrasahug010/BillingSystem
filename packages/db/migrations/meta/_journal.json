@@ -134,6 +134,13 @@
       "when": 1790741898465,
       "tag": "0018_device_wipe",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790759925299,
+      "tag": "0019_report_views",
+      "breakpoints": true
     }
   ]
 }

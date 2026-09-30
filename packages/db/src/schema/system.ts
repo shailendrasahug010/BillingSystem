@@ -187,3 +187,27 @@ export const backupSchedules = pgTable(
   },
   (t) => [index("backup_schedules_due_idx").on(t.nextRunAt)],
 );
+
+/**
+ * SAVED REPORT VIEWS — a report's tab and settings (period, grouping, filters)
+ * kept under a name to open again. Private to the person who saved it unless
+ * shared with the team; others see a shared view only for a report their role
+ * opens. A period like "this month" is kept as that, not as dates.
+ */
+export const reportViews = pgTable(
+  "report_views",
+  {
+    id: pk(),
+    businessId: businessId(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id),
+    name: varchar({ length: 60 }).notNull(),
+    /** sales | collections | purchases | outstanding | profit | pnl | products */
+    report: varchar({ length: 20 }).notNull(),
+    settings: jsonb().notNull().default({}),
+    shared: boolean().notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("report_views_name_uq").on(t.businessId, t.userId, sql`lower(${t.name})`), index("report_views_shared_idx").on(t.businessId, t.shared)],
+);

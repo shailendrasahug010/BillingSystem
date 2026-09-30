@@ -53,6 +53,7 @@ const CONSTRAINT_CODES: Record<string, { status: number; code: string; field?: s
   payments_client_id_uq: { status: 409, code: "DUPLICATE_REQUEST" },
   units_symbol_uq: { status: 409, code: "DUPLICATE_NAME", field: "symbol" },
   brands_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },
+  report_views_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },
   product_categories_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },
   tax_categories_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },
   price_levels_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },

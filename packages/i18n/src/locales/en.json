@@ -955,7 +955,9 @@
     "OCR_IMAGE_UNSUPPORTED": "This picture could not be opened. Use a JPEG or PNG photo.",
     "OCR_IMAGE_TOO_LARGE": "This picture is too large to read (more than {{max}} pixels on a side).",
     "OCR_BUSY": "Other pages are being read right now. Try again in a moment.",
-    "OCR_FAILED": "The page could not be read. Try again, or take a clearer photo."
+    "OCR_FAILED": "The page could not be read. Try again, or take a clearer photo.",
+    "REPORT_VIEW_SETTINGS_INVALID": "This report has no such setting ({{field}}).",
+    "REPORT_VIEW_LIMIT": "You can keep up to {{max}} saved views. Delete one you no longer use."
   },
   "validation": {
     "required": "This field is required",
@@ -2450,5 +2452,35 @@
     "onLeaveToday_one": "{{count}} on leave today",
     "onLeaveToday_other": "{{count}} on leave today",
     "open": "Open"
+  },
+  "reportViews": {
+    "menu": "Saved views",
+    "menuCount_one": "Saved views ({{count}})",
+    "menuCount_other": "Saved views ({{count}})",
+    "none": "No saved views yet. Set up a report the way you want it and choose Save view.",
+    "mine": "My views",
+    "team": "Shared by the team",
+    "by": "by {{group}}",
+    "shared": "shared with the team",
+    "sharedBy": "shared by {{name}}",
+    "save": "Save view",
+    "saveHint": "Keeps this report's tab, period, grouping and filters under a name. A period like “This month” stays this month.",
+    "name": "Name",
+    "namePlaceholder": "e.g. Monthly sales by company",
+    "share": "Share with the team",
+    "shareHint": "Others see it for the reports their role opens. Only you can change or delete it.",
+    "saved": "View “{{name}}” saved",
+    "updated": "View “{{name}}” updated",
+    "deleted": "View “{{name}}” deleted",
+    "viewing": "View: {{name}}",
+    "changed": "changed, not saved",
+    "saveChanges": "Save changes",
+    "edit": "Rename or share",
+    "editTitle": "Rename or share view",
+    "saveAsMine": "Save as my view",
+    "close": "Close view",
+    "deleteTitle": "Delete view “{{name}}”?",
+    "deleteHint": "The report stays as it is; only this saved view goes.",
+    "deleteShared": "It is shared: the team will no longer see it either. The report itself stays."
   }
 }

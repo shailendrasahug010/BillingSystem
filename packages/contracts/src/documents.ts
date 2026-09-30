@@ -349,3 +349,48 @@ export const SearchQuery = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(5),
 });
 
+
+/**
+ * Saved report views: a report's tab and settings kept under a name. Each
+ * report lists the groupings and filters it has; a view may hold only those.
+ * A preset period ("this month") is kept as the preset, a custom one as dates.
+ */
+export const REPORT_VIEW_REPORTS = {
+  sales: { permission: "report.view_sales", groups: SalesReportQuery.shape.groupBy.unwrap().options, filters: ["period"] },
+  collections: { permission: "report.view_collection", groups: CollectionReportQuery.shape.groupBy.unwrap().options, filters: ["period"] },
+  purchases: { permission: "report.view_purchase", groups: PurchaseReportQuery.shape.groupBy.unwrap().options, filters: ["period"] },
+  outstanding: { permission: "report.view_outstanding", groups: [], filters: ["party", "basis"] },
+  profit: { permission: "report.view_profit", groups: ["product", "brand", "category", "customer", "salesperson", "month"], filters: ["period"] },
+  pnl: { permission: "report.view_profit", groups: [], filters: ["period"] },
+  products: { permission: "report.view_sales", groups: [], filters: ["period", "movement"] },
+} as const satisfies Record<string, { permission: string; groups: readonly string[]; filters: readonly ("period" | "party" | "basis" | "movement")[] }>;
+
+export type ReportViewReportKey = keyof typeof REPORT_VIEW_REPORTS;
+export const ReportViewReport = z.enum(Object.keys(REPORT_VIEW_REPORTS) as [ReportViewReportKey, ...ReportViewReportKey[]]);
+export const ReportPeriodPreset = z.enum(["thisMonth", "lastMonth", "last7", "thisFy", "custom"]);
+
+export const ReportViewSettings = z
+  .strictObject({
+    period: ReportPeriodPreset.optional(),
+    from: IsoDate.optional(),
+    to: IsoDate.optional(),
+    groupBy: z.string().regex(/^[a-z_]{2,20}$/).optional(),
+    party: z.enum(["customer", "supplier"]).optional(),
+    basis: z.enum(["due_date", "invoice_date"]).optional(),
+    movement: z.enum(["fast", "slow", "not_moving"]).optional(),
+  })
+  .refine((s) => s.period !== "custom" || (s.from !== undefined && s.to !== undefined && s.from <= s.to), { message: "A custom period needs from and to", path: ["from"] });
+export type ReportViewSettings = z.infer<typeof ReportViewSettings>;
+
+const ReportViewName = z.string().trim().min(1).max(60);
+
+export const ReportViewBody = z.strictObject({
+  name: ReportViewName,
+  report: ReportViewReport,
+  settings: ReportViewSettings,
+  shared: z.boolean().default(false),
+});
+
+export const ReportViewPatch = z
+  .strictObject({ name: ReportViewName.optional(), settings: ReportViewSettings.optional(), shared: z.boolean().optional() })
+  .refine((p) => p.name !== undefined || p.settings !== undefined || p.shared !== undefined, { message: "Nothing to change" });

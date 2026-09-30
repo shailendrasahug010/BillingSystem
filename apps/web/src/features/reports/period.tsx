@@ -9,6 +9,7 @@ import { allowed } from "../../data/db";
 import { rangeDates, type RangeKey } from "../../data/store";
 import { ApiError } from "../../lib/api";
 import { downloadReport } from "../../lib/download";
+import type { ReportSettings } from "./views";
 
 const PRESETS: RangeKey[] = ["thisMonth", "lastMonth", "last7", "thisFy"];
 
@@ -27,6 +28,26 @@ export function usePeriod(initial: RangeKey = "thisMonth") {
     }
   };
   return { preset, from, to, choose, setFrom: (v: string) => (setPreset("custom"), setFrom(v)), setTo: (v: string) => (setPreset("custom"), setTo(v)) };
+}
+
+type Period = ReturnType<typeof usePeriod>;
+
+/**
+ * The same period picker driven by a report's settings (so the Reports
+ * screen can save and restore it): a preset stays a preset, typing a date
+ * makes it a custom period.
+ */
+export function settingsPeriod(s: ReportSettings, change: (patch: Partial<ReportSettings>) => void): Period {
+  const preset = s.period ?? "thisMonth";
+  const range = preset === "custom" ? { from: s.from ?? "", to: s.to ?? "" } : rangeDates(preset);
+  return {
+    preset,
+    from: range.from,
+    to: range.to,
+    choose: (p) => change(p === "custom" ? { period: "custom", from: range.from, to: range.to } : { period: p as Exclude<ReportSettings["period"], undefined>, from: undefined, to: undefined }),
+    setFrom: (v) => change({ period: "custom", from: v, to: range.to }),
+    setTo: (v) => change({ period: "custom", from: range.from, to: v }),
+  };
 }
 
 /** Download the report as a PDF (with the firm's letterhead) or as CSV for Excel. */
@@ -56,7 +77,7 @@ export function ExportButton({ path, query, filename }: { path: string; query: R
   );
 }
 
-export function PeriodBar({ period, children }: { period: ReturnType<typeof usePeriod>; children?: ReactNode }) {
+export function PeriodBar({ period, children }: { period: Period; children?: ReactNode }) {
   const { t } = useI18n();
   return (
     <FilterBar>

@@ -1,14 +1,26 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { translateError } from "@vyapaar/i18n";
+import { BookmarkPlus } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
+import { Button } from "../../components/ui/Button";
 import { Select } from "../../components/ui/Field";
 import { Segmented } from "../../components/ui/misc";
 import { DataTable, ErrorNote, FilterBar, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
+import { useToast } from "../../components/ui/Toast";
 import { allowed } from "../../data/db";
 import { ApiError, api } from "../../lib/api";
 import { PnlReport, ProductsReport, ProfitReport } from "./Analytics";
-import { ExportButton, PeriodBar, usePeriod } from "./period";
+import { ExportButton, PeriodBar, settingsPeriod } from "./period";
+import { ActiveViewBar, ViewDialog, ViewsMenu, type ViewDialogMode } from "./SavedViews";
+import { opensReport, REPORT_DEFAULTS, sameSettings, savedSettings, useReportViews, type ReportSettings, type ReportTab, type SavedView } from "./views";
+
+/** A report tab drawn from its settings, which the Reports screen keeps (to save and restore them). */
+export interface ReportProps {
+  settings: ReportSettings;
+  onChange(patch: Partial<ReportSettings>): void;
+}
 
 type Row = Record<string, unknown> & { key: string | null; label: string | null };
 
@@ -18,23 +30,103 @@ const GROUPS = {
   purchases: ["day", "month", "supplier", "product", "brand"],
 } as const;
 
-type ReportTab = "sales" | "collections" | "purchases" | "outstanding" | "profit" | "pnl" | "products";
-
-export function ReportsPage({ initialTab, initialGroup }: { initialTab?: ReportTab; initialGroup?: "brand" | "product" } = {}) {
-  const { t } = useI18n();
-  const tabs: ReportTab[] = [
-    ...(allowed("report.view_sales") ? (["sales"] as const) : []),
-    ...(allowed("report.view_collection") ? (["collections"] as const) : []),
-    ...(allowed("report.view_purchase") ? (["purchases"] as const) : []),
-    ...(allowed("report.view_outstanding") ? (["outstanding"] as const) : []),
-    ...(allowed("report.view_profit") ? (["profit", "pnl"] as const) : []),
-    ...(allowed("report.view_sales") ? (["products"] as const) : []),
-  ];
+/** The Reports screen: a tab per report the role opens, and views saved from them (see SavedViews). */
+export function ReportsPage(props: { initialTab?: ReportTab; initialGroup?: "brand" | "product" } = {}) {
+  const tabs = REPORT_TABS.filter(opensReport);
   if (!tabs.length) return <ErrorNote error={new ApiError(403, "FORBIDDEN")} />;
+  return <Reports key={`${props.initialTab ?? ""}-${props.initialGroup ?? ""}`} tabs={tabs} {...props} />;
+}
+
+const REPORT_TABS: ReportTab[] = ["sales", "collections", "purchases", "outstanding", "profit", "pnl", "products"];
+
+function Reports({ tabs, initialTab, initialGroup }: { tabs: ReportTab[]; initialTab?: ReportTab; initialGroup?: "brand" | "product" }) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<ReportTab>(initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]!);
+  const [settings, setSettings] = useState<Record<ReportTab, ReportSettings>>(() => ({ ...REPORT_DEFAULTS, profit: { ...REPORT_DEFAULTS.profit, groupBy: initialGroup ?? "product" } }));
+  const [active, setActive] = useState<SavedView | null>(null);
+  const [dialog, setDialog] = useState<ViewDialogMode | null>(null);
+  const [busy, setBusy] = useState(false);
+  const views = useReportViews();
+  const shown = (views.data ?? []).filter((v) => tabs.includes(v.report));
+
+  const change = (report: ReportTab) => (patch: Partial<ReportSettings>) => setSettings((prev) => ({ ...prev, [report]: { ...prev[report], ...patch } }));
+  const open = (view: SavedView) => {
+    setTab(view.report);
+    setSettings((prev) => ({ ...prev, [view.report]: { ...REPORT_DEFAULTS[view.report], ...view.settings } }));
+    setActive(view);
+  };
+  const changed = active !== null && !sameSettings(active.report, settings[active.report], active.settings);
+  const refresh = () => qc.invalidateQueries({ queryKey: ["report-views"] });
+
+  const create = async (name: string, shared: boolean) => {
+    const view = await api.post<SavedView>("/report-views", { name, report: tab, settings: savedSettings(tab, settings[tab]), shared });
+    setActive(view);
+    void refresh();
+    toast({ tone: "success", title: t("reportViews.saved", { name: view.name }) });
+  };
+  const update = async (view: SavedView, patch: { name?: string; shared?: boolean; settings?: ReportSettings }) => {
+    const updated = await api.patch<SavedView>(`/report-views/${view.id}`, patch);
+    setActive(updated);
+    void refresh();
+    toast({ tone: "success", title: t("reportViews.updated", { name: updated.name }) });
+  };
+  const saveChanges = () => {
+    if (!active) return;
+    setBusy(true);
+    update(active, { settings: savedSettings(active.report, settings[active.report]) })
+      .catch((e: unknown) => toast({ tone: "danger", title: t("errors.generic"), body: e instanceof ApiError ? translateError(i18n, e) : undefined }))
+      .finally(() => setBusy(false));
+  };
+
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title={t("reports.title")} subtitle={t("reports.subtitle")} />
-      <Tabs.Root key={initialTab ?? "default"} defaultValue={initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]} className="flex flex-col gap-4">
+      <PageHeader
+        title={t("reports.title")}
+        subtitle={t("reports.subtitle")}
+        actions={
+          <>
+            <ViewsMenu views={shown} activeId={active?.id ?? null} onOpen={open} />
+            <Button variant="soft" icon={<BookmarkPlus size={16} />} onClick={() => setDialog({ kind: "save", name: "" })}>
+              {t("reportViews.save")}
+            </Button>
+          </>
+        }
+      />
+      {active && (
+        <ActiveViewBar
+          view={active}
+          changed={changed}
+          busy={busy}
+          onSaveChanges={saveChanges}
+          onEdit={() => setDialog({ kind: "edit", view: active })}
+          onDelete={() => setDialog({ kind: "delete", view: active })}
+          onCopy={() => setDialog({ kind: "copy", name: active.name })}
+          onClose={() => setActive(null)}
+        />
+      )}
+      <ViewDialog
+        mode={dialog}
+        onClose={() => setDialog(null)}
+        onSave={({ name, shared }) => (dialog?.kind === "edit" ? update(dialog.view, { name, shared }) : create(name, shared))}
+        onDelete={async (view) => {
+          await api.delete(`/report-views/${view.id}`);
+          setActive(null);
+          void refresh();
+          toast({ tone: "success", title: t("reportViews.deleted", { name: view.name }) });
+        }}
+      />
+      <Tabs.Root
+        value={tab}
+        onValueChange={(v) => {
+          setTab(v as ReportTab);
+          // A view belongs to one report: moving to another leaves it.
+          if (active && v !== active.report) setActive(null);
+        }}
+        className="flex flex-col gap-4"
+      >
         <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={t("reports.title")}>
           {tabs.map((k) => (
             <Tabs.Trigger key={k} value={k} className={TAB_TRIGGER}>
@@ -44,37 +136,37 @@ export function ReportsPage({ initialTab, initialGroup }: { initialTab?: ReportT
         </Tabs.List>
         {tabs.includes("sales") && (
           <Tabs.Content value="sales">
-            <GroupedReport kind="sales" />
+            <GroupedReport kind="sales" settings={settings.sales} onChange={change("sales")} />
           </Tabs.Content>
         )}
         {tabs.includes("collections") && (
           <Tabs.Content value="collections">
-            <GroupedReport kind="collections" />
+            <GroupedReport kind="collections" settings={settings.collections} onChange={change("collections")} />
           </Tabs.Content>
         )}
         {tabs.includes("purchases") && (
           <Tabs.Content value="purchases">
-            <GroupedReport kind="purchases" />
+            <GroupedReport kind="purchases" settings={settings.purchases} onChange={change("purchases")} />
           </Tabs.Content>
         )}
         {tabs.includes("outstanding") && (
           <Tabs.Content value="outstanding">
-            <OutstandingReport />
+            <OutstandingReport settings={settings.outstanding} onChange={change("outstanding")} />
           </Tabs.Content>
         )}
         {tabs.includes("profit") && (
           <Tabs.Content value="profit">
-            <ProfitReport {...(initialGroup ? { initialGroup } : {})} />
+            <ProfitReport settings={settings.profit} onChange={change("profit")} />
           </Tabs.Content>
         )}
         {tabs.includes("pnl") && (
           <Tabs.Content value="pnl">
-            <PnlReport />
+            <PnlReport settings={settings.pnl} onChange={change("pnl")} />
           </Tabs.Content>
         )}
         {tabs.includes("products") && (
           <Tabs.Content value="products">
-            <ProductsReport />
+            <ProductsReport settings={settings.products} onChange={change("products")} />
           </Tabs.Content>
         )}
       </Tabs.Root>
@@ -82,10 +174,11 @@ export function ReportsPage({ initialTab, initialGroup }: { initialTab?: ReportT
   );
 }
 
-function GroupedReport({ kind }: { kind: keyof typeof GROUPS }) {
+function GroupedReport({ kind, settings, onChange }: { kind: keyof typeof GROUPS } & ReportProps) {
   const { t, money, number, dateMedium } = useI18n();
-  const period = usePeriod();
-  const [groupBy, setGroupBy] = useState<string>(kind === "purchases" ? "month" : "day");
+  const period = settingsPeriod(settings, onChange);
+  const groupBy = settings.groupBy ?? REPORT_DEFAULTS[kind].groupBy!;
+  const setGroupBy = (g: string) => onChange({ groupBy: g });
   const query = { from: period.from, to: period.to, groupBy };
   const q = useQuery({
     queryKey: ["reports", kind, query],
@@ -171,10 +264,12 @@ interface OutstandingRow {
   oldestDueDate: string;
 }
 
-function OutstandingReport() {
+function OutstandingReport({ settings, onChange }: ReportProps) {
   const { t, money, dateMedium } = useI18n();
-  const [party, setParty] = useState<"customer" | "supplier">("customer");
-  const [basis, setBasis] = useState<"due_date" | "invoice_date">("due_date");
+  const party = settings.party ?? "customer";
+  const basis = settings.basis ?? "due_date";
+  const setParty = (v: typeof party) => onChange({ party: v });
+  const setBasis = (v: typeof basis) => onChange({ basis: v });
   const query = { party, basis };
   const q = useQuery({
     queryKey: ["reports", "outstanding", query],

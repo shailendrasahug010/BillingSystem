@@ -13,7 +13,8 @@ import { badRequest } from "../lib/errors.js";
  * documents, ledgers, stock, GST, payroll, settings, roles, audit log, stored
  * files), as JSON, gzipped, optionally encrypted with a password (AES-256-GCM,
  * key from scrypt). Left out: sign-in sessions, memberships, devices,
- * notifications, queued jobs and the secrets of WhatsApp / email set-up.
+ * notifications, people's saved report views, queued jobs and the secrets
+ * of WhatsApp / email set-up.
  *
  * Restore never overwrites: it creates a new business owned by the person
  * restoring, gives every row a new id and rewrites every reference with the
@@ -28,7 +29,7 @@ const MAGIC = Buffer.from("DBBK");
 const MAX_JSON_BYTES = 1024 * 1024 * 1024;
 
 /** Tables with business rows that are not part of a backup. */
-const LEFT_OUT = new Set(["businesses", "business_members", "refresh_tokens", "otp_challenges", "sync_mutations", "notifications", "outbox_events", "backups", "backup_schedules", "devices"]);
+const LEFT_OUT = new Set(["businesses", "business_members", "refresh_tokens", "otp_challenges", "sync_mutations", "notifications", "outbox_events", "backups", "backup_schedules", "devices", "report_views"]);
 /** Global tables a restored row may point to as they are. */
 const GLOBAL = new Set(["states", "permissions"]);
 
