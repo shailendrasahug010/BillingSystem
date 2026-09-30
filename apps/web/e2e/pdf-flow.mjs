@@ -61,7 +61,7 @@ log("signed up");
 // 2. Products from the company's PDF price list (wrapped names in the first column).
 await nav("Products");
 await page.getByRole("button", { name: "Import" }).click();
-await page.getByLabel("Choose Excel, CSV or PDF file").setInputFiles(join(FIXTURES, "price-list.pdf"));
+await page.getByLabel("Choose Excel, CSV, PDF or photo").setInputFiles(join(FIXTURES, "price-list.pdf"));
 await dialog().getByRole("button", { name: "Import 5 rows" }).click({ timeout: 20000 });
 await toast("5 products added");
 await page.getByText("Harpic Toilet Cleaner 500ml").first().waitFor();

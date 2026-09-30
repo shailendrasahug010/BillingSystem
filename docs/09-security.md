@@ -100,6 +100,7 @@ Logged actions include: invoice create/update/cancel/print/share, price override
 * Upload via pre-signed URL issued only after a permission check; the URL fixes content type and maximum size (images 5 MB, PDFs 10 MB).
 * Allow-listed types (JPEG, PNG, WebP, PDF, XLSX for imports); the worker verifies the real type from file signatures, re-encodes images (dropping EXIF location), scans with an antivirus engine, and quarantines failures.
 * Buckets are private; downloads use short-lived signed URLs; filenames are never used as storage keys.
+* **Built — reading a photographed or scanned page** (`POST /imports/read-page`): only for people who may enter purchases or import products or customers, rate-limited, 12 MB at most; the type and size are read from the PNG / JPEG header before anything is decoded (6000 px a side and 24 million pixels at most, so a small file cannot unpack into a huge image); pages are read one at a time by a Tesseract worker (at most four waiting, a page cut off after a minute and the worker replaced); the image and the text are never stored or logged, and the reply is not cached.
 
 ## 9. Backup and restore safety
 

@@ -19,11 +19,13 @@ COPY packages/db/package.json packages/db/
 COPY packages/i18n/package.json packages/i18n/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 COPY . .
+# The bill reader (tesseract.js) needs only the compact English model; the full one (11 MB) is dropped.
 RUN pnpm --filter @vyapaar/api build \
  && pnpm --filter @vyapaar/web build \
  && pnpm --filter @vyapaar/api deploy --legacy --prod /out/api \
  && cp -r packages/db/migrations /out/api/migrations \
- && rm -rf /out/api/assets && cp -r apps/api/assets /out/api/assets
+ && rm -rf /out/api/assets && cp -r apps/api/assets /out/api/assets \
+ && find /out/api/node_modules -path "*@tesseract.js-data/eng/4.0.0" -type d -prune -exec rm -rf {} +
 
 # ---- api: bundled server + production node_modules only
 FROM node:22-slim AS api

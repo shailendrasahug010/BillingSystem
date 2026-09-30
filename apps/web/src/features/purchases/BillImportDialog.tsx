@@ -1,5 +1,5 @@
 import { billColumnOf, billFieldsFromText, readBillFile, type BillFile } from "@vyapaar/core";
-import { FileDown, FileUp } from "lucide-react";
+import { Camera, FileDown, FileUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -11,6 +11,7 @@ import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { downloadText } from "../../lib/download";
 import { readSheetFile, SHEET_ACCEPT, SheetError } from "../../lib/sheet";
+import { ReadingStatus, type Reading } from "../imports/ReadingStatus";
 import { draftFromMatch, SAMPLE_BILL, type MatchResponse } from "./billImport";
 
 const MAX_LINES = 300;
@@ -22,22 +23,29 @@ function isBillHeader(cells: string[]): boolean {
 }
 
 /**
- * Bring in a supplier's bill from the file they sent (Excel, CSV or the PDF
- * from their billing software): the
- * sheet is read on this device, its items are matched to our products (and
- * to what this supplier's items were matched to before), and the bill opens
- * in purchase entry to be checked and saved. Nothing is saved here.
+ * Bring in a supplier's bill from the file they sent (Excel, CSV, the PDF
+ * from their billing software, a scanned PDF) or a photo of the printed
+ * bill: the file is read (a photo or scan by the server, which keeps
+ * nothing), its items are matched to our products (and to what this
+ * supplier's items were matched to before), and the bill opens in purchase
+ * entry to be checked and saved. Nothing is saved here.
  */
 export function BillImportDialog({ open, onOpenChange, supplierId }: { open: boolean; onOpenChange(v: boolean): void; supplierId?: string }) {
   const { t, dateMedium, number } = useI18n();
   const { navigate } = useRouter();
   const input = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<{ name: string; data: BillFile } | null>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<{ name: string; data: BillFile; scanned: boolean } | null>(null);
+  const [reading, setReading] = useState<Reading | null>(null);
+  // Only the file chosen last is shown (another may be picked while a photo is read).
+  const choice = useRef(0);
   const [pick, setPick] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
+    choice.current++;
+    setReading(null);
     if (!open) return;
     setFile(null);
     setPick(0);
@@ -45,11 +53,14 @@ export function BillImportDialog({ open, onOpenChange, supplierId }: { open: boo
   }, [open]);
 
   const choose = async (f: File) => {
+    const mine = ++choice.current;
     setError(null);
     setFile(null);
     setPick(0);
+    setReading({ page: 0, pages: 0 });
     try {
-      const sheet = await readSheetFile(f, { isHeader: isBillHeader });
+      const sheet = await readSheetFile(f, { isHeader: isBillHeader, onProgress: (page, pages) => mine === choice.current && setReading({ page, pages }) });
+      if (mine !== choice.current) return;
       const data = readBillFile(sheet.rows);
       // A printed bill (PDF) has its number, date and the supplier's GSTIN above the table.
       if (sheet.preamble.length && data.bills.length === 1) {
@@ -60,9 +71,12 @@ export function BillImportDialog({ open, onOpenChange, supplierId }: { open: boo
         b.supplierGstin ??= top.supplierGstin;
         b.supplierName ??= top.supplierName;
       }
-      setFile({ name: f.name, data });
+      setFile({ name: f.name, data, scanned: sheet.scanned === true });
     } catch (e) {
-      setError(new ApiError(400, e instanceof SheetError ? e.code : "IMPORT_UNREADABLE"));
+      if (mine !== choice.current) return;
+      setError(e instanceof ApiError ? e : new ApiError(400, e instanceof SheetError ? e.code : "IMPORT_UNREADABLE"));
+    } finally {
+      if (mine === choice.current) setReading(null);
     }
   };
 
@@ -86,7 +100,7 @@ export function BillImportDialog({ open, onOpenChange, supplierId }: { open: boo
         })),
       });
       onOpenChange(false);
-      navigate({ name: "purchase-new", draft: draftFromMatch(file.name, bill, match) });
+      navigate({ name: "purchase-new", draft: draftFromMatch(file.name, bill, match, file.scanned) });
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
@@ -119,8 +133,11 @@ export function BillImportDialog({ open, onOpenChange, supplierId }: { open: boo
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">
-          <Button variant="soft" icon={<FileUp size={16} />} onClick={() => input.current?.click()}>
+          <Button variant="soft" icon={<FileUp size={16} />} disabled={reading !== null} onClick={() => input.current?.click()}>
             {file ? t("imports.otherFile") : t("billImport.chooseFile")}
+          </Button>
+          <Button variant="soft" icon={<Camera size={16} />} disabled={reading !== null} onClick={() => camera.current?.click()}>
+            {t("billImport.photo")}
           </Button>
           <Button icon={<FileDown size={16} />} onClick={sample}>
             {t("billImport.sample")}
@@ -137,8 +154,24 @@ export function BillImportDialog({ open, onOpenChange, supplierId }: { open: boo
               if (f) void choose(f);
             }}
           />
+          {/* On a phone this opens the camera; elsewhere, a picture file. */}
+          <input
+            ref={camera}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            aria-label={t("billImport.photo")}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void choose(f);
+            }}
+          />
         </div>
         <p className="text-[12.5px] text-ink-3">{t("billImport.columnsHelp")}</p>
+        <p className="text-[12.5px] text-ink-3">{t("billImport.photoTip")}</p>
+        {reading && <ReadingStatus reading={reading} />}
         {error ? <ErrorNote error={error} /> : null}
         {data && (
           <div className="flex flex-col gap-3 rounded-lg border border-line p-3 text-[13.5px]">

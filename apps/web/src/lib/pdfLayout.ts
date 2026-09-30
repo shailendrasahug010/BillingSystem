@@ -16,12 +16,15 @@ export interface PdfText {
   /** Font size. */
   height: number;
   page: number;
+  /** A whole cell already (read from a photo): not joined to the text beside it. */
+  whole?: boolean;
 }
 
 interface Cell {
   text: string;
   x0: number;
   x1: number;
+  whole?: boolean;
 }
 
 export interface PdfLine {
@@ -36,6 +39,8 @@ export interface PdfTable {
   rows: string[][];
   /** Text of the lines above the table (bill number, date, the supplier's GSTIN). */
   preamble: string[];
+  /** Read from a photo or a scanned page: worth checking line by line. */
+  scanned?: boolean;
 }
 
 const NUMERIC = /^[-+]?[₹\d.,]+%?$/;
@@ -59,12 +64,12 @@ export function linesOf(items: readonly PdfText[]): PdfLine[] {
       const cur = cells.at(-1);
       const gap = cur ? it.x - cur.x1 : Infinity;
       // A word space is about a quarter of the font size; columns sit further apart.
-      if (cur && gap <= 0.45 * l.height) {
+      if (cur && !cur.whole && !it.whole && gap <= 0.45 * l.height) {
         cur.text += (gap > 0.12 * l.height && !cur.text.endsWith(" ") && !it.str.startsWith(" ") ? " " : "") + it.str;
         cur.x1 = Math.max(cur.x1, it.x + it.width);
-      } else cells.push({ text: it.str, x0: it.x, x1: it.x + it.width });
+      } else cells.push({ text: it.str, x0: it.x, x1: it.x + it.width, ...(it.whole ? { whole: true } : {}) });
     }
-    return { page: l.page, y: l.y, height: l.height, cells: cells.map((c) => ({ ...c, text: c.text.replace(/\s+/g, " ").trim() })) };
+    return { page: l.page, y: l.y, height: l.height, cells: cells.map(({ whole: _, ...c }) => ({ ...c, text: c.text.replace(/\s+/g, " ").trim() })) };
   });
 }
 

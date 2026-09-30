@@ -21,6 +21,7 @@
     "@fastify/swagger": "9.9.0",
     "@fastify/swagger-ui": "6.1.1",
     "@node-rs/argon2": "2.2.1",
+    "@tesseract.js-data/eng": "1.0.0",
     "@vyapaar/contracts": "workspace:*",
     "@vyapaar/core": "workspace:*",
     "@vyapaar/db": "workspace:*",
@@ -33,6 +34,7 @@
     "pdfkit": "0.20.2",
     "pg": "8.23.0",
     "pino": "10.3.1",
+    "tesseract.js": "7.0.0",
     "uuidv7": "1.2.1",
     "write-excel-file": "4.1.1",
     "zod": "4.6.5"

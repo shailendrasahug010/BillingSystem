@@ -11,6 +11,7 @@ import { api, ApiError } from "../../lib/api";
 import { headerKey, sheetRecords } from "../../lib/csv";
 import { downloadText } from "../../lib/download";
 import { readSheetFile, SHEET_ACCEPT, SheetError } from "../../lib/sheet";
+import { ReadingStatus, type Reading } from "./ReadingStatus";
 
 type Kind = "products" | "customers";
 
@@ -108,8 +109,13 @@ export function ImportDialog({ kind, open, onOpenChange }: { kind: Kind; open: b
   const [check, setCheck] = useState<ImportResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [reading, setReading] = useState<Reading | null>(null);
+  // Only the file chosen last is shown (another may be picked while a photo is read).
+  const choice = useRef(0);
 
   useEffect(() => {
+    choice.current++;
+    setReading(null);
     if (open) {
       setFile(null);
       setCheck(null);
@@ -121,16 +127,27 @@ export function ImportDialog({ kind, open, onOpenChange }: { kind: Kind; open: b
   const run = async (dryRun: boolean, rows: Array<Record<string, string>>) => api.post<ImportResult>(path, { dryRun, rows });
 
   const choose = async (f: File) => {
+    const mine = ++choice.current;
     setError(null);
     setCheck(null);
+    setReading({ page: 0, pages: 0 });
     let sheet: string[][];
     try {
-      sheet = (await readSheetFile(f, { isHeader: (cells) => cells.some((c) => headerKey(c, ALIASES[kind]) === "name") })).rows;
+      sheet = (
+        await readSheetFile(f, {
+          isHeader: (cells) => cells.some((c) => headerKey(c, ALIASES[kind]) === "name"),
+          onProgress: (page, pages) => mine === choice.current && setReading({ page, pages }),
+        })
+      ).rows;
     } catch (e) {
+      if (mine !== choice.current) return;
       setFile(null);
-      setError(new ApiError(400, e instanceof SheetError ? e.code : "IMPORT_UNREADABLE"));
+      setError(e instanceof ApiError ? e : new ApiError(400, e instanceof SheetError ? e.code : "IMPORT_UNREADABLE"));
       return;
+    } finally {
+      if (mine === choice.current) setReading(null);
     }
+    if (mine !== choice.current) return;
     const { columns, records } = sheetRecords(sheet, ALIASES[kind]);
     const known = columns.filter((c) => COLUMNS[kind].includes(c));
     const ignored = columns.filter((c) => c && !COLUMNS[kind].includes(c));
@@ -200,7 +217,7 @@ export function ImportDialog({ kind, open, onOpenChange }: { kind: Kind; open: b
           <Button icon={<FileDown size={16} />} onClick={template}>
             {t("imports.template")}
           </Button>
-          <Button variant="soft" icon={<FileUp size={16} />} onClick={() => input.current?.click()}>
+          <Button variant="soft" icon={<FileUp size={16} />} disabled={reading !== null} onClick={() => input.current?.click()}>
             {file ? t("imports.otherFile") : t("imports.chooseFile")}
           </Button>
           <input
@@ -217,6 +234,7 @@ export function ImportDialog({ kind, open, onOpenChange }: { kind: Kind; open: b
           />
         </div>
         <p className="text-[12.5px] text-ink-3">{t("imports.columns", { columns: COLUMNS[kind].join(", ") })}</p>
+        {reading && <ReadingStatus reading={reading} />}
         {error ? <ErrorNote error={error} /> : null}
         {file && (
           <div className="flex flex-col gap-2 rounded-lg border border-line p-3 text-[13.5px]">

@@ -60,7 +60,7 @@ log("signed up");
 // 2. Products from an Excel sheet.
 await nav("Products");
 await page.getByRole("button", { name: "Import" }).click();
-await page.getByLabel("Choose Excel, CSV or PDF file").setInputFiles(join(FIXTURES, "products.xlsx"));
+await page.getByLabel("Choose Excel, CSV, PDF or photo").setInputFiles(join(FIXTURES, "products.xlsx"));
 await dialog().getByRole("button", { name: "Import 4 rows" }).click();
 await toast("4 products added");
 log("4 products imported from products.xlsx");

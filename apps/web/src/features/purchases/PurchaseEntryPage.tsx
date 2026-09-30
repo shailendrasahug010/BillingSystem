@@ -345,6 +345,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
             <p className="font-medium text-ink">
               {t("billImport.importedFrom", { file: draft.fileName })} · {t("billImport.matchedCount", { matched: matchedAtOpen.current, count: draft.items.length })}
             </p>
+            {draft.scanned && <p className="font-medium text-warn">{t("billImport.fromPhoto")}</p>}
             <p className="text-ink-2">{t("billImport.reviewHint")}</p>
             {!draft.supplierId && draft.supplierHint && <p className="text-warn">{t("billImport.supplierNotFound", { value: draft.supplierHint })}</p>}
             {draft.duplicate && (

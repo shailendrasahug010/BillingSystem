@@ -35,6 +35,8 @@ export interface PurchaseDraft {
   supplierCandidates: MatchResponse["supplierCandidates"];
   duplicate: MatchResponse["duplicate"];
   items: ImportedItem[];
+  /** Read from a photo or a scanned PDF. */
+  scanned?: boolean;
 }
 
 /** Lines the purchase entry screen keeps (a subset of its own line state). */
@@ -54,10 +56,11 @@ export interface DraftLine {
   fileRow: number;
 }
 
-export function draftFromMatch(fileName: string, bill: BillFileBill, match: MatchResponse): PurchaseDraft {
+export function draftFromMatch(fileName: string, bill: BillFileBill, match: MatchResponse, scanned = false): PurchaseDraft {
   return {
     id: crypto.randomUUID(),
     fileName,
+    ...(scanned ? { scanned } : {}),
     billNumber: bill.billNumber ?? "",
     billDate: bill.billDate,
     supplierId: match.supplier?.id ?? null,

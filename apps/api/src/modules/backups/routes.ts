@@ -6,6 +6,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 import { guard } from "../../lib/access.js";
+import { acceptFiles } from "../../lib/binary.js";
 import { audit, diff } from "../../lib/audit.js";
 import { withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, forbidden, unauthorized } from "../../lib/errors.js";
@@ -70,7 +71,7 @@ function scheduleView(row: ScheduleRow | null, extra: { defaultTo: string | null
 export const backupsModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   // Backup files arrive as they are (no JSON wrapping, no base64).
-  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: MAX_RESTORE_BYTES }, (_req, body, done) => done(null, body));
+  acceptFiles(app);
 
   r.get("/backups", { preHandler: guard(deps, "backup.create"), schema: { tags: ["backup"] } }, async (request) =>
     withTenant(deps.db, request.ctx, async (tx) => ({

@@ -918,10 +918,9 @@
     "NOTE_EXCEEDS_BILL": "The bill has only {{max}} left before GST.",
     "NOTE_EXCEEDS_LINE": "{{product}} has only {{max}} left before GST.",
     "IMPORT_OLD_EXCEL": "This is an old Excel file (.xls). Open it in Excel and save it as .xlsx or CSV, then upload again.",
-    "IMPORT_UNREADABLE": "This file could not be read. Upload an Excel (.xlsx) or CSV file.",
+    "IMPORT_UNREADABLE": "This file could not be read. Upload an Excel (.xlsx) or CSV file, a PDF, or a JPEG or PNG photo.",
     "IMAGE_TOO_LARGE": "The logo is too large (at most {{maxKb}} KB). Use a smaller image.",
     "INVALID_IMAGE": "This file is not a PNG, JPEG or WebP image.",
-    "IMPORT_PDF_SCANNED": "This PDF is a scanned or photographed page, so its text can't be read. Ask for the Excel file, or the PDF made by the supplier's billing software.",
     "IMPORT_PDF_LOCKED": "This PDF is locked with a password. Ask for an unlocked copy.",
     "DEVICE_LIMIT_REACHED": "This business has used every device code. Remove old devices in Settings.",
     "DEVICE_REVOKED": "This device was removed from the business, so its offline bills can't be saved. Ask the owner.",
@@ -950,7 +949,13 @@
     "PROMISE_DATE_TOO_FAR": "The promised date must be within a year",
     "NOTE_REQUIRED": "Write what happened on the visit",
     "OFFLINE_NOT_KEPT": "This device cannot keep work offline (its storage is blocked). Connect to the internet and try again.",
-    "OFFLINE_COPY_EXPIRED": "The copy of {{business}} on this device was deleted: it went more than {{days}} days without connecting. Connect to the internet and sign in; work still waiting on this device is sent then."
+    "OFFLINE_COPY_EXPIRED": "The copy of {{business}} on this device was deleted: it went more than {{days}} days without connecting. Connect to the internet and sign in; work still waiting on this device is sent then.",
+    "IMPORT_PHOTO_OFFLINE": "Reading a photo or a scanned PDF needs an internet connection. Connect and try again, or use the Excel or CSV file.",
+    "IMPORT_PHOTO_BLANK": "No printed text could be read on this page. Take the photo again: the whole page, straight from above, in good light.",
+    "OCR_IMAGE_UNSUPPORTED": "This picture could not be opened. Use a JPEG or PNG photo.",
+    "OCR_IMAGE_TOO_LARGE": "This picture is too large to read (more than {{max}} pixels on a side).",
+    "OCR_BUSY": "Other pages are being read right now. Try again in a moment.",
+    "OCR_FAILED": "The page could not be read. Try again, or take a clearer photo."
   },
   "validation": {
     "required": "This field is required",
@@ -1500,9 +1505,9 @@
     "import": "Import",
     "products": "Import products",
     "customers": "Import customers",
-    "hint": "From Excel or another billing software: upload the Excel file (.xlsx), a CSV, or a PDF made by the software. Everything is checked first; nothing is saved until every row is right.",
+    "hint": "From Excel or another billing software: upload the Excel file (.xlsx), a CSV, a PDF (made by the software or scanned) or a photo of a printed list. Everything is checked first; nothing is saved until every row is right.",
     "template": "Download template",
-    "chooseFile": "Choose Excel, CSV or PDF file",
+    "chooseFile": "Choose Excel, CSV, PDF or photo",
     "otherFile": "Choose another file",
     "columns": "Columns: {{columns}}. Only name is required (and GST for products).",
     "noNameColumn": "No name column found. Use the template's headers.",
@@ -1525,7 +1530,10 @@
     "customersCreated_one": "{{count}} customer added",
     "customersCreated_other": "{{count}} customers added",
     "rows_one": "{{count}} row",
-    "rows_other": "{{count}} rows"
+    "rows_other": "{{count}} rows",
+    "reading": "Reading the file…",
+    "readingPage": "Reading page {{page}} of {{pages}}… a few seconds a page.",
+    "readingOnePage": "Reading the page… this takes a few seconds."
   },
   "godowns": {
     "title": "Godowns",
@@ -1952,7 +1960,7 @@
   "billImport": {
     "button": "Import bill",
     "title": "Import supplier bill",
-    "hint": "Upload the bill your supplier sent: Excel, CSV or the PDF from their billing software. Items, quantities, rates, GST, batch and expiry are read and matched to your products; you check everything before saving.",
+    "hint": "Upload the bill your supplier sent (Excel, CSV or PDF), or take a photo of the printed bill. Items, quantities, rates, GST, batch and expiry are read and matched to your products; you check everything before saving.",
     "chooseFile": "Choose bill file",
     "sample": "Download sample",
     "columnsHelp": "Columns it understands (any usual name): bill no, bill date, supplier GSTIN or name, item name, item code, barcode, HSN, unit, qty, free qty, rate / PTR, disc %, GST % (or CGST % + SGST %, IGST %), batch, expiry, MRP, taxable value.",
@@ -2010,7 +2018,10 @@
     "packAboveMrp": "Billed per {{unit}} above its MRP, so the MRP is probably per piece. Check the unit and price.",
     "gstForRest": "GST for the items without one",
     "rateNotListed": "The bill charges GST {{rates}}, which is not in your GST list (rates changed on 22 Sep 2025). Choose the rate that applies now; this purchase keeps the GST the bill charged.",
-    "billRate": "Bill: GST {{rate}}%, not in your list"
+    "billRate": "Bill: GST {{rate}}%, not in your list",
+    "photo": "Photo of the bill",
+    "photoTip": "A printed bill can be photographed, or a scanned PDF uploaded: keep the whole bill in the frame, straight from above, in good light. Reading a photo needs internet.",
+    "fromPhoto": "Read from a photo or scan: check every item, quantity and rate against the paper bill before saving."
   },
   "offline": {
     "notReady": "This device is not ready for offline bills yet. Open Digital Bahi once while connected to the internet.",
