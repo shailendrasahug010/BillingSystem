@@ -13,6 +13,7 @@
     "lint:i18n": "pnpm --filter @digitalbahi/i18n test",
     "db:generate": "pnpm --filter @digitalbahi/db generate",
     "db:verify": "pnpm --filter @digitalbahi/db verify",
+    "db:docs": "pnpm --filter @digitalbahi/db reference",
     "dev:web": "pnpm --filter @digitalbahi/web dev",
     "preview:web": "pnpm --filter @digitalbahi/web preview",
     "db:migrate": "pnpm --filter @digitalbahi/db migrate",

@@ -12,12 +12,17 @@ export const salaryComponents = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Short code (BASIC, HRA, PF ...), unique in the business. */
     code: varchar({ length: 12 }).notNull(),
     name: text().notNull(),
     nameHi: text(),
+    /** earning or deduction. */
     type: salaryComponentType().notNull(),
+    /** How the amount is worked out: fixed, percent of basic, per day, per hour or typed each month (manual). */
     calcType: salaryCalcType().notNull().default("fixed"),
+    /** Amount used when a structure does not give one (fixed, per day or per hour). */
     defaultValue: money().notNull().default("0"),
+    /** Percent of basic used when a structure does not give one. */
     defaultPercent: percent().notNull().default("0"),
     /** Reduced proportionally for unpaid leave / absence. */
     isProrated: boolean().notNull().default(true),
@@ -34,12 +39,17 @@ export const employeeSalaryStructures = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The employee. */
     employeeId: uuid()
       .notNull()
       .references(() => employees.id),
+    /** First day the structure applies; the latest one on or before a month is used. */
     effectiveFrom: date({ mode: "string" }).notNull(),
+    /** Monthly basic pay. */
     basic: money().notNull(),
+    /** Monthly gross pay (all earnings) for a full month. */
     monthlyGross: money().notNull(),
+    /** Pay per overtime hour. */
     overtimeRatePerHour: money().notNull().default("0"),
     notes: text(),
     ...auditColumns,
@@ -52,13 +62,17 @@ export const employeeSalaryStructureComponents = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The salary structure. */
     structureId: uuid()
       .notNull()
       .references(() => employeeSalaryStructures.id, { onDelete: "cascade" }),
+    /** The salary component. */
     componentId: uuid()
       .notNull()
       .references(() => salaryComponents.id),
+    /** Monthly amount of the component (fixed ones). */
     amount: money().notNull().default("0"),
+    /** Percent of basic (percent-of-basic ones). */
     percent: percent().notNull().default("0"),
   },
   (t) => [unique("employee_salary_structure_components_uq").on(t.structureId, t.componentId)],
@@ -70,15 +84,23 @@ export const employeeAdvances = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The employee. */
     employeeId: uuid()
       .notNull()
       .references(() => employees.id),
+    /** advance or loan; both are recovered from salary in instalments, under their own label on the slip. */
     type: advanceType().notNull(),
+    /** Amount given. */
     amount: money().notNull(),
+    /** Date it was given. */
     issuedOn: date({ mode: "string" }).notNull(),
+    /** Amount recovered from each month's salary. */
     installmentAmount: money().notNull(),
+    /** Recovered so far (when payroll is finalized). */
     recoveredAmount: money().notNull().default("0"),
+    /** The payment by which the money was given. */
     paymentId: uuid().references(() => payments.id),
+    /** Fully recovered. */
     isClosed: boolean().notNull().default(false),
     notes: text(),
     ...auditColumns,
@@ -98,11 +120,17 @@ export const payrollRuns = pgTable(
     businessId: businessId(),
     /** First day of the month. */
     periodMonth: date({ mode: "string" }).notNull(),
+    /** Draft (editable), finalized (slips frozen, recoveries applied), paid or cancelled. */
     status: payrollStatus().notNull().default("draft"),
+    /** Sum of the slips' gross earnings. */
     totalGross: money().notNull().default("0"),
+    /** Sum of the slips' deductions. */
     totalDeductions: money().notNull().default("0"),
+    /** Sum of the slips' net pay. */
     totalNet: money().notNull().default("0"),
+    /** When the run was finalized. */
     finalizedAt: tstz(),
+    /** User who finalized it. */
     finalizedBy: uuid(),
     ...auditColumns,
     ...versioned,
@@ -116,18 +144,27 @@ export const salarySlips = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The month's payroll run. */
     payrollRunId: uuid()
       .notNull()
       .references(() => payrollRuns.id, { onDelete: "cascade" }),
+    /** The employee. */
     employeeId: uuid()
       .notNull()
       .references(() => employees.id),
+    /** Days in the month (calendar-month basis). */
     workingDays: qty().notNull(),
+    /** Days paid: every day except absence, half of half days, unpaid leave, and days before joining or after leaving. */
     paidDays: qty().notNull(),
+    /** Approved unpaid leave in the month. */
     unpaidLeaveDays: qty().notNull().default("0"),
+    /** Overtime hours from attendance. */
     overtimeHours: qty().notNull().default("0"),
+    /** All earnings on the slip. */
     grossEarnings: money().notNull(),
+    /** All deductions (PF, ESI, professional tax, TDS, advance recovery ...). */
     totalDeductions: money().notNull(),
+    /** Gross earnings - total deductions (checked by the database). */
     netPay: money().notNull(),
     /**
      * PF, ESI and professional tax as worked out by law, with the wages they were
@@ -138,7 +175,9 @@ export const salarySlips = pgTable(
       esi?: { wages: string; employee: string; employer: string };
       pt?: { amount: string; stateCode: string };
     }>(),
+    /** The payment by which the salary was paid. */
     paymentId: uuid().references(() => payments.id),
+    /** When the salary was paid. */
     paidAt: tstz(),
     ...auditColumns,
   },
@@ -155,13 +194,19 @@ export const salarySlipLines = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The salary slip. */
     salarySlipId: uuid()
       .notNull()
       .references(() => salarySlips.id, { onDelete: "cascade" }),
+    /** The salary component, for component lines. */
     componentId: uuid().references(() => salaryComponents.id),
+    /** The advance or loan, for recovery lines. */
     advanceId: uuid().references(() => employeeAdvances.id),
+    /** Line text printed on the slip. */
     label: text().notNull(),
+    /** earning or deduction. */
     type: salaryComponentType().notNull(),
+    /** Amount of the line. */
     amount: money().notNull(),
     sortOrder: smallint().notNull().default(0),
   },

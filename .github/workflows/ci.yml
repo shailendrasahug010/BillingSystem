@@ -53,5 +53,10 @@ jobs:
           git diff --exit-code -- packages/db/migrations
           test -z "$(git status --porcelain -- packages/db/migrations)"
 
+      - name: Database reference matches the schema
+        run: |
+          pnpm db:docs
+          git diff --exit-code -- docs/12-database-reference.md
+
       - name: Build web app
         run: pnpm build

@@ -14,6 +14,7 @@ export const expenseCategories = pgTable(
     businessId: businessId(),
     name: text().notNull(),
     nameHi: text(),
+    /** Seeded with the business (Rent, Electricity ...). */
     isSystem: boolean().notNull().default(false),
     isActive: boolean().notNull().default(true),
     ...auditColumns,
@@ -26,32 +27,53 @@ export const expenses = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Number from the expense series. */
     expenseNumber: varchar({ length: 30 }),
+    /** Date of the expense. */
     expenseDate: date({ mode: "string" }).notNull(),
+    /** Expense category (Rent, Fuel ...). */
     categoryId: uuid()
       .notNull()
       .references(() => expenseCategories.id),
+    /** Who was paid (shop, landlord, person). */
     paidTo: text(),
+    /** The supplier, when paid to one. */
     supplierId: uuid().references(() => suppliers.id),
     /** Amount before GST. */
     amount: money().notNull(),
     // Optional GST on the expense bill (for input tax credit).
+    /** GSTIN on the expense bill, needed to claim its GST as input credit. */
     vendorGstin: varchar({ length: 15 }),
+    /** GST rate on the bill in percent. */
     gstRate: percent().notNull().default("0"),
+    /** Central GST on the bill. */
     cgstAmount: money().notNull().default("0"),
+    /** State / UT GST on the bill. */
     sgstAmount: money().notNull().default("0"),
+    /** Integrated GST on the bill. */
     igstAmount: money().notNull().default("0"),
+    /** Whether the GST can be claimed as input credit (not for composition or unregistered businesses). */
     itcEligibility: itcEligibility(),
+    /** Amount paid: the amount plus its GST. */
     totalAmount: money().notNull(),
+    /** Cash, UPI, bank transfer, cheque, card or other. */
     paymentMethod: paymentMethod().notNull(),
+    /** Account the money was paid from. */
     paymentAccountId: uuid().references(() => paymentAccounts.id),
+    /** Bill or payment reference. */
     referenceNumber: varchar({ length: 40 }),
+    /** Reserved for a photo of the bill (not filled). */
     receiptFileId: uuid().references(() => files.id),
     notes: text(),
+    /** Posted or cancelled. */
     status: documentStatus().notNull().default("posted"),
+    /** Reserved for an approval step (not filled yet). */
     approvedBy: uuid(),
+    /** When it was cancelled (kept, and left out of reports and GST). */
     cancelledAt: tstz(),
+    /** User who cancelled it. */
     cancelledBy: uuid(),
+    /** Why it was cancelled. */
     cancelReason: text(),
     /** Idempotency key from the client (a retried save returns the same expense). */
     clientId: uuid(),

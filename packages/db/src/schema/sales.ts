@@ -35,28 +35,43 @@ export const salesOrders = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Number from the order series, given when the order is saved. */
     orderNumber: varchar({ length: 30 }),
+    /** Number series the order was numbered from. */
     seriesId: uuid().references(() => documentSeries.id),
+    /** Financial year of the order (2026-27); its number is unique within it. */
     financialYear: varchar({ length: 9 }).notNull(),
+    /** Date of the order. */
     orderDate: date({ mode: "string" }).notNull(),
+    /** When the customer expects the goods. */
     expectedDeliveryDate: date({ mode: "string" }),
+    /** The customer who ordered. */
     customerId: uuid()
       .notNull()
       .references(() => customers.id),
+    /** Godown the order is packed from. */
     warehouseId: uuid()
       .notNull()
       .references(() => warehouses.id),
+    /** Price list the order was priced on. */
     priceLevelId: uuid().references(() => priceLevels.id),
+    /** Salesperson who took the order. */
     salespersonId: uuid().references(() => employees.id),
+    /** Draft, pending, confirmed, packing, packed, dispatched, delivered or cancelled (steps per business; moves are recorded in status_history). */
     status: orderStatus().notNull().default("draft"),
     /** Where the order came from: counter, salesperson app, phone, WhatsApp... */
     source: varchar({ length: 20 }).notNull().default("app"),
+    /** GST state code of the place of supply. */
     placeOfSupply: char({ length: 2 }).notNull(),
     ...documentTotalsColumns(),
     notes: text(),
+    /** When the order was cancelled. */
     cancelledAt: tstz(),
+    /** Why it was cancelled. */
     cancelReason: text(),
+    /** Device the order was made on, when it was made offline. */
     deviceId: uuid().references(() => devices.id),
+    /** Id the app gave the order when it was made: a retried or offline save with the same id returns the saved order instead of making a second one. */
     clientId: uuid(),
     ...auditColumns,
     ...versioned,
@@ -74,6 +89,7 @@ export const salesOrderItems = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The order. */
     orderId: uuid()
       .notNull()
       .references(() => salesOrders.id, { onDelete: "cascade" }),
@@ -86,9 +102,13 @@ export const salesOrderItems = pgTable(
       .references(() => units.id),
     /** Fulfilment progress in base units; supports partial packing, dispatch, delivery and invoicing. */
     packedQty: qty().notNull().default("0"),
+    /** Base units sent on a trip. */
     dispatchedQty: qty().notNull().default("0"),
+    /** Base units delivered. */
     deliveredQty: qty().notNull().default("0"),
+    /** Base units already billed (an order can be billed in parts). */
     invoicedQty: qty().notNull().default("0"),
+    /** Base units no longer to be supplied. */
     cancelledQty: qty().notNull().default("0"),
   },
   (t) => [
@@ -112,30 +132,46 @@ export const invoices = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** GST invoice number (up to 16 letters, digits, / and -), unique in the financial year; empty while a draft. */
     invoiceNumber: varchar({ length: 16 }),
+    /** Number series the invoice was numbered from. */
     seriesId: uuid().references(() => documentSeries.id),
+    /** Financial year of the invoice (2026-27); its number is unique within it. */
     financialYear: varchar({ length: 9 }).notNull(),
+    /** Date of the invoice (decides the GST period and the tax rules that apply). */
     invoiceDate: date({ mode: "string" }).notNull(),
+    /** When payment is due: invoice date + the customer's credit days. */
     dueDate: date({ mode: "string" }),
+    /** Tax invoice, or bill of supply (no GST charged: exempt goods or a composition dealer). */
     documentKind: documentKind().notNull().default("tax_invoice"),
+    /** The customer billed. */
     customerId: uuid()
       .notNull()
       .references(() => customers.id),
     ...gstPartySnapshotColumns(),
+    /** The order the invoice bills, when it was ordered first. */
     salesOrderId: uuid().references(() => salesOrders.id),
+    /** Godown the goods left from. */
     warehouseId: uuid()
       .notNull()
       .references(() => warehouses.id),
+    /** Price list the invoice was priced on. */
     priceLevelId: uuid().references(() => priceLevels.id),
+    /** Salesperson credited with the sale (salesperson-wise reports). */
     salespersonId: uuid().references(() => employees.id),
+    /** Draft, posted or cancelled. */
     status: documentStatus().notNull().default("draft"),
     ...documentTotalsColumns(),
+    /** Paid so far against this invoice (payments allocated to it, and payment at the time of the invoice). */
     amountPaid: money().notNull().default("0"),
+    /** Still to be paid: grand total less amount paid and returns / credit notes against it. */
     balanceDue: money().notNull().default("0"),
+    /** Unpaid, partly paid or paid. */
     paymentStatus: paymentStatus().notNull().default("unpaid"),
     /** Cost of goods at posting (sum of qty_base x avg cost) for margin reports. */
     costTotal: money().notNull().default("0"),
     notes: text(),
+    /** Terms and conditions printed at the foot of the invoice. */
     terms: text(),
     /** Language the invoice is printed in (can differ from the user's UI language). */
     printLocale: varchar({ length: 10 }).notNull().default("en"),
@@ -146,24 +182,40 @@ export const invoices = pgTable(
     zeroRatedType: varchar({ length: 6 }),
     /** Exports: the shipping bill and port (often known only after the invoice; can be added later). */
     shippingBillNumber: varchar({ length: 20 }),
+    /** Date of the shipping bill. */
     shippingBillDate: date({ mode: "string" }),
+    /** Port code of the shipping bill (6 characters). */
     portCode: varchar({ length: 6 }),
     /** Without payment of IGST: the letter of undertaking (ARN) it was made under, printed on the invoice. */
     lutArn: varchar({ length: 20 }),
     // e-invoicing (IRP) and e-way bill: entered from the portals' replies (or filled by an adapter).
+    /** Invoice Reference Number from the e-invoice portal (IRP), 64 characters. */
     irn: varchar({ length: 64 }),
+    /** Acknowledgement number the IRP gave with the IRN. */
     irnAckNumber: varchar({ length: 20 }),
+    /** Acknowledgement date and time from the IRP. */
     irnAckDate: tstz(),
+    /** Signed QR code text from the IRP; the QR code printed on the invoice is drawn from it. */
     signedQrCode: text(),
+    /** E-way bill number (12 digits) for moving the goods. */
     ewayBillNumber: varchar({ length: 12 }),
+    /** When the e-way bill was generated. */
     ewayBillDate: tstz(),
+    /** Until when the e-way bill is valid. */
     ewayBillValidUntil: tstz(),
+    /** When the invoice was posted (numbered, and its stock, ledger and GST entries written). */
     postedAt: tstz(),
+    /** User who posted the invoice. */
     postedBy: uuid(),
+    /** When the invoice was cancelled. A cancelled invoice is kept with its number; cancelling reverses its stock, ledger and GST entries. */
     cancelledAt: tstz(),
+    /** User who cancelled the invoice. */
     cancelledBy: uuid(),
+    /** Why it was cancelled. */
     cancelReason: text(),
+    /** Reserved for editing posted invoices (stays 0: posted invoices are cancelled and made again). */
     revision: integer().notNull().default(0),
+    /** Device the invoice was made on, when it was made offline. */
     deviceId: uuid().references(() => devices.id),
     /** Idempotency key from the client (offline sync retries cannot create duplicates). */
     clientId: uuid(),
@@ -191,6 +243,7 @@ export const invoiceItems = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The invoice. */
     invoiceId: uuid()
       .notNull()
       .references(() => invoices.id, { onDelete: "cascade" }),
@@ -201,10 +254,13 @@ export const invoiceItems = pgTable(
     unitId: uuid()
       .notNull()
       .references(() => units.id),
+    /** The batch sold, for products kept by batch. */
     batchId: uuid().references(() => batches.id),
+    /** The order line this line bills. */
     orderItemId: uuid().references(() => salesOrderItems.id),
     /** Moving-average cost per base unit at posting time (margin reports). */
     unitCost: rate().notNull().default("0"),
+    /** Quantity already returned (credit notes); no more than was sold can be returned. */
     returnedQty: qty().notNull().default("0"),
   },
   (t) => [
@@ -215,17 +271,24 @@ export const invoiceItems = pgTable(
   ],
 );
 
-/** Full snapshot of an invoice before each edit (who changed what, and the previous values). */
+/**
+ * Full snapshot of an invoice before each edit (who changed what, and the previous values).
+ * Not written yet: posted invoices are not edited but cancelled and made again.
+ */
 export const invoiceRevisions = pgTable(
   "invoice_revisions",
   {
     id: pk(),
     businessId: businessId(),
+    /** The invoice. */
     invoiceId: uuid()
       .notNull()
       .references(() => invoices.id),
+    /** Revision number (1, 2 ...). */
     revision: integer().notNull(),
+    /** The whole invoice with its lines as it was before the change. */
     snapshot: jsonb().notNull(),
+    /** Why it was changed. */
     reason: text(),
     createdBy: uuid(),
     createdAt: tstz().notNull().defaultNow(),
@@ -239,9 +302,13 @@ export const statusHistory = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Kind of record: sales_order, packing, dispatch ... */
     entityType: varchar({ length: 30 }).notNull(),
+    /** Id of the record. */
     entityId: uuid().notNull(),
+    /** Status before (empty when the record was made). */
     fromStatus: varchar({ length: 30 }),
+    /** Status after. */
     toStatus: varchar({ length: 30 }).notNull(),
     note: text(),
     createdBy: uuid(),
@@ -255,14 +322,21 @@ export const packings = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Number from the packing series. */
     packingNumber: varchar({ length: 30 }),
+    /** The order being packed. */
     salesOrderId: uuid()
       .notNull()
       .references(() => salesOrders.id),
+    /** In progress, packed or cancelled. */
     status: packingStatus().notNull().default("in_progress"),
+    /** Number of boxes packed. */
     boxCount: smallint().notNull().default(0),
+    /** Total weight in kg, when weighed. */
     totalWeightKg: numeric({ precision: 10, scale: 3 }),
+    /** Employee who packed it. */
     packedBy: uuid().references(() => employees.id),
+    /** When packing was finished. */
     packedAt: tstz(),
     notes: text(),
     ...auditColumns,
@@ -280,19 +354,25 @@ export const packingItems = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The packing. */
     packingId: uuid()
       .notNull()
       .references(() => packings.id, { onDelete: "cascade" }),
+    /** The order line packed. */
     orderItemId: uuid()
       .notNull()
       .references(() => salesOrderItems.id),
+    /** The product packed. */
     productId: uuid()
       .notNull()
       .references(() => products.id),
+    /** The batch picked (first-expiry-first). */
     batchId: uuid().references(() => batches.id),
     /** Base units packed in this packing session. */
     qty: qty().notNull(),
+    /** Box the goods went into (1, 2 ...). */
     boxNo: smallint(),
+    /** Barcode scanned when packing, when it was scanned. */
     scannedBarcode: varchar({ length: 64 }),
   },
   (t) => [index("packing_items_packing_idx").on(t.packingId), check("packing_items_qty_chk", sql`${t.qty} > 0`)],
@@ -304,17 +384,29 @@ export const dispatches = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Number from the dispatch series. */
     dispatchNumber: varchar({ length: 30 }),
+    /** Date of the trip. */
     dispatchDate: date({ mode: "string" }).notNull(),
+    /** Vehicle registration number (also for the e-way bill). */
     vehicleNumber: varchar({ length: 15 }),
+    /** Driver's name. */
     driverName: text(),
+    /** Driver's mobile number. */
     driverMobile: varchar({ length: 15 }),
+    /** The driver, when an employee. */
     driverEmployeeId: uuid().references(() => employees.id),
+    /** Transport company, when the goods go by a transporter. */
     transporterName: text(),
+    /** Transporter's GSTIN (or transporter ID) for the e-way bill. */
     transporterGstin: varchar({ length: 15 }),
+    /** Lorry receipt (LR / consignment note) number. */
     lrNumber: varchar({ length: 30 }),
+    /** Date of the lorry receipt. */
     lrDate: date({ mode: "string" }),
+    /** When the goods should arrive. */
     expectedDeliveryDate: date({ mode: "string" }),
+    /** Planned, dispatched, in transit, delivered, partly delivered, returned or cancelled. */
     status: deliveryStatus().notNull().default("planned"),
     remarks: text(),
     ...auditColumns,
@@ -331,17 +423,25 @@ export const dispatchOrders = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The trip. */
     dispatchId: uuid()
       .notNull()
       .references(() => dispatches.id, { onDelete: "cascade" }),
     /** Set when the goods were ordered first; a bill made at the counter travels without an order. */
     salesOrderId: uuid().references(() => salesOrders.id),
+    /** The packing travelling, when packed first. */
     packingId: uuid().references(() => packings.id),
+    /** The bill travelling. */
     invoiceId: uuid().references(() => invoices.id),
+    /** Stop number on the trip (delivery order). */
     deliverySequence: smallint(),
+    /** Delivery status of this stop: dispatched, delivered, partly delivered or returned. */
     status: deliveryStatus().notNull().default("dispatched"),
+    /** When the stop was marked delivered. */
     deliveredAt: tstz(),
+    /** Name of the person who received the goods. */
     receivedBy: text(),
+    /** Proof of delivery file (photo attachments were dropped; not filled). */
     podFileId: uuid().references(() => files.id),
     remarks: text(),
     ...auditColumns,
@@ -355,18 +455,26 @@ export const dispatchOrders = pgTable(
   ],
 );
 
-/** Lines sold at a rate different from the price list (who changed it, from what, and why). */
+/**
+ * Lines sold at a rate different from the price list (who changed it, from what, and why).
+ * Not written yet.
+ */
 export const priceOverrides = pgTable(
   "price_overrides",
   {
     id: pk(),
     businessId: businessId(),
+    /** The invoice line. */
     invoiceItemId: uuid()
       .notNull()
       .references(() => invoiceItems.id, { onDelete: "cascade" }),
+    /** Rate on the price list. */
     listRate: rate().notNull(),
+    /** Rate charged. */
     chargedRate: rate().notNull(),
+    /** Why the rate was changed. */
     reason: text(),
+    /** User who allowed the change. */
     approvedBy: uuid(),
     createdAt: tstz().notNull().defaultNow(),
   },

@@ -17,6 +17,7 @@
     "verify": "vitest run --reporter=verbose",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "reference": "tsx scripts/db-docs.ts",
     "setup-app-role": "tsx scripts/setup-app-role.ts"
   },
   "dependencies": {

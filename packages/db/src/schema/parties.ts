@@ -24,7 +24,9 @@ export const priceLevels = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Name of the price list (Price A, Retail ...), unique in the business. */
     name: text().notNull(),
+    /** The list used for customers who have none of their own (one per business). */
     isDefault: boolean().notNull().default(false),
     sortOrder: smallint().notNull().default(0),
     ...auditColumns,
@@ -56,6 +58,7 @@ export const salesRoutes = pgTable(
     name: text().notNull(),
     /** ISO weekdays 1-7 the route is visited, e.g. {1,4}. */
     visitDays: smallint().array(),
+    /** Salesperson who covers the route. */
     salespersonId: uuid().references(() => employees.id),
     isActive: boolean().notNull().default(true),
     ...auditColumns,
@@ -68,10 +71,15 @@ export const customers = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The business's own customer code (C0001 ...), unique among its current customers. */
     code: varchar({ length: 20 }).notNull(),
+    /** Name of the shop or person, as printed on bills. */
     name: text().notNull(),
+    /** Registered business name when it differs from the shop name. */
     businessName: text(),
+    /** b2b (registered, with a GSTIN) or b2c: decides the GSTR-1 table its bills go to. */
     customerType: customerType().notNull().default("b2c"),
+    /** The customer's GST status: regular, composition, unregistered, consumer, SEZ unit, overseas (export) or deemed export. */
     gstRegistration: partyGstRegistration().notNull().default("consumer"),
     mobile: varchar({ length: 15 }),
     altMobile: varchar({ length: 15 }),
@@ -79,6 +87,7 @@ export const customers = pgTable(
     addressLine1: text(),
     addressLine2: text(),
     city: text(),
+    /** State of the customer's address: the default place of supply. */
     stateCode: char({ length: 2 })
       .notNull()
       .references(() => states.code),
@@ -89,12 +98,19 @@ export const customers = pgTable(
     creditLimit: money(),
     /** Payment terms in days; drives invoice due dates and aging. */
     creditDays: smallint().notNull().default(0),
+    /** Price list the customer buys on (Price A / B / C). */
     priceLevelId: uuid().references(() => priceLevels.id),
+    /** Customer category (kirana, wholesaler, medical ...). */
     categoryId: uuid().references(() => customerCategories.id),
+    /** Beat (route) the customer is on, for salespeople and collection lists. */
     routeId: uuid().references(() => salesRoutes.id),
+    /** Salesperson in charge of the customer. */
     salesRepId: uuid().references(() => employees.id),
+    /** Amount owed when the customer was brought into the app. */
     openingBalance: money().notNull().default("0"),
+    /** debit: the customer owed us; credit: we owed the customer (an advance). */
     openingBalanceSide: balanceSide().notNull().default("debit"),
+    /** Date of the opening balance (the start of using the app). */
     openingBalanceDate: date({ mode: "string" }),
     /**
      * Cached receivable balance (debit positive). Maintained in the same
@@ -129,17 +145,21 @@ export const customerAddresses = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The customer. */
     customerId: uuid()
       .notNull()
       .references(() => customers.id, { onDelete: "cascade" }),
+    /** Name of the address (Godown 2, Branch ...). */
     label: text().notNull(),
     addressLine1: text().notNull(),
     addressLine2: text(),
     city: text(),
+    /** State of this address: the place of supply when goods are delivered here. */
     stateCode: char({ length: 2 })
       .notNull()
       .references(() => states.code),
     pincode: varchar({ length: 6 }),
+    /** The address bills deliver to unless another is chosen. */
     isDefaultShipping: boolean().notNull().default(false),
     ...auditColumns,
   },
@@ -151,9 +171,13 @@ export const suppliers = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The business's own supplier code (S0001 ...), unique among its current suppliers. */
     code: varchar({ length: 20 }).notNull(),
+    /** Supplier's name. */
     name: text().notNull(),
+    /** Company the supplier represents or distributes for, when different. */
     companyName: text(),
+    /** The supplier's GST status: decides reverse charge and input credit on their bills. */
     gstRegistration: partyGstRegistration().notNull().default("regular"),
     mobile: varchar({ length: 15 }),
     email: text(),
@@ -162,22 +186,34 @@ export const suppliers = pgTable(
     addressLine1: text(),
     addressLine2: text(),
     city: text(),
+    /** State of the supplier: decides intra- or inter-state purchase. */
     stateCode: char({ length: 2 })
       .notNull()
       .references(() => states.code),
     pincode: varchar({ length: 6 }),
+    /** Days of credit the supplier gives: drives purchase due dates. */
     creditDays: smallint().notNull().default(0),
+    /** Most the business may owe the supplier (empty: no limit). */
     creditLimit: money(),
+    /** Amount owed when the supplier was brought into the app. */
     openingBalance: money().notNull().default("0"),
+    /** credit: we owed the supplier; debit: the supplier owed us (an advance). */
     openingBalanceSide: balanceSide().notNull().default("credit"),
+    /** Date of the opening balance. */
     openingBalanceDate: date({ mode: "string" }),
     /** Cached payable balance (credit positive), maintained like customers.balance. */
     balance: money().notNull().default("0"),
+    /** Name on the supplier's bank account, for payments. */
     bankAccountName: text(),
+    /** Supplier's bank account number, encrypted (AES-256-GCM). */
     bankAccountNumberEnc: text(),
+    /** Last 4 digits of the account number, for display. */
     bankAccountLast4: varchar({ length: 4 }),
+    /** IFSC of the supplier's bank branch. */
     bankIfsc: varchar({ length: 11 }),
+    /** Supplier's bank. */
     bankName: text(),
+    /** Supplier's UPI ID for payments. */
     upiId: text(),
     notes: text(),
     isActive: boolean().notNull().default(true),

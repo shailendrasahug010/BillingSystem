@@ -2,7 +2,7 @@
 
 The schema is real and runnable: `packages/db/src/schema/*.ts` (Drizzle) generates `packages/db/migrations/0001_schema.sql`; hand-written migrations add extensions (`0000`) and integrity rules (`0002`). `packages/db/test/integrity.test.ts` applies all migrations to a fresh PostgreSQL database and proves the rules below hold.
 
-**86 tables · 36 enum types · 233 foreign keys · 102 indexes · 50 check constraints · append-only triggers · row-level security.**
+**Append-only ledgers · triggers that protect history · row-level security for every business.** How many tables, columns, keys and indexes there are, and every column, is in the generated [database reference](12-database-reference.md).
 
 ## 1. Conventions
 
@@ -415,23 +415,7 @@ erDiagram
 
 ## 3. Table catalogue
 
-| Module | Tables |
-|---|---|
-| Platform | `states`, `users`, `businesses`, `settings`, `warehouses`, `files`, `devices`, `document_series` |
-| Access | `permissions`, `roles`, `role_permissions`, `business_members`, `refresh_tokens`, `otp_challenges` |
-| HR | `departments`, `employees`, `attendance`, `leave_types`, `leave_balances`, `leave_requests` |
-| Parties | `price_levels`, `customer_categories`, `sales_routes`, `customers`, `customer_addresses`, `suppliers` |
-| Catalogue | `brands`, `product_categories`, `units`, `tax_categories`, `tax_rates`, `products`, `product_units`, `product_barcodes`, `product_prices`, `product_images`, `batches` |
-| Inventory | `stock_ledger`, `stock_balances`, `stock_adjustments`, `stock_adjustment_items`, `stock_transfers`, `stock_transfer_items` |
-| Purchases | `purchases`, `purchase_items` |
-| Sales & fulfilment | `sales_orders`, `sales_order_items`, `invoices`, `invoice_items`, `invoice_revisions`, `status_history`, `packings`, `packing_items`, `dispatches`, `dispatch_orders`, `price_overrides` |
-| Notes | `credit_debit_notes`, `credit_debit_note_items` |
-| Payments | `payment_accounts`, `payments`, `payment_allocations`, `party_ledger_entries` |
-| Payroll | `salary_components`, `employee_salary_structures`, `employee_salary_structure_components`, `employee_advances`, `payroll_runs`, `salary_slips`, `salary_slip_lines` |
-| Expenses | `expense_categories`, `expenses` |
-| GST | `gst_transactions`, `gst_return_periods`, `gst_exports`, `gst_config` |
-| System | `audit_logs`, `notifications`, `reminder_rules`, `outbox_events`, `sync_mutations`, `backups`, `backup_schedules` |
-| Analytics (derived, rebuildable) | `customer_product_stats`, `product_associations`, `customer_stats`, `sales_daily_product`, `sales_daily_customer` |
+Every table, with all its columns (type, required, default, meaning), keys, foreign keys, checks, indexes, triggers, row-level security and what the API's role may do, is listed in **[12-database-reference.md](12-database-reference.md)**. That reference is generated from a database migrated from scratch and from the comments next to each table and column in `packages/db/src/schema/*.ts` (`pnpm db:docs`), and CI fails when it is out of date, so it is always the current truth; this document explains the design.
 
 How the requested entities map: *Stock* → `stock_balances`; *StockLedger* → `stock_ledger`; *Salaries* → `salary_slips`; *SalaryComponents* → `salary_components` + `salary_slip_lines`; *Leaves* → `leave_requests` (+ types, balances); *Companies/Brands* → `brands`; *ProductCategories* → `product_categories` (self-referencing for subcategories); *TaxRates* → `tax_categories` + `tax_rates`; *GSTTransactions* → `gst_transactions`.
 
@@ -482,6 +466,9 @@ DATABASE_URL=... SEED_DEMO_BUSINESS=1 pnpm --filter @digitalbahi/db seed
 
 # create the least-privileged application role (operator, once per environment)
 psql "$DATABASE_URL" -v app_password='…' -f packages/db/sql/app-role.sql
+
+# regenerate docs/12-database-reference.md after changing the schema or its comments (same kind of server)
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm db:docs
 
 # integration test on a throw-away database (needs a server you can CREATE DATABASE on)
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @digitalbahi/db test
