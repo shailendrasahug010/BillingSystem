@@ -1,0 +1,135 @@
+name: Installer
+
+# Digital Bahi for one computer (installer/): the Windows installer is built
+# and then installed, started, used and stopped on a clean Windows machine,
+# and the macOS / Linux script is run from the source checkout on Linux,
+# both downloading Node.js and PostgreSQL as a new computer would.
+# A tag v* attaches the installer to the GitHub release.
+
+on:
+  pull_request:
+    paths:
+      - "installer/**"
+      - ".github/workflows/installer.yml"
+      - "apps/api/src/app.ts"
+      - "apps/api/src/config.ts"
+      - "apps/api/src/lib/webApp.ts"
+      - "apps/api/build.mjs"
+      - "apps/api/package.json"
+      - "pnpm-lock.yaml"
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: NSIS
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe')) { choco install nsis -y --no-progress }
+
+      - name: Build DigitalBahi-Setup.exe
+        run: node installer/build-bundle.mjs --exe
+
+      - name: Install, start, use, restart and stop it
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Get-ChildItem dist-installer\DigitalBahi-Setup-*.exe | Select-Object -First 1).FullName
+          Start-Process -FilePath $exe -ArgumentList '/S' -Wait
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\DigitalBahi'
+          $data = Join-Path $env:LOCALAPPDATA 'DigitalBahi'
+          foreach ($f in "$app\DigitalBahi.cmd", "$app\Uninstall.exe", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Digital Bahi\Digital Bahi.lnk") {
+            if (-not (Test-Path $f)) { throw "not installed: $f" }
+          }
+          $env:DIGITALBAHI_NO_PAUSE = '1'
+          # As on a computer without Node.js (this one's PostgreSQL 14 is too old, so it is downloaded too).
+          $withNode = $env:Path
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'node.exe')) }) -join ';'
+          function Show-Logs { Get-ChildItem "$data\logs" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 } }
+          & "$app\DigitalBahi.cmd" start --no-browser
+          if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'start failed' }
+          if (-not (Test-Path "$data\runtime\node-v*-win-x64\node.exe")) { throw 'Node.js was not downloaded' }
+          $env:Path = $withNode
+
+          # The launcher has exited: the server and the database keep running.
+          node installer/smoke-test.mjs
+          if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'smoke test failed' }
+
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'node.exe')) }) -join ';'
+          & "$app\DigitalBahi.cmd" restart --no-browser
+          if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'restart failed' }
+          & "$app\DigitalBahi.cmd" status
+          if ($LASTEXITCODE -ne 0) { throw 'not running after restart' }
+          & "$app\DigitalBahi.cmd" stop
+          & "$app\DigitalBahi.cmd" status
+          if ($LASTEXITCODE -ne 3) { throw 'still running after stop' }
+
+          # Uninstalling keeps the data unless asked.
+          Start-Process -FilePath "$app\Uninstall.exe" -ArgumentList '/S', "_?=$app" -Wait
+          if (-not (Test-Path "$data\pgdata\PG_VERSION")) { throw 'the data was deleted' }
+          if (Test-Path "$app\api") { throw 'the program was not removed' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DigitalBahi-Setup
+          path: dist-installer/DigitalBahi-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-installer/DigitalBahi-Setup-*.exe
+
+  unix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Start from the source checkout, use, restart and stop it
+        env:
+          # This machine's PostgreSQL would do; the download is what a new computer gets.
+          DIGITALBAHI_PG_DOWNLOAD: "1"
+        run: |
+          set -e
+          installer/unix/digitalbahi.sh start --no-browser
+          node installer/smoke-test.mjs
+          installer/unix/digitalbahi.sh restart --no-browser
+          installer/unix/digitalbahi.sh status
+          installer/unix/digitalbahi.sh stop
+          if installer/unix/digitalbahi.sh status; then echo "still running after stop"; exit 1; fi
+
+      - name: Logs
+        if: failure()
+        run: tail -n 60 ~/.local/share/digitalbahi/logs/* || true

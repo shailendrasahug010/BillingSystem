@@ -11,3 +11,4 @@ coverage/
 .vite/
 apps/web/dist-singlefile/
 logs/
+dist-installer/

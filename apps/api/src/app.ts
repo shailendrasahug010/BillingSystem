@@ -9,6 +9,7 @@ import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from "fast
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "./lib/context.js";
 import { errorHandler } from "./lib/errors.js";
+import { assertWebApp, registerWebApp } from "./lib/webApp.js";
 import { MODULES } from "./modules/index.js";
 import type { ApiModule } from "./modules/types.js";
 
@@ -26,7 +27,7 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
         : {
             level: config.logLevel,
             redact: ["req.headers.authorization", "req.headers.cookie", "res.headers['set-cookie']"],
-            ...(config.env === "development" ? { transport: { target: "pino-pretty" } } : {}),
+            ...(config.logPretty ? { transport: { target: "pino-pretty" } } : {}),
           },
     genReqId: (req) => {
       const incoming = req.headers["x-request-id"];
@@ -76,6 +77,12 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
     },
     { prefix: "/api/v1" },
   );
+
+  // One computer without Caddy in front: the web app comes from the API too, on the same origin.
+  if (config.webDir) {
+    assertWebApp(config.webDir);
+    registerWebApp(app, config.webDir);
+  }
 
   return app;
 }

@@ -29,14 +29,15 @@ In the code the name is written `digitalbahi`: the `@digitalbahi/*` packages, th
 
 ```
 apps/
-  api/            Fastify REST API, multi-tenant, with its background workers (285 integration tests against PostgreSQL)
+  api/            Fastify REST API, multi-tenant, with its background workers (292 integration tests against PostgreSQL)
   web/            React 19 + Vite + Tailwind 4 — live on the API; demo mode for previews
 packages/
-  core/           Pure TypeScript business logic shared by server and clients (114 tests)
+  core/           Pure TypeScript business logic shared by server and clients (117 tests)
   contracts/      Zod request schemas and response types shared by API and clients
   i18n/           English + Hindi catalogues, Indian number/date/currency formatting (14 tests)
   db/             PostgreSQL schema (Drizzle), SQL migrations, roles, seeds, database reference generator (10 tests)
 deploy/           Caddy configuration (TLS, same-origin /api)
+installer/        One computer without setup: the Windows installer (NSIS .exe), the macOS / Linux script and the launcher they share
 docs/             Architecture and design (A–K) and the database reference (L)
 ```
 
@@ -51,6 +52,8 @@ docs/             Architecture and design (A–K) and the database reference (L)
 ## Getting started
 
 **Step-by-step instructions for everyone** (running it on a computer, installing the desktop app on Windows / Mac / Linux and the mobile app on Android / iPhone, putting it on a server with your own web address, backups and troubleshooting) are in **[HOW-TO-RUN.md](HOW-TO-RUN.md)**. The short version for developers:
+
+**Just running it on one computer?** On Windows run `DigitalBahi-Setup-<version>.exe` (from a release, or `node installer/build-bundle.mjs --target win32-x64 --exe`); on macOS and Linux run `installer/unix/digitalbahi.sh`. Either installs what is missing (Node.js, PostgreSQL), sets up a database of its own and opens the app at http://localhost:8710: see [the installer](HOW-TO-RUN.md#the-quick-way-the-installer). The API then also serves the built web app (`WEB_DIR`), and `installer/smoke-test.mjs` checks a running copy (sign-up, a bill and its PDF).
 
 Requirements: Node.js 22+, pnpm 10, PostgreSQL 16+.
 

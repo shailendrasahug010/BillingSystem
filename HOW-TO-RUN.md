@@ -13,7 +13,8 @@ So there is no separate "desktop version" or "mobile version" to build. Run the 
 
 | I want to… | Go to |
 |---|---|
-| Try it on my own computer | [1. Run it on your computer](#1-run-it-on-your-computer) |
+| Install it on my computer with one installer (Windows, Mac, Linux) | [The quick way: the installer](#the-quick-way-the-installer) |
+| Try it on my own computer, step by step | [1. Run it on your computer](#1-run-it-on-your-computer) |
 | Open it on my phone while trying it | [2. Open it on your phone over Wi-Fi](#2-open-it-on-your-phone-over-wi-fi) |
 | Install the desktop app (Windows, Mac, Linux) | [3. Install the desktop app](#3-install-the-desktop-app) |
 | Install the mobile app (Android, iPhone) | [4. Install the mobile app](#4-install-the-mobile-app) |
@@ -25,9 +26,51 @@ So there is no separate "desktop version" or "mobile version" to build. Run the 
 
 ## 1. Run it on your computer
 
-This is for trying the app out or developing it. It works on Windows 10/11, macOS and Linux.
+It works on Windows 10/11, macOS and Linux. The installer below does everything by itself; the steps after it do the same by hand, for developing the app.
 
-### What to install first
+### The quick way: the installer
+
+**Windows 10 / 11**
+
+1. Get `DigitalBahi-Setup-<version>.exe`: from the project's GitHub release, from the **Installer** workflow's run (under *Artifacts*), or build it yourself in the `BillingSystem` folder with `node installer/build-bundle.mjs --target win32-x64 --exe` (needs NSIS's `makensis`; the file goes to `dist-installer/`).
+2. Double-click it. The installer is not signed yet, so Windows may say **Windows protected your PC**: click **More info → Run anyway**. It installs for you alone and needs no administrator rights.
+3. Leave **Start Digital Bahi now** ticked and click **Finish**. The first start needs the internet, once:
+   * it downloads **Node.js** if the computer has no Node.js 22 or newer, and **PostgreSQL 16** if it has no PostgreSQL 16 or newer (about 70 MB together, each checked against its published checksum);
+   * if Windows lacks the **Microsoft Visual C++ runtime** that PostgreSQL needs, it downloads it from Microsoft and Windows asks for permission to install it: answer **Yes**;
+   * it creates Digital Bahi's own database and opens the app in your browser, at **http://localhost:8710**.
+4. From then on, the **Digital Bahi** icon on the desktop or in the Start menu starts it and opens the app (a few seconds), and **Stop Digital Bahi** in the Start menu stops it. Turning the computer off is fine too. Then go on with [First use](#first-use), and install the app with its own window as in [section 3](#3-install-the-desktop-app).
+
+**macOS and Linux**
+
+In a terminal, in the `BillingSystem` folder (`git clone` it first, as in the steps below):
+
+```bash
+installer/unix/digitalbahi.sh
+```
+
+The first time it builds Digital Bahi for this computer (a few minutes; Node.js is downloaded first if the computer has none), then does what the Windows installer does and opens the app. Later, start and stop it with the copy it made in the data folder (below): `…/app/digitalbahi.sh start`, `stop`, `restart` or `status`. After `git pull`, run `installer/unix/digitalbahi.sh install` to bring that copy up to date. Run it as your normal user, not with `sudo`.
+
+**What it sets up**
+
+| | |
+|---|---|
+| The database | A PostgreSQL database cluster of Digital Bahi's own, on port 54320 (or the next free one), reachable only from this computer, with passwords made at setup. If the computer already has PostgreSQL 16 or newer, its programs are used; its own databases are never touched. |
+| The server | Serves the app and the API at **http://localhost:8710** (or the next free port; the address then stays the same). It is reachable only from this computer: sign-up and OTP codes are shown on the screen, as there is no SMS gateway. |
+| The data folder | Windows `%LOCALAPPDATA%\DigitalBahi` (Start menu → Digital Bahi → *Digital Bahi data folder*), macOS `~/Library/Application Support/DigitalBahi`, Linux `~/.local/share/digitalbahi`. It holds the database (`pgdata`), `config.json` (ports, passwords and keys) and the logs (`logs`). |
+| Updates | Install the new version over the old one (Windows) or run `installer/unix/digitalbahi.sh install` (macOS / Linux). Your data stays; the database is brought up to date at the next start. |
+| Uninstall (Windows) | **Settings → Apps → Digital Bahi → Uninstall**. It asks whether to delete your data too; the answer **No** (the default) keeps it for a later install. |
+
+**Backups.** Use **Settings → Backup** in the app, or copy the whole data folder while Digital Bahi is stopped. Keep `config.json` with it: bank details in the database can only be read with the key in that file.
+
+**Other computers and phones** cannot connect to this one: the server only answers this computer, because anyone who could reach it could read sign-in codes off the screen. To use Digital Bahi from several devices, put it on a server ([section 5](#5-put-it-on-a-server)).
+
+**Settings.** `"env"` in `config.json` adds or changes the server's settings, for example `{"SMTP_URL": "smtps://user:pass@smtp.example.com:465", "MAIL_FROM": "bills@example.com"}` for the platform mail server. Restart Digital Bahi afterwards.
+
+### Step by step
+
+This is for developing the app, or running it without the installer.
+
+#### What to install first
 
 | Software | Version | Where to get it |
 |---|---|---|
@@ -38,7 +81,7 @@ This is for trying the app out or developing it. It works on Windows 10/11, macO
 
 While installing PostgreSQL, set a password for the `postgres` user and remember it. The steps below use `postgres` as that password; use yours instead.
 
-### Steps
+#### Steps
 
 Open a terminal (on Windows: **PowerShell**) and run:
 
@@ -359,5 +402,9 @@ Installing from the browser (sections 3 and 4) needs no store. If you also want 
 | No **Install** option | Use Chrome or Edge (Safari on iPhone); open the `https://` address (or `localhost` on the computer itself); it is not offered if the app is already installed. |
 | The phone cannot open the computer's address | Same Wi-Fi on both, start the app with `pnpm dev:web --host`, and allow Node.js in the computer's firewall. |
 | Start again with an empty database (your own computer only) | `dropdb -U postgres digitalbahi_dev`, then repeat the `createdb` and `pnpm db:deploy` steps. |
+| Installer: **Windows protected your PC** | The installer is not signed yet: click **More info → Run anyway**. |
+| Installer: the first start stops while downloading | Check the internet connection and start Digital Bahi again; it carries on from where it stopped. |
+| Installer: "Port 8710 (or 54320) is used by another program" | Close that program, or change `apiPort` (or `pgPort`) in `config.json` in the data folder and start again. A new `apiPort` gives the app a new address: install it again from there. |
+| Installer: the app does not open, or something else fails | Run **Digital Bahi** again: the window says what went wrong. The details are in the data folder's `logs` (`server.log`, `postgresql.log`); errors are also in the error log there. |
 
 For developers: `pnpm typecheck`, `pnpm test` (with `DATABASE_URL` set to a PostgreSQL admin connection; each test file makes and removes its own database) and the browser scripts in `apps/web/e2e/` are described in the [README](README.md).

@@ -54,6 +54,8 @@ const Env = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().default(20),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+  /** Readable log lines (pino-pretty, a development tool) instead of JSON; development only, on unless set false. */
+  LOG_PRETTY: bool.optional(),
   /** Where the error log files go (errors-YYYY-MM-DD.log / .jsonl); "off" writes none. */
   LOG_DIR: z.string().default("logs"),
   /** Days of error log files kept. */
@@ -63,6 +65,8 @@ const Env = z.object({
   /** The built web app's source maps (kept off the public site), to show browser errors at their source line. */
   WEB_SOURCEMAPS_DIR: z.string().optional(),
   DOCS_ENABLED: bool.optional(),
+  /** The built web app (apps/web/dist) to serve at / when no web server sits in front (one computer: installer/). */
+  WEB_DIR: z.string().optional(),
 });
 
 export interface Config {
@@ -85,8 +89,10 @@ export interface Config {
   nightlyAnalytics: { schedulerSeconds: number; hour: number };
   rateLimit: { max: number; authMax: number };
   logLevel: string;
+  logPretty: boolean;
   errorLog: { dir: string | null; retentionDays: number; timeZone: string; webSourceMapsDir: string | null };
   docsEnabled: boolean;
+  webDir: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -132,6 +138,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     nightlyAnalytics: { schedulerSeconds: e.NIGHTLY_SCHEDULER_SECONDS, hour: e.NIGHTLY_ANALYTICS_HOUR },
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },
     logLevel: e.LOG_LEVEL,
+    logPretty: e.NODE_ENV === "development" && (e.LOG_PRETTY ?? true),
     errorLog: {
       dir: e.LOG_DIR === "off" || e.LOG_DIR === "" ? null : path.resolve(e.LOG_DIR),
       retentionDays: e.LOG_RETENTION_DAYS,
@@ -139,5 +146,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       webSourceMapsDir: e.WEB_SOURCEMAPS_DIR ? path.resolve(e.WEB_SOURCEMAPS_DIR) : defaultWebSourceMapsDir(),
     },
     docsEnabled: e.DOCS_ENABLED ?? e.NODE_ENV !== "production",
+    webDir: e.WEB_DIR ? path.resolve(e.WEB_DIR) : null,
   };
 }

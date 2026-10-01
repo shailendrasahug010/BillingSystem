@@ -83,6 +83,7 @@ Implemented in PostgreSQL (token buckets) at small scale; Redis when volume dema
 * No secret ever ships in frontend code or mobile/desktop bundles: database credentials, JWT private keys, GSP/IRP credentials, WhatsApp/SMS API keys, storage keys all live in the server's secret manager (or environment injected at runtime), never in the repository (`.env*` is git-ignored; secret scanning in CI).
 * Integrations run in the worker process only; credentials are encrypted at rest and decrypted just-in-time.
 * The database is reachable only from the API/worker network; operators use a bastion with MFA; migrations run with a separate owner role; the app role cannot alter schema or rewrite ledgers.
+* **One computer (`installer/`)** has no SMS gateway, so its API runs with OTP codes on screen (`OTP_DEV_ECHO`, refused in production). That is safe only because nothing else can reach it: the API and its PostgreSQL listen on 127.0.0.1 alone, and the cluster is Digital Bahi's own, with SCRAM passwords and JWT and data-encryption keys generated at setup into `config.json` (mode 600 on macOS / Linux; the per-user application-data folder on Windows). The same owner / app role split applies. Downloads (Node.js, PostgreSQL, the Visual C++ runtime) are checked against pinned SHA-256 / SHA-512 hashes or Microsoft's signature before use.
 
 ## 7. Integrity and audit
 
