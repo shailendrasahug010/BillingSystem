@@ -19,13 +19,14 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit, diff } from "../../lib/audit.js";
 import type { AppDeps, RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextMasterCode } from "../../services/numbering.js";
 import { assertOwned } from "../../services/owned.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
 import { likeContains } from "../catalog/products.js";
+import { notify } from "../../services/notifications.js";
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
@@ -139,6 +140,52 @@ async function partyLedger(tx: Tx, ctx: RequestCtx, kind: PartyKind, id: string,
     totalCredit: totals.credit.toFixed(2),
     closing: running.toFixed(2),
   };
+}
+
+/** The same value for an edit: empty, null and missing alike, and numbers however written. */
+function sameValue(a: unknown, b: unknown): boolean {
+  const text = (v: unknown) => (v === undefined || v === null ? "" : String(v));
+  const [x, y] = [text(a), text(b)];
+  if (x === y) return true;
+  return x !== "" && y !== "" && Number.isFinite(Number(x)) && Number.isFinite(Number(y)) && Number(x) === Number(y);
+}
+
+/**
+ * A customer edit made offline on a version that has changed since: each
+ * field the device changed is applied when no one else changed it (the
+ * server still has the value the device saw), skipped when it already has the
+ * new value, and otherwise goes to the later of the two changes (the other
+ * change's time from the audit log). Returns what to apply, the fields kept
+ * as they are (a later change stands) and those whose value this edit
+ * replaces, with who had set it.
+ */
+async function mergeOfflineEdit(tx: Tx, ctx: RequestCtx, current: Record<string, unknown> & { id: string }, patch: Record<string, unknown>, offline: { base: Record<string, unknown>; madeAt: string }) {
+  const apply: Record<string, unknown> = {};
+  const kept: Array<{ field: string }> = [];
+  const overwritten: Array<{ field: string; userId: string | null }> = [];
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === undefined || sameValue(current[field], value)) continue;
+    if (field in offline.base && sameValue(current[field], offline.base[field])) {
+      apply[field] = value;
+      continue;
+    }
+    const [last] = (
+      await tx.execute<{ created_at: string; user_id: string | null }>(sql`
+        select created_at, user_id from audit_logs
+        where business_id = ${ctx.businessId} and entity_type = 'customer' and entity_id = ${current.id}
+          and action = 'customer.updated' and changes ? ${field}
+        order by id desc limit 1`)
+    ).rows;
+    if (!last || Date.parse(offline.madeAt) >= new Date(last.created_at).getTime()) {
+      apply[field] = value;
+      overwritten.push({ field, userId: last?.user_id ?? null });
+    } else {
+      kept.push({ field });
+    }
+  }
+  // The PAN goes with the GSTIN it was taken from.
+  if (kept.some((k) => k.field === "gstin")) delete apply.pan;
+  return { patch: apply, kept, overwritten };
 }
 
 type CustomerRowDb = {
@@ -332,6 +379,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.customers.id })
           .from(schema.customers)
@@ -388,6 +436,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
   r.patch("/customers/:id", { preHandler: guard(deps, "customer.update"), schema: { tags: ["customers"], params: IdParams, body: CustomerPatch } }, async (request) => {
     const ctx = request.ctx;
     const expectedVersion = request.headers["if-match"] ? Number(request.headers["if-match"]) : null;
+    const { offline, ...input } = request.body;
     return tenant(ctx, async (tx) => {
       const [c] = await tx
         .select()
@@ -395,25 +444,64 @@ export const partiesModule: ApiModule = async (app, deps) => {
         .where(and(eq(schema.customers.id, request.params.id), eq(schema.customers.businessId, ctx.businessId), isNull(schema.customers.deletedAt)))
         .for("update");
       if (!c) throw notFound("customer");
-      if (expectedVersion !== null && expectedVersion !== c.version) throw conflict("VERSION_CONFLICT", { current: c.version });
-      const type = request.body.customerType ?? c.customerType;
-      const gstin = request.body.gstin !== undefined ? request.body.gstin : c.gstin;
+      // Changed since the version the client saw: an online edit is refused; one made offline is merged field by field.
+      const stale = expectedVersion !== null && expectedVersion !== c.version;
+      if (stale && !offline) throw conflict("VERSION_CONFLICT", { current: c.version });
+      const type = input.customerType ?? c.customerType;
+      const gstin = input.gstin !== undefined ? input.gstin : c.gstin;
       if (type === "b2b" && !gstin) throw badRequest("GSTIN_REQUIRED_FOR_B2B", {}, "gstin");
-      const body = await normaliseParty(tx, request.body, c);
-      await assertOwned(tx, schema.priceLevels, ctx.businessId, body.priceLevelId, "priceLevelId");
-      await assertOwned(tx, schema.customerCategories, ctx.businessId, body.categoryId, "categoryId");
-      await assertOwned(tx, schema.salesRoutes, ctx.businessId, body.routeId, "routeId");
-      await assertOwned(tx, schema.employees, ctx.businessId, body.salesRepId, "salesRepId");
-      if (body.code) body.code = body.code.toUpperCase();
+      const normalised = await normaliseParty(tx, input, c);
+      await assertOwned(tx, schema.priceLevels, ctx.businessId, normalised.priceLevelId, "priceLevelId");
+      await assertOwned(tx, schema.customerCategories, ctx.businessId, normalised.categoryId, "categoryId");
+      await assertOwned(tx, schema.salesRoutes, ctx.businessId, normalised.routeId, "routeId");
+      await assertOwned(tx, schema.employees, ctx.businessId, normalised.salesRepId, "salesRepId");
+      if (normalised.code) normalised.code = normalised.code.toUpperCase();
+      const merge = stale && offline ? await mergeOfflineEdit(tx, ctx, c, normalised, offline) : null;
+      const body = merge ? (merge.patch as typeof normalised) : normalised;
       const changes = diff(c, body);
       await tx
         .update(schema.customers)
         .set({ ...body, updatedBy: ctx.userId, version: c.version + 1 })
         .where(eq(schema.customers.id, c.id));
-      if (Object.keys(changes).length) {
-        await audit(tx, ctx, { action: "customer.updated", entityType: "customer", entityId: c.id, entityLabel: `${c.code} ${body.name ?? c.name}`, changes });
+      if (Object.keys(changes).length || merge?.kept.length) {
+        await audit(tx, ctx, {
+          action: "customer.updated",
+          entityType: "customer",
+          entityId: c.id,
+          entityLabel: `${c.code} ${body.name ?? c.name}`,
+          changes: {
+            ...changes,
+            ...(offline ? { madeOffline: offline.madeAt } : {}),
+            // The device's values that a later change kept out.
+            ...(merge?.kept.length ? { notApplied: Object.fromEntries(merge.kept.map((k) => [k.field, (normalised as Record<string, unknown>)[k.field] ?? null])) } : {}),
+          },
+        });
       }
-      return customerDetail(tx, ctx, c.id);
+      // Whoever's change this one replaced is told.
+      if (merge?.overwritten.length) {
+        const [editor] = await tx.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, ctx.userId));
+        const byUser = new Map<string, string[]>();
+        for (const o of merge.overwritten) if (o.userId && o.userId !== ctx.userId) byUser.set(o.userId, [...(byUser.get(o.userId) ?? []), o.field]);
+        for (const [userId, fields] of byUser) {
+          await notify(
+            tx,
+            ctx.businessId,
+            {
+              type: "customer_edit_replaced",
+              permission: null,
+              userId,
+              severity: "info",
+              titleKey: "notifications.events.customer_edit_replaced",
+              params: { customer: body.businessName ?? c.businessName ?? c.name, fields: fields.join(","), editor: editor?.name ?? null },
+              entityType: "customer",
+              entityId: c.id,
+              dedupeKey: `customer:${c.id}:v${c.version + 1}:${userId}`,
+            },
+            deps.clock.now().toISOString(),
+          );
+        }
+      }
+      return { ...(await customerDetail(tx, ctx, c.id)), ...(merge ? { merge: { kept: merge.kept.map((k) => k.field), overwritten: merge.overwritten.map((o) => o.field) } } : {}) };
     });
   });
 

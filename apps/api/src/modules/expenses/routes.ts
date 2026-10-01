@@ -8,7 +8,7 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit, diff } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { assertRange } from "../../lib/period.js";
@@ -85,6 +85,7 @@ export const expensesModule: ApiModule = async (app, deps) => {
 
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx.select({ id: e.id }).from(e).where(and(eq(e.businessId, ctx.businessId), eq(e.clientId, clientId)));
         if (existing) return { replay: true, detail: await expenseDetail(tx, ctx, existing.id) };
       }

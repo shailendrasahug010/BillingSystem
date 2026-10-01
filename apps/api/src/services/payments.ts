@@ -79,12 +79,13 @@ export async function recordPayment(tx: Tx, ctx: RequestCtx, financialYearStartM
     if (!acc) throw badRequest("REFERENCE_NOT_FOUND", {}, "paymentAccountId");
   }
   // Lock order everywhere: party row first, then its documents, then the number series.
+  // NO KEY UPDATE serialises balance changes without clashing with bills referring to the party.
   const partyTable = input.party.type === "customer" ? schema.customers : schema.suppliers;
   const [party] = await tx
     .select({ id: partyTable.id })
     .from(partyTable)
     .where(and(eq(partyTable.id, input.party.id), eq(partyTable.businessId, businessId)))
-    .for("update");
+    .for("no key update");
   if (!party) throw badRequest("REFERENCE_NOT_FOUND", {}, input.party.type === "customer" ? "customerId" : "supplierId");
   const open = await lockOpenDocuments(tx, businessId, input.party);
   const { allocations, unallocated } = allocatePayment(input.amount, open, input.allocations);

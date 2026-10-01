@@ -26,7 +26,7 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { inSequence, withTenant } from "../../lib/db.js";
+import { inSequence, lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
@@ -84,6 +84,7 @@ export const purchasesModule: ApiModule = async (app, deps) => {
 
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.purchases.id })
           .from(schema.purchases)

@@ -39,3 +39,14 @@ export async function inSequence<const T extends readonly (() => unknown)[]>(tas
   for (const task of tasks) out.push(await task());
   return out as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> };
 }
+
+/**
+ * Serialises requests that carry the same Idempotency-Key (two tabs syncing
+ * the same work, a retry while the first is still running): the second waits
+ * until the first commits, then finds what it made and returns it, instead of
+ * failing on a number or key the first one took. Called first in the
+ * transaction, before looking the key up; other keys never wait.
+ */
+export async function lockIdempotencyKey(tx: Tx, key: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`idempotency:${key}`}, 0))`);
+}

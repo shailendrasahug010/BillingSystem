@@ -248,6 +248,16 @@ export const devices = pgTable(
     wipedAt: tstz(),
     /** The sign-in (refresh token family) the device last registered with: removing the device ends it. */
     sessionId: uuid(),
+    /** Work waiting on the device to be sent, as it last reported (bills, payments, orders, changes …). */
+    queueWaiting: integer().notNull().default(0),
+    /** Of that, bills. */
+    queueBills: integer().notNull().default(0),
+    /** Work the server refused that waits on the device for someone to fix or remove. */
+    queueRefused: integer().notNull().default(0),
+    /** When the oldest waiting work was done. */
+    queueOldestAt: tstz(),
+    /** When the device last reported its waiting work (it can only while online). */
+    queueReportedAt: tstz(),
     ...timestamps,
   },
   (t) => [unique("devices_series_code_uq").on(t.businessId, t.seriesCode)],

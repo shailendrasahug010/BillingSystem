@@ -30,6 +30,7 @@ const RulePatch = z.strictObject({
       hour: z.number().int().min(0).max(23).optional(),
       daysBefore: z.number().int().min(0).max(30).optional(),
       dayOfMonth: z.number().int().min(1).max(28).optional(),
+      afterHours: z.number().int().min(1).max(168).optional(),
     })
     .optional(),
 });
@@ -255,7 +256,7 @@ export const notificationsModule: ApiModule = async (app, deps) => {
       const t = schema.reminderRules;
       const [rule] = await tx.select().from(t).where(and(eq(t.businessId, ctx.businessId), eq(t.type, type)));
       if (rule && !rule.isActive) throw conflict("REMINDER_RULE_OFF");
-      const n = await checkReminder(tx, ctx.businessId, type, deps.clock.today(ctx.timeZone), reminderConfig(type, rule?.config));
+      const n = await checkReminder(tx, ctx.businessId, type, deps.clock.today(ctx.timeZone), reminderConfig(type, rule?.config), deps.clock.now());
       if (!n) return { result: "nothing" as const, notificationId: null };
       const id = await notify(tx, ctx.businessId, n, deps.clock.now().toISOString());
       return { result: id ? ("raised" as const) : ("already" as const), notificationId: id };

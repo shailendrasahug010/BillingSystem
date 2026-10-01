@@ -2215,7 +2215,14 @@
       "removedToast": "Device removed",
       "wipedOn": "Copy deleted {{when}}",
       "wipePending": "Deletes its copy when it next connects",
-      "noSeries": "No bills"
+      "noSeries": "No bills",
+      "waiting": "Not sent",
+      "allSent": "All sent",
+      "waitingSince_one": "{{count}} waiting since {{when}}",
+      "waitingSince_other": "{{count}} waiting since {{when}}",
+      "refused_one": "{{count}} refused by the server",
+      "refused_other": "{{count}} refused by the server",
+      "reportedAt": "as of {{when}}"
     },
     "kinds": {
       "invoice": "Bill",
@@ -2255,7 +2262,8 @@
     "theBusiness": "the business",
     "wipedWaiting_one": "{{count}} entry that had not been sent was deleted with it.",
     "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them.",
-    "heldForReview": "Held for review: the server took it, and a manager will check it"
+    "heldForReview": "Held for review: the server took it, and a manager will check it",
+    "editKept": "Their later change kept: {{fields}}"
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"
@@ -2753,6 +2761,10 @@
       "daysBeforeHint": "Also remind about bills falling due within this many days",
       "dayOfMonth": "From day",
       "dayOfMonthHint": "Day of the month the reminder starts",
+      "afterHours": "After",
+      "afterHoursHint": "Remind when a device has held work this long without reporting",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
       "asItHappens": "Also as it happens",
       "forRole": "For roles with {{permission}}",
       "lastRun": "Last checked {{date, date}}",
@@ -2799,6 +2811,10 @@
         "salary_due": {
           "name": "Salary due",
           "help": "From the set day of the month until last month's salaries are paid."
+        },
+        "devices_unsynced": {
+          "name": "Devices with work not sent",
+          "help": "A phone or PC holding work made offline that has not reached the server after the set hours, or work the server refused."
         }
       }
     },
@@ -2862,7 +2878,8 @@
       "leave_rejected_one": "Your {{type}} leave of {{count}} day ({{from, date}} to {{to, date}}) was not approved",
       "leave_rejected_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) was not approved",
       "offline_review": "Bill {{number}} for {{customer}} ({{total, currency}}), made offline, is held for review",
-      "offline_reviewed": "Your bill {{number}} for {{customer}} was reviewed by {{reviewer}}"
+      "offline_reviewed": "Your bill {{number}} for {{customer}} was reviewed by {{reviewer}}",
+      "customer_edit_replaced": "Your change to {{customer}} ({{fields}}) was replaced by {{editor}}'s change, made offline after it"
     },
     "review": {
       "price_changed": "{{product}} was billed at {{billed, currency}}; the rate list says {{list, currency}}.",
@@ -2874,6 +2891,12 @@
       "credit_limit": "{{customer}} went over the credit limit of {{limit, currency}} by {{excess, currency}}.",
       "credit_overdue_one": "{{customer}} has {{count}} bill overdue ({{amount, currency}}), which blocks new bills.",
       "credit_overdue_other": "{{customer}} has {{count}} bills overdue ({{amount, currency}}), which blocks new bills."
+    },
+    "devices_unsynced": {
+      "title_one": "{{count}} device has work that has not reached the server",
+      "title_other": "{{count}} devices have work that has not reached the server",
+      "body": "{{device}} ({{person}}): {{waiting}} waiting, the oldest from {{date, date}}.",
+      "refused": "{{device}} ({{person}}): {{refused}} refused by the server, waiting for someone to fix or remove."
     }
   }
 }

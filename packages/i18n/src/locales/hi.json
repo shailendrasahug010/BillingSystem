@@ -2215,7 +2215,14 @@
       "removedToast": "डिवाइस हटा दिया गया",
       "wipedOn": "कॉपी हटाई गई {{when}}",
       "wipePending": "अगली बार जुड़ने पर कॉपी हटा देगा",
-      "noSeries": "बिल नहीं"
+      "noSeries": "बिल नहीं",
+      "waiting": "नहीं भेजा गया",
+      "allSent": "सब भेजा गया",
+      "waitingSince_one": "{{count}} रुका हुआ, {{when}} से",
+      "waitingSince_other": "{{count}} रुके हुए, {{when}} से",
+      "refused_one": "{{count}} सर्वर ने नहीं लिया",
+      "refused_other": "{{count}} सर्वर ने नहीं लिए",
+      "reportedAt": "{{when}} तक की जानकारी"
     },
     "kinds": {
       "invoice": "बिल",
@@ -2255,7 +2262,8 @@
     "theBusiness": "व्यापार",
     "wipedWaiting_one": "न भेजी गई {{count}} एंट्री भी साथ में हटा दी गई।",
     "wipedWaiting_other": "न भेजी गई {{count}} एंट्री भी साथ में हटा दी गईं।",
-    "heldForReview": "जाँच के लिए रोका गया: सर्वर ने ले लिया, मैनेजर इसे जाँचेंगे"
+    "heldForReview": "जाँच के लिए रोका गया: सर्वर ने ले लिया, मैनेजर इसे जाँचेंगे",
+    "editKept": "उनका बाद का बदलाव रखा गया: {{fields}}"
   },
   "pdf": {
     "page": "पृष्ठ {{page}} / {{count}}"
@@ -2753,6 +2761,10 @@
       "daysBeforeHint": "इतने दिनों में देय होने वाले बिलों की भी याद दिलाएँ",
       "dayOfMonth": "किस तारीख से",
       "dayOfMonthHint": "महीने की वह तारीख जिससे याद दिलाना शुरू हो",
+      "afterHours": "कितने घंटे बाद",
+      "afterHoursHint": "जब किसी डिवाइस में इतनी देर से काम रुका हो और वह संपर्क न करे, तब याद दिलाएँ",
+      "hours_one": "{{count}} घंटा",
+      "hours_other": "{{count}} घंटे",
       "asItHappens": "होते ही भी",
       "forRole": "{{permission}} वाले रोल के लिए",
       "lastRun": "आख़िरी जाँच {{date, date}}",
@@ -2799,6 +2811,10 @@
         "salary_due": {
           "name": "देय वेतन",
           "help": "महीने की तय तारीख से, जब तक पिछले महीने का वेतन न चुका दिया जाए।"
+        },
+        "devices_unsynced": {
+          "name": "ऐसे डिवाइस जिनका काम नहीं पहुँचा",
+          "help": "ऐसा फ़ोन या पीसी जिसमें ऑफ़लाइन किया गया काम तय घंटों के बाद भी सर्वर तक नहीं पहुँचा, या जिसे सर्वर ने नहीं लिया।"
         }
       }
     },
@@ -2862,7 +2878,8 @@
       "leave_rejected_one": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर नहीं हुई",
       "leave_rejected_other": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर नहीं हुई",
       "offline_review": "ऑफ़लाइन बना बिल {{number}} ({{customer}}, {{total, currency}}) जाँच के लिए रोका गया है",
-      "offline_reviewed": "आपका बिल {{number}} ({{customer}}) {{reviewer}} ने जाँच लिया"
+      "offline_reviewed": "आपका बिल {{number}} ({{customer}}) {{reviewer}} ने जाँच लिया",
+      "customer_edit_replaced": "{{customer}} में आपका बदलाव ({{fields}}) {{editor}} के बाद में ऑफ़लाइन किए गए बदलाव से बदल गया"
     },
     "review": {
       "price_changed": "{{product}} {{billed, currency}} पर बिल हुआ; रेट लिस्ट में {{list, currency}} है।",
@@ -2874,6 +2891,12 @@
       "credit_limit": "{{customer}} {{limit, currency}} की क्रेडिट सीमा से {{excess, currency}} ऊपर चला गया।",
       "credit_overdue_one": "{{customer}} का {{count}} बिल ({{amount, currency}}) देय तारीख पार कर चुका है, जिससे नए बिल रुकते हैं।",
       "credit_overdue_other": "{{customer}} के {{count}} बिल ({{amount, currency}}) देय तारीख पार कर चुके हैं, जिससे नए बिल रुकते हैं।"
+    },
+    "devices_unsynced": {
+      "title_one": "{{count}} डिवाइस का काम सर्वर तक नहीं पहुँचा",
+      "title_other": "{{count}} डिवाइस का काम सर्वर तक नहीं पहुँचा",
+      "body": "{{device}} ({{person}}): {{waiting}} रुके हुए, सबसे पुराना {{date, date}} का।",
+      "refused": "{{device}} ({{person}}): {{refused}} सर्वर ने नहीं लिए, किसी के ठीक करने या हटाने की प्रतीक्षा में।"
     }
   }
 }

@@ -33,8 +33,8 @@ export interface ReminderRule {
   permission: string;
   events: boolean;
   isActive: boolean;
-  config: { hour: number; daysBefore?: number; dayOfMonth?: number };
-  defaults: { hour: number; daysBefore?: number; dayOfMonth?: number };
+  config: { hour: number; daysBefore?: number; dayOfMonth?: number; afterHours?: number };
+  defaults: { hour: number; daysBefore?: number; dayOfMonth?: number; afterHours?: number };
   lastRunOn: string | null;
 }
 
@@ -86,18 +86,52 @@ export function displayParams(params: Record<string, unknown>, locale: LocaleCod
   return out;
 }
 
+/** Customer fields by the labels the forms use (a customer change made offline names them). */
+const FIELD_LABELS: Record<string, TranslationKey> = {
+  name: "customer.name",
+  businessName: "customer.businessName",
+  mobile: "customer.mobile",
+  altMobile: "customer.altMobile",
+  email: "customer.email",
+  addressLine1: "customer.address",
+  addressLine2: "customer.address",
+  city: "common.city",
+  pincode: "customer.pincode",
+  stateCode: "common.state",
+  gstin: "customer.gstin",
+  pan: "customer.pan",
+  creditLimit: "customer.creditLimit",
+  creditDays: "customer.creditDays",
+  routeId: "customer.route",
+  priceLevelId: "customer.priceLevel",
+  categoryId: "customer.category",
+  salesRepId: "customer.salesRep",
+};
+
+/** "mobile,city" as "Mobile, City" in the app's language. */
+export function useFieldLabels(): (fields: string[] | string) => string {
+  const { t } = useI18n();
+  return useCallback(
+    (fields) =>
+      [...new Set((typeof fields === "string" ? fields.split(",") : fields).map((f) => (FIELD_LABELS[f] ? t(FIELD_LABELS[f]) : f)))].join(", "),
+    [t],
+  );
+}
+
 /** The title and body of a notification in the app's language. */
 export function useNotificationText(): (n: NotificationRow) => { title: string; body: string | null } {
   const { t, has, locale } = useI18n();
+  const labels = useFieldLabels();
   return useCallback(
     (n) => {
       const params = displayParams(n.params, locale);
+      if (typeof params.fields === "string" && params.fields !== "—") params.fields = labels(params.fields);
       // A notification from a newer server whose text this app does not have yet.
       const title = has(n.titleKey) ? t(n.titleKey as TranslationKey, params) : t("notifications.generic");
       const body = n.bodyKey && has(n.bodyKey) ? t(n.bodyKey as TranslationKey, params) : null;
       return { title, body };
     },
-    [t, has, locale],
+    [t, has, locale, labels],
   );
 }
 
@@ -123,6 +157,7 @@ export function useTimeAgo(): (iso: string) => string {
 export function targetRoute(n: Pick<NotificationRow, "type" | "entityType" | "entityId">): Route | null {
   if (n.entityType === "sales_order" && n.entityId) return { name: "order-view", orderId: n.entityId };
   if (n.entityType === "invoice" && n.entityId) return { name: "invoice-view", invoiceId: n.entityId };
+  if (n.entityType === "customer" && n.entityId) return { name: "customer", customerId: n.entityId };
   switch (n.type) {
     case "customer_payment_due":
       return { name: "outstanding" };
@@ -139,6 +174,8 @@ export function targetRoute(n: Pick<NotificationRow, "type" | "entityType" | "en
       return { name: "planned", module: "dispatch" };
     case "salary_due":
       return { name: "planned", module: "payroll" };
+    case "devices_unsynced":
+      return { name: "settings" };
     case "leave_request":
     case "leave_requested":
     case "leave_approved":

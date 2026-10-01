@@ -49,7 +49,7 @@ describe.skipIf(!hasDatabase)("notifications", () => {
     it("are listed with their settings; the owner changes them, others may not", async () => {
       const list = await get("/reminder-rules");
       expect(list.status).toBe(200);
-      expect(list.body.data).toHaveLength(9);
+      expect(list.body.data).toHaveLength(10);
       expect(list.body.data.find((r: { type: string }) => r.type === "customer_payment_due")).toMatchObject({ isActive: true, permission: "customer.view_ledger", config: { hour: 9, daysBefore: 3 }, lastRunOn: null });
 
       const changed = await patch("/reminder-rules/customer_payment_due", { config: { daysBefore: 5 } });
@@ -78,7 +78,7 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       ids.employee = (await post("/employees", { name: "HR Person", mobile: mobiles.hr, joiningDate: "2025-04-01" })).body.id;
 
       const first = await runDueReminders(deps());
-      expect(first).toMatchObject({ businesses: 1, checked: 9, failed: 0 });
+      expect(first).toMatchObject({ businesses: 1, checked: 10, failed: 0 });
       const rows = await q<{ type: string; permission: string; dedupe_key: string; severity: string; title_key: string; params: Record<string, unknown> }>(
         `select type, permission, dedupe_key, severity::text, title_key, params from notifications order by type`,
       );
@@ -97,13 +97,13 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       // Once a day: the rules are claimed for today, and the keys would stop a repeat anyway.
       expect(await runDueReminders(deps())).toMatchObject({ checked: 0, notifications: 0 });
       await q(`update reminder_rules set last_run_on = null`);
-      expect(await runDueReminders(deps())).toMatchObject({ checked: 9, notifications: 0 });
+      expect(await runDueReminders(deps())).toMatchObject({ checked: 10, notifications: 0 });
 
       // The next day: today's again, salary only once a month, nothing for a rule switched off.
       expect((await patch("/reminder-rules/low_stock", { isActive: false })).status).toBe(200);
       t.setToday("2026-09-25");
       try {
-        expect(await runDueReminders(deps())).toMatchObject({ checked: 8, notifications: 3 });
+        expect(await runDueReminders(deps())).toMatchObject({ checked: 9, notifications: 3 });
       } finally {
         t.setToday(null);
       }
@@ -125,7 +125,7 @@ describe.skipIf(!hasDatabase)("notifications", () => {
         expect((await check("to_pack")).body.error).toMatchObject({ code: "REMINDER_RULE_OFF" });
         expect((await patch("/reminder-rules/to_pack", { isActive: true })).status).toBe(200);
         // The scheduled checks that day leave no second low-stock notification.
-        expect(await runDueReminders(deps())).toMatchObject({ checked: 9, notifications: 3 });
+        expect(await runDueReminders(deps())).toMatchObject({ checked: 10, notifications: 3 });
         expect(await q(`select 1 from notifications where dedupe_key = 'low_stock:2026-09-26'`)).toHaveLength(1);
       } finally {
         t.setToday(null);
@@ -257,7 +257,8 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       ...["title", "body", "withExpired"].map((k) => `notifications.expiring_stock.${k}`),
       ...["pending_orders", "to_pack", "to_dispatch", "leave_request"].map((k) => `notifications.${k}.title`),
       ...["title", "noRun", "draft", "finalized"].map((k) => `notifications.salary_due.${k}`),
-      ...["order_waiting", "order_to_pack", "order_to_dispatch", "leave_requested", "leave_approved", "leave_rejected", "offline_review", "offline_reviewed"].map((k) => `notifications.events.${k}`),
+      ...["title", "body", "refused"].map((k) => `notifications.devices_unsynced.${k}`),
+      ...["order_waiting", "order_to_pack", "order_to_dispatch", "leave_requested", "leave_approved", "leave_rejected", "offline_review", "offline_reviewed", "customer_edit_replaced"].map((k) => `notifications.events.${k}`),
       // Why a bill made offline is held (the body of offline_review).
       ...["price_changed", "customer_inactive", "product_inactive", "period_locked", "late_sync", "stock_short", "credit_limit", "credit_overdue"].map((k) => `notifications.review.${k}`),
     ];

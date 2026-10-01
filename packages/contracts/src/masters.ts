@@ -133,7 +133,17 @@ export const CustomerBody = z.strictObject({
   isActive: z.boolean().default(true),
 });
 
-export const CustomerPatch = patchOf(CustomerBody.omit({ openingBalance: true, openingBalanceSide: true }));
+/**
+ * A change made offline: the values the device had before it (per field)
+ * and when it was made. Sent with If-Match; when the customer changed
+ * meanwhile, the change is merged field by field instead of refused.
+ */
+export const OfflineEdit = z.strictObject({
+  base: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  madeAt: z.iso.datetime({ offset: true }),
+});
+
+export const CustomerPatch = patchOf(CustomerBody.omit({ openingBalance: true, openingBalanceSide: true })).extend({ offline: OfflineEdit.optional() });
 
 export const CustomerListQuery = PageQuery.extend({
   type: z.enum(["all", "b2b", "b2c"]).default("all"),

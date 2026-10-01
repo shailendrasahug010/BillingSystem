@@ -895,6 +895,11 @@ interface DeviceRow {
   revokedAt: string | null;
   wipedAt: string | null;
   offlineBills: number;
+  /** Work waiting on the device, as it last reported (it can only while online). */
+  queueWaiting: number;
+  queueRefused: number;
+  queueOldestAt: string | null;
+  queueReportedAt: string | null;
 }
 
 /** Phones and PCs that keep a copy of the business (those that bill, with their own series); a lost one can be removed. */
@@ -926,7 +931,7 @@ function DevicesCard() {
           rows={q.data ?? []}
           loading={q.isPending}
           rowKey={(d) => d.id}
-          minWidth={640}
+          minWidth={760}
           empty={<p className="p-4 text-[13.5px] text-ink-3">{t("offline.devices.empty")}</p>}
           columns={[
             {
@@ -942,6 +947,24 @@ function DevicesCard() {
             { key: "series", header: t("offline.devices.series"), render: (d) => (d.seriesCode ? <span className="font-mono">{d.seriesCode}</span> : <span className="text-ink-3">{t("offline.devices.noSeries")}</span>) },
             { key: "seen", header: t("offline.devices.lastSeen"), render: (d) => <span className="text-ink-2">{d.lastSeenAt ? dateTime(d.lastSeenAt) : "—"}</span> },
             { key: "bills", header: t("offline.devices.bills"), align: "right", render: (d) => d.offlineBills },
+            {
+              key: "waiting",
+              header: t("offline.devices.waiting"),
+              render: (d) =>
+                d.revokedAt || (d.queueWaiting === 0 && d.queueRefused === 0) ? (
+                  <span className="text-ink-3">{d.queueReportedAt ? t("offline.devices.allSent") : "—"}</span>
+                ) : (
+                  <span className="flex flex-col gap-0.5">
+                    {d.queueWaiting > 0 && (
+                      <span className={d.queueRefused > 0 ? "text-ink-2" : "text-warn"}>
+                        {t("offline.devices.waitingSince", { count: d.queueWaiting, when: d.queueOldestAt ? dateTime(d.queueOldestAt) : "—" })}
+                      </span>
+                    )}
+                    {d.queueRefused > 0 && <span className="text-danger">{t("offline.devices.refused", { count: d.queueRefused })}</span>}
+                    {d.queueReportedAt && <span className="text-[11.5px] text-ink-3">{t("offline.devices.reportedAt", { when: dateTime(d.queueReportedAt) })}</span>}
+                  </span>
+                ),
+            },
             {
               key: "action",
               header: "",

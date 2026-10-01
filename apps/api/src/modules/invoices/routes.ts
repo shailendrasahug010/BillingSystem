@@ -8,7 +8,7 @@ import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { AppDeps, RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { offlineInvoiceNumber } from "../../services/devices.js";
@@ -340,7 +340,9 @@ export async function postInvoice(
   }
 
   // 4. Credit policy, with the customer row locked.
-  const [locked] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, c.id)).for("update");
+  // NO KEY UPDATE: it serialises balance changes without clashing with the key-share lock other
+  // bills take on the customer by referring to it (FOR UPDATE would, and two bills deadlock).
+  const [locked] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, c.id)).for("no key update");
   const open = (await openInvoices(tx, ctx.businessId, c.id)).filter((d) => d.id !== id);
   const credit = checkCredit(ctx, sale, locked!.balance, open, Boolean(body.offline));
   warnings.push(...credit);
@@ -531,6 +533,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
 
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.invoices.id })
           .from(schema.invoices)

@@ -1,5 +1,5 @@
 {
-  "id": "bfbf0b76-9af3-4b25-8bd3-f10b113f340c",
+  "id": "fa9fb93c-2af0-43d4-a6a1-9ba4007cf3d5",
   "prevId": "60b67d48-bcf9-408d-8972-afab0f137163",
   "version": "7",
   "dialect": "postgresql",
@@ -291,6 +291,39 @@
         "session_id": {
           "name": "session_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "queue_waiting": {
+          "name": "queue_waiting",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "queue_bills": {
+          "name": "queue_bills",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "queue_refused": {
+          "name": "queue_refused",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "queue_oldest_at": {
+          "name": "queue_oldest_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "queue_reported_at": {
+          "name": "queue_reported_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

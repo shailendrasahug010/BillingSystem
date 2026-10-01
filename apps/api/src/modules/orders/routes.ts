@@ -8,7 +8,7 @@ import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
@@ -84,6 +84,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
     const result = await tenant(ctx, async (tx) => {
       const workflow = await workflowOf(tx, ctx.businessId);
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.salesOrders.id })
           .from(schema.salesOrders)
@@ -267,6 +268,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.invoices.id })
           .from(schema.invoices)

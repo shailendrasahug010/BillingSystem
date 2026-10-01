@@ -13,10 +13,12 @@ describe("reminder rules", () => {
     expect(reminderConfig("customer_payment_due", { hour: 24, daysBefore: 31 })).toEqual({ hour: 9, daysBefore: 3 });
     expect(reminderConfig("salary_due", { hour: "8", dayOfMonth: 29 })).toEqual({ hour: 10, dayOfMonth: 1 });
     expect(reminderConfig("leave_request", { hour: 8.5 })).toEqual({ hour: 10 });
+    expect(reminderConfig("devices_unsynced", { afterHours: 6 })).toEqual({ hour: 9, afterHours: 6 });
+    expect(reminderConfig("devices_unsynced", { afterHours: 200 })).toEqual({ hour: 9, afterHours: 24 });
   });
 
   it("know their types, each with the permission whose holders are told", () => {
-    expect(REMINDER_TYPES).toHaveLength(9);
+    expect(REMINDER_TYPES).toHaveLength(10);
     expect(REMINDER_TYPES.every(isReminderType)).toBe(true);
     expect(isReminderType("nonsense")).toBe(false);
     expect(new Set(NOTIFICATION_PERMISSIONS)).toEqual(new Set([...REMINDER_TYPES.map((t) => REMINDERS[t].permission), "invoice.review"]));

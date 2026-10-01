@@ -84,6 +84,8 @@ export interface CustomerEditEntry extends EntryBase {
   body: Record<string, unknown>;
   /** The version the change was made on; null once the person chose to keep theirs over a later change. */
   version: number | null;
+  /** When it was last changed on the device (a change made meanwhile on the server wins only if later). */
+  madeAt?: string;
   /** The customer before and after, to show now and to put back if the change is removed. */
   before: CustomerRow;
   after: CustomerRow;
@@ -161,6 +163,8 @@ export interface SyncedEntry {
   syncedAt: string;
   /** A bill the server took but held for a manager (it broke a rule by the time it arrived). */
   held?: boolean;
+  /** A customer change merged with a later one: the fields where the later change stands. */
+  kept?: string[];
 }
 
 export interface OfflineState {
@@ -191,6 +195,39 @@ const syncedListeners = new Set<(count: number) => void>();
 function set(patch: Partial<OfflineState>): void {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
+  if ("entries" in patch || "online" in patch || "offlineMode" in patch) scheduleReport();
+}
+
+let reportTimer: ReturnType<typeof setTimeout> | undefined;
+let lastReport = "";
+
+/**
+ * Tells the server what waits on this device (counts and the oldest time, no
+ * content), so the owner sees it under Settings → Devices and is reminded
+ * when a device keeps work too long. Only while online; a report that would
+ * say the same as the last one is not sent.
+ */
+function scheduleReport(): void {
+  clearTimeout(reportTimer);
+  reportTimer = setTimeout(() => void reportQueue(), 2_000);
+}
+
+async function reportQueue(): Promise<void> {
+  if (!scope || workingOffline()) return;
+  const { userId, businessId } = scope;
+  const device = await loadDevice(userId, businessId);
+  if (!device?.id) return;
+  const pending = state.entries.filter((e) => e.status === "pending");
+  const oldest = state.entries.map((e) => e.savedAt).sort()[0] ?? null;
+  const body = { waiting: pending.length, bills: pending.filter((e) => kindOf(e) === "invoice").length, refused: state.entries.length - pending.length, oldestAt: oldest };
+  const signature = `${device.id}:${JSON.stringify(body)}`;
+  if (signature === lastReport) return;
+  try {
+    await api.put(`/devices/${device.id}/queue`, body);
+    lastReport = signature;
+  } catch {
+    // Not reachable just now: the next change or sync reports again.
+  }
 }
 
 const subscribe = (l: () => void) => {
@@ -387,7 +424,7 @@ export async function queueCustomerChange(customerId: string, patch: Record<stri
   }
   if (pending) {
     const edit = pending as CustomerEditEntry;
-    return queueEntry({ ...edit, customerName: after.businessName ?? after.name, body: { ...edit.body, ...patch }, after });
+    return queueEntry({ ...edit, customerName: after.businessName ?? after.name, body: { ...edit.body, ...patch }, after, madeAt: new Date().toISOString() });
   }
   return queueEntry(make());
 }
@@ -455,9 +492,13 @@ async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt"
     case "customer-edit": {
       const c = e as CustomerEditEntry;
       const path = `/customers/${c.customerId}`;
-      let res: { id: string; code: string };
+      let res: { id: string; code: string; merge?: { kept: string[]; overwritten: string[] } };
+      // What the device had before the change, so a change made meanwhile is merged field by field.
+      const before = c.before as unknown as Record<string, unknown>;
+      const base = Object.fromEntries(Object.keys(c.body).filter((k) => k in before).map((k) => [k, (before[k] ?? null) as string | number | boolean | null]));
+      const offline = { base, madeAt: c.madeAt ?? c.savedAt };
       try {
-        res = await api.patch<{ id: string; code: string }>(path, c.body, c.version === null ? {} : { headers: { "if-match": String(c.version) } });
+        res = await api.patch<typeof res>(path, c.version === null ? c.body : { ...c.body, offline }, c.version === null ? {} : { headers: { "if-match": String(c.version) } });
       } catch (err) {
         // Changed since: fine if the server already shows this change (it was sent before, the answer lost).
         if (!(err instanceof ApiError && err.code === "VERSION_CONFLICT")) throw err;
@@ -465,7 +506,7 @@ async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt"
         if (!Object.entries(c.body).every(([k, v]) => (now[k] ?? null) === (v ?? null))) throw err;
         res = now;
       }
-      return { kind: "customer-edit", number: "", customerName: c.customerName, total: 0, serverId: res.id, serverNumber: res.code, serverTotal: 0 };
+      return { kind: "customer-edit", number: "", customerName: c.customerName, total: 0, serverId: res.id, serverNumber: res.code, serverTotal: 0, ...(res.merge?.kept.length ? { kept: res.merge.kept } : {}) };
     }
     case "purchase": {
       const p = e as PurchaseEntry;

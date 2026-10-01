@@ -232,6 +232,18 @@ function Rules() {
                         </Select>
                       </label>
                     )}
+                    {r.defaults.afterHours !== undefined && (
+                      <label className="flex flex-col gap-1 text-[12px] text-ink-3" title={t("notifications.rules.afterHoursHint")}>
+                        {t("notifications.rules.afterHours")}
+                        <Select aria-label={`${name}: ${t("notifications.rules.afterHours")}`} value={r.config.afterHours ?? r.defaults.afterHours} disabled={disabled || !r.isActive} onChange={(e) => void save(r, { config: { afterHours: Number(e.target.value) } })} className="w-32">
+                          {withValue([2, 4, 8, 12, 24, 48, 72], r.config.afterHours).map((h) => (
+                            <option key={h} value={h}>
+                              {t("notifications.rules.hours", { count: h })}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                    )}
                     {r.defaults.dayOfMonth !== undefined && (
                       <label className="flex flex-col gap-1 text-[12px] text-ink-3" title={t("notifications.rules.dayOfMonthHint")}>
                         {t("notifications.rules.dayOfMonth")}

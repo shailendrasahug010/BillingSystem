@@ -98,7 +98,8 @@ async function updateAverageCost(tx: Tx, businessId: string, productId: string, 
     })
     .from(schema.products)
     .where(and(eq(schema.products.id, productId), eq(schema.products.businessId, businessId)))
-    .for("update");
+    // Serialises cost updates without clashing with documents referring to the product.
+    .for("no key update");
   if (!row) return;
   const onHand = dec(row.onHand).gt(0) ? dec(row.onHand) : dec(0);
   const total = onHand.plus(inQty);

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
@@ -61,7 +61,7 @@ async function reversePayment(tx: Tx, ctx: RequestCtx, p: PaymentRow, reason: st
   const partyType = p.partyType as "customer" | "supplier";
   const partyId = (partyType === "customer" ? p.customerId : p.supplierId)!;
   const partyTable = partyType === "customer" ? schema.customers : schema.suppliers;
-  await tx.select({ id: partyTable.id }).from(partyTable).where(eq(partyTable.id, partyId)).for("update");
+  await tx.select({ id: partyTable.id }).from(partyTable).where(eq(partyTable.id, partyId)).for("no key update");
 
   const a = schema.paymentAllocations;
   const live = await tx.select().from(a).where(and(eq(a.paymentId, p.id), isNull(a.reversedAt)));
@@ -138,6 +138,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
 
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.payments.id })
           .from(schema.payments)
@@ -267,7 +268,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
       if (dec(p.unallocatedAmount).lte(0)) throw conflict("NOTHING_TO_ALLOCATE");
       const isCustomer = p.partyType === "customer";
       const partyTable = isCustomer ? schema.customers : schema.suppliers;
-      await tx.select({ id: partyTable.id }).from(partyTable).where(eq(partyTable.id, (isCustomer ? p.customerId : p.supplierId)!)).for("update");
+      await tx.select({ id: partyTable.id }).from(partyTable).where(eq(partyTable.id, (isCustomer ? p.customerId : p.supplierId)!)).for("no key update");
       let open: OpenDocument[];
       if (isCustomer) {
         const i = schema.invoices;

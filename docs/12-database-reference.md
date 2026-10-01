@@ -7,7 +7,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | | Count |
 |---|---|
 | Tables | 96 |
-| Columns | 1582 |
+| Columns | 1587 |
 | Foreign keys | 254 |
 | Unique constraints | 46 |
 | Check constraints | 57 |
@@ -228,6 +228,11 @@ Registered devices (phones, desktops). Needed for offline work: each device gets
 | `check_hash` | text |  |  | SHA-256 of the secret the device checks in with (renewed at each registration), so a removed device learns it must wipe itself. |
 | `wiped_at` | timestamptz |  |  | When a removed device was told to delete its copy (it did so on hearing it). |
 | `session_id` | uuid |  |  | The sign-in (refresh token family) the device last registered with: removing the device ends it. |
+| `queue_waiting` | integer | ✓ | `0` | Work waiting on the device to be sent, as it last reported (bills, payments, orders, changes …). |
+| `queue_bills` | integer | ✓ | `0` | Of that, bills. |
+| `queue_refused` | integer | ✓ | `0` | Work the server refused that waits on the device for someone to fix or remove. |
+| `queue_oldest_at` | timestamptz |  |  | When the oldest waiting work was done. |
+| `queue_reported_at` | timestamptz |  |  | When the device last reported its waiting work (it can only while online). |
 
 * Unique `devices_series_code_uq`: `(business_id, series_code)`
 * Trigger `devices_set_updated_at`: before update, each row → `set_updated_at()`
@@ -2455,7 +2460,7 @@ Which reminders run and how, one row per business and type (the types and their 
 |---|---|:-:|---|---|
 | `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
 | `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
-| `type` | varchar(40) | ✓ |  | customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due |
+| `type` | varchar(40) | ✓ |  | customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due, devices_unsynced |
 | `config` | jsonb | ✓ | `'{}'` | The rule's settings as JSON (days before due, thresholds, time of day ...). |
 | `channels` | varchar(20)[] | ✓ | `'{in_app}'` | Where the reminders go: in_app, push, whatsapp, sms, email. |
 | `is_active` | boolean | ✓ | `true` | Switched off: no daily check and no event notifications of this type. |

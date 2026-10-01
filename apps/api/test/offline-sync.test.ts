@@ -262,6 +262,75 @@ describe.skipIf(!hasDatabase)("offline bills from devices", () => {
     });
   });
 
+  it("merges a customer change made offline with one made meanwhile, field by field; the later change stands", async () => {
+    const shop = (await get(`/customers/${ids.shop}`)).body;
+    const v = shop.version;
+    const seen = { mobile: shop.mobile, city: shop.city };
+    const edit = (token: string, body: object, version: number) => call(t.app, "PATCH", `/customers/${ids.shop}`, { token, body, headers: { "if-match": String(version) } });
+    // Sam changes the mobile and the city offline; a minute later the owner changes the city online.
+    const samMadeAt = new Date(Date.now() - 60_000).toISOString();
+    expect((await edit(owner.token, { city: "Dewas" }, v)).status).toBe(200);
+    const merged = await edit(salesToken, { mobile: "9826099011", city: "Ujjain", offline: { base: seen, madeAt: samMadeAt } }, v);
+    expect(merged.status).toBe(200);
+    // The mobile nobody else touched is applied; the owner's later city stands.
+    expect(merged.body).toMatchObject({ mobile: "9826099011", city: "Dewas", version: v + 2, merge: { kept: ["city"], overwritten: [] } });
+    const logged = (await get(`/audit-logs?entityType=customer&entityId=${ids.shop}`)).body.data[0];
+    expect(logged.changes).toMatchObject({ mobile: [seen.mobile ?? null, "9826099011"], madeOffline: samMadeAt, notApplied: { city: "Ujjain" } });
+
+    // A change made offline after the owner's wins over it, and the owner is told.
+    const later = await edit(salesToken, { city: "Ujjain", offline: { base: { city: seen.city }, madeAt: new Date(Date.now() + 60_000).toISOString() } }, v);
+    expect(later.body).toMatchObject({ city: "Ujjain", merge: { kept: [], overwritten: ["city"] } });
+    const told = (await get("/notifications")).body.data.find((n: { type: string }) => n.type === "customer_edit_replaced");
+    expect(told).toMatchObject({ entityType: "customer", entityId: ids.shop, params: { customer: "Kirana One", fields: "city", editor: "Sales Sam" } });
+
+    // Sent again (its answer lost): already so, nothing changes.
+    const again = await edit(salesToken, { city: "Ujjain", offline: { base: { city: seen.city }, madeAt: new Date().toISOString() } }, v);
+    expect(again.body).toMatchObject({ city: "Ujjain", merge: { kept: [], overwritten: [] } });
+    // Online, an old version is still refused.
+    expect((await edit(owner.token, { city: "Indore" }, v)).body.error.code).toBe("VERSION_CONFLICT");
+  });
+
+  it("keeps what waits on each device, and reminds when one holds work that has not reached the server", async () => {
+    const spare = (await post("/devices", { name: "Sam's spare phone", platform: "android" }, salesToken)).body;
+    const report = (body: object, token = salesToken) => call(t.app, "PUT", `/devices/${spare.id}/queue`, { token, body });
+    expect((await report({ waiting: 3, bills: 2, refused: 0, oldestAt: "2026-09-23T17:00:00+05:30" })).status).toBe(204);
+    // Only the device's own person reports for it.
+    expect((await report({ waiting: 0, bills: 0, refused: 0 }, owner.token)).status).toBe(404);
+    expect((await get("/devices")).body.data.find((d: { id: string }) => d.id === spare.id)).toMatchObject({ queueWaiting: 3, queueBills: 2, queueRefused: 0 });
+
+    const check = () => post("/reminder-rules/devices_unsynced/check", {});
+    // It reported just now: nothing to remind about yet.
+    expect((await check()).body.result).toBe("nothing");
+    t.advance(25 * 3_600_000);
+    try {
+      expect((await check()).body.result).toBe("raised");
+      const n = (await get("/notifications")).body.data.find((x: { type: string }) => x.type === "devices_unsynced");
+      expect(n).toMatchObject({ titleKey: "notifications.devices_unsynced.title", bodyKey: "notifications.devices_unsynced.body", params: { count: 1, device: "Sam's spare phone", person: "Sales Sam", waiting: 3, date: "2026-09-23" } });
+      // The salesperson's role does not look after devices.
+      expect((await get("/notifications", salesToken)).body.data.some((x: { type: string }) => x.type === "devices_unsynced")).toBe(false);
+    } finally {
+      t.advance(-25 * 3_600_000);
+    }
+    // Work the server refused waits on the device for someone: reminded the next day without waiting the hours.
+    expect((await report({ waiting: 1, bills: 1, refused: 1, oldestAt: "2026-09-24T10:00:00+05:30" })).status).toBe(204);
+    t.setToday("2026-09-25");
+    try {
+      expect((await check()).body.result).toBe("raised");
+      const n = (await get("/notifications")).body.data.find((x: { type: string; params: { refused: number } }) => x.type === "devices_unsynced" && x.params.refused === 1);
+      expect(n.bodyKey).toBe("notifications.devices_unsynced.refused");
+    } finally {
+      t.setToday(null);
+    }
+    // Sent and cleared: nothing.
+    expect((await report({ waiting: 0, bills: 0, refused: 0, oldestAt: null })).status).toBe(204);
+    t.setToday("2026-09-26");
+    try {
+      expect((await check()).body.result).toBe("nothing");
+    } finally {
+      t.setToday(null);
+    }
+  });
+
   it("keeps device series out of the editable number series", async () => {
     const series = (await get("/document-series")).body.data;
     expect(series.some((s: { pattern: string }) => s.pattern.includes("{DEVICE}"))).toBe(false);

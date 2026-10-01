@@ -28,6 +28,8 @@ interface CheckContext {
   tx: Tx;
   businessId: string;
   today: string;
+  /** The moment of the check (the API's clock). */
+  at: Date;
   config: ReminderConfig;
 }
 
@@ -130,6 +132,10 @@ const CHECKS: Record<ReminderType, Check> = {
     return { ...base("leave_request", c.today), titleKey: "notifications.leave_request.title", params: { count: row!.n } };
   },
 
+  async devices_unsynced(c) {
+    return devicesUnsynced(c);
+  },
+
   async salary_due(c) {
     if (Number(c.today.slice(8, 10)) < (c.config.dayOfMonth ?? 1)) return null;
     const month = `${addDays(`${c.today.slice(0, 7)}-01`, -1).slice(0, 7)}`;
@@ -154,6 +160,41 @@ const CHECKS: Record<ReminderType, Check> = {
   },
 };
 
+/**
+ * Phones and PCs holding work that has not reached the server: work made
+ * offline on a device that has not reported for `afterHours` (it can report
+ * only while online, so it is still away with it), or work the server
+ * refused that waits on the device for someone to fix or remove.
+ */
+async function devicesUnsynced(c: CheckContext): Promise<NewNotification | null> {
+  const since = new Date(c.at.getTime() - (c.config.afterHours ?? 24) * 3_600_000).toISOString();
+  const rows = (
+    await c.tx.execute<{ name: string; person: string; waiting: number; refused: number; oldest: string | null }>(sql`
+      select d.name, u.name as person, d.queue_waiting as waiting, d.queue_refused as refused,
+             (d.queue_oldest_at at time zone b.time_zone)::date::text as oldest
+      from devices d join users u on u.id = d.user_id join businesses b on b.id = d.business_id
+      where d.business_id = ${c.businessId} and d.revoked_at is null
+        and (d.queue_refused > 0 or (d.queue_waiting > 0 and coalesce(d.queue_reported_at, d.last_seen_at) < ${since}::timestamptz))
+      order by d.queue_refused desc, d.queue_oldest_at nulls last, d.name`)
+  ).rows;
+  if (!rows.length) return null;
+  const first = rows[0]!;
+  return {
+    ...base("devices_unsynced", c.today),
+    severity: "warning",
+    titleKey: "notifications.devices_unsynced.title",
+    bodyKey: first.refused > 0 ? "notifications.devices_unsynced.refused" : "notifications.devices_unsynced.body",
+    params: {
+      count: rows.length,
+      device: first.name,
+      person: first.person,
+      waiting: first.waiting,
+      refused: first.refused,
+      date: first.oldest,
+    },
+  };
+}
+
 async function orderCount(c: CheckContext, type: "pending_orders" | "to_pack" | "to_dispatch", where: ReturnType<typeof sql>, step: "requireConfirmation" | "usePacking" | "useDispatch"): Promise<NewNotification | null> {
   const workflow = (await getSettings(c.tx, c.businessId, ["orders.workflow"] as const))["orders.workflow"];
   if (workflow[step] === false) return null;
@@ -166,8 +207,8 @@ async function orderCount(c: CheckContext, type: "pending_orders" | "to_pack" | 
 }
 
 /** What a rule's check would raise today (for the checks themselves and their tests). */
-export async function checkReminder(tx: Tx, businessId: string, type: ReminderType, today: string, config: ReminderConfig = reminderConfig(type, {})): Promise<NewNotification | null> {
-  return CHECKS[type]({ tx, businessId, today, config });
+export async function checkReminder(tx: Tx, businessId: string, type: ReminderType, today: string, config: ReminderConfig = reminderConfig(type, {}), at = new Date()): Promise<NewNotification | null> {
+  return CHECKS[type]({ tx, businessId, today, at, config });
 }
 
 export interface ReminderRunResult {
@@ -210,7 +251,7 @@ export async function runDueReminders(deps: AppDeps): Promise<ReminderRunResult>
         try {
           // A savepoint: a failing check does not undo the others (or the claim).
           const created = await tx.transaction(async (sp) => {
-            const n = await checkReminder(sp, businessId, rule.type as ReminderType, today, config);
+            const n = await checkReminder(sp, businessId, rule.type as ReminderType, today, config, now);
             return n ? notify(sp, businessId, n, now.toISOString()) : null;
           });
           if (created) result.notifications++;

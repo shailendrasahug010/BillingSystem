@@ -110,7 +110,7 @@ async function customersToRebuild(tx: Tx, businessId: string, since: string): Pr
   return rows.rows.map((r) => r.id);
 }
 
-async function checkBalances(tx: Tx, businessId: string): Promise<NightlyDetails["balances"]> {
+export async function checkBalances(tx: Tx, businessId: string): Promise<NightlyDetails["balances"]> {
   const take = (rows: BalanceMismatch[]) => ({ mismatched: rows.length, examples: rows.slice(0, EXAMPLES) });
   const customers = await tx.execute<BalanceMismatch>(sql`
     select c.id as key, c.balance::text as cached, coalesce(sum(l.debit - l.credit), 0)::numeric(15,2)::text as ledger

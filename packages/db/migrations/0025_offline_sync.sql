@@ -8,6 +8,11 @@ CREATE TABLE "sync_changes" (
 	CONSTRAINT "sync_changes_business_id_xid_entity_entity_id_pk" PRIMARY KEY("business_id","xid","entity","entity_id")
 );
 --> statement-breakpoint
+ALTER TABLE "devices" ADD COLUMN "queue_waiting" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "devices" ADD COLUMN "queue_bills" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "devices" ADD COLUMN "queue_refused" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "devices" ADD COLUMN "queue_oldest_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "devices" ADD COLUMN "queue_reported_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "invoices" ADD COLUMN "review_status" "invoice_review_status";--> statement-breakpoint
 ALTER TABLE "invoices" ADD COLUMN "review_reasons" jsonb;--> statement-breakpoint
 ALTER TABLE "invoices" ADD COLUMN "reviewed_by" uuid;--> statement-breakpoint
@@ -57,3 +62,8 @@ CREATE TRIGGER customers_sync_change AFTER INSERT OR UPDATE OR DELETE ON custome
 --> statement-breakpoint
 CREATE TRIGGER suppliers_sync_change AFTER INSERT OR UPDATE OR DELETE ON suppliers
   FOR EACH ROW EXECUTE FUNCTION track_sync_change('supplier', 'id');
+--> statement-breakpoint
+-- The tenth reminder rule, phones and PCs holding work not sent to the server, for every business.
+INSERT INTO reminder_rules (business_id, type)
+SELECT b.id, 'devices_unsynced' FROM businesses b
+ON CONFLICT (business_id, type) DO NOTHING;

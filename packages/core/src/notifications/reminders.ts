@@ -18,6 +18,7 @@ export const REMINDER_TYPES = [
   "to_dispatch",
   "leave_request",
   "salary_due",
+  "devices_unsynced",
 ] as const;
 
 export type ReminderType = (typeof REMINDER_TYPES)[number];
@@ -30,6 +31,8 @@ export interface ReminderConfig {
   daysBefore?: number;
   /** Salary reminder: from this day of the month, if last month's salaries are not paid. */
   dayOfMonth?: number;
+  /** Devices reminder: work waiting on a device that has not reported for this many hours. */
+  afterHours?: number;
 }
 
 export interface ReminderDefinition {
@@ -51,6 +54,8 @@ export const REMINDERS: Record<ReminderType, ReminderDefinition> = {
   to_dispatch: { type: "to_dispatch", permission: "dispatch.dispatch", defaults: { hour: 9 }, events: true },
   leave_request: { type: "leave_request", permission: "leave.approve", defaults: { hour: 10 }, events: true },
   salary_due: { type: "salary_due", permission: "payroll.run", defaults: { hour: 10, dayOfMonth: 1 }, events: false },
+  // Phase 5.3: phones and PCs holding work made offline (or refused by the server) that has not reached it.
+  devices_unsynced: { type: "devices_unsynced", permission: "settings.update", defaults: { hour: 9, afterHours: 24 }, events: false },
 };
 
 export const isReminderType = (value: string): value is ReminderType => (REMINDER_TYPES as readonly string[]).includes(value);
@@ -64,6 +69,7 @@ export function reminderConfig(type: ReminderType, stored: unknown): ReminderCon
     hour: int(s.hour, 0, 23, d.hour),
     ...(d.daysBefore !== undefined ? { daysBefore: int(s.daysBefore, 0, 30, d.daysBefore) } : {}),
     ...(d.dayOfMonth !== undefined ? { dayOfMonth: int(s.dayOfMonth, 1, 28, d.dayOfMonth) } : {}),
+    ...(d.afterHours !== undefined ? { afterHours: int(s.afterHours, 1, 168, d.afterHours) } : {}),
   };
 }
 

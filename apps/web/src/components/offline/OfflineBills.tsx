@@ -16,6 +16,7 @@ import { useToast } from "../ui/Toast";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
+import { useFieldLabels } from "../../features/notifications/notifications";
 
 /** On a list screen: its kind of work still waiting on this device, and the way to see it. */
 export function WaitingStrip({ kinds }: { kinds: QueuedKind[] }) {
@@ -250,6 +251,7 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
   const state = useOffline();
   const offline = state.offlineMode || !state.online;
   const label = useKindLabel();
+  const fieldLabels = useFieldLabels();
   const go = (route: Route) => {
     onOpenChange(false);
     navigate(route);
@@ -316,6 +318,7 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
                     {s.serverTotal > 0 && <span className="num ml-auto">{money(s.serverTotal)}</span>}
                     {kind === "invoice" && Math.abs(s.serverTotal - s.total) >= 0.01 && <span className="w-full text-warn">{t("offline.totalChanged", { amount: money(s.serverTotal) })}</span>}
                     {s.held && <span className="w-full text-warn">{t("offline.heldForReview")}</span>}
+                    {s.kept && s.kept.length > 0 && <span className="w-full text-warn">{t("offline.editKept", { fields: fieldLabels(s.kept) })}</span>}
                     <span className="sr-only">{date(s.syncedAt.slice(0, 10))}</span>
                   </li>
                 );
