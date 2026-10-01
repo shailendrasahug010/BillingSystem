@@ -16,7 +16,8 @@ The schema is real and runnable: `packages/db/src/schema/*.ts` (Drizzle) generat
 | Soft delete | Master data only (`deleted_at`, `deleted_by`): customers, suppliers, products, brands, categories, warehouses, employees, expenses. Unique codes are enforced only among non-deleted rows (partial unique indexes). |
 | Financial documents | Never deleted once posted: status moves to `cancelled` with reversing ledger entries (DB trigger enforces). |
 | Optimistic locking | `version` integer on editable documents and masters; used for concurrent edits and offline-sync conflict detection. |
-| Idempotency | Documents created by clients carry `client_id`; a unique partial index makes retries (e.g. offline sync replays) harmless. |
+| Idempotency | Documents created by clients carry `client_id`; a unique partial index makes retries (e.g. offline sync replays) harmless, and a transaction advisory lock on the key serialises two requests with the same key, so the second returns the first's result. |
+| Change feed | Triggers on products (and prices, units, barcodes, stock balances), customers and suppliers add a row to `sync_changes` per record and transaction (the transaction id, `xid8`); `GET /sync/pull` reads them past the snapshot the device last read at (Phase 5.3). |
 | Enums | PostgreSQL enums for fixed state machines (values shared with `@digitalbahi/core`); business-editable lists (leave types, expense categories, customer categories…) are tables. |
 | Naming | `snake_case`, plural table names, `<table>_<purpose>_{idx,uq,chk}` for indexes and constraints. |
 

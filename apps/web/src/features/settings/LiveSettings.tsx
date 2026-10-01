@@ -931,7 +931,7 @@ function DevicesCard() {
           rows={q.data ?? []}
           loading={q.isPending}
           rowKey={(d) => d.id}
-          minWidth={760}
+          minWidth={680}
           empty={<p className="p-4 text-[13.5px] text-ink-3">{t("offline.devices.empty")}</p>}
           columns={[
             {
