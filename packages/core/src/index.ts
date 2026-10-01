@@ -24,6 +24,7 @@ export * from "./suggestions/associations.js";
 export * from "./suggestions/engine.js";
 export * from "./notifications/reminders.js";
 export * from "./search/products.js";
+export * from "./insights/kpis.js";
 
 export * from "./validation/identifiers.js";
 export * from "./words/amount-in-words.js";

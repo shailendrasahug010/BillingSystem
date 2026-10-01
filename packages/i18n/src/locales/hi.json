@@ -1060,7 +1060,8 @@
     "NO_EWAY_BILLS_DUE": "इस ट्रिप के किसी बिल को ई-वे बिल की ज़रूरत नहीं।",
     "EWAY_BILL_BEFORE_INVOICE": "ई-वे बिल की तारीख इनवॉइस से पहले नहीं हो सकती।",
     "REMINDER_RULE_OFF": "पहले रिमाइंडर नियम चालू करें।",
-    "NOT_HELD_FOR_REVIEW": "यह बिल जाँच के लिए रोका नहीं गया है।"
+    "NOT_HELD_FOR_REVIEW": "यह बिल जाँच के लिए रोका नहीं गया है।",
+    "SECTION_REQUIRED": "कौन-सी तालिका डाउनलोड करनी है, चुनें।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -1231,6 +1232,7 @@
     "title": "रिपोर्ट",
     "subtitle": "किसी भी अवधि की बिक्री, वसूली, खरीद और बकाया",
     "tabs": {
+      "insights": "झलक",
       "sales": "बिक्री",
       "collections": "वसूली",
       "purchases": "खरीद",
@@ -2112,6 +2114,87 @@
     "daysOfCover": "कितने दिन चलेगा",
     "lastSold": "आख़िरी बिक्री",
     "movementHint": "तेज़: बिक्री के पहले 80% वाले उत्पाद। नहीं चल रहा: स्टॉक में है पर इस अवधि में नहीं बिका। कितने दिन चलेगा: इसी रफ़्तार से स्टॉक कितने दिन चलेगा।"
+  },
+  "insights": {
+    "measures": "मुख्य आँकड़े",
+    "compare": "तुलना",
+    "compareWith": {
+      "previous": "पिछली अवधि से",
+      "last_year": "पिछले साल की इसी अवधि से"
+    },
+    "comparedPeriod": "{{from}} – {{to}} से तुलना",
+    "kpis": {
+      "netSales": "शुद्ध बिक्री",
+      "grossMargin": "सकल मार्जिन",
+      "marginPercent": "मार्जिन %",
+      "costOfGoodsSold": "बिके माल की लागत",
+      "bills": "बिल",
+      "averageBill": "औसत बिल",
+      "customersBilled": "बिल वाले ग्राहक",
+      "newCustomers": "नए ग्राहक",
+      "returns": "वापसी",
+      "returnRate": "वापसी दर",
+      "collections": "वसूली",
+      "receivables": "ग्राहकों पर बकाया",
+      "daysSalesOutstanding": "वसूली में दिन",
+      "inventoryValue": "स्टॉक मूल्य",
+      "turnover": "स्टॉक टर्नओवर",
+      "daysOfInventory": "स्टॉक कितने दिन का"
+    },
+    "was": "पहले {{value}}",
+    "points": "{{value}} अंक",
+    "noComparison": "पहले कुछ नहीं",
+    "days_one": "{{count}} दिन",
+    "days_other": "{{count}} दिन",
+    "times": "{{value}} गुना",
+    "trend": "पिछले 12 महीने",
+    "month": "महीना",
+    "sales": "बिक्री",
+    "margin": "मार्जिन",
+    "contribution": "बिक्री कहाँ से आती है",
+    "by": {
+      "customers": "ग्राहक",
+      "companies": "कंपनियाँ",
+      "salespeople": "सेल्समैन"
+    },
+    "share": "हिस्सा",
+    "class": "श्रेणी",
+    "earlier": "पिछली अवधि",
+    "change": "बदलाव",
+    "status": {
+      "new": "नया",
+      "lost": "छूट गया",
+      "growing": "बढ़ रहा",
+      "declining": "घट रहा"
+    },
+    "abcSummary": {
+      "customers_one": "{{class}}: {{count}} ग्राहक, बिक्री का {{share}}%",
+      "customers_other": "{{class}}: {{count}} ग्राहक, बिक्री का {{share}}%",
+      "companies_one": "{{class}}: {{count}} कंपनी, बिक्री का {{share}}%",
+      "companies_other": "{{class}}: {{count}} कंपनियाँ, बिक्री का {{share}}%",
+      "salespeople_one": "{{class}}: {{count}} सेल्समैन, बिक्री का {{share}}%",
+      "salespeople_other": "{{class}}: {{count}} सेल्समैन, बिक्री का {{share}}%"
+    },
+    "newLost": "{{new}} नए · {{lost}} छूटे (पहले {{lostSales}} की ख़रीद)",
+    "abcHint": "A: वे थोड़े जिनसे बिक्री का पहला 80% आता है; B: अगला 15%; C: बाक़ी। बढ़त पिछली अवधि से है।",
+    "noBrand": "बिना कंपनी",
+    "unassigned": "बिना सेल्समैन",
+    "stock": "स्टॉक का चलन",
+    "fast": "तेज़ बिकने वाले",
+    "slow": "धीमे बिकने वाले",
+    "dead": "डेड स्टॉक",
+    "fastHint": "इस अवधि के सबसे ज़्यादा बिकने वाले, और इसी रफ़्तार से उनका स्टॉक कितने दिन चलेगा।",
+    "slowHint": "बिक रहे हैं, पर इसी रफ़्तार से स्टॉक {{days}} दिन से ज़्यादा चलेगा",
+    "deadHint": "स्टॉक में है, {{days}} दिन से नहीं बिका",
+    "tiedUp_one": "{{count}} उत्पाद में {{value}} फँसा है",
+    "tiedUp_other": "{{count}} उत्पादों में {{value}} फँसा है",
+    "none": {
+      "fast": "इस अवधि में कोई बिक्री नहीं",
+      "slow": "कुछ धीमा नहीं",
+      "dead": "कोई डेड स्टॉक नहीं"
+    },
+    "neverSold": "कभी नहीं बिका",
+    "hint": "बिक्री GST से पहले और वापसी व छूट घटाकर है; मार्जिन हर आइटम बिकते समय की औसत ख़रीद लागत से है। स्टॉक अवधि के आख़िरी दिन की लागत पर है; वसूली में दिन ग्राहकों के बकाये की तुलना अवधि की बिलिंग से करते हैं।"
   },
   "billImport": {
     "button": "बिल आयात करें",

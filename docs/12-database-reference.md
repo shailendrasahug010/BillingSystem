@@ -2590,7 +2590,7 @@ SAVED REPORT VIEWS — a report's tab and settings (period, grouping, filters) k
 | `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
 | `user_id` | uuid | ✓ |  | → [`users`](#users).id. Person who saved the view. |
 | `name` | varchar(60) | ✓ |  | Name of the view (unique per person, ignoring case). |
-| `report` | varchar(20) | ✓ |  | sales \| collections \| purchases \| outstanding \| profit \| pnl \| products |
+| `report` | varchar(20) | ✓ |  | insights \| sales \| collections \| purchases \| outstanding \| profit \| pnl \| products |
 | `settings` | jsonb | ✓ | `'{}'` | The report's tab, period, grouping and filters, as JSON. |
 | `shared` | boolean | ✓ | `false` | Shown to the team (to roles that may open the report), not only to its owner. |
 | `created_at` | timestamptz | ✓ | `now()` | When the row was created. |

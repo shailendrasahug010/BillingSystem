@@ -19,6 +19,7 @@ function useDescribe() {
       report === "outstanding" ? t(s.party === "supplier" ? "reports.payable" : "reports.receivable") : null,
       report === "outstanding" ? t(s.basis === "invoice_date" ? "reports.byBillDate" : "reports.byDueDate") : null,
       s.movement ? t(`analytics.movements.${s.movement}`) : null,
+      report === "insights" && s.compare ? `${t("insights.compare")} ${t(`insights.compareWith.${s.compare}`)}` : null,
     ]
       .filter(Boolean)
       .join(" · ");

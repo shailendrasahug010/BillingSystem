@@ -34,6 +34,7 @@ import { purchasesModule } from "./purchases/routes.js";
 import { analyticsModule } from "./reports/analytics.js";
 import { collectionsModule } from "./reports/collections.js";
 import { homeModule } from "./reports/home.js";
+import { insightsModule } from "./reports/insights.js";
 import { dashboardModule } from "./reports/dashboard.js";
 import { reportsModule } from "./reports/reports.js";
 import { reportViewsModule } from "./reports/views.js";
@@ -72,6 +73,7 @@ export const MODULES: ApiModule[] = [
   paymentsModule,
   collectionsModule,
   homeModule,
+  insightsModule,
   notesModule,
   expensesModule,
   gstModule,

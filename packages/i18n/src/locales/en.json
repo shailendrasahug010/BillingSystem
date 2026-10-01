@@ -1060,7 +1060,8 @@
     "NO_EWAY_BILLS_DUE": "No bill on this trip needs an e-way bill.",
     "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice.",
     "REMINDER_RULE_OFF": "Switch the reminder rule on first.",
-    "NOT_HELD_FOR_REVIEW": "This bill is not held for review."
+    "NOT_HELD_FOR_REVIEW": "This bill is not held for review.",
+    "SECTION_REQUIRED": "Choose which table to download."
   },
   "validation": {
     "required": "This field is required",
@@ -1231,6 +1232,7 @@
     "title": "Reports",
     "subtitle": "Sales, collections, purchases and dues for any period",
     "tabs": {
+      "insights": "Insights",
       "sales": "Sales",
       "collections": "Collections",
       "purchases": "Purchases",
@@ -2112,6 +2114,87 @@
     "daysOfCover": "Days of cover",
     "lastSold": "Last sold",
     "movementHint": "Fast: the products making the first 80% of sales. Not moving: in stock but not sold in the period. Days of cover: how long the stock lasts at this period's pace."
+  },
+  "insights": {
+    "measures": "Measures",
+    "compare": "Compared with",
+    "compareWith": {
+      "previous": "the period before",
+      "last_year": "the same period last year"
+    },
+    "comparedPeriod": "Compared with {{from}} – {{to}}",
+    "kpis": {
+      "netSales": "Net sales",
+      "grossMargin": "Gross margin",
+      "marginPercent": "Margin %",
+      "costOfGoodsSold": "Cost of goods sold",
+      "bills": "Bills",
+      "averageBill": "Average bill",
+      "customersBilled": "Customers billed",
+      "newCustomers": "New customers",
+      "returns": "Returns",
+      "returnRate": "Return rate",
+      "collections": "Collections",
+      "receivables": "Customers owe",
+      "daysSalesOutstanding": "Days to collect",
+      "inventoryValue": "Stock value",
+      "turnover": "Stock turnover",
+      "daysOfInventory": "Days of stock"
+    },
+    "was": "was {{value}}",
+    "points": "{{value}} pts",
+    "noComparison": "nothing before",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "times": "{{value}}×",
+    "trend": "Last 12 months",
+    "month": "Month",
+    "sales": "Sales",
+    "margin": "Margin",
+    "contribution": "Where sales come from",
+    "by": {
+      "customers": "Customers",
+      "companies": "Companies",
+      "salespeople": "Salespeople"
+    },
+    "share": "Share",
+    "class": "Class",
+    "earlier": "Earlier period",
+    "change": "Change",
+    "status": {
+      "new": "New",
+      "lost": "Lost",
+      "growing": "Growing",
+      "declining": "Declining"
+    },
+    "abcSummary": {
+      "customers_one": "{{class}}: {{count}} customer, {{share}}% of sales",
+      "customers_other": "{{class}}: {{count}} customers, {{share}}% of sales",
+      "companies_one": "{{class}}: {{count}} company, {{share}}% of sales",
+      "companies_other": "{{class}}: {{count}} companies, {{share}}% of sales",
+      "salespeople_one": "{{class}}: {{count}} salesperson, {{share}}% of sales",
+      "salespeople_other": "{{class}}: {{count}} salespeople, {{share}}% of sales"
+    },
+    "newLost": "{{new}} new · {{lost}} lost (they bought {{lostSales}} before)",
+    "abcHint": "A: the few that make the first 80% of sales; B: the next 15%; C: the rest. Growth is against the earlier period.",
+    "noBrand": "No company",
+    "unassigned": "No salesperson",
+    "stock": "How stock moves",
+    "fast": "Fast movers",
+    "slow": "Slow movers",
+    "dead": "Dead stock",
+    "fastHint": "The best sellers of the period, with how long their stock lasts at this pace.",
+    "slowHint": "Selling, but the stock lasts more than {{days}} days at this pace",
+    "deadHint": "In stock, not sold for {{days}} days",
+    "tiedUp_one": "{{value}} tied up in {{count}} product",
+    "tiedUp_other": "{{value}} tied up in {{count}} products",
+    "none": {
+      "fast": "No sales in this period",
+      "slow": "Nothing slow",
+      "dead": "No dead stock"
+    },
+    "neverSold": "Never sold",
+    "hint": "Sales are before GST and net of returns and discounts; margin uses the average purchase cost when each item was sold. Stock is valued at cost on the period's last day; days to collect compare what customers owe with the period's billing."
   },
   "billImport": {
     "button": "Import bill",

@@ -331,7 +331,7 @@ export const reportViews = pgTable(
       .references(() => users.id),
     /** Name of the view (unique per person, ignoring case). */
     name: varchar({ length: 60 }).notNull(),
-    /** sales | collections | purchases | outstanding | profit | pnl | products */
+    /** insights | sales | collections | purchases | outstanding | profit | pnl | products */
     report: varchar({ length: 20 }).notNull(),
     /** The report's tab, period, grouping and filters, as JSON. */
     settings: jsonb().notNull().default({}),
