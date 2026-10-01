@@ -73,13 +73,16 @@ jobs:
             if (-not (Test-Path $f)) { throw "not installed: $f" }
           }
           $env:DIGITALBAHI_NO_PAUSE = '1'
-          # As on a computer without Node.js (this one's PostgreSQL 14 is too old, so it is downloaded too).
+          # As on a computer without Node.js or PostgreSQL (this one has PostgreSQL 17, which the
+          # launcher would use: most computers have none, so the download is what is checked).
+          $env:DIGITALBAHI_PG_DOWNLOAD = '1'
           $withNode = $env:Path
           Remove-NodeFromPath
           function Show-Logs { Get-ChildItem "$data\logs" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 } }
           & "$app\DigitalBahi.cmd" start --no-browser
           if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'start failed' }
           if (-not (Test-Path "$data\runtime\node-v*-win-x64\node.exe")) { throw 'Node.js was not downloaded' }
+          if (-not (Test-Path "$data\runtime\postgresql-*-win32-x64\bin\pg_ctl.exe")) { throw 'PostgreSQL was not downloaded' }
           $env:Path = $withNode
 
           # The launcher has exited: the server and the database keep running.
