@@ -109,7 +109,7 @@ log("salesperson signed in with the user ID");
 
 // 4. Only what the Sales role allows: the menu, the dashboard's actions, the buttons on each screen.
 const menu = (await staffPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Outstanding", "Messages", "Products"];
+const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Outstanding", "Messages", "Products", "Notifications"];
 if (JSON.stringify(menu) !== JSON.stringify(expectedMenu)) errors.push(`sales menu: ${menu.join(", ")}`);
 const quick = (await staffPage.getByRole("region", { name: "Quick actions" }).getByRole("button").allTextContents()).map((s) => s.replace(/(Ctrl|Alt).*$/, "").trim());
 if (JSON.stringify(quick) !== JSON.stringify(["Create Invoice", "New Order", "Receive Payment", "Add Customer"])) errors.push(`sales quick actions: ${quick.join(", ")}`);
@@ -134,7 +134,7 @@ await staffPage.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 15
 await staffPage.goto(`${WEB}/#settings`);
 await staffPage.getByText("Not part of your role").waitFor({ timeout: 15000 });
 await staffPage.screenshot({ path: `${OUT}/team-5-no-access.png` });
-log("sales sees its eight screens, its four actions, no product editing or exports, a fixed rate; Settings says no access");
+log("sales sees its nine screens, its four actions, no product editing or exports, a fixed rate; Settings says no access");
 
 // 5. A warehouse worker has no sales dashboard: their home shows what to pack and send.
 const packer = await api("POST", "/members", token, { name: "Pappu Packer", mobile: `98778${run}`, roleId: (await api("GET", "/roles", token)).data.find((r) => r.key === "warehouse").id, username: `pappu${run}`, password: "Pappu-pass-2026" });
@@ -152,7 +152,7 @@ await packerPage.getByRole("heading", { name: "Pack next" }).waitFor({ timeout: 
 for (const figure of ["Orders to Pack", "Orders to Dispatch"]) if ((await packerPage.getByText(figure, { exact: true }).count()) === 0) errors.push(`warehouse home lacks ${figure}`);
 if ((await packerPage.getByText("Today's Sales").count()) !== 0) errors.push("warehouse sees the sales figures");
 const packerMenu = (await packerPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-if (JSON.stringify(packerMenu) !== JSON.stringify(["Dashboard", "Sales Orders", "Products", "Inventory", "Purchases", "Packing", "Dispatch"])) errors.push(`warehouse menu: ${packerMenu.join(", ")}`);
+if (JSON.stringify(packerMenu) !== JSON.stringify(["Dashboard", "Sales Orders", "Products", "Inventory", "Purchases", "Packing", "Dispatch", "Notifications"])) errors.push(`warehouse menu: ${packerMenu.join(", ")}`);
 await packerPage.screenshot({ path: `${OUT}/team-6-warehouse.png` });
 log("warehouse worker lands on their own home (to pack, to send); menu:", packerMenu.join(", "));
 
@@ -172,7 +172,7 @@ for (const h of ["Leave to decide", "Expenses this month"]) if ((await hrPage.ge
 if ((await hrPage.getByRole("heading", { name: /^Salary for / }).count()) === 0) errors.push("HR home lacks the salary run");
 if ((await hrPage.getByText("Today's Sales").count()) !== 0 || (await hrPage.getByText("Pack next").count()) !== 0) errors.push("HR sees sales or warehouse parts");
 const hrMenu = (await hrPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-if (JSON.stringify(hrMenu) !== JSON.stringify(["Dashboard", "Expenses", "Employees", "Salary", "Leave"])) errors.push(`HR menu: ${hrMenu.join(", ")}`);
+if (JSON.stringify(hrMenu) !== JSON.stringify(["Dashboard", "Expenses", "Employees", "Salary", "Leave", "Notifications"])) errors.push(`HR menu: ${hrMenu.join(", ")}`);
 await hrPage.screenshot({ path: `${OUT}/team-7-hr.png` });
 log("HR lands on staff today, leave to decide, salary and expenses; menu:", hrMenu.join(", "));
 

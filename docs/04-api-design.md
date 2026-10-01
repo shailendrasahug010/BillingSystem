@@ -214,8 +214,11 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 | Method & path | Purpose |
 |---|---|
 | `GET /search?q=` ★ | Global search across customers, suppliers, products, invoices, orders, purchases, payments, employees by name, code, mobile, GSTIN, invoice number, barcode |
-| `GET /notifications` · `POST /notifications/:id/read` · `GET /events` (SSE) | In-app notifications and live updates |
-| `GET/PATCH /reminder-rules` | Which reminders run, thresholds, channels |
+| `GET /notifications?status=all\|unread&limit=&cursor=` · `GET /notifications/unread-count` [notification.view] | The person's notifications, newest first: those addressed to them and those for a permission their role has, without the ones they dismissed; each is `{type, severity, titleKey, bodyKey, params, entityType, entityId, createdAt, readAt}` (the app translates the keys), with the unread count |
+| `POST /notifications/:id/read` · `POST /notifications/:id/dismiss` · `POST /notifications/read-all` [notification.view] | Read and dismissed for this person only (204; 404 for one they may not see); read-all returns `{marked}` |
+| `GET /notifications/stream` [notification.view] | Server-sent events: `ready`, then `notification {id}` whenever one this person may see is created on any API server; a comment every 25 s; ends when the access token would expire (open it again with a fresh one); `unavailable` if the server cannot listen |
+| `GET /reminder-rules` [notification.view] · `PATCH /reminder-rules/:type {isActive?, config?: {hour, daysBefore, dayOfMonth}}` [notification.configure] | The nine rules with their permission, whether they also fire as things happen, settings (defaults filled in) and last run day; a change is audited (`reminder_rule.updated`), settings that do not apply to the type are ignored |
+| `POST /reminder-rules/:type/check` [notification.configure] | Runs the rule's check now: `{result: raised\|already\|nothing}`; its notification is the day's one (409 `REMINDER_RULE_OFF` while the rule is off) |
 | `GET /audit-logs?entityType=&entityId=&userId=` [audit.view] | Audit trail |
 | `POST /files` → pre-signed upload · `GET /files/:id` → signed download | Uploads (validated type and size) |
 | `GET` · `PUT /backups/schedule` [backup.configure; saving also needs backup.download] | Automatic backups: off / daily / weekly, hour, weekday, recipient (empty: the firm's email) and the file's password (write-only; kept when left out); the view has the next time and the last result as an error code |

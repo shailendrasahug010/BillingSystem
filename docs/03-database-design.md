@@ -445,7 +445,7 @@ Negative stock is **not** a database constraint on purpose: some distributors bi
 ## 5. Indexing strategy for large data
 
 * Every list screen's main query has a composite index starting with `business_id`: `invoices (business_id, customer_id, invoice_date)`, `invoices (business_id, invoice_date)`, `payments (business_id, customer_id, payment_date)`, `stock_ledger (business_id, product_id, warehouse_id, id)`, `audit_logs (business_id, entity_type, entity_id, created_at)`.
-* **Partial indexes** for hot subsets: open invoices (`status = 'posted' and balance_due > 0`) for outstanding and aging; unread notifications; pending outbox events; pending leave requests.
+* **Partial indexes** for hot subsets: open invoices (`status = 'posted' and balance_due > 0`) for outstanding and aging; notifications per business by date; pending outbox events; pending leave requests.
 * **Trigram (GIN) indexes** on customer, supplier and product names for fuzzy search on the server.
 * **Keyset (cursor) pagination** everywhere; no `OFFSET` on large tables.
 * **Summary tables** for reports (§7 of the architecture doc) and cached balances for lists.

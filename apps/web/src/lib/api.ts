@@ -146,6 +146,52 @@ export const api = {
   upload: <T>(path: string, file: Blob, options: { query?: Query; headers?: Record<string, string> } = {}) => request<T>("POST", path, { file, ...options }),
 };
 
+/**
+ * Reads a server-sent event stream (EventSource cannot send the access token,
+ * so this uses fetch). Calls `onEvent` for each event and resolves when the
+ * server ends the stream; a 401 refreshes the session once, as requests do.
+ */
+export async function readEventStream(path: string, onEvent: (event: string, data: string) => void, signal: AbortSignal): Promise<void> {
+  for (let retried = false; ; retried = true) {
+    const headers: Record<string, string> = { accept: "text/event-stream" };
+    if (accessToken) headers.authorization = `Bearer ${accessToken}`;
+    let res: Response;
+    try {
+      res = await fetch(url(path), { headers, credentials: "same-origin", cache: "no-store", signal });
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      throw new ApiError(0, "network");
+    }
+    if (res.status === 401 && !retried && (await refreshSession())) continue;
+    if (!res.ok || !res.body) throw toError(res.status, await parse(res).catch(() => null));
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        buffer += value.replace(/\r\n?/g, "\n");
+        for (let end = buffer.indexOf("\n\n"); end >= 0; end = buffer.indexOf("\n\n")) {
+          const block = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          let event = "message";
+          const data: string[] = [];
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event:")) event = line.slice(6).trim();
+            else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
+          }
+          if (data.length) onEvent(event, data.join("\n"));
+        }
+      }
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      throw new ApiError(0, "network");
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
 /** Fetches every page of a keyset-paginated list (small master lists: customers, suppliers). */
 export async function fetchAll<T>(path: string, query: Query = {}, pageSize = 200): Promise<T[]> {
   const out: T[] = [];

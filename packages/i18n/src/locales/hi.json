@@ -1048,7 +1048,8 @@
     "EINVOICE_NOT_APPLICABLE": "{{number}} ई-इनवॉइस नहीं होता: केवल पंजीकृत खरीदार, SEZ और विदेश के बिल होते हैं।",
     "EWAY_BILL_HAS_ERRORS": "{{number}} अभी ई-वे बिल पोर्टल पर नहीं जा सकता: GST रिपोर्ट → ई-वे बिल में देखें।",
     "NO_EWAY_BILLS_DUE": "इस ट्रिप के किसी बिल को ई-वे बिल की ज़रूरत नहीं।",
-    "EWAY_BILL_BEFORE_INVOICE": "ई-वे बिल की तारीख इनवॉइस से पहले नहीं हो सकती।"
+    "EWAY_BILL_BEFORE_INVOICE": "ई-वे बिल की तारीख इनवॉइस से पहले नहीं हो सकती।",
+    "REMINDER_RULE_OFF": "पहले रिमाइंडर नियम चालू करें।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -2707,6 +2708,143 @@
       "SHIPPING_BILL": "शिपिंग बिल अभी नहीं जोड़ा",
       "VEHICLE_FORMAT": "वाहन नंबर गलत लगता है",
       "EXPORT_PORT_STATE": "निर्यात: बंदरगाह का राज्य आपका माना गया; अलग हो तो पोर्टल पर बदलें"
+    }
+  },
+  "notifications": {
+    "title": "सूचनाएँ",
+    "subtitle": "आपके और आपके रोल के लिए रिमाइंडर और अपडेट",
+    "unreadCount_one": "{{count}} अपठित",
+    "unreadCount_other": "{{count}} अपठित",
+    "empty": "अभी यहाँ कुछ नहीं है। रिमाइंडर और अपडेट यहाँ दिखेंगे।",
+    "emptyUnread": "सब पढ़ लिया: कुछ भी अपठित नहीं।",
+    "markAllRead": "सभी को पढ़ा हुआ मानें",
+    "markedAll_one": "{{count}} सूचना पढ़ी हुई मानी गई",
+    "markedAll_other": "{{count}} सूचनाएँ पढ़ी हुई मानी गईं",
+    "markRead": "पढ़ा हुआ मानें",
+    "dismiss": "हटाएँ",
+    "seeAll": "सभी देखें",
+    "unread": "अपठित",
+    "generic": "नई सूचना",
+    "tabs": {
+      "inbox": "इनबॉक्स",
+      "rules": "रिमाइंडर नियम"
+    },
+    "rules": {
+      "intro": "हर दिन तय समय के बाद हर नियम कारोबार की जाँच करता है और कुछ करने लायक हो तो एक सूचना छोड़ता है। ऑर्डर और छुट्टी के नियम घटना होते ही भी सूचना देते हैं।",
+      "readOnly": "इन्हें वही बदल सकते हैं जिनके रोल में सूचनाएँ सेट करने की अनुमति है।",
+      "hour": "इस समय के बाद जाँच",
+      "daysBefore": "कितने दिन पहले",
+      "daysBeforeHint": "इतने दिनों में देय होने वाले बिलों की भी याद दिलाएँ",
+      "dayOfMonth": "किस तारीख से",
+      "dayOfMonthHint": "महीने की वह तारीख जिससे याद दिलाना शुरू हो",
+      "asItHappens": "होते ही भी",
+      "forRole": "{{permission}} वाले रोल के लिए",
+      "lastRun": "आख़िरी जाँच {{date, date}}",
+      "notRun": "अभी जाँच नहीं हुई",
+      "saved": "रिमाइंडर नियम सेव हुआ",
+      "checkNow": "अभी जाँचें",
+      "checkedRaised": "जाँच हो गई: सूचना इनबॉक्स में है",
+      "checkedAlready": "आज सूचना दी जा चुकी है: इनबॉक्स देखें",
+      "checkedNothing": "अभी याद दिलाने लायक कुछ नहीं",
+      "on": "चालू",
+      "types": {
+        "customer_payment_due": {
+          "name": "ग्राहकों का बकाया भुगतान",
+          "help": "ग्राहकों के वे बिल जिनकी देय तारीख निकल गई है, और जो अगले कुछ दिनों में देय होंगे।"
+        },
+        "supplier_payment_due": {
+          "name": "सप्लायरों को देय भुगतान",
+          "help": "चुकाने वाले ख़रीद बिल: जिनकी देय तारीख निकल गई है, और जो अगले कुछ दिनों में देय होंगे।"
+        },
+        "low_stock": {
+          "name": "कम स्टॉक",
+          "help": "वे प्रोडक्ट जिनका स्टॉक न्यूनतम स्टॉक के बराबर या उससे कम है।"
+        },
+        "expiring_stock": {
+          "name": "एक्सपायर होने वाला स्टॉक",
+          "help": "स्टॉक के वे बैच जो स्टॉक के लिए तय चेतावनी दिनों में एक्सपायर होंगे, या हो चुके हैं।"
+        },
+        "pending_orders": {
+          "name": "पुष्टि के लिए ऑर्डर",
+          "help": "पुष्टि की प्रतीक्षा में ऑर्डर।"
+        },
+        "to_pack": {
+          "name": "पैक करने के ऑर्डर",
+          "help": "पुष्टि हो चुके ऑर्डर जो पैक होने बाकी हैं।"
+        },
+        "to_dispatch": {
+          "name": "भेजने के ऑर्डर",
+          "help": "पैक हो चुके ऑर्डर जो भेजे जाने बाकी हैं।"
+        },
+        "leave_request": {
+          "name": "छुट्टी के अनुरोध",
+          "help": "फ़ैसले की प्रतीक्षा में छुट्टी के अनुरोध। ऐप इस्तेमाल करने वाले कर्मचारियों को फ़ैसला होते ही पता चलता है।"
+        },
+        "salary_due": {
+          "name": "देय वेतन",
+          "help": "महीने की तय तारीख से, जब तक पिछले महीने का वेतन न चुका दिया जाए।"
+        }
+      }
+    },
+    "customer_payment_due": {
+      "overdue_one": "ग्राहक का {{count}} बिल देय तारीख पार कर चुका है: {{overdueAmount, currency}}",
+      "overdue_other": "ग्राहकों के {{count}} बिल देय तारीख पार कर चुके हैं: {{overdueAmount, currency}}",
+      "alsoDue": "आज या {{days}} दिनों में देय भी: {{dueAmount, currency}} (बिल: {{dueCount}})।",
+      "soon_one": "ग्राहक का {{count}} बिल आज या {{days}} दिनों में देय है: {{dueAmount, currency}}",
+      "soon_other": "ग्राहकों के {{count}} बिल आज या {{days}} दिनों में देय हैं: {{dueAmount, currency}}"
+    },
+    "supplier_payment_due": {
+      "overdue_one": "सप्लायर का {{count}} बिल चुकाने की तारीख निकल गई है: {{overdueAmount, currency}}",
+      "overdue_other": "सप्लायरों के {{count}} बिल चुकाने की तारीख निकल गई है: {{overdueAmount, currency}}",
+      "alsoDue": "आज या {{days}} दिनों में देय भी: {{dueAmount, currency}} (बिल: {{dueCount}})।",
+      "soon_one": "सप्लायर का {{count}} बिल आज या {{days}} दिनों में चुकाना है: {{dueAmount, currency}}",
+      "soon_other": "सप्लायरों के {{count}} बिल आज या {{days}} दिनों में चुकाने हैं: {{dueAmount, currency}}"
+    },
+    "low_stock": {
+      "title_one": "{{count}} प्रोडक्ट न्यूनतम स्टॉक पर या उससे नीचे है",
+      "title_other": "{{count}} प्रोडक्ट न्यूनतम स्टॉक पर या उससे नीचे हैं",
+      "body": "सबसे कम: {{product}}।",
+      "withOut": "स्टॉक ख़त्म: {{outOfStock}}। सबसे कम: {{product}}।"
+    },
+    "expiring_stock": {
+      "title_one": "स्टॉक का {{count}} बैच {{days}} दिनों में एक्सपायर होगा",
+      "title_other": "स्टॉक के {{count}} बैच {{days}} दिनों में एक्सपायर होंगे",
+      "body": "सबसे पहले: {{product}}, एक्सपायरी {{date, date}}।",
+      "withExpired": "एक्सपायर हो चुके: {{expired}}। सबसे पहले: {{product}}, एक्सपायरी {{date, date}}।"
+    },
+    "pending_orders": {
+      "title_one": "{{count}} ऑर्डर पुष्टि की प्रतीक्षा में है, {{date, date}} का",
+      "title_other": "{{count}} ऑर्डर पुष्टि की प्रतीक्षा में हैं, सबसे पुराना {{date, date}} का"
+    },
+    "to_pack": {
+      "title_one": "{{count}} ऑर्डर पैक होना बाकी है, {{date, date}} का",
+      "title_other": "{{count}} ऑर्डर पैक होने बाकी हैं, सबसे पुराना {{date, date}} का"
+    },
+    "to_dispatch": {
+      "title_one": "पैक हुआ {{count}} ऑर्डर भेजा जाना बाकी है, {{date, date}} का",
+      "title_other": "पैक हुए {{count}} ऑर्डर भेजे जाने बाकी हैं, सबसे पुराना {{date, date}} का"
+    },
+    "leave_request": {
+      "title_one": "छुट्टी का {{count}} अनुरोध फ़ैसले की प्रतीक्षा में है",
+      "title_other": "छुट्टी के {{count}} अनुरोध फ़ैसले की प्रतीक्षा में हैं"
+    },
+    "salary_due": {
+      "title": "{{month}} का वेतन अभी नहीं चुकाया गया",
+      "noRun_one": "{{month}} का पेरोल अभी नहीं बना ({{count}} कर्मचारी)।",
+      "noRun_other": "{{month}} का पेरोल अभी नहीं बना ({{count}} कर्मचारी)।",
+      "draft": "{{month}} का पेरोल ड्राफ़्ट है: उसे फ़ाइनल करें, फिर भुगतान दर्ज करें।",
+      "finalized": "{{month}} का पेरोल फ़ाइनल है: वेतन के भुगतान दर्ज करें।"
+    },
+    "events": {
+      "order_waiting": "{{customer}} का ऑर्डर {{number}} पुष्टि की प्रतीक्षा में है ({{total, currency}})",
+      "order_to_pack": "{{customer}} के ऑर्डर {{number}} की पुष्टि हो गई, पैक करने के लिए तैयार ({{total, currency}})",
+      "order_to_dispatch": "{{customer}} का ऑर्डर {{number}} पैक हो गया, भेजने के लिए तैयार ({{total, currency}})",
+      "leave_requested_one": "{{employee}} ने {{count}} दिन की {{type}} छुट्टी माँगी है: {{from, date}} से {{to, date}}",
+      "leave_requested_other": "{{employee}} ने {{count}} दिन की {{type}} छुट्टी माँगी है: {{from, date}} से {{to, date}}",
+      "leave_approved_one": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर हो गई",
+      "leave_approved_other": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर हो गई",
+      "leave_rejected_one": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर नहीं हुई",
+      "leave_rejected_other": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर नहीं हुई"
     }
   }
 }

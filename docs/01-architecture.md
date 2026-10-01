@@ -231,18 +231,25 @@ Files never go through the API as blobs. The client asks `POST /files` for an up
 
 ```mermaid
 flowchart LR
-  EV["Domain events<br/>(outbox)"] --> RULES["Reminder rules<br/>(per business)"]
-  CRON["Scheduled scans<br/>(API scheduler)"] --> RULES
-  RULES --> N[("notifications<br/>key + params")]
-  N --> INAPP["In-app bell + SSE"]
-  N --> PUSH["FCM push (Android)"]
-  N --> WA["WhatsApp / SMS / email<br/>(customer-facing reminders)"]
+  EV["Domain events<br/>(outbox worker)"] --> RULES["Reminder rules<br/>(per business)"]
+  CRON["Daily checks<br/>(API scheduler, each rule's hour)"] --> RULES
+  RULES --> N[("notifications<br/>key + params, dedupe key")]
+  N --> RCPT[("notification_receipts<br/>read / dismissed per person")]
+  N -- "NOTIFY on commit (ids only)" --> HUB["LISTEN, one connection<br/>per API server"]
+  HUB --> INAPP["SSE stream → bell + inbox"]
+  N -.-> PUSH["FCM push (Android) — later"]
+  N -.-> WA["WhatsApp / SMS to customers — later"]
 ```
 
-* **Event-driven** reminders: order waiting for packing, leave request submitted, payment received.
-* **Scheduled** scans (configurable time, default 08:00 IST): customer payments due in N days / overdue, supplier payments due, low stock, batches expiring within N days, salary due, orders pending more than N hours.
-* Notifications store a translation key and parameters, never rendered text, so each user reads them in their own language; `dedupe_key` stops the same reminder twice.
-* Customer-facing messages (payment reminders on WhatsApp) use pre-approved templates in both languages and respect per-customer opt-out.
+Built in Phase 5.2 (`apps/api/src/services/notifications.ts`, `reminders.ts`, `notification-events.ts`, `notification-hub.ts`; module `notifications`; rule types and defaults in `packages/core/src/notifications/reminders.ts`):
+
+* **Reminder rules.** Nine per business (`reminder_rules`, seeded at sign-up): customer payments due, supplier payments due, low stock, expiring stock, orders to confirm, to pack, to dispatch, leave requests, salary due. Each can be switched off and has an hour (in the business's time zone; 9 am, 10 am for leave and salary) and, where it applies, days ahead (payments, default 3) or the day of the month (salary, default 1st).
+* **Daily checks.** Every `REMINDER_SCHEDULER_SECONDS` (default 300) the API asks `reminder_rules_due()` (a `SECURITY DEFINER` function that only answers which businesses have a rule whose hour has come and that has not run today), then, inside each business under row-level security, claims those rules (`FOR UPDATE SKIP LOCKED`, `last_run_on = today`) and runs their checks. A check leaves at most one notification, a summary ("3 customer bills are overdue: ₹45,230.50"), with the dedupe key `<type>:<date>` (salary: `salary_due:<month>`, once a month), so several API servers and a "Check now" from the settings never repeat it. A failing check is rolled back alone (savepoint) and written to the error log.
+* **As things happen.** The outbox worker turns `sales_order.created` / `sales_order.status_changed` into "order waiting for confirmation / to pack / to dispatch" (only for the workflow steps the business uses, and while that rule is on) and `leave.requested` / `leave.decided` into a request for the approvers and the decision for the employee (their linked sign-in, or the member of the business with their mobile number); each with a dedupe key per order and status or per request.
+* **Who sees what.** A notification is addressed to a permission (everyone whose role has it: `customer.view_ledger`, `payment.pay`, `purchase.create`, `inventory.view`, `order.confirm`, `packing.pack`, `dispatch.dispatch`, `leave.approve`, `payroll.run`) or to one person. Read and dismissed are per person (`notification_receipts`), so the owner reading a reminder leaves it unread for the salesperson. Notifications are deleted by the nightly job after 90 days and left out of backups.
+* **Live.** Creating a notification sends `NOTIFY notifications` with only its id, business, person and permission; PostgreSQL delivers it when the transaction commits. Each API server holds one `LISTEN` connection, opened with the first app, and pushes `event: notification` to the open streams (`GET /notifications/stream`) of the people who may see it; the app then fetches the list. The stream ends when the access token would expire and the app opens it again (with fetch, as `EventSource` cannot send the token); a lost connection is retried with a growing wait, and the unread count is also fetched every five minutes.
+* Notifications store a translation key and parameters, never rendered text, so each user reads them in their own language; a test checks that every key the server sends exists in each language with all its values.
+* **Later:** FCM push to the Android app, and automatic payment reminders to customers on WhatsApp / SMS with per-customer opt-out (today the Messages screen sends them by hand).
 
 ## 10. Localisation architecture
 

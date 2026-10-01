@@ -8,10 +8,11 @@ import { guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
-import { notFound } from "../../lib/errors.js";
+import { conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { NotificationHub } from "../../services/notification-hub.js";
-import { heldPermissions, isFor, visibleTo } from "../../services/notifications.js";
+import { heldPermissions, isFor, notify, visibleTo } from "../../services/notifications.js";
+import { checkReminder } from "../../services/reminders.js";
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
@@ -238,6 +239,26 @@ export const notificationsModule: ApiModule = async (app, deps) => {
         changes: { isActive: [before?.isActive ?? true, isActive], config: [reminderConfig(type, before?.config), config] },
       });
       return ruleJson(type, row);
+    });
+  });
+
+  /**
+   * Runs a rule's check now, whatever its hour, so whoever sets it up sees
+   * what it says. Its notification is the day's one: the scheduled check
+   * later that day finds it there and leaves no second one.
+   */
+  r.post("/reminder-rules/:type/check", { preHandler: guard(deps, "notification.configure"), schema: { tags: ["notifications"], params: TypeParams } }, async (request) => {
+    const ctx: RequestCtx = request.ctx;
+    const { type } = request.params;
+    if (!isReminderType(type)) throw notFound("reminder_rule");
+    return tenant(ctx, async (tx) => {
+      const t = schema.reminderRules;
+      const [rule] = await tx.select().from(t).where(and(eq(t.businessId, ctx.businessId), eq(t.type, type)));
+      if (rule && !rule.isActive) throw conflict("REMINDER_RULE_OFF");
+      const n = await checkReminder(tx, ctx.businessId, type, deps.clock.today(ctx.timeZone), reminderConfig(type, rule?.config));
+      if (!n) return { result: "nothing" as const, notificationId: null };
+      const id = await notify(tx, ctx.businessId, n, deps.clock.now().toISOString());
+      return { result: id ? ("raised" as const) : ("already" as const), notificationId: id };
     });
   });
 };

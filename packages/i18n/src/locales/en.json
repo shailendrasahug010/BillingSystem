@@ -1048,7 +1048,8 @@
     "EINVOICE_NOT_APPLICABLE": "{{number}} is not e-invoiced: only bills to registered buyers, SEZ units and abroad are.",
     "EWAY_BILL_HAS_ERRORS": "{{number}} cannot go to the e-way bill portal yet: see what to fix in GST Reports → E-way bill.",
     "NO_EWAY_BILLS_DUE": "No bill on this trip needs an e-way bill.",
-    "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice."
+    "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice.",
+    "REMINDER_RULE_OFF": "Switch the reminder rule on first."
   },
   "validation": {
     "required": "This field is required",
@@ -2707,6 +2708,143 @@
       "SHIPPING_BILL": "Shipping bill not added yet",
       "VEHICLE_FORMAT": "Vehicle number looks wrong",
       "EXPORT_PORT_STATE": "Export: the port's state is taken as yours; change it on the portal if not"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Reminders and updates for you and your role",
+    "unreadCount_one": "{{count}} unread",
+    "unreadCount_other": "{{count}} unread",
+    "empty": "Nothing here yet. Reminders and updates will show up here.",
+    "emptyUnread": "All caught up: nothing unread.",
+    "markAllRead": "Mark all as read",
+    "markedAll_one": "{{count}} notification marked as read",
+    "markedAll_other": "{{count}} notifications marked as read",
+    "markRead": "Mark as read",
+    "dismiss": "Dismiss",
+    "seeAll": "See all",
+    "unread": "Unread",
+    "generic": "New notification",
+    "tabs": {
+      "inbox": "Inbox",
+      "rules": "Reminder rules"
+    },
+    "rules": {
+      "intro": "Each day, after its hour, a rule checks the business and leaves one notification when there is something to act on. Order and leave rules also notify the moment it happens.",
+      "readOnly": "Only someone whose role can configure notifications can change these.",
+      "hour": "Check after",
+      "daysBefore": "Days ahead",
+      "daysBeforeHint": "Also remind about bills falling due within this many days",
+      "dayOfMonth": "From day",
+      "dayOfMonthHint": "Day of the month the reminder starts",
+      "asItHappens": "Also as it happens",
+      "forRole": "For roles with {{permission}}",
+      "lastRun": "Last checked {{date, date}}",
+      "notRun": "Not checked yet",
+      "saved": "Reminder rule saved",
+      "checkNow": "Check now",
+      "checkedRaised": "Checked: the notification is in the inbox",
+      "checkedAlready": "Already notified today: see the inbox",
+      "checkedNothing": "Nothing to remind about right now",
+      "on": "On",
+      "types": {
+        "customer_payment_due": {
+          "name": "Customer payments due",
+          "help": "Customer bills past their due date, and those falling due in the next few days."
+        },
+        "supplier_payment_due": {
+          "name": "Supplier payments due",
+          "help": "Purchase bills to pay: past their due date, and falling due in the next few days."
+        },
+        "low_stock": {
+          "name": "Low stock",
+          "help": "Products at or below their minimum stock."
+        },
+        "expiring_stock": {
+          "name": "Expiring stock",
+          "help": "Batches in stock that expire within the warning days set for stock, or have expired."
+        },
+        "pending_orders": {
+          "name": "Orders to confirm",
+          "help": "Orders waiting for confirmation."
+        },
+        "to_pack": {
+          "name": "Orders to pack",
+          "help": "Confirmed orders waiting to be packed."
+        },
+        "to_dispatch": {
+          "name": "Orders to dispatch",
+          "help": "Packed orders waiting to go out."
+        },
+        "leave_request": {
+          "name": "Leave requests",
+          "help": "Leave requests waiting for a decision. Employees who use the app hear when theirs is decided."
+        },
+        "salary_due": {
+          "name": "Salary due",
+          "help": "From the set day of the month until last month's salaries are paid."
+        }
+      }
+    },
+    "customer_payment_due": {
+      "overdue_one": "{{count}} customer bill is overdue: {{overdueAmount, currency}}",
+      "overdue_other": "{{count}} customer bills are overdue: {{overdueAmount, currency}}",
+      "alsoDue": "Also due today or within {{days}} days: {{dueAmount, currency}} (bills: {{dueCount}}).",
+      "soon_one": "{{count}} customer bill is due today or within {{days}} days: {{dueAmount, currency}}",
+      "soon_other": "{{count}} customer bills are due today or within {{days}} days: {{dueAmount, currency}}"
+    },
+    "supplier_payment_due": {
+      "overdue_one": "{{count}} supplier bill is overdue to pay: {{overdueAmount, currency}}",
+      "overdue_other": "{{count}} supplier bills are overdue to pay: {{overdueAmount, currency}}",
+      "alsoDue": "Also due today or within {{days}} days: {{dueAmount, currency}} (bills: {{dueCount}}).",
+      "soon_one": "{{count}} supplier bill is due to pay today or within {{days}} days: {{dueAmount, currency}}",
+      "soon_other": "{{count}} supplier bills are due to pay today or within {{days}} days: {{dueAmount, currency}}"
+    },
+    "low_stock": {
+      "title_one": "{{count}} product is at or below its minimum stock",
+      "title_other": "{{count}} products are at or below their minimum stock",
+      "body": "Lowest first: {{product}}.",
+      "withOut": "Out of stock: {{outOfStock}}. Lowest first: {{product}}."
+    },
+    "expiring_stock": {
+      "title_one": "{{count}} batch in stock expires within {{days}} days",
+      "title_other": "{{count}} batches in stock expire within {{days}} days",
+      "body": "First: {{product}}, expiring {{date, date}}.",
+      "withExpired": "Already expired: {{expired}}. First: {{product}}, expired {{date, date}}."
+    },
+    "pending_orders": {
+      "title_one": "{{count}} order is waiting for confirmation, from {{date, date}}",
+      "title_other": "{{count}} orders are waiting for confirmation, the oldest from {{date, date}}"
+    },
+    "to_pack": {
+      "title_one": "{{count}} order is waiting to be packed, from {{date, date}}",
+      "title_other": "{{count}} orders are waiting to be packed, the oldest from {{date, date}}"
+    },
+    "to_dispatch": {
+      "title_one": "{{count}} packed order is waiting to go out, from {{date, date}}",
+      "title_other": "{{count}} packed orders are waiting to go out, the oldest from {{date, date}}"
+    },
+    "leave_request": {
+      "title_one": "{{count}} leave request is waiting for a decision",
+      "title_other": "{{count}} leave requests are waiting for a decision"
+    },
+    "salary_due": {
+      "title": "Salaries for {{month}} are not paid yet",
+      "noRun_one": "No payroll run for {{month}} yet ({{count}} employee).",
+      "noRun_other": "No payroll run for {{month}} yet ({{count}} employees).",
+      "draft": "The payroll run for {{month}} is a draft: finalize it, then record the payments.",
+      "finalized": "The payroll for {{month}} is finalized: record the salary payments."
+    },
+    "events": {
+      "order_waiting": "Order {{number}} from {{customer}} is waiting for confirmation ({{total, currency}})",
+      "order_to_pack": "Order {{number}} for {{customer}} is confirmed and ready to pack ({{total, currency}})",
+      "order_to_dispatch": "Order {{number}} for {{customer}} is packed and ready to go out ({{total, currency}})",
+      "leave_requested_one": "{{employee}} asked for {{count}} day of {{type}} leave: {{from, date}} to {{to, date}}",
+      "leave_requested_other": "{{employee}} asked for {{count}} days of {{type}} leave: {{from, date}} to {{to, date}}",
+      "leave_approved_one": "Your {{type}} leave of {{count}} day ({{from, date}} to {{to, date}}) is approved",
+      "leave_approved_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) is approved",
+      "leave_rejected_one": "Your {{type}} leave of {{count}} day ({{from, date}} to {{to, date}}) was not approved",
+      "leave_rejected_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) was not approved"
     }
   }
 }

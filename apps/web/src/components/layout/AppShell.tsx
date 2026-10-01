@@ -38,6 +38,7 @@ import { installApp, useCanInstall } from "../../lib/pwa";
 import { Dialog } from "../ui/Dialog";
 import { Kbd, tintFor } from "../ui/misc";
 import { UpdateBanner } from "./UpdateBanner";
+import { NotificationBell } from "./NotificationBell";
 import { OfflineBanner, OfflineChip } from "../offline/OfflineBills";
 import { getOfflineState } from "../../offline/sync";
 import { useToast } from "../ui/Toast";
@@ -416,7 +417,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             {LIVE ? <OfflineChip /> : <SyncChip />}
             <LanguageToggle className="hidden sm:inline-flex" />
             <ThemeToggle className="hidden sm:inline-flex" />
-            {/* Notifications are not built yet in the live app. */}
+            {LIVE && allowed("notification.view") && <NotificationBell />}
             {!LIVE && allowed("notification.view") && <button
               type="button"
               className="press relative inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2"

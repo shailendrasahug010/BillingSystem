@@ -51,6 +51,7 @@ const PackingPage = lazy(() => import("../features/logistics/PackingPage").then(
 const DispatchPage = lazy(() => import("../features/logistics/DispatchPage").then((m) => ({ default: m.DispatchPage })));
 const BackupPage = lazy(() => import("../features/backup/BackupPage").then((m) => ({ default: m.BackupPage })));
 const MessagesPage = lazy(() => import("../features/messages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
+const NotificationsPage = lazy(() => import("../features/notifications/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 const OutstandingPage = lazy(() => import("../features/outstanding/OutstandingPage").then((m) => ({ default: m.OutstandingPage })));
@@ -134,6 +135,8 @@ function Screen({ route }: { route: Route }) {
             return <AuditLogPage />;
           case "messages":
             return <MessagesPage />;
+          case "notifications":
+            return <NotificationsPage />;
           case "backup":
             return <BackupPage />;
         }

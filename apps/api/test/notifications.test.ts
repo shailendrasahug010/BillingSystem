@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createTranslator, LOCALES, type TranslationKey } from "@digitalbahi/i18n";
 import { processOutbox } from "../src/services/outbox-worker.js";
 import { runDueReminders } from "../src/services/reminders.js";
 import { call, createTestApp, hasDatabase, nextMobile, signup, TEST_TODAY, type Session, type TestApp } from "./helpers.js";
@@ -109,6 +110,26 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       const next = await q<{ type: string }>(`select type from notifications where dedupe_key like '%:2026-09-25' order by type`);
       expect(next.map((r) => r.type)).toEqual(["customer_payment_due", "pending_orders", "supplier_payment_due"]);
       expect((await patch("/reminder-rules/low_stock", { isActive: true })).status).toBe(200);
+    });
+
+    it("run on request ('Check now'), leaving the day's one notification", async () => {
+      t.setToday("2026-09-26");
+      try {
+        const check = (type: string, token = owner.token) => post(`/reminder-rules/${type}/check`, {}, token);
+        expect((await check("low_stock")).body).toMatchObject({ result: "raised" });
+        expect((await check("low_stock")).body).toEqual({ result: "already", notificationId: null });
+        expect((await check("leave_request")).body).toEqual({ result: "nothing", notificationId: null });
+        expect((await check("low_stock", tokens.sales)).status).toBe(403);
+        expect((await check("nonsense")).status).toBe(404);
+        expect((await patch("/reminder-rules/to_pack", { isActive: false })).status).toBe(200);
+        expect((await check("to_pack")).body.error).toMatchObject({ code: "REMINDER_RULE_OFF" });
+        expect((await patch("/reminder-rules/to_pack", { isActive: true })).status).toBe(200);
+        // The scheduled checks that day leave no second low-stock notification.
+        expect(await runDueReminders(deps())).toMatchObject({ checked: 9, notifications: 3 });
+        expect(await q(`select 1 from notifications where dedupe_key = 'low_stock:2026-09-26'`)).toHaveLength(1);
+      } finally {
+        t.setToday(null);
+      }
     });
   });
 
@@ -224,6 +245,42 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       } finally {
         ownerStream.close();
         warehouseStream.close();
+      }
+    });
+  });
+
+  describe("texts", () => {
+    /** Every title and body the checks and events can raise. */
+    const KEYS = [
+      ...["customer_payment_due", "supplier_payment_due"].flatMap((k) => [`notifications.${k}.overdue`, `notifications.${k}.alsoDue`, `notifications.${k}.soon`]),
+      ...["title", "body", "withOut"].map((k) => `notifications.low_stock.${k}`),
+      ...["title", "body", "withExpired"].map((k) => `notifications.expiring_stock.${k}`),
+      ...["pending_orders", "to_pack", "to_dispatch", "leave_request"].map((k) => `notifications.${k}.title`),
+      ...["title", "noRun", "draft", "finalized"].map((k) => `notifications.salary_due.${k}`),
+      ...["order_waiting", "order_to_pack", "order_to_dispatch", "leave_requested", "leave_approved", "leave_rejected"].map((k) => `notifications.events.${k}`),
+    ];
+
+    it("exist in every language the app has", () => {
+      for (const { code } of LOCALES) {
+        const tr = createTranslator(code);
+        expect(KEYS.filter((k) => !tr.has(k)), code).toEqual([]);
+      }
+    });
+
+    it("read in full: every placeholder in the notifications raised here has its value", async () => {
+      const rows = await q<{ title_key: string; body_key: string | null; params: Record<string, string | number | null> }>(`select distinct title_key, body_key, params from notifications`);
+      expect(rows.length).toBeGreaterThan(5);
+      for (const r of rows) {
+        expect(KEYS).toContain(r.title_key);
+        if (r.body_key) expect(KEYS).toContain(r.body_key);
+        // A missing value shows as a dash in the app, as here.
+        const params = Object.fromEntries(Object.entries(r.params).map(([k, v]) => [k, v ?? "—"]));
+        for (const { code } of LOCALES) {
+          const tr = createTranslator(code);
+          for (const key of [r.title_key, r.body_key]) {
+            if (key) expect(tr.t(key as TranslationKey, params), `${code} ${key}`).not.toMatch(/\{\{/);
+          }
+        }
       }
     });
   });
