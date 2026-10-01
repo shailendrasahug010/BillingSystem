@@ -1,5 +1,5 @@
 {
-  "name": "vyapaar-distributor-crm",
+  "name": "digitalbahi",
   "private": true,
   "description": "Distributor & Supplier CRM, Inventory, Billing and GST platform for Indian distributors and wholesalers",
   "packageManager": "pnpm@10.33.0",
@@ -7,17 +7,17 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter @vyapaar/web build",
+    "build": "pnpm --filter @digitalbahi/web build",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
-    "lint:i18n": "pnpm --filter @vyapaar/i18n test",
-    "db:generate": "pnpm --filter @vyapaar/db generate",
-    "db:verify": "pnpm --filter @vyapaar/db verify",
-    "dev:web": "pnpm --filter @vyapaar/web dev",
-    "preview:web": "pnpm --filter @vyapaar/web preview",
-    "db:migrate": "pnpm --filter @vyapaar/db migrate",
-    "dev:api": "pnpm --filter @vyapaar/api dev",
-    "db:deploy": "pnpm --filter @vyapaar/api deploy:db"
+    "lint:i18n": "pnpm --filter @digitalbahi/i18n test",
+    "db:generate": "pnpm --filter @digitalbahi/db generate",
+    "db:verify": "pnpm --filter @digitalbahi/db verify",
+    "dev:web": "pnpm --filter @digitalbahi/web dev",
+    "preview:web": "pnpm --filter @digitalbahi/web preview",
+    "db:migrate": "pnpm --filter @digitalbahi/db migrate",
+    "dev:api": "pnpm --filter @digitalbahi/api dev",
+    "db:deploy": "pnpm --filter @digitalbahi/api deploy:db"
   },
   "devDependencies": {
     "typescript": "6.0.3",

@@ -1,4 +1,4 @@
-import type { Database } from "@vyapaar/db";
+import type { Database } from "@digitalbahi/db";
 import type { Config } from "../config.js";
 import type { Messenger } from "../services/messaging/transport.js";
 import type { FieldCipher } from "./crypto.js";

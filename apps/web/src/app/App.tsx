@@ -1,4 +1,4 @@
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { lazy, Suspense, useState } from "react";
 import { ScreenErrorBoundary } from "../components/ErrorBoundary";
 import { AppShell } from "../components/layout/AppShell";

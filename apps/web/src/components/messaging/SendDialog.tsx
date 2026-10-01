@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocaleCode } from "@vyapaar/i18n";
+import type { LocaleCode } from "@digitalbahi/i18n";
 import { Check, CheckCheck, Mail, MessageCircle, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";

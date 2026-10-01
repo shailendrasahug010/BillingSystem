@@ -1,4 +1,4 @@
-import type { PaymentMethod, TaxCategory } from "@vyapaar/core";
+import type { PaymentMethod, TaxCategory } from "@digitalbahi/core";
 
 export interface Business {
   name: string;

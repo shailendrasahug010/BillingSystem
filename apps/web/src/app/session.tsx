@@ -1,5 +1,5 @@
-import type { BusinessSummary, MeResponse, SessionResponse } from "@vyapaar/contracts";
-import { todayIn } from "@vyapaar/core";
+import type { BusinessSummary, MeResponse, SessionResponse } from "@digitalbahi/contracts";
+import { todayIn } from "@digitalbahi/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { applyMe, applyWorkspace, hydrateWorkspace, resetWorkspace, type WorkspaceData } from "../data/live";

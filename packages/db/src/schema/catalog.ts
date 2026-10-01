@@ -90,7 +90,7 @@ export const taxCategories = pgTable(
   (t) => [unique("tax_categories_name_uq").on(t.businessId, t.name)],
 );
 
-/** Effective-dated GST rates per category, optionally conditional on unit value. See resolveTax in @vyapaar/core. */
+/** Effective-dated GST rates per category, optionally conditional on unit value. See resolveTax in @digitalbahi/core. */
 export const taxRates = pgTable(
   "tax_rates",
   {

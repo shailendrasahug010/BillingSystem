@@ -17,6 +17,8 @@ export function createFieldCipher(keyBase64: string | undefined, env: string): F
   } else {
     if (env === "production") throw new Error("DATA_ENCRYPTION_KEY is required in production");
     // Development / tests only: a fixed, well-known key. Never protects real data.
+    // The seed keeps the project's former working name on purpose: changing it
+    // would make every value already encrypted in a development database unreadable.
     key = createHash("sha256").update("vyapaar-development-only-key").digest();
   }
   return {

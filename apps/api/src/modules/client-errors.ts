@@ -1,4 +1,4 @@
-import { schema } from "@vyapaar/db";
+import { schema } from "@digitalbahi/db";
 import { eq } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

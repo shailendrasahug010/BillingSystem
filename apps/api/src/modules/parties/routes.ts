@@ -9,9 +9,9 @@ import {
   SupplierBody,
   SupplierListQuery,
   SupplierPatch,
-} from "@vyapaar/contracts";
-import { dec, financialYearOf, normalizeIndianMobile, stateCodeFromGstin, validateGstin, validatePan } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/contracts";
+import { dec, financialYearOf, normalizeIndianMobile, stateCodeFromGstin, validateGstin, validatePan } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

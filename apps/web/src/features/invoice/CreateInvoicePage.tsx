@@ -1,4 +1,4 @@
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { ArrowLeft, ArrowRight, Check, Copy, ScanBarcode, TriangleAlert } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";

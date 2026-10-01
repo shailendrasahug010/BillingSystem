@@ -82,7 +82,7 @@ describe("the error log's reading of an error", () => {
   });
 
   it("writes a readable block and a JSON line a day, and deletes files past the days kept", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "vyapaar-log-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "digitalbahi-log-"));
     await writeFile(path.join(dir, "errors-2026-07-01.log"), "old\n");
     await writeFile(path.join(dir, "errors-2026-07-01.jsonl"), "{}\n");
     await writeFile(path.join(dir, "errors-2026-09-15.log"), "recent\n");
@@ -116,8 +116,8 @@ describe.skipIf(!hasDatabase)("errors written by the running API", () => {
   };
 
   beforeAll(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "vyapaar-log-"));
-    maps = await mkdtemp(path.join(tmpdir(), "vyapaar-maps-"));
+    dir = await mkdtemp(path.join(tmpdir(), "digitalbahi-log-"));
+    maps = await mkdtemp(path.join(tmpdir(), "digitalbahi-maps-"));
     // A built web script, one line long, whose map points back at its source.
     const gen = new SourceMapGenerator({ file: "index-Ab12Cd.js" });
     gen.addMapping({ generated: { line: 1, column: 4120 }, original: { line: 88, column: 14 }, source: "../../src/features/reports/ReportsPage.tsx", name: "GroupedReport" });
@@ -193,7 +193,7 @@ describe.skipIf(!hasDatabase)("errors written by the running API", () => {
 
 describe("the errors summary", () => {
   it("counts the same error at the same place once, most frequent first", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "vyapaar-log-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "digitalbahi-log-"));
     const log = new ErrorLog({ dir, retentionDays: 30, timeZone: "Asia/Kolkata", webSourceMapsDir: null });
     const at = (m: number) => new Date(Date.UTC(2026, 8, 30, 9, m)).toISOString();
     const place = { file: "apps/api/src/modules/invoices/routes.ts", line: 212, column: 31, fn: "postInvoice" };

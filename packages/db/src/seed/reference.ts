@@ -1,4 +1,4 @@
-import { ALL_PERMISSIONS, DEFAULT_ROLES, financialYearOf, GST_STATES } from "@vyapaar/core";
+import { ALL_PERMISSIONS, DEFAULT_ROLES, financialYearOf, GST_STATES } from "@digitalbahi/core";
 import { sql } from "drizzle-orm";
 import type { Executor } from "../executor.js";
 import * as s from "../schema/index.js";

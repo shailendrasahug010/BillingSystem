@@ -1,5 +1,5 @@
 {
-  "name": "@vyapaar/i18n",
+  "name": "@digitalbahi/i18n",
   "version": "0.1.0",
   "private": true,
   "description": "Central translation catalogues (English, Hindi), locale registry and Indian number/date/currency formatting. Used by the web/mobile/desktop clients and by the API (PDFs, notifications, error messages).",

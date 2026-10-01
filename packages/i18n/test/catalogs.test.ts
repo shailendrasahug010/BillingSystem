@@ -116,7 +116,7 @@ describe("formatting", () => {
   });
 });
 
-describe("every domain error in @vyapaar/core is translated", () => {
+describe("every domain error in @digitalbahi/core is translated", () => {
   const coreSrc = join(import.meta.dirname, "../../core/src");
   const files: string[] = [];
   const walk = (dir: string) => {

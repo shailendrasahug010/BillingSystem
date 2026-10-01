@@ -1,4 +1,4 @@
-import { billColumnOf, billFieldsFromText, readBillFile, type BillFile } from "@vyapaar/core";
+import { billColumnOf, billFieldsFromText, readBillFile, type BillFile } from "@digitalbahi/core";
 import { Camera, FileDown, FileUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";

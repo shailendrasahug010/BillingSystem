@@ -1,4 +1,4 @@
-import { daysBetween, findState, type CreditCheck } from "@vyapaar/core";
+import { daysBetween, findState, type CreditCheck } from "@digitalbahi/core";
 import { MapPin, Phone, TriangleAlert, X } from "lucide-react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";

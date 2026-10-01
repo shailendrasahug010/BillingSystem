@@ -8,7 +8,7 @@ import { LanguageToggle } from "../../components/layout/AppShell";
 import { Button } from "../../components/ui/Button";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { ApiError } from "../../lib/api";
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { stateOptions } from "../../lib/states";
 
 type Mode = "password" | "otp" | "signup" | "reset";

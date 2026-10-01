@@ -24,7 +24,7 @@ Not yet offline: discount notes, cancelling documents, the pull feed and the *Ne
 
 | Works offline | Why it is safe offline |
 |---|---|
-| **Create invoices** (numbered from the device's own series) | Totals and GST computed by the same `@vyapaar/core` engine the server uses; tax rules cached with their effective dates |
+| **Create invoices** (numbered from the device's own series) | Totals and GST computed by the same `@digitalbahi/core` engine the server uses; tax rules cached with their effective dates |
 | **Create sales orders** | Orders do not move stock or money until confirmed online |
 | **Receive payments / collections** | A receipt is a new, independent record; allocation is re-validated on sync |
 | **Add / edit customers** (basic fields) | Versioned; conflicts resolved field by field |
@@ -73,7 +73,7 @@ GST requires invoice numbers to be unique within a financial year; a device cann
 **Push** (`POST /sync/push`, batches in creation order):
 
 1. The server checks `sync_mutations` by `mutationId`: already processed → return the stored result (idempotent replays after a dropped connection).
-2. It re-validates the mutation exactly as an online request: permissions, the device still active, business rules (credit and stock policies), GST period not locked, totals recomputed with the server's `@vyapaar/core` (engine version and tax rules for the document date).
+2. It re-validates the mutation exactly as an online request: permissions, the device still active, business rules (credit and stock policies), GST period not locked, totals recomputed with the server's `@digitalbahi/core` (engine version and tax rules for the document date).
 3. Result per mutation: `applied` (with server ids/versions), `rejected` (error code + params, e.g. `ALLOCATION_EXCEEDS_BALANCE`), or `conflict` (with the server's copy).
 
 **Pull** (`GET /sync/pull?cursor=`): a change feed per business (`updated_at` + id cursor, plus tombstones for deletions and deactivations) for the cached entities, filtered to what this user may see.

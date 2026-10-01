@@ -1,5 +1,5 @@
-import { buildGstr1, buildGstr3b, dec, financialYearOf, gstr1Csv, type Gstr1CsvSection, type GstRegisterRow } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { buildGstr1, buildGstr3b, dec, financialYearOf, gstr1Csv, type Gstr1CsvSection, type GstRegisterRow } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";

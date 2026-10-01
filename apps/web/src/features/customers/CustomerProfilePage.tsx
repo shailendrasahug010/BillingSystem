@@ -1,4 +1,4 @@
-import { buildReorderList, daysBetween, findState } from "@vyapaar/core";
+import { buildReorderList, daysBetween, findState } from "@digitalbahi/core";
 import { ArrowLeft, ClipboardPlus, MapPin, MessageCircle, Pencil, Phone, Receipt, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
@@ -20,7 +20,7 @@ import { ApiError } from "../../lib/api";
 import { useToast } from "../../components/ui/Toast";
 import { AddCustomerDialog } from "./AddCustomerDialog";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 import { customerKind, kindLabel } from "./customerKind";
 

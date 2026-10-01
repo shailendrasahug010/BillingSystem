@@ -1,6 +1,6 @@
-import { hasPermission } from "@vyapaar/core";
+import { hasPermission } from "@digitalbahi/core";
 import { uuidv7 } from "uuidv7";
-import { schema } from "@vyapaar/db";
+import { schema } from "@digitalbahi/db";
 import { and, eq, lte, ne, sql } from "drizzle-orm";
 import { loadAccess } from "../lib/access.js";
 import { audit } from "../lib/audit.js";

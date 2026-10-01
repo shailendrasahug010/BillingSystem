@@ -49,7 +49,7 @@ jobs:
 
       - name: Migrations match the schema
         run: |
-          pnpm --filter @vyapaar/db generate
+          pnpm --filter @digitalbahi/db generate
           git diff --exit-code -- packages/db/migrations
           test -z "$(git status --porcelain -- packages/db/migrations)"
 

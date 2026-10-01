@@ -10,8 +10,8 @@ import {
   type DocumentTotals,
   type PaymentMethod,
   type ResolvedTax,
-} from "@vyapaar/core";
-import { translateError } from "@vyapaar/i18n";
+} from "@digitalbahi/core";
+import { translateError } from "@digitalbahi/i18n";
 import { FileSpreadsheet, PackagePlus, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";

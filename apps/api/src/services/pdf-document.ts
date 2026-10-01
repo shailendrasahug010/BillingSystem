@@ -1,5 +1,5 @@
-import { amountInWords, findState, qrMatrix } from "@vyapaar/core";
-import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@vyapaar/i18n";
+import { amountInWords, findState, qrMatrix } from "@digitalbahi/core";
+import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@digitalbahi/i18n";
 import { BLUE, drawFirm, drawFooters, HEAD_BG, INK, INK_2, LINE, newPdf, RED, type Letterhead, type Pdf } from "./pdf-kit.js";
 
 /**

@@ -1,4 +1,4 @@
-import type { BillFileBill, BillFileLine } from "@vyapaar/core";
+import type { BillFileBill, BillFileLine } from "@digitalbahi/core";
 import { WORKSPACE } from "../../data/db";
 import type { Product } from "../../data/types";
 

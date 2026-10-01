@@ -1,4 +1,4 @@
-import { PayrollPayBody, PayrollRunBody, SlipInputsBody } from "@vyapaar/contracts";
+import { PayrollPayBody, PayrollRunBody, SlipInputsBody } from "@digitalbahi/contracts";
 import {
   addDays,
   calculateSalarySlip,
@@ -15,9 +15,9 @@ import {
   type SalaryComponent,
   type StatutoryInput,
   type StatutoryResult,
-} from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
-import { formatDate } from "@vyapaar/i18n";
+} from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
+import { formatDate } from "@digitalbahi/i18n";
 import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

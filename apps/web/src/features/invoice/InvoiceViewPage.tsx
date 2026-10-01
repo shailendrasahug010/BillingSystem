@@ -1,4 +1,4 @@
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { ArrowLeft, CloudOff, MessageCircle, Printer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";

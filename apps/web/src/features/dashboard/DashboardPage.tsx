@@ -1,4 +1,4 @@
-import { stockLevel } from "@vyapaar/core";
+import { stockLevel } from "@digitalbahi/core";
 import {
   ArrowDownRight,
   ArrowUpRight,

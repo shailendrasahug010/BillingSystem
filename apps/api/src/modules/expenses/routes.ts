@@ -1,6 +1,6 @@
-import { CancelBody, ExpenseBody, ExpenseCategoryBody, ExpenseCategoryPatch, ExpenseListQuery, ExpenseReportQuery } from "@vyapaar/contracts";
-import { calculateTaxLine, dec, determineSupplyType, normalizeGstin, taxAt, toAmountString, validateGstin } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { CancelBody, ExpenseBody, ExpenseCategoryBody, ExpenseCategoryPatch, ExpenseListQuery, ExpenseReportQuery } from "@digitalbahi/contracts";
+import { calculateTaxLine, dec, determineSupplyType, normalizeGstin, taxAt, toAmountString, validateGstin } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

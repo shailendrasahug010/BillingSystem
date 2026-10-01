@@ -1,6 +1,6 @@
 # A. Product architecture
 
-This document describes how Vyapaar CRM is put together: the pieces, how they talk, where each kind of logic lives, and how the system grows from one distributor on a ₹1,500/month server to a multi-tenant SaaS without a rewrite.
+This document describes how Digital Bahi is put together: the pieces, how they talk, where each kind of logic lives, and how the system grows from one distributor on a ₹1,500/month server to a multi-tenant SaaS without a rewrite.
 
 ## 1. Who we are building for
 
@@ -20,7 +20,7 @@ The daily loop that must be fastest and most reliable: **Order → Invoice → S
 ## 2. Architectural principles
 
 1. **Modular monolith first.** One deployable API, split internally into business modules with explicit boundaries. Microservices would multiply cost and operational load for a team and customer base this size. Module boundaries are drawn so any module could be extracted later.
-2. **One calculation engine, everywhere.** Money, GST, stock and suggestion logic lives in `@vyapaar/core`, a pure TypeScript package with no I/O. The browser, the phone (offline) and the server run the same code, so an invoice built offline has exactly the totals the server recomputes.
+2. **One calculation engine, everywhere.** Money, GST, stock and suggestion logic lives in `@digitalbahi/core`, a pure TypeScript package with no I/O. The browser, the phone (offline) and the server run the same code, so an invoice built offline has exactly the totals the server recomputes.
 3. **The database protects the money.** Financial and stock invariants are enforced by PostgreSQL (constraints, append-only triggers, period locks, row-level security), not only by application code.
 4. **History is immutable.** Ledgers are append-only; posted documents are cancelled, never deleted; document lines store a snapshot of the tax that was charged.
 5. **Rules are configuration.** GST rates, thresholds, numbering patterns, credit policy, negative-stock policy and workflow steps are data with effective dates, editable without a deploy.
@@ -38,13 +38,13 @@ flowchart LR
   end
 
   subgraph Device["On each device"]
-    CORE1["@vyapaar/core<br/>GST + totals + suggestions"]
+    CORE1["@digitalbahi/core<br/>GST + totals + suggestions"]
     IDB[("IndexedDB cache<br/>+ sync outbox")]
   end
 
   subgraph Server["Server (single region: India)"]
     API["API — Fastify<br/>modular monolith"]
-    CORE2["@vyapaar/core<br/>(authoritative recalculation)"]
+    CORE2["@digitalbahi/core<br/>(authoritative recalculation)"]
     JOBS["Workers — pg-boss<br/>outbox, stats, reminders,<br/>exports, PDFs, backups"]
     PG[("PostgreSQL 16+<br/>RLS, append-only ledgers")]
     OBJ[("Object storage<br/>S3 / R2 / MinIO")]
@@ -175,7 +175,7 @@ sequenceDiagram
   G->>G: permission guard: invoice.create
   G->>S: createInvoice(ctx, dto)
   S->>DB: BEGIN, then SET LOCAL app.business_id and app.user_id
-  S->>S: recalculate totals with @vyapaar/core, compare with client totals
+  S->>S: recalculate totals with @digitalbahi/core, compare with client totals
   S->>DB: number, insert, stock ledger, party ledger, GST register, audit log, outbox event
   S->>DB: COMMIT
   S-->>C: 201 + invoice (with server totals)
@@ -247,15 +247,15 @@ flowchart LR
 ## 10. Localisation architecture
 
 * Catalogues live in `packages/i18n/src/locales/<code>.json` (English is the source). Keys are type-checked at compile time; a test fails the build if any language misses a key or uses different placeholders.
-* Numbers, currency and dates use the Indian system (`₹12,34,567.00`, `dd/mm/yyyy`) through `@vyapaar/i18n` formatters.
+* Numbers, currency and dates use the Indian system (`₹12,34,567.00`, `dd/mm/yyyy`) through `@digitalbahi/i18n` formatters.
 * Domain errors carry a code and parameters (`INSUFFICIENT_STOCK {product, available}`), translated on the client. The API never sends English sentences as the only error information.
 * Product master data has an optional local-language name (`name_local`) and search aliases (`"namak"`, `"नमक"`), used by search and by Hindi invoices.
 * Invoices have their own print language, independent of the user's UI language.
-* Adding Marathi, Gujarati or Tamil = a new JSON file, one registry entry, and (for invoices) number words in `@vyapaar/core`.
+* Adding Marathi, Gujarati or Tamil = a new JSON file, one registry entry, and (for invoices) number words in `@digitalbahi/core`.
 
 ## 11. GST architecture (summary)
 
-Calculation (`@vyapaar/core`), recording (`gst_transactions`), reporting (queries) and filing/export (versioned formatters and provider adapters) are four separate layers. Rates and thresholds are effective-dated data. Details: [08-gst-architecture.md](08-gst-architecture.md).
+Calculation (`@digitalbahi/core`), recording (`gst_transactions`), reporting (queries) and filing/export (versioned formatters and provider adapters) are four separate layers. Rates and thresholds are effective-dated data. Details: [08-gst-architecture.md](08-gst-architecture.md).
 
 ## 12. Authentication and authorisation (summary)
 

@@ -1,4 +1,4 @@
-import type { SessionResponse } from "@vyapaar/contracts";
+import type { SessionResponse } from "@digitalbahi/contracts";
 
 /**
  * HTTP client for the Digital Bahi API. The access token lives only in memory; the

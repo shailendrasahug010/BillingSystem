@@ -1,4 +1,4 @@
-import { schema, type Tx } from "@vyapaar/db";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, sql } from "drizzle-orm";
 
 /** True when the GST return period of `date` is locked or filed: documents dated in it can no longer change. */

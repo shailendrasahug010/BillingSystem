@@ -1,4 +1,4 @@
-import type { MeResponse } from "@vyapaar/contracts";
+import type { MeResponse } from "@digitalbahi/contracts";
 import {
   dec,
   resolveTax,
@@ -8,7 +8,7 @@ import {
   type PaymentBehaviour,
   type TaxCategory,
   type TaxRateRule,
-} from "@vyapaar/core";
+} from "@digitalbahi/core";
 import { api, fetchAll } from "../lib/api";
 import {
   BRANDS,

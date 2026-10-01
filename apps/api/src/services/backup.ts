@@ -1,4 +1,4 @@
-import { schema, schemaVersion, type Tx } from "@vyapaar/db";
+import { schema, schemaVersion, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { getTableConfig, PgTable, type PgColumn } from "drizzle-orm/pg-core";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";

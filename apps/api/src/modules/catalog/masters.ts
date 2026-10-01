@@ -1,6 +1,6 @@
-import { BrandBody, CategoryBody, patchOf, PriceLevelBody, TaxCategoryBody, TaxRateEndBody, TaxRateRuleBody, UnitBody } from "@vyapaar/contracts";
-import { findOverlappingRules, type TaxRateRule } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { BrandBody, CategoryBody, patchOf, PriceLevelBody, TaxCategoryBody, TaxRateEndBody, TaxRateRuleBody, UnitBody } from "@digitalbahi/contracts";
+import { findOverlappingRules, type TaxRateRule } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

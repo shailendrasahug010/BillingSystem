@@ -4,7 +4,7 @@
 
 Distributor & supplier CRM, billing, inventory, GST and collections for Indian FMCG distributors, wholesalers and suppliers. Web, Windows, Mac, Android and iPhone from one code base (installable app), in English and Hindi. Each firm using it gets its own letterhead: its logo, name, address, mobile, email and GSTIN on every printed document, with Digital Bahi as the app around it.
 
-(The code still uses the working name `vyapaar` for packages, the database and its roles; users never see it.)
+In the code the name is written `digitalbahi`: the `@digitalbahi/*` packages, the database `digitalbahi` and its roles `digitalbahi_owner` / `digitalbahi_app`. (Until October 2026 the working name was `vyapaar`; a server installed before then keeps its data as described in [HOW-TO-RUN.md](HOW-TO-RUN.md#servers-installed-before-the-rename).)
 
 > **Status:** Phases 1–2 (architecture, UI/UX) are done, the **Phase 3 MVP is built as a multi-tenant SaaS** (a Fastify API over PostgreSQL with web screens for billing, customers, products, suppliers, purchases, payments, inventory, godowns and transfers, sales orders, returns, CSV import, printing and WhatsApp share, reports, GST summary, audit log, users & roles and settings), and **Phase 4 is built**: expenses with GST input credit, GSTR-1 files (JSON for the offline tool, CSV per table) and the GSTR-3B working with month lock and filing record, employees, attendance, leave and payroll with printable salary slips, packing (scan-to-pack, first-expiry-first batches, packing slips) and dispatch (trips, delivery updates, trip sheets), discount / rate-difference credit notes and supplier credit notes, and profit, P&L and product-movement reports. Since then: supplier bill import (Excel, CSV, PDF), PDF reports, **invoice, note and receipt PDFs made on the server** (shared as files from phones), **WhatsApp Business and email** (bills with the PDF and payment reminders from the firm's own number), **Excel reports**, **Backup & Restore** (the whole firm in one password-protected file, restored as a new business), the installable app, and **billing without internet** (device bill series, sync when back online). The next step is a pilot with a real distributor. E-invoicing (IRN) is intentionally not included yet. See [docs/11-roadmap.md](docs/11-roadmap.md).
 
@@ -41,9 +41,9 @@ docs/             Architecture and design (A–K)
 
 ### What is implemented
 
-* **`@vyapaar/core`** — GST return formatters (GSTR-1 JSON / offline-tool CSV, GSTR-3B with credit set-off in the rule 88A order, golden-file tests); payroll (payable days, salary slips, advance recovery); exact-decimal money; GST engine with effective-dated, value-conditional rates, intra/inter-state and UTGST, tax-inclusive pricing, cess, invoice-level discount apportionment and round-off; invoice/document totals with rate-wise and HSN summaries; financial-year numbering with GST number-format checks; stock rules (negative-stock policy, FEFO batch picking, moving-average cost, expiry); payment allocation, aging, credit checks and payment behaviour; configurable order workflow; explainable product suggestions (reorder due, frequently bought, bought together, last order) and product search ranking; GSTIN/PAN/IFSC/mobile/pincode/HSN validators; amount in words (English and Hindi); permission catalogue and default roles.
-* **`@vyapaar/i18n`** — typed translation keys, English and Hindi catalogues with parity checks, lakh/crore formatting.
-* **`@vyapaar/db`** — 86 tables covering every module; append-only ledgers, no deletion of posted documents, GST period locks and tenant row-level security enforced by PostgreSQL; reference and per-business seeds.
+* **`@digitalbahi/core`** — GST return formatters (GSTR-1 JSON / offline-tool CSV, GSTR-3B with credit set-off in the rule 88A order, golden-file tests); payroll (payable days, salary slips, advance recovery); exact-decimal money; GST engine with effective-dated, value-conditional rates, intra/inter-state and UTGST, tax-inclusive pricing, cess, invoice-level discount apportionment and round-off; invoice/document totals with rate-wise and HSN summaries; financial-year numbering with GST number-format checks; stock rules (negative-stock policy, FEFO batch picking, moving-average cost, expiry); payment allocation, aging, credit checks and payment behaviour; configurable order workflow; explainable product suggestions (reorder due, frequently bought, bought together, last order) and product search ranking; GSTIN/PAN/IFSC/mobile/pincode/HSN validators; amount in words (English and Hindi); permission catalogue and default roles.
+* **`@digitalbahi/i18n`** — typed translation keys, English and Hindi catalogues with parity checks, lakh/crore formatting.
+* **`@digitalbahi/db`** — 86 tables covering every module; append-only ledgers, no deletion of posted documents, GST period locks and tenant row-level security enforced by PostgreSQL; reference and per-business seeds.
 * **`apps/api`** — one transaction per business action with PostgreSQL row-level security (the API connects as a role that cannot bypass it): OTP sign-up that creates the business with its defaults, password/OTP login, rotating refresh tokens with theft detection, several businesses per user, members and roles with anti-escalation rules; masters with GSTIN checks and duplicate hints; invoice posting (gap-free numbers under concurrency, rate lists, dated GST rules, server-verified totals, stock and party ledgers, GST register, payment at sale, idempotency keys), cancellation, purchase bills (batches, landed and moving-average cost, reverse charge, ITC), stock ledger and adjustments, receipts and supplier payments (allocation, advances, cheque bounce), statements, dashboard, reports with CSV export, GST summary, search, audit log; expenses, GST return files and month locking, employees / attendance / leave / payroll, packing and dispatch, value-only credit notes, profit / P&L / product reports. Supplier and employee bank accounts, PAN and Aadhaar are encrypted at rest.
 * **`apps/web`** — sign-up / sign-in (password or OTP) and business picker; app shell (desktop sidebar, phone bottom navigation), login, dashboard, **create invoice** (desktop and phone flows, live GST, smart suggestions with reasons, keyboard shortcuts, barcode entry, credit warnings), printable tax invoice in English or Hindi, customers, customer profile (ledger, reorder list), products, settings (language, theme, devices for offline billing), **offline billing** (opens without a network, bills numbered by the device and synced later), global search (Ctrl+K), design-system gallery, and a page for every planned module showing its tables and endpoints.
 
@@ -64,11 +64,11 @@ pnpm build
 ### Run it locally
 
 ```bash
-createdb vyapaar_dev                                  # as the database owner
-# migrations, the restricted application role (vyapaar_app) and reference data
-MIGRATION_DATABASE_URL=postgres://postgres:postgres@localhost:5432/vyapaar_dev APP_DB_PASSWORD=devpass pnpm db:deploy
+createdb digitalbahi_dev                                  # as the database owner
+# migrations, the restricted application role (digitalbahi_app) and reference data
+MIGRATION_DATABASE_URL=postgres://postgres:postgres@localhost:5432/digitalbahi_dev APP_DB_PASSWORD=devpass pnpm db:deploy
 # API on :3000 (OpenAPI at http://localhost:3000/api/docs); OTP codes are shown in the sign-up screen
-DATABASE_URL=postgres://vyapaar_app:devpass@localhost:5432/vyapaar_dev OTP_DEV_ECHO=true pnpm dev:api
+DATABASE_URL=postgres://digitalbahi_app:devpass@localhost:5432/digitalbahi_dev OTP_DEV_ECHO=true pnpm dev:api
 pnpm dev:web                                          # http://localhost:5173, proxies /api to the API
 ```
 
@@ -82,13 +82,13 @@ To enter a supplier's bill from the file they send, use **Purchases → Import b
 
 Every report (sales, collections, purchases, outstanding, expenses, profit, product movement) downloads as **PDF**, **Excel (.xlsx)** or **CSV**. The Excel workbook keeps numbers and dates as such (sums and filters work), with the title, firm and period on top, a frozen heading row and the totals. The PDF carries the firm's letterhead (logo, name, address, contact, GSTIN), the period, the table with its totals and page numbers, and prints Hindi names correctly.
 
-Demo mode without a server: `VITE_DATA_SOURCE=mock pnpm dev:web`, or `pnpm --filter @vyapaar/web build:preview` for a single shareable HTML file. In demo mode: **New Invoice** (Ctrl+I) → type `ABC` and press Enter → the suggestions explain themselves ("Usually every 7 days · last bought 6 days ago") → Alt+1 adds the first → F2 and type `namak` → Ctrl+Enter saves. Switch **EN / हिं** in the top bar at any time.
+Demo mode without a server: `VITE_DATA_SOURCE=mock pnpm dev:web`, or `pnpm --filter @digitalbahi/web build:preview` for a single shareable HTML file. In demo mode: **New Invoice** (Ctrl+I) → type `ABC` and press Enter → the suggestions explain themselves ("Usually every 7 days · last bought 6 days ago") → Alt+1 adds the first → F2 and type `namak` → Ctrl+Enter saves. Switch **EN / हिं** in the top bar at any time.
 
 ### Deploy (one server)
 
 ```bash
 cp .env.example .env                  # fill in passwords, domain and the OTP gateway URL
-pnpm --filter @vyapaar/api keys       # prints JWT_PRIVATE_KEY, JWT_PUBLIC_KEY, DATA_ENCRYPTION_KEY for .env
+pnpm --filter @digitalbahi/api keys       # prints JWT_PRIVATE_KEY, JWT_PUBLIC_KEY, DATA_ENCRYPTION_KEY for .env
 docker compose up -d --build          # PostgreSQL, release job (migrations), API, Caddy with TLS
 ```
 

@@ -1,5 +1,5 @@
-import type { BusinessSummary, SessionResponse } from "@vyapaar/contracts";
-import { schema, type Database, type Executor } from "@vyapaar/db";
+import type { BusinessSummary, SessionResponse } from "@digitalbahi/contracts";
+import { schema, type Database, type Executor } from "@digitalbahi/db";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { uuidv7 } from "uuidv7";

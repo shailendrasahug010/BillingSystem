@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { MeResponse } from "@vyapaar/contracts";
-import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validatePincode } from "@vyapaar/core";
+import type { MeResponse } from "@digitalbahi/contracts";
+import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validatePincode } from "@digitalbahi/core";
 import { ImageUp, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";

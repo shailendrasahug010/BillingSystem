@@ -1,6 +1,6 @@
-import { REPORT_VIEW_REPORTS, ReportViewBody, ReportViewPatch, type ReportViewReportKey, type ReportViewSettings } from "@vyapaar/contracts";
-import type { Permission } from "@vyapaar/core";
-import { schema } from "@vyapaar/db";
+import { REPORT_VIEW_REPORTS, ReportViewBody, ReportViewPatch, type ReportViewReportKey, type ReportViewSettings } from "@digitalbahi/contracts";
+import type { Permission } from "@digitalbahi/core";
+import { schema } from "@digitalbahi/db";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";

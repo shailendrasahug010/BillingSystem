@@ -89,7 +89,7 @@ export function createTranslator(locale: LocaleCode = DEFAULT_LOCALE): Translato
   };
 }
 
-/** Translate a DomainError-like object ({ code, params }) from @vyapaar/core. */
+/** Translate a DomainError-like object ({ code, params }) from @digitalbahi/core. */
 export function translateError(
   translator: Translator,
   error: { code?: string; params?: TranslationParams } | null | undefined,

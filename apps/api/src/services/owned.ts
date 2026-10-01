@@ -1,4 +1,4 @@
-import type { Tx } from "@vyapaar/db";
+import type { Tx } from "@digitalbahi/db";
 import { and, eq, isNull, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { badRequest } from "../lib/errors.js";

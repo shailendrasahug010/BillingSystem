@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { addDays, daysBetween, financialYearOf } from "@vyapaar/core";
+import { addDays, daysBetween, financialYearOf } from "@digitalbahi/core";
 import { useMemo } from "react";
 import {
   CUSTOMERS,

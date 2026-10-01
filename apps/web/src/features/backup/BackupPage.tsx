@@ -1,5 +1,5 @@
-import type { SessionResponse } from "@vyapaar/contracts";
-import { translateError } from "@vyapaar/i18n";
+import type { SessionResponse } from "@digitalbahi/contracts";
+import { translateError } from "@digitalbahi/i18n";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, DatabaseBackup, Download, Eye, EyeOff, Mail, Upload } from "lucide-react";
 import { useEffect, useState } from "react";

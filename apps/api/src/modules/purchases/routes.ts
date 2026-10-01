@@ -1,4 +1,4 @@
-import { CancelBody, PurchaseBody, PurchaseListQuery } from "@vyapaar/contracts";
+import { CancelBody, PurchaseBody, PurchaseListQuery } from "@digitalbahi/contracts";
 import {
   addDays,
   apportion,
@@ -17,8 +17,8 @@ import {
   type ResolvedTax,
   type TaxCategory,
   type TaxRateRule,
-} from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

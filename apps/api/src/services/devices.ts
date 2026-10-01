@@ -1,5 +1,5 @@
-import { financialYearOf, formatDocumentNumber, validateDocumentNumber } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { financialYearOf, formatDocumentNumber, validateDocumentNumber } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { RequestCtx } from "../lib/context.js";

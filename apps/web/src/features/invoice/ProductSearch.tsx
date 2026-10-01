@@ -1,4 +1,4 @@
-import { searchProducts, stockLevel } from "@vyapaar/core";
+import { searchProducts, stockLevel } from "@digitalbahi/core";
 import { ScanBarcode, Search } from "lucide-react";
 import { forwardRef, useId, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";

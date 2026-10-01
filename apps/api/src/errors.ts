@@ -2,10 +2,10 @@
  * Reads the error log files and prints what went wrong, most frequent first,
  * each with the file and line it happened at:
  *
- *   pnpm --filter @vyapaar/api errors                 errors of today and yesterday, grouped
- *   pnpm --filter @vyapaar/api errors --days 7        the last 7 days
- *   pnpm --filter @vyapaar/api errors --last 3        the 3 latest, in full
- *   pnpm --filter @vyapaar/api errors --ref <ref>     the error a person was shown this reference for
+ *   pnpm --filter @digitalbahi/api errors                 errors of today and yesterday, grouped
+ *   pnpm --filter @digitalbahi/api errors --days 7        the last 7 days
+ *   pnpm --filter @digitalbahi/api errors --last 3        the 3 latest, in full
+ *   pnpm --filter @digitalbahi/api errors --ref <ref>     the error a person was shown this reference for
  *
  * In the container: docker compose exec api node dist/errors.js [same options].
  * LOG_DIR and LOG_TIME_ZONE as for the API (default ./logs, Asia/Kolkata).

@@ -1,5 +1,5 @@
-import { amountInWords, type PaymentMethod } from "@vyapaar/core";
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { amountInWords, type PaymentMethod } from "@digitalbahi/core";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import { BUSINESS } from "../../data/db";
 

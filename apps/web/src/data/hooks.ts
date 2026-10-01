@@ -25,7 +25,7 @@ export function useCustomerInsight(customerId: string | null): CustomerInsight |
   return customerId ? customerInsight(customerId) : null;
 }
 
-/** The catalogue prepared for @vyapaar/core product search; follows workspace updates. */
+/** The catalogue prepared for @digitalbahi/core product search; follows workspace updates. */
 export function useSearchableProducts() {
   const version = useStoreVersion();
   return useMemo(

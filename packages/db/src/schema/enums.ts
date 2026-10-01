@@ -1,8 +1,8 @@
 import { pgEnum } from "drizzle-orm/pg-core";
-import { ORDER_STATUSES, PAYMENT_METHODS, STOCK_MOVEMENT_TYPES } from "@vyapaar/core";
+import { ORDER_STATUSES, PAYMENT_METHODS, STOCK_MOVEMENT_TYPES } from "@digitalbahi/core";
 
 /**
- * Enum values are shared with @vyapaar/core so the database, API and UI can
+ * Enum values are shared with @digitalbahi/core so the database, API and UI can
  * never disagree about what a status means. Adding a value is a migration
  * (ALTER TYPE ... ADD VALUE); business-configurable lists (expense categories,
  * leave types, customer categories...) are tables, not enums.

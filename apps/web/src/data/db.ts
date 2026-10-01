@@ -1,4 +1,4 @@
-import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig } from "@vyapaar/core";
+import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig } from "@digitalbahi/core";
 import * as mock from "./mock";
 import { LIVE } from "./source";
 import type { Brand, Business, Customer, DayAmount, Invoice, Order, Payment, Product } from "./types";

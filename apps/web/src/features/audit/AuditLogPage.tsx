@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { TranslationKey } from "@vyapaar/i18n";
+import type { TranslationKey } from "@digitalbahi/i18n";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
 import { useI18n } from "../../app/i18n";

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocaleCode } from "@vyapaar/i18n";
+import type { LocaleCode } from "@digitalbahi/i18n";
 import { Tabs } from "radix-ui";
 import { Mail, MessageCircle, RotateCcw, Send } from "lucide-react";
 import { useMemo, useState } from "react";

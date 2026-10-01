@@ -1,6 +1,6 @@
-import { AdvanceBody, AttendanceBody, AttendanceMonthQuery, DepartmentBody, EmployeeBody, EmployeeExitBody, EmployeeListQuery, EmployeePatch, SalaryStructureBody } from "@vyapaar/contracts";
-import { dec, monthBounds, normalizeIndianMobile, toAmountString } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { AdvanceBody, AttendanceBody, AttendanceMonthQuery, DepartmentBody, EmployeeBody, EmployeeExitBody, EmployeeListQuery, EmployeePatch, SalaryStructureBody } from "@digitalbahi/contracts";
+import { dec, monthBounds, normalizeIndianMobile, toAmountString } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, desc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

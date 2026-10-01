@@ -1,5 +1,5 @@
-import { todayIn } from "@vyapaar/core";
-import { createDb } from "@vyapaar/db";
+import { todayIn } from "@digitalbahi/core";
+import { createDb } from "@digitalbahi/db";
 import { buildApp } from "./app.js";
 import { uuidv7 } from "uuidv7";
 import { createFieldCipher } from "./lib/crypto.js";

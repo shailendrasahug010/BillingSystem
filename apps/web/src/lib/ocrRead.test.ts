@@ -1,4 +1,4 @@
-import { billColumnOf, readBillFile } from "@vyapaar/core";
+import { billColumnOf, readBillFile } from "@digitalbahi/core";
 import { describe, expect, it } from "vitest";
 import { tableOfPages, type OcrPage } from "./ocrRead";
 

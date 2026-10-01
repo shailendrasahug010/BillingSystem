@@ -1,4 +1,4 @@
-import { DomainError, ValidationError } from "@vyapaar/core";
+import { DomainError, ValidationError } from "@digitalbahi/core";
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import type { RequestCtx } from "./context.js";
 import { hasZodFastifySchemaValidationErrors } from "fastify-type-provider-zod";
@@ -7,7 +7,7 @@ type Params = Record<string, string | number>;
 
 /**
  * Every failure leaves the API as { error: { code, params, field?, details?, requestId } }.
- * Codes are stable and translated by the clients (see errors.* in @vyapaar/i18n);
+ * Codes are stable and translated by the clients (see errors.* in @digitalbahi/i18n);
  * the API never relies on English sentences.
  */
 export class ApiError extends Error {

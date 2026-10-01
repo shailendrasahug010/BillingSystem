@@ -25,7 +25,7 @@ describe.skipIf(!hasDatabase)("platform", () => {
   });
 
   it("connects as a role that cannot bypass row-level security", async () => {
-    const r = await t.owner.query("select rolsuper, rolbypassrls from pg_roles where rolname = 'vyapaar_app_test'");
+    const r = await t.owner.query("select rolsuper, rolbypassrls from pg_roles where rolname = 'digitalbahi_app_test'");
     expect(r.rows[0]).toEqual({ rolsuper: false, rolbypassrls: false });
   });
 });

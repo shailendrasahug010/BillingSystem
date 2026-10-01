@@ -10,8 +10,8 @@ import {
   type Basket,
   type PurchaseLine,
   type SuggestionProduct,
-} from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -63,7 +63,7 @@ export const suggestionsModule: ApiModule = async (app, deps) => {
    * Everything the billing screen and the customer profile show about a
    * customer's buying: per-product purchase statistics, payment behaviour,
    * open bills and association rules. Clients feed it to the same suggestion
-   * engine (@vyapaar/core) the server uses, so offline and online agree.
+   * engine (@digitalbahi/core) the server uses, so offline and online agree.
    */
   r.get(
     "/customers/:id/insight",

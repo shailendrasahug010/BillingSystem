@@ -1,4 +1,4 @@
-import type { ReorderRow, Suggestion, SuggestionGroup, SuggestionReason } from "@vyapaar/core";
+import type { ReorderRow, Suggestion, SuggestionGroup, SuggestionReason } from "@digitalbahi/core";
 import { CircleQuestionMark, Plus, Sparkles } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useMemo, useState } from "react";
@@ -8,8 +8,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Kbd } from "../../components/ui/misc";
 import { productById, TODAY } from "../../data/db";
 import { cn } from "../../lib/cn";
-import { daysBetween } from "@vyapaar/core";
-import type { Translate } from "@vyapaar/i18n";
+import { daysBetween } from "@digitalbahi/core";
+import type { Translate } from "@digitalbahi/i18n";
 
 type Tab = "all" | SuggestionGroup;
 

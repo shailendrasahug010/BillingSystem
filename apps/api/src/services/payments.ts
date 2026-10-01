@@ -1,5 +1,5 @@
-import { allocatePayment, dec, paymentStatusFor, toAmountString, type OpenDocument, type PaymentMethod } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { allocatePayment, dec, paymentStatusFor, toAmountString, type OpenDocument, type PaymentMethod } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { audit } from "../lib/audit.js";

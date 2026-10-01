@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PaymentMethod } from "@vyapaar/core";
-import type { LocaleCode } from "@vyapaar/i18n";
+import type { PaymentMethod } from "@digitalbahi/core";
+import type { LocaleCode } from "@digitalbahi/i18n";
 import { ArrowDownLeft, ArrowUpRight, Download, Printer, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -10,7 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
-import { createTranslator, formatCurrency, formatDate } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate } from "@digitalbahi/i18n";
 import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, Stat, type Column } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { PrintPortal } from "../../components/ui/PrintPortal";

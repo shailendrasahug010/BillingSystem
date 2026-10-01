@@ -9,7 +9,7 @@
  * Run against the API (OTP_DEV_ECHO=true) with its error log in LOG_DIR, and
  * the web app either from the dev server or from the production build:
  *   LOG_DIR=apps/api/logs API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/error-log-flow.mjs
- *   (production build: pnpm --filter @vyapaar/web build && (cd apps/web && npx vite preview --port 4173); WEB_URL=http://localhost:4173)
+ *   (production build: pnpm --filter @digitalbahi/web build && (cd apps/web && npx vite preview --port 4173); WEB_URL=http://localhost:4173)
  * Needs the `playwright` package (PLAYWRIGHT_PATH if it is not resolvable
  * from here) and a Chromium (CHROMIUM_PATH optional).
  */

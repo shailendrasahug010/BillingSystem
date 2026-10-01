@@ -1,6 +1,6 @@
-import { AuditLogQuery } from "@vyapaar/contracts";
-import { addDays } from "@vyapaar/core";
-import { schema } from "@vyapaar/db";
+import { AuditLogQuery } from "@digitalbahi/contracts";
+import { addDays } from "@digitalbahi/core";
+import { schema } from "@digitalbahi/db";
 import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { guard } from "../lib/access.js";

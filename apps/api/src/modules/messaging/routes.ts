@@ -1,6 +1,6 @@
-import { MessageListQuery, MessagingSettingsBody, ReminderBody, SendDocumentBody, TestMessageBody } from "@vyapaar/contracts";
-import { schema, type Tx } from "@vyapaar/db";
-import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@vyapaar/i18n";
+import { MessageListQuery, MessagingSettingsBody, ReminderBody, SendDocumentBody, TestMessageBody } from "@digitalbahi/contracts";
+import { schema, type Tx } from "@digitalbahi/db";
+import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@digitalbahi/i18n";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isIP } from "node:net";
 import { randomBytes } from "node:crypto";

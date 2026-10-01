@@ -1,4 +1,4 @@
-import type { BusinessSummary, MeResponse, SessionResponse } from "@vyapaar/contracts";
+import type { BusinessSummary, MeResponse, SessionResponse } from "@digitalbahi/contracts";
 import type { WorkspaceData } from "../data/live";
 import { idbDelete, idbGet, idbKeys, idbPut } from "./idb";
 import { isSealed, seal, unseal, type Sealed } from "./vault";

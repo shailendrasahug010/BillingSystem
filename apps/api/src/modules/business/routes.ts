@@ -1,6 +1,6 @@
-import { BusinessLogoBody, BusinessProfilePatch, patchOf, SeriesPatch, SETTING_SCHEMAS, SettingBody, WarehouseBody } from "@vyapaar/contracts";
-import { stateCodeFromGstin, validateGstin, validatePan, validateSeriesPattern } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { BusinessLogoBody, BusinessProfilePatch, patchOf, SeriesPatch, SETTING_SCHEMAS, SettingBody, WarehouseBody } from "@digitalbahi/contracts";
+import { stateCodeFromGstin, validateGstin, validatePan, validateSeriesPattern } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { createHash } from "node:crypto";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";

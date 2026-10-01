@@ -22,7 +22,7 @@ import {
   type ZeroRatedType,
   zeroRatedKindFor,
   zeroRatedTypeOf,
-} from "@vyapaar/core";
+} from "@digitalbahi/core";
 import { useMemo, useReducer, type Dispatch } from "react";
 import { BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
 import { useCustomerInsight } from "../../data/hooks";

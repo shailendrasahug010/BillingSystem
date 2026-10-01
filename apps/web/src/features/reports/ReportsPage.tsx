@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { BookmarkPlus } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useState } from "react";

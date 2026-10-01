@@ -1,4 +1,4 @@
-import type { InvoiceBody } from "@vyapaar/contracts";
+import type { InvoiceBody } from "@digitalbahi/contracts";
 import {
   addDays,
   calculateDocument,
@@ -20,8 +20,8 @@ import {
   type TaxCategory,
   type TaxRateRule,
   type ZeroRatedType,
-} from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { z } from "zod";
 import { can } from "../lib/access.js";

@@ -1,6 +1,6 @@
-import { DashboardQuery } from "@vyapaar/contracts";
-import { addDays, ageDocuments, dec, financialYearOf } from "@vyapaar/core";
-import { schema } from "@vyapaar/db";
+import { DashboardQuery } from "@digitalbahi/contracts";
+import { addDays, ageDocuments, dec, financialYearOf } from "@digitalbahi/core";
+import { schema } from "@digitalbahi/db";
 import { eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { can, guard } from "../../lib/access.js";

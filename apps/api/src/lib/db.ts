@@ -1,4 +1,4 @@
-import type { Database, Tx } from "@vyapaar/db";
+import type { Database, Tx } from "@digitalbahi/db";
 import { sql } from "drizzle-orm";
 
 export interface TenantScope {

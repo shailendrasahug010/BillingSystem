@@ -1,4 +1,4 @@
-import { REPORT_VIEW_REPORTS, type ReportViewReportKey, type ReportViewSettings } from "@vyapaar/contracts";
+import { REPORT_VIEW_REPORTS, type ReportViewReportKey, type ReportViewSettings } from "@digitalbahi/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { allowed } from "../../data/db";
 import { api } from "../../lib/api";

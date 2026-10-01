@@ -1,6 +1,6 @@
-import { AllocationInput, CancelBody, PaymentBody, PaymentListQuery } from "@vyapaar/contracts";
-import { allocatePayment, dec, type OpenDocument } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { AllocationInput, CancelBody, PaymentBody, PaymentListQuery } from "@digitalbahi/contracts";
+import { allocatePayment, dec, type OpenDocument } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

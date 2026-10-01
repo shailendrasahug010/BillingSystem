@@ -1,4 +1,4 @@
-import { schema, type Tx } from "@vyapaar/db";
+import { schema, type Tx } from "@digitalbahi/db";
 import type { RequestCtx } from "./context.js";
 
 type Change = [unknown, unknown];

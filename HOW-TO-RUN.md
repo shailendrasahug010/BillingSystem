@@ -51,19 +51,19 @@ pnpm install
 Create the database and set it up (tables, the restricted database user the app connects as, and reference data such as GST states and units):
 
 ```bash
-createdb -U postgres vyapaar_dev
+createdb -U postgres digitalbahi_dev
 ```
 
 macOS / Linux:
 
 ```bash
-MIGRATION_DATABASE_URL=postgres://postgres:postgres@localhost:5432/vyapaar_dev APP_DB_PASSWORD=devpass pnpm db:deploy
+MIGRATION_DATABASE_URL=postgres://postgres:postgres@localhost:5432/digitalbahi_dev APP_DB_PASSWORD=devpass pnpm db:deploy
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:MIGRATION_DATABASE_URL="postgres://postgres:postgres@localhost:5432/vyapaar_dev"; $env:APP_DB_PASSWORD="devpass"; pnpm db:deploy
+$env:MIGRATION_DATABASE_URL="postgres://postgres:postgres@localhost:5432/digitalbahi_dev"; $env:APP_DB_PASSWORD="devpass"; pnpm db:deploy
 ```
 
 You should see `Migrations applied`, `Application role ready` and `Reference data seeded`.
@@ -73,13 +73,13 @@ Start the server (leave this terminal open):
 macOS / Linux:
 
 ```bash
-DATABASE_URL=postgres://vyapaar_app:devpass@localhost:5432/vyapaar_dev OTP_DEV_ECHO=true pnpm dev:api
+DATABASE_URL=postgres://digitalbahi_app:devpass@localhost:5432/digitalbahi_dev OTP_DEV_ECHO=true pnpm dev:api
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:DATABASE_URL="postgres://vyapaar_app:devpass@localhost:5432/vyapaar_dev"; $env:OTP_DEV_ECHO="true"; pnpm dev:api
+$env:DATABASE_URL="postgres://digitalbahi_app:devpass@localhost:5432/digitalbahi_dev"; $env:OTP_DEV_ECHO="true"; pnpm dev:api
 ```
 
 Start the app in a **second** terminal (in the same `BillingSystem` folder):
@@ -228,7 +228,7 @@ console.log(`JWT_PUBLIC_KEY="${one(publicKey)}"`);
 console.log(`DATA_ENCRYPTION_KEY="${c.randomBytes(32).toString("base64")}"`);'
 ```
 
-(On a computer with the project installed, `pnpm --filter @vyapaar/api keys` prints the same.) It prints three lines (`JWT_PRIVATE_KEY=…`, `JWT_PUBLIC_KEY=…`, `DATA_ENCRYPTION_KEY=…`). Open `.env` (`nano .env`) and fill in:
+(On a computer with the project installed, `pnpm --filter @digitalbahi/api keys` prints the same.) It prints three lines (`JWT_PRIVATE_KEY=…`, `JWT_PUBLIC_KEY=…`, `DATA_ENCRYPTION_KEY=…`). Open `.env` (`nano .env`) and fill in:
 
 | Setting | Value |
 |---|---|
@@ -278,8 +278,8 @@ Without approved templates WhatsApp only delivers to customers who wrote to you 
 | Server logs | `docker compose logs -f api` |
 | **Errors, most frequent first**, each with the file and line it happened at | `docker compose exec api node dist/errors.js` (add `--days 7`, `--last 3`, or `--ref <reference>` for the error a person was shown that reference for) |
 | The error log files themselves | `docker compose exec api ls logs` then `docker compose exec api cat logs/errors-2026-09-30.log` |
-| Back up the database (run daily, keep copies elsewhere) | `docker compose exec -T postgres pg_dump -U vyapaar_owner -Fc vyapaar > vyapaar-$(date +%F).dump` |
-| Restore a backup (replaces the current data) | `docker compose exec -T postgres pg_restore -U vyapaar_owner -d vyapaar --clean --if-exists < vyapaar-2026-09-25.dump` |
+| Back up the database (run daily, keep copies elsewhere) | `docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > digitalbahi-$(date +%F).dump` |
+| Restore a backup (replaces the current data) | `docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < digitalbahi-2026-09-25.dump` |
 | Update to a new version | `git pull && docker compose up -d --build` (database changes are applied on start; installed apps then show "Reload now") |
 | Stop / start | `docker compose stop` / `docker compose start` |
 
@@ -287,13 +287,34 @@ These commands back up the **whole server** (all firms). Each firm's owner can a
 
 **Automatic backups.** Under **Backup & Restore → Automatic backups** the owner picks every day or every week, the time (in the firm's time zone), the email address (the firm's own by default) and a password for the file. The server then emails a password-protected copy at that time by itself; nothing else needs to be scheduled. Email has to be set up first (section on WhatsApp & email above). The Backup screen shows the next time and whether the last copy went out (and why not, e.g. the mail server refused it); a failed copy is tried again at the next time. If the person who set it up is removed or loses the backup permission, automatic backups switch off. The API looks for due backups every 5 minutes (`BACKUP_SCHEDULER_SECONDS`; set `0` on extra API servers if you run more than one, though two servers never send the same copy twice).
 
-**The error log.** Every failure is written to a file, in plain words, so it can be found and fixed: failed requests (anything the server answers with a 500), crashes of a screen in someone's browser, background jobs (automatic backups, WhatsApp / email sending), lost database connections and anything that would stop the API. Each entry says **what happened**, **where** (the source file and line, e.g. `apps/web/src/features/reports/ReportsPage.tsx line 254` — also for the browser, from the web app's source maps, which the server keeps and the public site never serves), the request or screen, the browser, who was using it, and the **reference** the person was shown ("Reference: …" under the error, or on the "This screen stopped working" page) so a complaint can be matched to its entry. Files are per day, `logs/errors-YYYY-MM-DD.log` (readable) and `.jsonl` (one JSON line each), kept 30 days (`LOG_RETENTION_DAYS`), in the `api_logs` volume (`LOG_DIR`; `off` writes none). Times are in India time (`LOG_TIME_ZONE`). Passwords, tokens and what people typed into forms are never written. On your own computer the files are in `apps/api/logs/`, and `pnpm --filter @vyapaar/api errors` prints the summary.
+**The error log.** Every failure is written to a file, in plain words, so it can be found and fixed: failed requests (anything the server answers with a 500), crashes of a screen in someone's browser, background jobs (automatic backups, WhatsApp / email sending), lost database connections and anything that would stop the API. Each entry says **what happened**, **where** (the source file and line, e.g. `apps/web/src/features/reports/ReportsPage.tsx line 254` — also for the browser, from the web app's source maps, which the server keeps and the public site never serves), the request or screen, the browser, who was using it, and the **reference** the person was shown ("Reference: …" under the error, or on the "This screen stopped working" page) so a complaint can be matched to its entry. Files are per day, `logs/errors-YYYY-MM-DD.log` (readable) and `.jsonl` (one JSON line each), kept 30 days (`LOG_RETENTION_DAYS`), in the `api_logs` volume (`LOG_DIR`; `off` writes none). Times are in India time (`LOG_TIME_ZONE`). Passwords, tokens and what people typed into forms are never written. On your own computer the files are in `apps/api/logs/`, and `pnpm --filter @digitalbahi/api errors` prints the summary.
 
 A daily backup with cron (`crontab -e`):
 
 ```
-30 1 * * * cd /root/BillingSystem && docker compose exec -T postgres pg_dump -U vyapaar_owner -Fc vyapaar > /root/backups/vyapaar-$(date +\%F).dump
+30 1 * * * cd /root/BillingSystem && docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > /root/backups/digitalbahi-$(date +\%F).dump
 ```
+
+### Servers installed before the rename
+
+The project's code name used to be `vyapaar`; it is now `digitalbahi` (the database `digitalbahi`, its owner `digitalbahi_owner` and the API's role `digitalbahi_app`). Nothing inside the tables changed, only these names. A server set up **before** the rename keeps its data by keeping its old names: before `git pull && docker compose up -d --build`, add these lines to its `.env` (they are in `.env.example`, commented out):
+
+```
+COMPOSE_PROJECT_NAME=vyapaar
+POSTGRES_USER=vyapaar_owner
+POSTGRES_DB=vyapaar
+APP_DB_ROLE=vyapaar_app
+```
+
+Without them Docker would start a new, empty database next to the old one (the old one is not deleted: add the lines and run `docker compose up -d` again). People who are signed in are asked for nothing: their app refreshes its sign-in once by itself. Their theme and language choices are kept.
+
+On your own computer, a development database made before the rename can be renamed instead (stop the API first, then run as the `postgres` user):
+
+```bash
+psql -U postgres -c "ALTER DATABASE vyapaar_dev RENAME TO digitalbahi_dev" -c "ALTER ROLE vyapaar_app RENAME TO digitalbahi_app" -c "ALTER ROLE digitalbahi_app PASSWORD 'devpass'"
+```
+
+(The password is set again because PostgreSQL clears an MD5 password when a role is renamed.)
 
 ---
 
@@ -320,11 +341,11 @@ Installing from the browser (sections 3 and 4) needs no store. If you also want 
 | Problem | What to do |
 |---|---|
 | `pnpm: command not found` | Run `corepack enable` (once, after installing Node.js), then open a new terminal. |
-| `createdb: command not found` (Windows) | Use the full path, e.g. `& "C:\Program Files\PostgreSQL\16\bin\createdb.exe" -U postgres vyapaar_dev`, or create the database in pgAdmin. |
+| `createdb: command not found` (Windows) | Use the full path, e.g. `& "C:\Program Files\PostgreSQL\16\bin\createdb.exe" -U postgres digitalbahi_dev`, or create the database in pgAdmin. |
 | `password authentication failed for user "postgres"` | Use the password you set when installing PostgreSQL in the database addresses. |
 | `port 3000 (or 5173) already in use` | Another copy is still running: close that terminal, or start the API with `PORT=3001` and the app with `API_URL=http://localhost:3001 pnpm dev:web`. |
 | The app stays on "Loading your business…" or shows "Could not load" | The API is not running or cannot reach the database: look at the API terminal for the error. |
-| "This screen stopped working", or "Something went wrong on the server" with a reference | Find the reference in the error log: `pnpm --filter @vyapaar/api errors --ref <reference>` (on a server `docker compose exec api node dist/errors.js --ref <reference>`); it shows the file and line where it happened. |
+| "This screen stopped working", or "Something went wrong on the server" with a reference | Find the reference in the error log: `pnpm --filter @digitalbahi/api errors --ref <reference>` (on a server `docker compose exec api node dist/errors.js --ref <reference>`); it shows the file and line where it happened. |
 | "You are offline" | The device has no internet, or cannot reach the server, and has not been opened online before. The app continues by itself when it can. |
 | "This device is not ready for offline bills yet" | Open the app once with internet on this device (it then gets its bill series), and bill offline after that. |
 | "This password does not open the copy on this device" | Type the password you had when this device was last online (after a password change the old one still opens the copy), or connect to the internet: online the copy opens by itself. |
@@ -333,6 +354,6 @@ Installing from the browser (sections 3 and 4) needs no store. If you also want 
 | No OTP arrives (on a server) | Check `docker compose logs api` and the OTP adapter's logs; on your own computer the code is shown on screen instead. |
 | No **Install** option | Use Chrome or Edge (Safari on iPhone); open the `https://` address (or `localhost` on the computer itself); it is not offered if the app is already installed. |
 | The phone cannot open the computer's address | Same Wi-Fi on both, start the app with `pnpm dev:web --host`, and allow Node.js in the computer's firewall. |
-| Start again with an empty database (your own computer only) | `dropdb -U postgres vyapaar_dev`, then repeat the `createdb` and `pnpm db:deploy` steps. |
+| Start again with an empty database (your own computer only) | `dropdb -U postgres digitalbahi_dev`, then repeat the `createdb` and `pnpm db:deploy` steps. |
 
 For developers: `pnpm typecheck`, `pnpm test` (with `DATABASE_URL` set to a PostgreSQL admin connection; each test file makes and removes its own database) and the browser scripts in `apps/web/e2e/` are described in the [README](README.md).

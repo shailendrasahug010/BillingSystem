@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { findState, type PaymentMethod } from "@vyapaar/core";
-import type { TranslationKey } from "@vyapaar/i18n";
+import { findState, type PaymentMethod } from "@digitalbahi/core";
+import type { TranslationKey } from "@digitalbahi/i18n";
 import { Landmark, MapPin, Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useState } from "react";

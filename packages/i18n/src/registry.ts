@@ -5,7 +5,7 @@ import hi from "./locales/hi.json" with { type: "json" };
  * Supported languages. Adding a language (Marathi, Gujarati, Tamil...) means:
  *   1. add `locales/<code>.json` (the parity test lists every missing key),
  *   2. add an entry here,
- *   3. optionally register number words for invoices in @vyapaar/core.
+ *   3. optionally register number words for invoices in @digitalbahi/core.
  * No component code changes.
  */
 export interface LocaleInfo {

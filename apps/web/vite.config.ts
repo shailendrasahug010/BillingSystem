@@ -23,7 +23,7 @@ function publicFiles(dir = join(here, "public")): string[] {
  */
 function serviceWorker(): Plugin {
   return {
-    name: "vyapaar-service-worker",
+    name: "digitalbahi-service-worker",
     apply: "build",
     generateBundle(_options, bundle) {
       const built = Object.keys(bundle)

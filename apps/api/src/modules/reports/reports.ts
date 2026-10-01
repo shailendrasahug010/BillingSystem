@@ -1,6 +1,6 @@
-import { CollectionReportQuery, OutstandingQuery, PurchaseReportQuery, SalesReportQuery } from "@vyapaar/contracts";
-import { ageDocuments, dec, type OpenDocument, type Permission } from "@vyapaar/core";
-import type { Tx } from "@vyapaar/db";
+import { CollectionReportQuery, OutstandingQuery, PurchaseReportQuery, SalesReportQuery } from "@digitalbahi/contracts";
+import { ageDocuments, dec, type OpenDocument, type Permission } from "@digitalbahi/core";
+import type { Tx } from "@digitalbahi/db";
 import { sql, type SQL } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";

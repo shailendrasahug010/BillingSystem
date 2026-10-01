@@ -9,7 +9,7 @@ import {
   localeInfo,
   type LocaleCode,
   type Translator,
-} from "@vyapaar/i18n";
+} from "@digitalbahi/i18n";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 interface I18nValue extends Translator {
@@ -24,11 +24,13 @@ interface I18nValue extends Translator {
 }
 
 const I18nContext = createContext<I18nValue | null>(null);
-const STORAGE_KEY = "vyapaar.locale";
+const STORAGE_KEY = "digitalbahi.locale";
+/** Where the language was kept under the project's former working name: read until saved under the new key. */
+const LEGACY_STORAGE_KEY = "vyapaar.locale";
 
 function initialLocale(): LocaleCode {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
     if (isLocaleCode(stored)) return stored;
   } catch {
     /* storage unavailable: fall back to default */
@@ -44,6 +46,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.dir = localeInfo(locale).dir;
     try {
       localStorage.setItem(STORAGE_KEY, locale);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     } catch {
       /* ignore */
     }

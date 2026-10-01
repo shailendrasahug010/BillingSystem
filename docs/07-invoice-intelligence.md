@@ -22,7 +22,7 @@ flowchart LR
   ASSOC --> API
   CPS -->|"sync for the day's beat"| DEV["Device cache<br/>(offline suggestions)"]
   ASSOC --> DEV
-  API --> ENG["suggestProducts()<br/>@vyapaar/core"]
+  API --> ENG["suggestProducts()<br/>@digitalbahi/core"]
   DEV --> ENG
 ```
 

@@ -1,4 +1,4 @@
-import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validateMobile, validatePincode, type IssueCode } from "@vyapaar/core";
+import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validateMobile, validatePincode, type IssueCode } from "@digitalbahi/core";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
@@ -6,7 +6,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { BUSINESS, WORKSPACE } from "../../data/db";
 import { LIVE } from "../../data/source";
 import type { Customer } from "../../data/types";

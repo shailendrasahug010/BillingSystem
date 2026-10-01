@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ageDocuments, daysBetween, type PaymentMethod } from "@vyapaar/core";
+import { ageDocuments, daysBetween, type PaymentMethod } from "@digitalbahi/core";
 import { useMemo } from "react";
 import { CUSTOMERS, customerById, PAYMENTS, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";

@@ -1,6 +1,6 @@
-import { ProductBody, ProductListQuery, ProductPatch } from "@vyapaar/contracts";
-import { dec } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { ProductBody, ProductListQuery, ProductPatch } from "@digitalbahi/contracts";
+import { dec } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

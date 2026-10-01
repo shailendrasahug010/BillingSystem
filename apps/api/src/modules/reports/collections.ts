@@ -1,6 +1,6 @@
-import { Money } from "@vyapaar/contracts";
-import { ageDocuments, dec } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { Money } from "@digitalbahi/contracts";
+import { ageDocuments, dec } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";

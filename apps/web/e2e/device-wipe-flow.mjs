@@ -8,7 +8,7 @@
  * starts offline: the copy is deleted instead of opened, and it says why.
  *
  * Build the app and serve it with the API behind /api:
- *   pnpm --filter @vyapaar/web build && (cd apps/web && npx vite preview --port 4173)
+ *   pnpm --filter @digitalbahi/web build && (cd apps/web && npx vite preview --port 4173)
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:4173 node apps/web/e2e/device-wipe-flow.mjs
  * Needs the `playwright` package (PLAYWRIGHT_PATH if it is not resolvable
  * from here) and a Chromium (CHROMIUM_PATH optional).

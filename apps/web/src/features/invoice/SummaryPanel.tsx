@@ -1,4 +1,4 @@
-import { findState, PAYMENT_METHODS, type PaymentMethod } from "@vyapaar/core";
+import { findState, PAYMENT_METHODS, type PaymentMethod } from "@digitalbahi/core";
 import { MessageCircle, Printer, Save } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";

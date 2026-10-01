@@ -1,4 +1,4 @@
-import { schema, type Tx } from "@vyapaar/db";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";

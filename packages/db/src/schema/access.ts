@@ -3,7 +3,7 @@ import { boolean, index, pgTable, primaryKey, smallint, text, unique, uuid, varc
 import { auditColumns, pk, timestamps, tstz } from "./columns.js";
 import { businesses, businessId, devices, users } from "./platform.js";
 
-/** Catalogue of permission keys, synced from @vyapaar/core PERMISSION_CATALOG on deploy. */
+/** Catalogue of permission keys, synced from @digitalbahi/core PERMISSION_CATALOG on deploy. */
 export const permissions = pgTable("permissions", {
   key: varchar({ length: 60 }).primaryKey(),
   module: varchar({ length: 30 }).notNull(),

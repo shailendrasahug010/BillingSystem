@@ -1,6 +1,6 @@
-import { PurchaseImportMatchBody } from "@vyapaar/contracts";
-import { compactName, normalizeGstin, normalizeSearchText, supplierItemKeys } from "@vyapaar/core";
-import { schema } from "@vyapaar/db";
+import { PurchaseImportMatchBody } from "@digitalbahi/contracts";
+import { compactName, normalizeGstin, normalizeSearchText, supplierItemKeys } from "@digitalbahi/core";
+import { schema } from "@digitalbahi/db";
 import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { guard } from "../../lib/access.js";

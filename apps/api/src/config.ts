@@ -10,14 +10,15 @@ const Env = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().default(3000),
-  /** Connection as the application role (vyapaar_app): row-level security applies. */
+  /** Connection as the application role (digitalbahi_app): row-level security applies. */
   DATABASE_URL: z.string().min(1),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   JWT_PRIVATE_KEY: z.string().optional(),
   JWT_PUBLIC_KEY: z.string().optional(),
   /** 32 random bytes, base64: encrypts bank account numbers and other sensitive fields at rest. */
   DATA_ENCRYPTION_KEY: z.string().optional(),
-  JWT_ISSUER: z.string().default("vyapaar"),
+  /** Changing it (as the rename from "vyapaar" did) only makes open sessions refresh their access token once. */
+  JWT_ISSUER: z.string().default("digitalbahi"),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   CORS_ORIGINS: z.string().default(""),

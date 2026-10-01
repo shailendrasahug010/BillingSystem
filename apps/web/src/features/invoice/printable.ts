@@ -1,4 +1,4 @@
-import { dec, type ZeroRatedType } from "@vyapaar/core";
+import { dec, type ZeroRatedType } from "@digitalbahi/core";
 import { BUSINESS, customerById, invoiceTotals, productById, WORKSPACE } from "../../data/db";
 import type { Invoice } from "../../data/types";
 

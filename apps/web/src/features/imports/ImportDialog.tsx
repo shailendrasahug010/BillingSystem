@@ -1,4 +1,4 @@
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { CircleCheck, FileDown, FileUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";

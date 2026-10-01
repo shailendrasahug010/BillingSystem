@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { createDb, runMigrations, seedReferenceData, setupAppRole } from "@vyapaar/db";
+import { createDb, runMigrations, seedReferenceData, setupAppRole } from "@digitalbahi/db";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import pg from "pg";
 import { buildApp } from "../src/app.js";
@@ -15,8 +15,8 @@ export const ADMIN_URL = process.env.DATABASE_URL;
 export const hasDatabase = Boolean(ADMIN_URL);
 export const TEST_TODAY = "2026-09-24";
 
-const APP_ROLE = "vyapaar_app_test";
-const APP_PASSWORD = "vyapaar_app_test";
+const APP_ROLE = "digitalbahi_app_test";
+const APP_PASSWORD = "digitalbahi_app_test";
 
 function withDatabase(url: string, database: string, user?: { name: string; password: string }): string {
   const u = new URL(url);
@@ -60,7 +60,7 @@ export interface TestApp {
 /** Options for tests that need them: folders for the error log and web source maps, routes of their own. */
 export async function createTestApp(options: { logDir?: string; webSourceMapsDir?: string; extraModules?: ApiModule[] } = {}): Promise<TestApp> {
   if (!ADMIN_URL) throw new Error("DATABASE_URL is required for API tests");
-  const dbName = `vyapaar_api_${Date.now()}_${randomBytes(3).toString("hex")}`;
+  const dbName = `digitalbahi_api_${Date.now()}_${randomBytes(3).toString("hex")}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
   await admin.connect();
   await admin.query(`create database ${dbName}`);

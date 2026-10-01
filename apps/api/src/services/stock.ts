@@ -1,5 +1,5 @@
-import { applyMovement, dec, directionOf, roundRate, toQtyString, toRateString, type NegativeStockPolicy, type StockCheck, type StockMovementType } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { applyMovement, dec, directionOf, roundRate, toQtyString, toRateString, type NegativeStockPolicy, type StockCheck, type StockMovementType } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 

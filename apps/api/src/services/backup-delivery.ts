@@ -1,4 +1,4 @@
-import { schema } from "@vyapaar/db";
+import { schema } from "@digitalbahi/db";
 import { eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { audit, type AuditActor } from "../lib/audit.js";

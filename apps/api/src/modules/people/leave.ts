@@ -1,6 +1,6 @@
-import { LeaveBalanceQuery, LeaveDecisionBody, LeaveListQuery, LeaveRequestBody, LeaveTypePatch } from "@vyapaar/contracts";
-import { addDays, dec, leaveDays } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { LeaveBalanceQuery, LeaveDecisionBody, LeaveListQuery, LeaveRequestBody, LeaveTypePatch } from "@digitalbahi/contracts";
+import { addDays, dec, leaveDays } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

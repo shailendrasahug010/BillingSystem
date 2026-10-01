@@ -17,7 +17,7 @@ The schema is real and runnable: `packages/db/src/schema/*.ts` (Drizzle) generat
 | Financial documents | Never deleted once posted: status moves to `cancelled` with reversing ledger entries (DB trigger enforces). |
 | Optimistic locking | `version` integer on editable documents and masters; used for concurrent edits and offline-sync conflict detection. |
 | Idempotency | Documents created by clients carry `client_id`; a unique partial index makes retries (e.g. offline sync replays) harmless. |
-| Enums | PostgreSQL enums for fixed state machines (values shared with `@vyapaar/core`); business-editable lists (leave types, expense categories, customer categories…) are tables. |
+| Enums | PostgreSQL enums for fixed state machines (values shared with `@digitalbahi/core`); business-editable lists (leave types, expense categories, customer categories…) are tables. |
 | Naming | `snake_case`, plural table names, `<table>_<purpose>_{idx,uq,chk}` for indexes and constraints. |
 
 ## 2. Entity-relationship diagrams
@@ -477,12 +477,12 @@ Negative stock is **not** a database constraint on purpose: some distributors bi
 
 ```bash
 # apply migrations and reference data
-DATABASE_URL=postgres://user:pass@host:5432/vyapaar pnpm --filter @vyapaar/db migrate
-DATABASE_URL=... SEED_DEMO_BUSINESS=1 pnpm --filter @vyapaar/db seed
+DATABASE_URL=postgres://user:pass@host:5432/digitalbahi pnpm --filter @digitalbahi/db migrate
+DATABASE_URL=... SEED_DEMO_BUSINESS=1 pnpm --filter @digitalbahi/db seed
 
 # create the least-privileged application role (operator, once per environment)
 psql "$DATABASE_URL" -v app_password='…' -f packages/db/sql/app-role.sql
 
 # integration test on a throw-away database (needs a server you can CREATE DATABASE on)
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @vyapaar/db test
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @digitalbahi/db test
 ```

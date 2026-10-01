@@ -1,4 +1,4 @@
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { Cloud, CloudOff, LockKeyhole, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";

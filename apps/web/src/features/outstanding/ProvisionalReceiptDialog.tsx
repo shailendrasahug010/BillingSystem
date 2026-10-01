@@ -1,5 +1,5 @@
 import { MessageCircle, Printer } from "lucide-react";
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";

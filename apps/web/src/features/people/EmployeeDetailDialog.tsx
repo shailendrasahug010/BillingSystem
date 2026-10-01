@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PaymentMethod } from "@vyapaar/core";
+import type { PaymentMethod } from "@digitalbahi/core";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";

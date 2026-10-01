@@ -1,5 +1,5 @@
-import { allowedTransitions, DEFAULT_ORDER_WORKFLOW, type OrderStatus } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { allowedTransitions, DEFAULT_ORDER_WORKFLOW, type OrderStatus } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { eq } from "drizzle-orm";
 import { audit } from "../lib/audit.js";
 import type { RequestCtx } from "../lib/context.js";

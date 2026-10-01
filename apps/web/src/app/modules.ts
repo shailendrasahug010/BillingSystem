@@ -28,8 +28,8 @@ import {
   History,
   MessagesSquare,
 } from "lucide-react";
-import type { Permission } from "@vyapaar/core";
-import type { TranslationKey } from "@vyapaar/i18n";
+import type { Permission } from "@digitalbahi/core";
+import type { TranslationKey } from "@digitalbahi/i18n";
 import { allowed } from "../data/db";
 import { LIVE } from "../data/source";
 import type { PlannedModule, Route } from "./router";

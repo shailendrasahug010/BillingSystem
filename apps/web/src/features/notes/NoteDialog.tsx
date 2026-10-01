@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { Percent, Printer, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";

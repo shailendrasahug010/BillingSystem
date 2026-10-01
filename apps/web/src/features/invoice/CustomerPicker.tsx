@@ -1,4 +1,4 @@
-import { normalizeSearchText } from "@vyapaar/core";
+import { normalizeSearchText } from "@digitalbahi/core";
 import { Search, UserPlus } from "lucide-react";
 import { forwardRef, useId, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";

@@ -1,5 +1,5 @@
-import { SETTING_SCHEMAS, type SettingKey, type SettingValue } from "@vyapaar/contracts";
-import { schema, type Tx } from "@vyapaar/db";
+import { SETTING_SCHEMAS, type SettingKey, type SettingValue } from "@digitalbahi/contracts";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray } from "drizzle-orm";
 
 /** Used when a business has no row for a key (e.g. a key added after it signed up). */

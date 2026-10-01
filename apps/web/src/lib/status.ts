@@ -1,4 +1,4 @@
-import type { OrderStatus } from "@vyapaar/core";
+import type { OrderStatus } from "@digitalbahi/core";
 import type { Tone } from "../components/ui/Badge";
 
 /** One mapping from workflow state to badge tone, used by every list and detail screen. */

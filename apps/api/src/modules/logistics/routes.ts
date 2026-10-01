@@ -1,6 +1,6 @@
-import { DeliveryBody, DispatchBody, DispatchListQuery, PackingBody, PackingListQuery } from "@vyapaar/contracts";
-import { dec, toQtyString } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { DeliveryBody, DispatchBody, DispatchListQuery, PackingBody, PackingListQuery } from "@digitalbahi/contracts";
+import { dec, toQtyString } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

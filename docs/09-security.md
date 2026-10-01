@@ -25,14 +25,14 @@ Three layers, all of which must allow an action.
 
 ### 2.1 Tenant isolation (which business)
 * The business id comes from the verified token, never from the URL or body.
-* Every repository query filters by `business_id`, and **PostgreSQL row-level security** enforces the same rule underneath: the API connects as a non-owner role (`vyapaar_app`) and sets `app.business_id` per transaction, so a query that forgets its filter returns nothing and cannot insert into another tenant (tested in `packages/db/test/integrity.test.ts`).
+* Every repository query filters by `business_id`, and **PostgreSQL row-level security** enforces the same rule underneath: the API connects as a non-owner role (`digitalbahi_app`) and sets `app.business_id` per transaction, so a query that forgets its filter returns nothing and cannot insert into another tenant (tested in `packages/db/test/integrity.test.ts`).
 * Resource ids of other tenants return `404`, never `403`, so existence is not revealed.
 * **Foreign keys ignore RLS**, so every id a client sends (brand, tax category, route, price level, customer…) is checked against the current business before it is stored (`assertOwned`); tests post another tenant's ids and expect `REFERENCE_NOT_FOUND`.
 * The `businesses` table itself is under RLS: a user sees a business only when it is the current one or they are an active member; memberships can be read across the user's businesses (for the switcher) but only created or changed in the current business.
 * A SaaS business can be `trial`, `active`, `suspended` or `closed`; suspended and closed businesses are refused on every business route while their users can still sign in and see why.
 
 ### 2.2 Role-based permissions (what action)
-* Permissions are code-defined (`PERMISSION_CATALOG` in `@vyapaar/core`, `<module>.<action>`, 100 of them); roles are data, fully editable per business. Grants support wildcards (`invoice.*`, `*`) so new permissions reach Admin automatically.
+* Permissions are code-defined (`PERMISSION_CATALOG` in `@digitalbahi/core`, `<module>.<action>`, 100 of them); roles are data, fully editable per business. Grants support wildcards (`invoice.*`, `*`) so new permissions reach Admin automatically.
 * Default roles seeded per business: **Admin** (everything), **Manager** (sales, purchase, inventory, customers, reports), **Sales Employee** (customers, orders, invoices, collection — no purchase cost, no profit reports), **Accountant** (payments, GST, expenses, reports, audit), **Warehouse** (packing, dispatch, inventory), **HR** (employees, salary, leave).
 * A Fastify `preHandler` checks the permission on every endpoint (`guard(deps, "invoice.cancel")`); the client uses the same catalogue (from `/me`) only to hide what the user cannot do.
 * **No privilege escalation:** creating or editing a role, inviting a member or changing someone's role requires holding every permission involved; a user cannot change their own membership, and the owner's membership cannot be changed.
@@ -46,7 +46,7 @@ Three layers, all of which must allow an action.
 ## 3. Input validation and injection defence
 
 * Every request body, query and path parameter is parsed by a **Zod schema** shared with the clients (`packages/contracts`). Unknown fields are rejected; money arrives as decimal strings with bounded precision; lengths and array sizes are capped.
-* Domain validators from `@vyapaar/core`: GSTIN (format + check digit + state), PAN, IFSC, pincode, Indian mobile, HSN, invoice-number pattern.
+* Domain validators from `@digitalbahi/core`: GSTIN (format + check digit + state), PAN, IFSC, pincode, Indian mobile, HSN, invoice-number pattern.
 * **SQL injection:** all queries go through Drizzle's parameterised builder or tagged `sql` templates (parameters bound, never string-concatenated). Dynamic sorting/filtering uses allow-listed column maps.
 * Output: React escapes by default; no `dangerouslySetInnerHTML` with user content; invoice templates use an escaping template engine.
 * Server-side totals recalculation (`compareTotals`) means a tampered client cannot change what a customer is charged or what tax is reported.

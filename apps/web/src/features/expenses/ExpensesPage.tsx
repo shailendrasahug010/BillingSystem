@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PaymentMethod } from "@vyapaar/core";
+import type { PaymentMethod } from "@digitalbahi/core";
 import { Plus, Search } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";

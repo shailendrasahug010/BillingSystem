@@ -1,5 +1,5 @@
-import { schema } from "@vyapaar/db";
-import { hasPermission } from "@vyapaar/core";
+import { schema } from "@digitalbahi/db";
+import { hasPermission } from "@digitalbahi/core";
 import { desc, eq, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";

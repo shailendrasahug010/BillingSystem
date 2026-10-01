@@ -1,4 +1,4 @@
-import type { DocumentTotals } from "@vyapaar/core";
+import type { DocumentTotals } from "@digitalbahi/core";
 import { Minus, Plus, ShoppingBasket, Trash, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useI18n } from "../../app/i18n";

@@ -7,7 +7,7 @@ import {
   todayIn,
   type PaymentMethod,
   type TaxCategory,
-} from "@vyapaar/core";
+} from "@digitalbahi/core";
 import type { Brand, Business, Customer, DayAmount, Invoice, Order, Payment, Product } from "./types";
 
 /**

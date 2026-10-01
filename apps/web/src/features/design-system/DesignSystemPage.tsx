@@ -1,4 +1,4 @@
-import { ORDER_STATUSES } from "@vyapaar/core";
+import { ORDER_STATUSES } from "@digitalbahi/core";
 import { Plus, Printer, Save, Search, Trash } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";

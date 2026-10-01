@@ -1,5 +1,5 @@
-import { amountInWords, findState, qrMatrix, zeroRatedDeclaration } from "@vyapaar/core";
-import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@vyapaar/i18n";
+import { amountInWords, findState, qrMatrix, zeroRatedDeclaration } from "@digitalbahi/core";
+import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@digitalbahi/i18n";
 import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import { BUSINESS, WORKSPACE } from "../../data/db";
 import type { PrintableInvoice, ZeroRatedPrint } from "./printable";

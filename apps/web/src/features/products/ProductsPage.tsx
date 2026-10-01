@@ -1,4 +1,4 @@
-import { stockLevel } from "@vyapaar/core";
+import { stockLevel } from "@digitalbahi/core";
 import { Download, FileUp, PackagePlus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -12,7 +12,7 @@ import { useSearchableProducts } from "../../data/hooks";
 import { LIVE } from "../../data/source";
 import { cn } from "../../lib/cn";
 import { downloadCsv } from "../../lib/download";
-import { searchProducts } from "@vyapaar/core";
+import { searchProducts } from "@digitalbahi/core";
 import { ImportDialog } from "../imports/ImportDialog";
 import { ProductEditor } from "./ProductEditor";
 

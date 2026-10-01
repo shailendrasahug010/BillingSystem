@@ -22,7 +22,7 @@ One REST API serves the web app, the Windows app and the Android app. It is desi
 
 ### Error format
 
-Errors are codes with parameters so every client can translate them (the same codes `@vyapaar/core` throws):
+Errors are codes with parameters so every client can translate them (the same codes `@digitalbahi/core` throws):
 
 ```json
 {
@@ -48,7 +48,7 @@ Errors are codes with parameters so every client can translate them (the same co
 
 ### Totals are always recomputed
 
-Clients send line inputs **and** the totals they displayed. The server recalculates with the same `@vyapaar/core` engine and rejects with `422 TOTALS_MISMATCH` if anything differs (`compareTotals`). What the user saw is exactly what is saved, or nothing is saved.
+Clients send line inputs **and** the totals they displayed. The server recalculates with the same `@digitalbahi/core` engine and rejects with `422 TOTALS_MISMATCH` if anything differs (`compareTotals`). What the user saw is exactly what is saved, or nothing is saved.
 
 ## 2. Endpoints
 

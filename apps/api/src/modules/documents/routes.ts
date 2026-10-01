@@ -1,6 +1,6 @@
-import { zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
-import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@vyapaar/i18n";
+import { zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
+import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@digitalbahi/i18n";
 import { inArray, eq } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";

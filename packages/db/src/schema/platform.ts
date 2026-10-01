@@ -20,7 +20,7 @@ import {
 import { auditColumns, pk, softDelete, timestamps, tstz, versioned } from "./columns.js";
 import { businessGstRegistration } from "./enums.js";
 
-/** GST state / UT codes. Reference data seeded from @vyapaar/core GST_STATES. */
+/** GST state / UT codes. Reference data seeded from @digitalbahi/core GST_STATES. */
 export const states = pgTable("states", {
   code: char({ length: 2 }).primaryKey(),
   name: text().notNull(),
@@ -225,7 +225,7 @@ export const documentSeries = pgTable(
     /** invoice, sales_order, purchase, payment_in, payment_out, credit_note, debit_note, expense, packing, dispatch... */
     docType: varchar({ length: 30 }).notNull(),
     name: text().notNull(),
-    /** e.g. "INV/{FYS}/{SEQ:5}" — see formatDocumentNumber in @vyapaar/core. */
+    /** e.g. "INV/{FYS}/{SEQ:5}" — see formatDocumentNumber in @digitalbahi/core. */
     pattern: text().notNull(),
     financialYear: varchar({ length: 9 }).notNull(),
     nextNumber: integer().notNull().default(1),

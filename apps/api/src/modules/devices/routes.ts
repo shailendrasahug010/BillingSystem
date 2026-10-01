@@ -1,6 +1,6 @@
-import { DeviceBody } from "@vyapaar/contracts";
-import { financialYearOf } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { DeviceBody } from "@digitalbahi/contracts";
+import { financialYearOf } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";

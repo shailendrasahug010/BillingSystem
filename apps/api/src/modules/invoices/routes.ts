@@ -1,6 +1,6 @@
-import { CancelBody, InvoiceBody, InvoiceListQuery, ShippingBillBody } from "@vyapaar/contracts";
-import { addDays, amountInWords, dec, evaluateCredit, taxComponentLabels, toAmountString, toQtyString, toRateString, type DocumentTotals, type OpenDocument } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { CancelBody, InvoiceBody, InvoiceListQuery, ShippingBillBody } from "@digitalbahi/contracts";
+import { addDays, amountInWords, dec, evaluateCredit, taxComponentLabels, toAmountString, toQtyString, toRateString, type DocumentTotals, type OpenDocument } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, gt, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

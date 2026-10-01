@@ -61,7 +61,7 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
   if (config.docsEnabled) {
     await app.register(swagger, {
       openapi: {
-        info: { title: "Vyapaar CRM API", version: "1.0.0", description: "Billing, stock, GST and collections for distributors" },
+        info: { title: "Digital Bahi API", version: "1.0.0", description: "Billing, stock, GST and collections for distributors" },
         components: { securitySchemes: { bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" } } },
         security: [{ bearer: [] }],
       },

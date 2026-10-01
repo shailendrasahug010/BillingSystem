@@ -9,7 +9,7 @@ import pg from "pg";
  * Run by an operator / deploy job with the owner connection after migrations
  * (and by the API test harness on its throw-away databases).
  */
-export async function setupAppRole(ownerConnectionString: string, role = "vyapaar_app", password?: string): Promise<void> {
+export async function setupAppRole(ownerConnectionString: string, role = "digitalbahi_app", password?: string): Promise<void> {
   if (!/^[a-z_][a-z0-9_]*$/.test(role)) throw new Error(`Invalid role name ${role}`);
   const client = new pg.Client({ connectionString: ownerConnectionString });
   await client.connect();
