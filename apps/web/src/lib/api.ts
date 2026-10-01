@@ -106,6 +106,8 @@ interface RequestOptions {
 }
 
 async function request<T>(method: string, path: string, options: RequestOptions = {}, retried = false): Promise<T> {
+  // A refresh under way brings the token this request needs: without it, the request would only get a 401 and wait for it anyway.
+  if (refreshing && !path.startsWith("/auth/")) await refreshing.catch(() => null);
   const headers: Record<string, string> = { ...options.headers };
   if (options.file) headers["content-type"] = "application/octet-stream";
   else if (options.body !== undefined) headers["content-type"] = "application/json";
