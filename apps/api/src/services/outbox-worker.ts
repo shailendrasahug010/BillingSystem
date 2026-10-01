@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
+import { NOTIFICATION_EVENTS, notifyForEvent } from "./notification-events.js";
 import { refreshCustomer } from "./purchase-history.js";
 import { getSettings } from "./settings.js";
 
@@ -12,9 +13,11 @@ import { getSettings } from "./settings.js";
  * handlers that care, a few seconds later, and marks it processed. Nothing is
  * lost while it is stopped: the events wait.
  *
- * Today's handler keeps the purchase history (customer_product_stats and
- * customer_stats) of the customer an event is about. Events no handler needs
- * are marked processed as they are.
+ * The handlers keep the purchase history (customer_product_stats and
+ * customer_stats) of the customer an event is about, and raise the
+ * notifications events call for (new orders, leave requests: see
+ * notification-events.ts). Events no handler needs are marked processed as
+ * they are.
  *
  * Every business is handled in its own transaction under row-level security:
  * `outbox_pending_businesses` (a SECURITY DEFINER function) only says whose
@@ -93,7 +96,7 @@ export interface OutboxResult {
 export async function processBusinessOutbox(deps: AppDeps, businessId: string): Promise<OutboxResult> {
   const total: OutboxResult = { processed: 0, failed: 0 };
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const failures: Array<{ customerId: string; error: unknown }> = [];
+    const failures: Array<{ job: string; details: Record<string, string>; error: unknown }> = [];
     const result = await withTenant(deps.db, { businessId, userId: "" }, async (tx) => {
       const now = deps.clock.now();
       const e = schema.outboxEvents;
@@ -110,24 +113,32 @@ export async function processBusinessOutbox(deps: AppDeps, businessId: string): 
       const today = deps.clock.today(business?.timeZone);
       const windowDays = (await getSettings(tx, businessId, ["suggestions.window_days"] as const))["suggestions.window_days"];
 
+      // Each handler runs in a savepoint: what fails is rolled back alone, and only its events are retried.
+      const errorOf = new Map<number, unknown>();
       const customerOf = await customersOf(tx, events);
-      const failedEvents = new Set<number>();
       for (const customerId of new Set(customerOf.values())) {
         try {
-          // A savepoint: a customer that fails is rolled back alone.
           await tx.transaction((sp) => refreshCustomer(sp, businessId, customerId, today, windowDays));
         } catch (error) {
-          failures.push({ customerId, error });
-          for (const [eventId, c] of customerOf) if (c === customerId) failedEvents.add(eventId);
+          failures.push({ job: "outbox worker (purchase history of a customer)", details: { businessId, customerId }, error });
+          for (const [eventId, c] of customerOf) if (c === customerId) errorOf.set(eventId, error);
+        }
+      }
+      for (const ev of events) {
+        if (!NOTIFICATION_EVENTS.has(ev.eventType) || errorOf.has(ev.id)) continue;
+        try {
+          await tx.transaction((sp) => notifyForEvent(sp, businessId, ev, now.toISOString()));
+        } catch (error) {
+          failures.push({ job: "outbox worker (notification for an event)", details: { businessId, event: `${ev.eventType} ${ev.aggregateId}` }, error });
+          errorOf.set(ev.id, error);
         }
       }
 
-      const done = events.filter((ev) => !failedEvents.has(ev.id)).map((ev) => ev.id);
+      const done = events.filter((ev) => !errorOf.has(ev.id)).map((ev) => ev.id);
       if (done.length) await tx.update(e).set({ processedAt: now.toISOString() }).where(inArray(e.id, done));
-      for (const ev of events.filter((x) => failedEvents.has(x.id))) {
+      for (const ev of events.filter((x) => errorOf.has(x.id))) {
         const attempts = ev.attempts + 1;
-        const error = failures.find((f) => f.customerId === customerOf.get(ev.id))!.error;
-        const message = rootMessage(error);
+        const message = rootMessage(errorOf.get(ev.id));
         await tx
           .update(e)
           .set({
@@ -139,11 +150,9 @@ export async function processBusinessOutbox(deps: AppDeps, businessId: string): 
           })
           .where(eq(e.id, ev.id));
       }
-      return { processed: done.length, failed: failedEvents.size, more: events.length === BATCH };
+      return { processed: done.length, failed: errorOf.size, more: events.length === BATCH };
     });
-    for (const f of failures) {
-      deps.errors.record(f.error, { reference: uuidv7(), source: "job", job: "outbox worker (purchase history of a customer)", details: { businessId, customerId: f.customerId } });
-    }
+    for (const f of failures) deps.errors.record(f.error, { reference: uuidv7(), source: "job", job: f.job, details: f.details });
     if (!result) break;
     total.processed += result.processed;
     total.failed += result.failed;

@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 94 |
-| Columns | 1568 |
-| Foreign keys | 250 |
+| Tables | 95 |
+| Columns | 1572 |
+| Foreign keys | 253 |
 | Unique constraints | 46 |
 | Check constraints | 57 |
-| Indexes (besides primary keys and unique constraints) | 117 |
+| Indexes (besides primary keys and unique constraints) | 119 |
 | Triggers | 66 |
-| Tables with row-level security | 88 |
+| Tables with row-level security | 89 |
 | Enums | 38 |
-| Functions | 12 |
-| Migrations | 24 (last: `0023_purchase_history`) |
+| Functions | 13 |
+| Migrations | 25 (last: `0024_notifications`) |
 
 ## How the database is set up
 
@@ -43,7 +43,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Payroll:** [`salary_components`](#salary_components), [`employee_salary_structures`](#employee_salary_structures), [`employee_salary_structure_components`](#employee_salary_structure_components), [`employee_advances`](#employee_advances), [`payroll_runs`](#payroll_runs), [`salary_slips`](#salary_slips), [`salary_slip_lines`](#salary_slip_lines)
 * **Expenses:** [`expense_categories`](#expense_categories), [`expenses`](#expenses)
 * **GST returns and configuration:** [`gst_transactions`](#gst_transactions), [`gst_return_periods`](#gst_return_periods), [`gst_exports`](#gst_exports), [`gst_config`](#gst_config)
-* **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
+* **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`notification_receipts`](#notification_receipts), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
 * **Analytics (derived, rebuildable):** [`customer_product_stats`](#customer_product_stats), [`product_associations`](#product_associations), [`customer_stats`](#customer_stats), [`analytics_runs`](#analytics_runs), [`suggestion_feedback`](#suggestion_feedback), [`sales_daily_product`](#sales_daily_product), [`sales_daily_customer`](#sales_daily_customer)
 * **WhatsApp and email:** [`messaging_settings`](#messaging_settings), [`messages`](#messages)
 * [Enums](#enums) · [Functions](#functions) · [Migrations](#migrations)
@@ -94,7 +94,7 @@ A login identity. One user can belong to several businesses with different roles
 * Index `users_mobile_uq`: unique, btree `(mobile)`
 * Index `users_username_uq`: unique, btree `(username)`
 * Trigger `users_set_updated_at`: before update, each row → `set_updated_at()`
-* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`notifications`](#notifications).user_id, [`report_views`](#report_views).user_id, [`suggestion_feedback`](#suggestion_feedback).user_id
+* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`notifications`](#notifications).user_id, [`notification_receipts`](#notification_receipts).user_id, [`report_views`](#report_views).user_id, [`suggestion_feedback`](#suggestion_feedback).user_id
 
 ### `businesses`
 
@@ -135,7 +135,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 85 tables by `business_id`
+* Referenced by: 86 tables by `business_id`
 
 ### `settings`
 
@@ -2408,19 +2408,35 @@ In-app notifications. Stored as a translation key + params (never rendered text)
 | `params` | jsonb | ✓ | `'{}'` | Values put into the title and text (names, amounts, dates), as JSON. |
 | `entity_type` | varchar(40) |  |  | Kind of record it is about, to open it. |
 | `entity_id` | uuid |  |  | Id of that record. |
-| `dedupe_key` | varchar(120) |  |  | Prevents the same reminder being created twice (e.g. "low_stock:&lt;product>:&lt;date>"). |
-| `read_at` | timestamptz |  |  | When it was read. |
-| `dismissed_at` | timestamptz |  |  | When it was dismissed. |
-| `delivered_channels` | varchar(20)[] |  |  | Channels it went out on besides the app (push, whatsapp, sms, email). |
+| `dedupe_key` | varchar(120) |  |  | Makes "once per condition" a database rule: a reminder for the same thing (e.g. "low_stock:2026-09-24", "order:&lt;id>:packed") is never created twice. |
+| `delivered_channels` | varchar(20)[] |  |  | Channels it went out on: in_app today; push, whatsapp, sms and email later. |
 | `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
 
+* Index `notifications_business_created_idx`: btree `(business_id, created_at)`
 * Index `notifications_dedupe_uq`: unique, btree `(business_id, dedupe_key) WHERE (dedupe_key IS NOT NULL)`
-* Index `notifications_unread_idx`: btree `(business_id, user_id, created_at) WHERE (read_at IS NULL)`
+* Index `notifications_user_idx`: btree `(user_id, created_at) WHERE (user_id IS NOT NULL)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`notification_receipts`](#notification_receipts).notification_id
+
+### `notification_receipts`
+
+Each person's state of a notification: read, or dismissed (hidden from their list). A notification addressed to everyone with a permission is read by each of them separately. No row: not read yet.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `notification_id` | uuid | ✓ |  | **Primary key** (with `user_id`). → [`notifications`](#notifications).id (on delete cascade). The notification. |
+| `user_id` | uuid | ✓ |  | **Primary key** (with `notification_id`). → [`users`](#users).id. The person. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `read_at` | timestamptz |  |  | When they read it (opened it, or marked all read). |
+| `dismissed_at` | timestamptz |  |  | When they dismissed it. |
+
+* Primary key `notification_id, user_id`
+* Index `notification_receipts_user_idx`: btree `(user_id, business_id)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `reminder_rules`
 
-Which reminders run and how (thresholds, lead days, channels).
+Which reminders run and how, one row per business and type (the types and their defaults are REMINDERS in @digitalbahi/core). `config` holds the hour of the daily check and the type's own settings.
 
 | Column | Type | Required | Default | Description |
 |---|---|:-:|---|---|
@@ -2429,9 +2445,10 @@ Which reminders run and how (thresholds, lead days, channels).
 | `type` | varchar(40) | ✓ |  | customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due |
 | `config` | jsonb | ✓ | `'{}'` | The rule's settings as JSON (days before due, thresholds, time of day ...). |
 | `channels` | varchar(20)[] | ✓ | `'{in_app}'` | Where the reminders go: in_app, push, whatsapp, sms, email. |
-| `is_active` | boolean | ✓ | `true` | Inactive rows are kept for history but no longer offered for new entries. |
+| `is_active` | boolean | ✓ | `true` | Switched off: no daily check and no event notifications of this type. |
 | `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
 | `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `last_run_on` | date |  |  | The business day its daily check last ran (claimed): once a day, even with several API servers. |
 
 * Index `reminder_rules_type_uq`: unique, btree `(business_id, type)`
 * Trigger `reminder_rules_set_updated_at`: before update, each row → `set_updated_at()`
@@ -3025,6 +3042,7 @@ Written in the migrations; triggers use them to keep the rules no application bu
 | `invoices_period_lock_guard()` | trigger | plpgsql | Trigger on [`invoices`](#invoices). |
 | `nightly_analytics_due(p_now timestamp with time zone, p_hour integer, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses due for the nightly analytics run: active ones where it is past p_hour in their own time zone and no run is claimed for their current date yet. Without a session, row-level security hides businesses and runs; this answers only "whose turn is it" (the run is claimed and done inside that business). |
 | `outbox_pending_businesses(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid) | sql | The businesses with outbox events waiting, for the API's outbox worker. It runs without a session, and row-level security hides every business's events until one is chosen; this answers only "whose events are waiting" (the events are then taken and handled inside that business). |
+| `reminder_rules_due(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses with a daily reminder check due: an active rule not yet run on the business's current date, whose hour (config.hour, else the type's default) has come in its time zone. Without a session, row-level security hides businesses and rules; this answers only "whose turn is it" (the rules are then claimed and checked inside that business). |
 | `set_updated_at()` | trigger | plpgsql | updated_at is maintained automatically on every table that has it. Trigger on 55 tables. |
 | `user_in_other_business(p_user uuid, p_business uuid)` | boolean | sql | Whether a member's account is also in another business. A business may set the user ID and password only of accounts it alone uses (its staff), never of someone who also works elsewhere. Row-level security hides other businesses' memberships from the API, so this answers the one question with the owner's rights and nothing more. |
 | `whatsapp_status_business(p_key text)` | uuid | sql | The business a status callback belongs to, from the key in its address. Callbacks come without a session, and row-level security hides every business's settings until one is chosen; this answers only that question. |
@@ -3033,4 +3051,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications`

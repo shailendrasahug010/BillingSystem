@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgTable, smallint, text, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, index, integer, jsonb, pgTable, primaryKey, smallint, text, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import { pk, timestamps, tstz } from "./columns.js";
 import { jobStatus, notificationSeverity, syncMutationStatus } from "./enums.js";
 import { businessId, devices, files, users } from "./platform.js";
@@ -74,23 +74,52 @@ export const notifications = pgTable(
     entityType: varchar({ length: 40 }),
     /** Id of that record. */
     entityId: uuid(),
-    /** Prevents the same reminder being created twice (e.g. "low_stock:<product>:<date>"). */
+    /**
+     * Makes "once per condition" a database rule: a reminder for the same thing
+     * (e.g. "low_stock:2026-09-24", "order:<id>:packed") is never created twice.
+     */
     dedupeKey: varchar({ length: 120 }),
-    /** When it was read. */
-    readAt: tstz(),
-    /** When it was dismissed. */
-    dismissedAt: tstz(),
-    /** Channels it went out on besides the app (push, whatsapp, sms, email). */
+    /** Channels it went out on: in_app today; push, whatsapp, sms and email later. */
     deliveredChannels: varchar({ length: 20 }).array(),
     createdAt: tstz().notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("notifications_dedupe_uq").on(t.businessId, t.dedupeKey).where(sql`${t.dedupeKey} is not null`),
-    index("notifications_unread_idx").on(t.businessId, t.userId, t.createdAt).where(sql`${t.readAt} is null`),
+    index("notifications_business_created_idx").on(t.businessId, t.createdAt),
+    index("notifications_user_idx").on(t.userId, t.createdAt).where(sql`${t.userId} is not null`),
   ],
 );
 
-/** Which reminders run and how (thresholds, lead days, channels). */
+/**
+ * Each person's state of a notification: read, or dismissed (hidden from their
+ * list). A notification addressed to everyone with a permission is read by
+ * each of them separately. No row: not read yet.
+ */
+export const notificationReceipts = pgTable(
+  "notification_receipts",
+  {
+    /** The notification. */
+    notificationId: uuid()
+      .notNull()
+      .references(() => notifications.id, { onDelete: "cascade" }),
+    /** The person. */
+    userId: uuid()
+      .notNull()
+      .references(() => users.id),
+    businessId: businessId(),
+    /** When they read it (opened it, or marked all read). */
+    readAt: tstz(),
+    /** When they dismissed it. */
+    dismissedAt: tstz(),
+  },
+  (t) => [primaryKey({ columns: [t.notificationId, t.userId] }), index("notification_receipts_user_idx").on(t.userId, t.businessId)],
+);
+
+/**
+ * Which reminders run and how, one row per business and type (the types and
+ * their defaults are REMINDERS in @digitalbahi/core). `config` holds the hour
+ * of the daily check and the type's own settings.
+ */
 export const reminderRules = pgTable(
   "reminder_rules",
   {
@@ -102,7 +131,10 @@ export const reminderRules = pgTable(
     config: jsonb().notNull().default({}),
     /** Where the reminders go: in_app, push, whatsapp, sms, email. */
     channels: varchar({ length: 20 }).array().notNull().default(sql`'{in_app}'::varchar[]`),
+    /** Switched off: no daily check and no event notifications of this type. */
     isActive: boolean().notNull().default(true),
+    /** The business day its daily check last ran (claimed): once a day, even with several API servers. */
+    lastRunOn: date({ mode: "string" }),
     ...timestamps,
   },
   (t) => [uniqueIndex("reminder_rules_type_uq").on(t.businessId, t.type)],

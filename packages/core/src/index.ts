@@ -22,6 +22,7 @@ export * from "./purchases/bill-file.js";
 export * from "./suggestions/stats.js";
 export * from "./suggestions/associations.js";
 export * from "./suggestions/engine.js";
+export * from "./notifications/reminders.js";
 export * from "./search/products.js";
 
 export * from "./validation/identifiers.js";

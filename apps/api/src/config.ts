@@ -47,6 +47,8 @@ const Env = z.object({
   OUTBOX_WORKER_SECONDS: z.coerce.number().int().min(0).max(3600).default(5),
   /** How often the API looks for businesses due for their nightly analytics run; 0 = never. */
   NIGHTLY_SCHEDULER_SECONDS: z.coerce.number().int().min(0).max(86400).default(600),
+  /** How often the API looks for daily reminder checks that are due (each rule has its own hour); 0 = never. */
+  REMINDER_SCHEDULER_SECONDS: z.coerce.number().int().min(0).max(3600).default(300),
   /** The nightly run starts after this hour (0–23) in each business's time zone. */
   NIGHTLY_ANALYTICS_HOUR: z.coerce.number().int().min(0).max(23).default(2),
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),
@@ -79,6 +81,7 @@ export interface Config {
   trialDays: number;
   backupSchedulerSeconds: number;
   outboxWorkerSeconds: number;
+  reminderSchedulerSeconds: number;
   nightlyAnalytics: { schedulerSeconds: number; hour: number };
   rateLimit: { max: number; authMax: number };
   logLevel: string;
@@ -125,6 +128,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trialDays: e.TRIAL_DAYS,
     backupSchedulerSeconds: e.BACKUP_SCHEDULER_SECONDS,
     outboxWorkerSeconds: e.OUTBOX_WORKER_SECONDS,
+    reminderSchedulerSeconds: e.REMINDER_SCHEDULER_SECONDS,
     nightlyAnalytics: { schedulerSeconds: e.NIGHTLY_SCHEDULER_SECONDS, hour: e.NIGHTLY_ANALYTICS_HOUR },
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },
     logLevel: e.LOG_LEVEL,

@@ -1,4 +1,4 @@
-import { ALL_PERMISSIONS, DEFAULT_ROLES, financialYearOf, GST_STATES } from "@digitalbahi/core";
+import { ALL_PERMISSIONS, DEFAULT_ROLES, financialYearOf, GST_STATES, REMINDER_TYPES } from "@digitalbahi/core";
 import { sql } from "drizzle-orm";
 import type { Executor } from "../executor.js";
 import * as s from "../schema/index.js";
@@ -213,17 +213,6 @@ export async function seedBusinessDefaults(db: Db, businessId: string, today: st
       .values(Object.entries(settings).map(([key, value]) => ({ businessId, key, value })))
       .onConflictDoNothing();
 
-    const reminders = [
-      "customer_payment_due",
-      "supplier_payment_due",
-      "low_stock",
-      "expiring_stock",
-      "pending_orders",
-      "to_pack",
-      "to_dispatch",
-      "leave_request",
-      "salary_due",
-    ];
-    await tx.insert(s.reminderRules).values(reminders.map((type) => ({ businessId, type }))).onConflictDoNothing();
+    await tx.insert(s.reminderRules).values(REMINDER_TYPES.map((type) => ({ businessId, type }))).onConflictDoNothing();
   });
 }

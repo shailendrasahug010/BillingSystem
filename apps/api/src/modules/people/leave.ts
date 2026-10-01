@@ -159,6 +159,7 @@ export const leaveModule: ApiModule = async (app, deps) => {
       const id = uuidv7();
       await tx.insert(lr).values({ id, businessId: ctx.businessId, employeeId: e.id, leaveTypeId: type.id, fromDate: body.fromDate, toDate: body.toDate, halfDay: body.halfDay, days, reason: body.reason ?? null, createdBy: ctx.userId, updatedBy: ctx.userId });
       await audit(tx, ctx, { action: "leave.applied", entityType: "leave_request", entityId: id, entityLabel: `${e.name} ${type.code}`, changes: { from: body.fromDate, to: body.toDate, days } });
+      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "leave.requested", aggregateType: "leave_request", aggregateId: id, payload: { employeeId: e.id } });
       return requestDetail(tx, ctx, id);
     });
     return reply.code(201).send(detail);
@@ -192,6 +193,7 @@ export const leaveModule: ApiModule = async (app, deps) => {
         .set({ status: request.body.decision === "approve" ? "approved" : "rejected", decidedBy: ctx.userId, decidedAt: now, decisionNote: request.body.note ?? null, updatedBy: ctx.userId })
         .where(eq(lr.id, req.id));
       await audit(tx, ctx, { action: request.body.decision === "approve" ? "leave.approved" : "leave.rejected", entityType: "leave_request", entityId: req.id, changes: { days: req.days, note: request.body.note ?? null } });
+      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "leave.decided", aggregateType: "leave_request", aggregateId: req.id, payload: { decision: request.body.decision } });
       return requestDetail(tx, ctx, req.id);
     });
   });

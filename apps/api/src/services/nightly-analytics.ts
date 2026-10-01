@@ -4,6 +4,7 @@ import { and, eq, isNotNull, lt, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
+import { NOTIFICATION_KEEP_DAYS } from "./notifications.js";
 import { processBusinessOutbox, rootMessage } from "./outbox-worker.js";
 import {
   customerFigures,
@@ -31,7 +32,8 @@ import { getSettings } from "./settings.js";
  *  5. Checks the cached balances against their ledgers: customers.balance and
  *     suppliers.balance against party_ledger_entries, stock_balances against
  *     stock_ledger. Mismatches are reported, not changed.
- *  6. Deletes processed outbox events older than OUTBOX_KEEP_DAYS.
+ *  6. Deletes processed outbox events older than OUTBOX_KEEP_DAYS, and
+ *     notifications older than NOTIFICATION_KEEP_DAYS.
  *
  * What it found is kept in analytics_runs.details; drift and mismatches are
  * also written to the error log, where operators look.
@@ -66,6 +68,8 @@ export type BalanceMismatch = {
 export interface NightlyDetails {
   asOf: string;
   outbox: { processed: number; failed: number; deleted: number };
+  /** Notifications older than NOTIFICATION_KEEP_DAYS deleted. */
+  notificationsDeleted: number;
   customers: number;
   statsRows: number;
   drift: DriftReport;
@@ -176,9 +180,14 @@ export async function nightlyForBusiness(deps: AppDeps, businessId: string, toda
       .delete(schema.outboxEvents)
       .where(and(eq(schema.outboxEvents.businessId, businessId), isNotNull(schema.outboxEvents.processedAt), lt(schema.outboxEvents.processedAt, cutoff)))
       .returning({ id: schema.outboxEvents.id });
+    const oldNotifications = await tx
+      .delete(schema.notifications)
+      .where(and(eq(schema.notifications.businessId, businessId), lt(schema.notifications.createdAt, new Date(deps.clock.now().getTime() - NOTIFICATION_KEEP_DAYS * 86_400_000).toISOString())))
+      .returning({ id: schema.notifications.id });
     return {
       asOf: today,
       outbox: { ...outbox, deleted: deleted.length },
+      notificationsDeleted: oldNotifications.length,
       customers: customers.length,
       statsRows,
       drift,

@@ -12,6 +12,7 @@ import { withTenant } from "../../lib/db.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
+import { orderStatusEvent } from "../../services/order-status.js";
 import { prepareSale } from "../../services/sales-document.js";
 import { getSetting } from "../../services/settings.js";
 import { likeContains } from "../catalog/products.js";
@@ -167,7 +168,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
       );
       await recordStatus(tx, ctx, id, null, status);
       await audit(tx, ctx, { action: "sales_order.created", entityType: "sales_order", entityId: id, entityLabel: numbering.number, changes: { customer: sale.customer.name, grandTotal: toAmountString(t.grandTotal) } });
-      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id } });
+      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id, status } });
       return { replay: false, detail: await orderDetail(tx, ctx, id, workflow) };
     });
     if (result.replay) reply.header("idempotent-replay", "true");
@@ -247,6 +248,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
         })
         .where(eq(schema.salesOrders.id, o.id));
       await recordStatus(tx, ctx, o.id, from, to, request.body.note);
+      await orderStatusEvent(tx, ctx.businessId, o.id, from, to);
       await audit(tx, ctx, { action: `sales_order.${to}`, entityType: "sales_order", entityId: o.id, entityLabel: o.orderNumber ?? undefined, changes: { status: [from, to] } });
       return orderDetail(tx, ctx, o.id, workflow);
     });

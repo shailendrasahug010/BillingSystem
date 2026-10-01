@@ -10,6 +10,7 @@ import { createTokenService } from "./lib/security.js";
 import { startBackupScheduler } from "./services/backup-schedule.js";
 import { startNightlyScheduler } from "./services/nightly-analytics.js";
 import { startOutboxWorker } from "./services/outbox-worker.js";
+import { startReminderScheduler } from "./services/reminders.js";
 import { LiveMessenger, LogMessenger } from "./services/messaging/transport.js";
 
 const config = loadConfig();
@@ -56,12 +57,15 @@ const stopBackups = startBackupScheduler(app.deps, config.backupSchedulerSeconds
 // Purchase history a few seconds after each bill; the nightly rebuild, drift and balance checks.
 const stopOutbox = startOutboxWorker(app.deps, config.outboxWorkerSeconds, app.log);
 const stopNightly = startNightlyScheduler(app.deps, config.nightlyAnalytics.schedulerSeconds, app.log);
+// Daily reminder checks (each rule after its hour, in each firm's time zone).
+const stopReminders = startReminderScheduler(app.deps, config.reminderSchedulerSeconds, app.log);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");
   stopBackups();
   stopOutbox();
   stopNightly();
+  stopReminders();
   await app.close();
   await errors.flush();
   await pool.end();
