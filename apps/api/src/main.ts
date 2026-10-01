@@ -8,6 +8,8 @@ import { loadConfig } from "./config.js";
 import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
 import { startBackupScheduler } from "./services/backup-schedule.js";
+import { startNightlyScheduler } from "./services/nightly-analytics.js";
+import { startOutboxWorker } from "./services/outbox-worker.js";
 import { LiveMessenger, LogMessenger } from "./services/messaging/transport.js";
 
 const config = loadConfig();
@@ -51,10 +53,15 @@ if (config.errorLog.dir) app.log.info({ dir: config.errorLog.dir, webSourceMaps:
 log = (msg, err) => app.log.warn({ err: err.message }, msg);
 // Automatic backups (emailed on each firm's schedule).
 const stopBackups = startBackupScheduler(app.deps, config.backupSchedulerSeconds, app.log);
+// Purchase history a few seconds after each bill; the nightly rebuild, drift and balance checks.
+const stopOutbox = startOutboxWorker(app.deps, config.outboxWorkerSeconds, app.log);
+const stopNightly = startNightlyScheduler(app.deps, config.nightlyAnalytics.schedulerSeconds, app.log);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");
   stopBackups();
+  stopOutbox();
+  stopNightly();
   await app.close();
   await errors.flush();
   await pool.end();

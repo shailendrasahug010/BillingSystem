@@ -162,6 +162,13 @@
       "when": 1790780328443,
       "tag": "0022_einvoice_ewaybill",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790850112039,
+      "tag": "0023_purchase_history",
+      "breakpoints": true
     }
   ]
 }

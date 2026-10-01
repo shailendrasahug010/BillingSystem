@@ -786,6 +786,13 @@ export const notesModule: ApiModule = async (app, deps) => {
         .update(schema.creditDebitNotes)
         .set({ status: "cancelled", cancelledAt: now, cancelReason: request.body.reason, amountSettled: "0", settlementStatus: "unpaid", version: note.version + 1, updatedBy: ctx.userId })
         .where(eq(schema.creditDebitNotes.id, note.id));
+      await tx.insert(schema.outboxEvents).values({
+        businessId: ctx.businessId,
+        eventType: isSale ? "credit_note.cancelled" : valueOnly ? "supplier_credit_note.cancelled" : "debit_note.cancelled",
+        aggregateType: "note",
+        aggregateId: note.id,
+        payload: { [isSale ? "invoiceId" : "purchaseId"]: docId },
+      });
       await audit(tx, ctx, {
         action: isSale ? "credit_note.cancelled" : "debit_note.cancelled",
         entityType: "note",

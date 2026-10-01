@@ -28,6 +28,7 @@ import { BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from 
 import { useCustomerInsight } from "../../data/hooks";
 import { storeAssociations, useStoreVersion, type CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
+import { useSuggestionFeedback, type SuggestionFeedback } from "./suggestionFeedback";
 
 export interface DraftLine {
   key: string;
@@ -210,6 +211,8 @@ export interface DraftView {
   dueDate: string;
   /** An export or supply to SEZ (zero-rated), and whether IGST is paid on it; null for other sales. */
   zeroRated: { kind: ZeroRatedKind; withPayment: boolean; type: ZeroRatedType } | null;
+  /** What the suggestions offered and what was taken, sent with the saved bill. */
+  feedback: SuggestionFeedback;
 }
 
 export function useInvoiceDraft(initialCustomerId: string | null = null): DraftView {
@@ -217,6 +220,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
   const version = useStoreVersion();
   const customer = draft.customerId ? customerById.get(draft.customerId) ?? null : null;
   const insight = useCustomerInsight(customer?.id ?? null);
+  const feedback = useSuggestionFeedback(customer?.id ?? null);
   // Only a regular registrant makes zero-rated supplies; an export's place of supply is abroad (96).
   const zeroRatedKind = WORKSPACE.chargeTax ? zeroRatedKindFor(customer?.gstRegistration) : null;
   const withPayment = draft.zeroRated.withPayment ?? !lutValidOn(draft.date);
@@ -315,5 +319,6 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
     credit,
     dueDate: addDays(draft.date, customer?.creditDays ?? 0),
     zeroRated,
+    feedback,
   };
 }

@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 92 |
-| Columns | 1548 |
-| Foreign keys | 245 |
-| Unique constraints | 45 |
-| Check constraints | 56 |
-| Indexes (besides primary keys and unique constraints) | 115 |
+| Tables | 94 |
+| Columns | 1568 |
+| Foreign keys | 250 |
+| Unique constraints | 46 |
+| Check constraints | 57 |
+| Indexes (besides primary keys and unique constraints) | 117 |
 | Triggers | 66 |
-| Tables with row-level security | 86 |
+| Tables with row-level security | 88 |
 | Enums | 38 |
-| Functions | 10 |
-| Migrations | 23 (last: `0022_einvoice_ewaybill`) |
+| Functions | 12 |
+| Migrations | 24 (last: `0023_purchase_history`) |
 
 ## How the database is set up
 
@@ -44,7 +44,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Expenses:** [`expense_categories`](#expense_categories), [`expenses`](#expenses)
 * **GST returns and configuration:** [`gst_transactions`](#gst_transactions), [`gst_return_periods`](#gst_return_periods), [`gst_exports`](#gst_exports), [`gst_config`](#gst_config)
 * **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
-* **Analytics (derived, rebuildable):** [`customer_product_stats`](#customer_product_stats), [`product_associations`](#product_associations), [`customer_stats`](#customer_stats), [`sales_daily_product`](#sales_daily_product), [`sales_daily_customer`](#sales_daily_customer)
+* **Analytics (derived, rebuildable):** [`customer_product_stats`](#customer_product_stats), [`product_associations`](#product_associations), [`customer_stats`](#customer_stats), [`analytics_runs`](#analytics_runs), [`suggestion_feedback`](#suggestion_feedback), [`sales_daily_product`](#sales_daily_product), [`sales_daily_customer`](#sales_daily_customer)
 * **WhatsApp and email:** [`messaging_settings`](#messaging_settings), [`messages`](#messages)
 * [Enums](#enums) · [Functions](#functions) · [Migrations](#migrations)
 
@@ -94,7 +94,7 @@ A login identity. One user can belong to several businesses with different roles
 * Index `users_mobile_uq`: unique, btree `(mobile)`
 * Index `users_username_uq`: unique, btree `(username)`
 * Trigger `users_set_updated_at`: before update, each row → `set_updated_at()`
-* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`notifications`](#notifications).user_id, [`report_views`](#report_views).user_id
+* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`notifications`](#notifications).user_id, [`report_views`](#report_views).user_id, [`suggestion_feedback`](#suggestion_feedback).user_id
 
 ### `businesses`
 
@@ -135,7 +135,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 83 tables by `business_id`
+* Referenced by: 85 tables by `business_id`
 
 ### `settings`
 
@@ -645,7 +645,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 | `opening_balance` | numeric(15,2) | ✓ | `0` | Amount owed when the customer was brought into the app. |
 | `opening_balance_side` | [balance_side](#enum-balance_side) | ✓ | `'debit'` | debit: the customer owed us; credit: we owed the customer (an advance). |
 | `opening_balance_date` | date |  |  | Date of the opening balance (the start of using the app). |
-| `balance` | numeric(15,2) | ✓ | `0` | Cached receivable balance (debit positive). Maintained in the same transaction as every party_ledger_entries insert; a nightly job verifies it equals the ledger sum. Lets the list of 5,000 customers sort by outstanding without aggregating the ledger. |
+| `balance` | numeric(15,2) | ✓ | `0` | Cached receivable balance (debit positive). Maintained in the same transaction as every party_ledger_entries insert; the nightly analytics job checks it equals the ledger sum and reports any difference. Lets the list of 5,000 customers sort by outstanding without aggregating the ledger. |
 | `notes` | text |  |  | Free-text notes. |
 | `is_active` | boolean | ✓ | `true` | Inactive rows are kept for history but no longer offered for new entries. |
 | `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
@@ -668,7 +668,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 * Index `customers_route_idx`: btree `(business_id, route_id)`
 * Trigger `customers_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`customer_addresses`](#customer_addresses).customer_id, [`sales_orders`](#sales_orders).customer_id, [`invoices`](#invoices).customer_id, [`credit_debit_notes`](#credit_debit_notes).customer_id, [`payments`](#payments).customer_id, [`party_ledger_entries`](#party_ledger_entries).customer_id, [`collection_notes`](#collection_notes).customer_id, [`customer_product_stats`](#customer_product_stats).customer_id, [`customer_stats`](#customer_stats).customer_id, [`sales_daily_customer`](#sales_daily_customer).customer_id
+* Referenced by: [`customer_addresses`](#customer_addresses).customer_id, [`sales_orders`](#sales_orders).customer_id, [`invoices`](#invoices).customer_id, [`credit_debit_notes`](#credit_debit_notes).customer_id, [`payments`](#payments).customer_id, [`party_ledger_entries`](#party_ledger_entries).customer_id, [`collection_notes`](#collection_notes).customer_id, [`customer_product_stats`](#customer_product_stats).customer_id, [`customer_stats`](#customer_stats).customer_id, [`suggestion_feedback`](#suggestion_feedback).customer_id, [`sales_daily_customer`](#sales_daily_customer).customer_id
 
 ### `customer_addresses`
 
@@ -719,7 +719,7 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 | `opening_balance` | numeric(15,2) | ✓ | `0` | Amount owed when the supplier was brought into the app. |
 | `opening_balance_side` | [balance_side](#enum-balance_side) | ✓ | `'credit'` | credit: we owed the supplier; debit: the supplier owed us (an advance). |
 | `opening_balance_date` | date |  |  | Date of the opening balance. |
-| `balance` | numeric(15,2) | ✓ | `0` | Cached payable balance (credit positive), maintained like customers.balance. |
+| `balance` | numeric(15,2) | ✓ | `0` | Cached payable balance (credit positive), maintained and checked nightly like customers.balance. |
 | `bank_account_name` | text |  |  | Name on the supplier's bank account, for payments. |
 | `bank_account_number_enc` | text |  |  | Supplier's bank account number, encrypted (AES-256-GCM). |
 | `bank_account_last4` | varchar(4) |  |  | Last 4 digits of the account number, for display. |
@@ -1062,7 +1062,7 @@ STOCK LEDGER — the single source of truth for stock. Append-only: the app role
 
 ### `stock_balances`
 
-Current stock per product / warehouse / batch: a cache of the ledger updated in the same transaction (SELECT ... FOR UPDATE on the row, then insert the ledger row with the new balance). Reads are O(1); a nightly job re-checks that it equals SUM(qty_in - qty_out).
+Current stock per product / warehouse / batch: a cache of the ledger updated in the same transaction (SELECT ... FOR UPDATE on the row, then insert the ledger row with the new balance). Reads are O(1); the nightly analytics job checks that it equals SUM(qty_in - qty_out) and reports any difference.
 
 | Column | Type | Required | Default | Description |
 |---|---|:-:|---|---|
@@ -1504,7 +1504,7 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 * Trigger `invoices_period_lock`: before update, each row → `invoices_period_lock_guard()`
 * Trigger `invoices_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`invoice_items`](#invoice_items).invoice_id, [`invoice_revisions`](#invoice_revisions).invoice_id, [`dispatch_orders`](#dispatch_orders).invoice_id, [`credit_debit_notes`](#credit_debit_notes).invoice_id, [`payment_allocations`](#payment_allocations).invoice_id
+* Referenced by: [`invoice_items`](#invoice_items).invoice_id, [`invoice_revisions`](#invoice_revisions).invoice_id, [`dispatch_orders`](#dispatch_orders).invoice_id, [`credit_debit_notes`](#credit_debit_notes).invoice_id, [`payment_allocations`](#payment_allocations).invoice_id, [`suggestion_feedback`](#suggestion_feedback).invoice_id
 
 ### `invoice_items`
 
@@ -2455,6 +2455,7 @@ Transactional outbox: domain events written in the business transaction and proc
 | `processed_at` | timestamptz |  |  | When it was handled; empty while waiting. |
 | `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
 
+* Index `outbox_events_business_pending_idx`: btree `(business_id, id) WHERE (processed_at IS NULL)`
 * Index `outbox_events_pending_idx`: btree `(available_at) WHERE (processed_at IS NULL)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
@@ -2610,11 +2611,52 @@ Customer-level aggregates for lists and profiles (total sales, AOV, payment beha
 | `typical_visit_interval_days` | float8 |  |  | Median gap in days between invoices. |
 | `avg_days_to_pay` | float8 |  |  | Average days from invoice to full payment. |
 | `on_time_ratio` | float8 |  |  | Share of invoices paid by their due date (0..1). |
-| `payment_rating` | smallint |  |  | Payment behaviour score, 1 (poor) to 5 (excellent). |
+| `payment_rating` | smallint |  |  | Payment behaviour: 4 excellent, 3 good, 2 slow, 1 risky; empty with too few settled bills to tell. |
 | `overdue_amount` | numeric(15,2) | ✓ | `0` | Amount past its due date. |
 | `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `associations` | jsonb | ✓ | `'[]'` | The customer's own "bought together" rules, mined from their bills with stricter thresholds than the store-wide ones ("usually bought with bread by this customer"). |
+| `as_of` | date |  |  | The day these figures (and the customer's product stats) were worked out for; the window ends on it. |
 
 * Trigger `customer_stats_set_updated_at`: before update, each row → `set_updated_at()`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+
+### `analytics_runs`
+
+Runs of the nightly analytics job, one per business and day. Inserting the row claims the run, so two API servers never both do it. `details` keeps what it found: customers rebuilt, drift between the worker's figures and a fresh computation, association rules mined, and cached balances that do not match their ledgers.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `job` | varchar(30) | ✓ |  | Which job: nightly. |
+| `as_of` | date | ✓ |  | The business day the run is for. |
+| `status` | varchar(12) | ✓ | `'running'` | running, completed or failed. |
+| `started_at` | timestamptz | ✓ | `now()` | When the run was claimed and began. |
+| `finished_at` | timestamptz |  |  | When it completed or failed. |
+| `details` | jsonb | ✓ | `'{}'` | What the run found, as JSON (counts, drift, mismatched balances with examples). |
+| `error` | text |  |  | Why it failed. |
+
+* Check `analytics_runs_status_chk`: `(status::text = ANY (ARRAY['running'::character varying, 'completed'::character varying, 'failed'::character varying]::text[]))`
+* Unique `analytics_runs_uq`: `(business_id, job, as_of)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+
+### `suggestion_feedback`
+
+What the billing screen offered and what was taken, one row per bill being made (the app makes the id, so a resend replaces instead of adding). Used to measure whether suggestions help: acceptance by reason and position, and the share of bill lines that came from them.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ |  | **Primary key.** Made by the app for the bill being made. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `customer_id` | uuid | ✓ |  | → [`customers`](#customers).id (on delete cascade). The customer the bill was for. |
+| `user_id` | uuid | ✓ |  | → [`users`](#users).id. The person billing. |
+| `invoice_id` | uuid |  |  | → [`invoices`](#invoices).id. The bill it ended in, once saved. |
+| `shown` | jsonb | ✓ | `'[]'` | Suggestions offered (first appearance of each product, up to 50). |
+| `added` | jsonb | ✓ | `'[]'` | Suggestions added to the bill. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+
+* Index `suggestion_feedback_created_idx`: btree `(business_id, created_at)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `sales_daily_product`
@@ -2981,6 +3023,8 @@ Written in the migrations; triggers use them to keep the rules no application bu
 | `gst_period_locked(p_business uuid, p_date date)` | boolean | sql | GST period lock: once GSTR-1 for a month is locked/filed, invoices and notes dated in it cannot change their tax-relevant content or be cancelled. Payment fields (amount_paid, balance_due, payment_status) stay updatable. |
 | `gst_transactions_guard()` | trigger | plpgsql | GST register rows may only be flagged as cancelled, never edited or deleted. Trigger on [`gst_transactions`](#gst_transactions). |
 | `invoices_period_lock_guard()` | trigger | plpgsql | Trigger on [`invoices`](#invoices). |
+| `nightly_analytics_due(p_now timestamp with time zone, p_hour integer, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses due for the nightly analytics run: active ones where it is past p_hour in their own time zone and no run is claimed for their current date yet. Without a session, row-level security hides businesses and runs; this answers only "whose turn is it" (the run is claimed and done inside that business). |
+| `outbox_pending_businesses(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid) | sql | The businesses with outbox events waiting, for the API's outbox worker. It runs without a session, and row-level security hides every business's events until one is chosen; this answers only "whose events are waiting" (the events are then taken and handled inside that business). |
 | `set_updated_at()` | trigger | plpgsql | updated_at is maintained automatically on every table that has it. Trigger on 55 tables. |
 | `user_in_other_business(p_user uuid, p_business uuid)` | boolean | sql | Whether a member's account is also in another business. A business may set the user ID and password only of accounts it alone uses (its staff), never of someone who also works elsewhere. Row-level security hides other businesses' memberships from the API, so this answers the one question with the owner's rights and nothing more. |
 | `whatsapp_status_business(p_key text)` | uuid | sql | The business a status callback belongs to, from the key in its address. Callbacks come without a session, and row-level security hides every business's settings until one is chosen; this answers only that question. |
@@ -2989,4 +3033,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history`

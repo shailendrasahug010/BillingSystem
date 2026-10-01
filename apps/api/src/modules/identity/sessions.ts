@@ -8,7 +8,9 @@ import { withUser } from "../../lib/db.js";
 import { ApiError, forbidden } from "../../lib/errors.js";
 import { newOpaqueToken, sha256 } from "../../lib/security.js";
 
-export const REFRESH_COOKIE = "vy_rt";
+export const REFRESH_COOKIE = "db_rt";
+/** The cookie's name under the project's former working name: still accepted, and replaced by REFRESH_COOKIE when next set. */
+export const LEGACY_REFRESH_COOKIE = "vy_rt";
 const REFRESH_COOKIE_PATH = "/api/v1/auth";
 /** Two tabs refreshing at the same moment: the loser retries instead of being logged out. */
 const ROTATION_GRACE_MS = 30_000;
@@ -140,6 +142,12 @@ export async function sessionResponse(
   };
 }
 
+/** A browser still holding the cookie under its former name gets it removed. */
+function clearLegacyCookie(deps: AppDeps, reply: FastifyReply): void {
+  if (reply.request.cookies?.[LEGACY_REFRESH_COOKIE] === undefined) return;
+  reply.clearCookie(LEGACY_REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH, httpOnly: true, secure: deps.config.cookieSecure, sameSite: "strict" });
+}
+
 function setRefreshCookie(deps: AppDeps, reply: FastifyReply, token: string): void {
   reply.setCookie(REFRESH_COOKIE, token, {
     httpOnly: true,
@@ -148,14 +156,16 @@ function setRefreshCookie(deps: AppDeps, reply: FastifyReply, token: string): vo
     path: REFRESH_COOKIE_PATH,
     maxAge: deps.config.jwt.refreshTtlDays * 86_400,
   });
+  clearLegacyCookie(deps, reply);
 }
 
 export function clearRefreshCookie(deps: AppDeps, reply: FastifyReply): void {
   reply.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH, httpOnly: true, secure: deps.config.cookieSecure, sameSite: "strict" });
+  clearLegacyCookie(deps, reply);
 }
 
 export function presentedRefreshToken(request: FastifyRequest, body: { refreshToken?: string | undefined } | null | undefined): string | null {
-  return request.cookies[REFRESH_COOKIE] ?? body?.refreshToken ?? null;
+  return request.cookies[REFRESH_COOKIE] ?? request.cookies[LEGACY_REFRESH_COOKIE] ?? body?.refreshToken ?? null;
 }
 
 export async function revokeFamily(db: Executor, familyId: string, now: Date): Promise<void> {

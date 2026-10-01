@@ -43,6 +43,12 @@ const Env = z.object({
   TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
   /** How often the API looks for automatic backups that are due (0 = never, e.g. on extra instances). */
   BACKUP_SCHEDULER_SECONDS: z.coerce.number().int().min(0).max(3600).default(300),
+  /** How often the outbox worker looks for waiting events (purchase history after each bill); 0 = never. */
+  OUTBOX_WORKER_SECONDS: z.coerce.number().int().min(0).max(3600).default(5),
+  /** How often the API looks for businesses due for their nightly analytics run; 0 = never. */
+  NIGHTLY_SCHEDULER_SECONDS: z.coerce.number().int().min(0).max(86400).default(600),
+  /** The nightly run starts after this hour (0–23) in each business's time zone. */
+  NIGHTLY_ANALYTICS_HOUR: z.coerce.number().int().min(0).max(23).default(2),
   RATE_LIMIT_MAX: z.coerce.number().int().default(600),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().default(20),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -72,6 +78,8 @@ export interface Config {
   messaging: { driver: "live" | "log"; smtpUrl?: string; mailFrom?: string; whatsappApiBase: string };
   trialDays: number;
   backupSchedulerSeconds: number;
+  outboxWorkerSeconds: number;
+  nightlyAnalytics: { schedulerSeconds: number; hour: number };
   rateLimit: { max: number; authMax: number };
   logLevel: string;
   errorLog: { dir: string | null; retentionDays: number; timeZone: string; webSourceMapsDir: string | null };
@@ -116,6 +124,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     trialDays: e.TRIAL_DAYS,
     backupSchedulerSeconds: e.BACKUP_SCHEDULER_SECONDS,
+    outboxWorkerSeconds: e.OUTBOX_WORKER_SECONDS,
+    nightlyAnalytics: { schedulerSeconds: e.NIGHTLY_SCHEDULER_SECONDS, hour: e.NIGHTLY_ANALYTICS_HOUR },
     rateLimit: { max: e.RATE_LIMIT_MAX, authMax: e.AUTH_RATE_LIMIT_MAX },
     logLevel: e.LOG_LEVEL,
     errorLog: {

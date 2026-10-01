@@ -1,7 +1,7 @@
 import type { ReorderRow, Suggestion, SuggestionGroup, SuggestionReason } from "@digitalbahi/core";
 import { CircleQuestionMark, Plus, Sparkles } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useShortcuts } from "../../app/shortcuts";
 import { Badge } from "../../components/ui/Badge";
@@ -38,6 +38,7 @@ export function SuggestionsPanel({
   suggestions,
   reorder,
   onAdd,
+  onShown,
   hasCustomer,
   variant = "desktop",
 }: {
@@ -45,6 +46,8 @@ export function SuggestionsPanel({
   suggestions: Suggestion[];
   reorder: ReorderRow[];
   onAdd(productId: string, qty: number): void;
+  /** The suggestions on screen, each time they change (for measuring whether suggestions help). */
+  onShown?(visible: Suggestion[]): void;
   hasCustomer: boolean;
   variant?: "desktop" | "mobile";
 }) {
@@ -59,6 +62,14 @@ export function SuggestionsPanel({
   }, [suggestions]);
 
   const visible = (tab === "all" ? suggestions : suggestions.filter((s) => s.group === tab)).slice(0, variant === "mobile" ? 12 : 9);
+  // The cards are on screen unless the reorder tab shows its table instead.
+  const cardsShown = hasCustomer && !(tab === "reorder" && tableView && variant === "desktop");
+  const shownKey = cardsShown ? visible.map((s) => s.productId).join(",") : "";
+  useEffect(() => {
+    if (shownKey) onShown?.(visible);
+    // Only when what is on screen changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownKey]);
 
   useShortcuts(
     Array.from({ length: 9 }, (_, i) => ({

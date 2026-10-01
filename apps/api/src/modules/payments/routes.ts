@@ -102,6 +102,13 @@ async function reversePayment(tx: Tx, ctx: RequestCtx, p: PaymentRow, reason: st
     reversesEntryId: original?.id ?? null,
     userId: ctx.userId,
   });
+  await tx.insert(schema.outboxEvents).values({
+    businessId: ctx.businessId,
+    eventType: bounced ? "payment.cheque_bounced" : "payment.cancelled",
+    aggregateType: "payment",
+    aggregateId: p.id,
+    payload: { amount: p.amount },
+  });
   await audit(tx, ctx, {
     action: bounced ? "payment.cheque_bounced" : "payment.cancelled",
     entityType: "payment",

@@ -114,9 +114,9 @@ export const customers = pgTable(
     openingBalanceDate: date({ mode: "string" }),
     /**
      * Cached receivable balance (debit positive). Maintained in the same
-     * transaction as every party_ledger_entries insert; a nightly job verifies
-     * it equals the ledger sum. Lets the list of 5,000 customers sort by
-     * outstanding without aggregating the ledger.
+     * transaction as every party_ledger_entries insert; the nightly analytics
+     * job checks it equals the ledger sum and reports any difference. Lets the
+     * list of 5,000 customers sort by outstanding without aggregating the ledger.
      */
     balance: money().notNull().default("0"),
     notes: text(),
@@ -201,7 +201,7 @@ export const suppliers = pgTable(
     openingBalanceSide: balanceSide().notNull().default("credit"),
     /** Date of the opening balance. */
     openingBalanceDate: date({ mode: "string" }),
-    /** Cached payable balance (credit positive), maintained like customers.balance. */
+    /** Cached payable balance (credit positive), maintained and checked nightly like customers.balance. */
     balance: money().notNull().default("0"),
     /** Name on the supplier's bank account, for payments. */
     bankAccountName: text(),

@@ -16,7 +16,7 @@ Supporting criteria, in order: data integrity for money and stock, cross-platfor
 | ORM / migrations | Drizzle ORM + drizzle-kit | 0.45 / 0.31 | **Built** |
 | API framework | Fastify (plugins) + fastify-type-provider-zod | 5.12 | **Built** (Phase 3) |
 | Validation / contracts | Zod schemas in `@digitalbahi/contracts`, shared by API and clients | 4.x | **Built** |
-| Background jobs | pg-boss (queues + cron on PostgreSQL); outbox rows are already written in every posting transaction | 12.x | Phase 4 |
+| Background jobs | Outbox worker and schedulers in the API process, on PostgreSQL itself (`FOR UPDATE SKIP LOCKED`, claimed rows); pg-boss if job types multiply | — | Phase 5 (built) |
 | Web UI | React + Vite | 19.3 / 8.3 | **Prototype built** |
 | Styling | Tailwind CSS v4 on CSS-variable design tokens | 4.3 | **Built** |
 | Accessible primitives | Radix UI (dialog, popover, tabs…) | 1.6 | **Built** |
@@ -63,8 +63,8 @@ Phase 1 planned NestJS on the Fastify adapter. While building Phase 3 we used **
 * Business flows that several modules share (numbering, stock movements, party ledger, payments, settings) live in `apps/api/src/services` and always take the caller's transaction.
 * Alternatives considered: NestJS (see above), .NET or Go (excellent, but they break the "one engine everywhere" rule).
 
-### pg-boss (jobs) instead of Redis + BullMQ at the start
-Jobs, retries, cron schedules and the outbox all live in PostgreSQL: one fewer service to run, back up and pay for, and job enqueueing can happen inside the business transaction. Redis is added only when caching or rate-limit volume needs it.
+### Jobs on PostgreSQL instead of Redis + BullMQ
+Jobs, retries, schedules and the outbox all live in PostgreSQL: one fewer service to run, back up and pay for, and a job is enqueued inside the business transaction (the `outbox_events` row is written with the bill). As built, the API process runs small loops instead of a job library: the outbox worker (every few seconds; takes a business's events with `FOR UPDATE SKIP LOCKED`, retries with backoff, sets aside an event after 8 failures), the nightly analytics scheduler (claims a business's day by inserting its `analytics_runs` row) and the automatic-backup scheduler (claims a schedule by moving its next time). Each finds due work across businesses through a `SECURITY DEFINER` function that answers only "whose turn is it", then works inside that business under row-level security; several API servers can run them side by side. pg-boss (queues and cron on the same database) is the next step if the kinds of jobs multiply; Redis is added only when caching or rate-limit volume needs it.
 
 ### React + Vite + Tailwind + Radix (UI)
 * React has the largest hiring pool in India and first-class support in both desktop and mobile shells.

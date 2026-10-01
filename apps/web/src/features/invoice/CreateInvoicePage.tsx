@@ -142,6 +142,9 @@ function useSave(view: DraftView) {
             : { body: `${customer!.businessName} · ${money(invoice.total)}` }),
         action: { label: t("common.details"), onClick: () => navigate({ name: "invoice-view", invoiceId: invoice.id }) },
       });
+      // Feedback on the suggestions goes with a bill saved online (the server knows that bill).
+      if (offline) view.feedback.reset();
+      else view.feedback.send(invoice.id, view.draft.lines.map((l) => l.productId));
       view.dispatch({ type: "reset" });
       if (mode === "print") navigate({ name: "invoice-view", invoiceId: invoice.id });
       if (mode === "share") {
@@ -304,7 +307,11 @@ function DesktopInvoice({ view }: { view: DraftView }) {
             customerName={customer?.businessName ?? null}
             suggestions={view.suggestions}
             reorder={view.reorder}
-            onAdd={(productId, qty) => dispatch({ type: "add", productId, qty })}
+            onAdd={(productId, qty) => {
+              view.feedback.taken(productId, view.suggestions);
+              dispatch({ type: "add", productId, qty });
+            }}
+            onShown={(visible) => view.feedback.offered(visible, view.suggestions)}
           />
 
           <section className="rounded-[var(--radius-card)] border border-line bg-surface shadow-card" aria-labelledby="items-h">
@@ -475,7 +482,11 @@ function MobileInvoice({ view }: { view: DraftView }) {
             customerName={customer.businessName}
             suggestions={view.suggestions}
             reorder={view.reorder}
-            onAdd={(productId, qty) => dispatch({ type: "add", productId, qty })}
+            onAdd={(productId, qty) => {
+              view.feedback.taken(productId, view.suggestions);
+              dispatch({ type: "add", productId, qty });
+            }}
+            onShown={(visible) => view.feedback.offered(visible, view.suggestions)}
           />
           <section className="rounded-[var(--radius-card)] border border-line bg-surface px-4 shadow-card">
             <h2 className="pt-3 text-[15px] font-semibold text-ink">

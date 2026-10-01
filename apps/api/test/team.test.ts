@@ -18,7 +18,7 @@ describe.skipIf(!hasDatabase)("members, roles and audit", () => {
       id: invite.body.id as string,
       userId: invite.body.userId as string,
       token: login.body.accessToken as string,
-      cookie: login.cookies.find((c) => c.name === "vy_rt")!.value,
+      cookie: login.cookies.find((c) => c.name === "db_rt")!.value,
     };
   }
 
@@ -97,7 +97,7 @@ describe.skipIf(!hasDatabase)("members, roles and audit", () => {
     expect(reset.body.username).toBe("ravi");
     expect((await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi", password: "Ravi-pass-123" } })).status).toBe(401);
     expect((await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi", password: "Ravi-new-456" } })).status).toBe(200);
-    const refresh = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: before.cookies.find((c) => c.name === "vy_rt")!.value } });
+    const refresh = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: before.cookies.find((c) => c.name === "db_rt")!.value } });
     expect(refresh.status).toBe(401);
     // Only with user.update.
     const sales = await call(t.app, "POST", "/auth/login", { body: { identifier: "ravi", password: "Ravi-new-456" } });
@@ -167,7 +167,7 @@ describe.skipIf(!hasDatabase)("members, roles and audit", () => {
     expect(res.status).toBe(200);
     expect(res.body.isActive).toBe(false);
     expect((await call(t.app, "GET", "/audit-logs", { token: acc.token })).status).toBe(403);
-    const refresh = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: acc.cookie } });
+    const refresh = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: acc.cookie } });
     expect(refresh.body.error.code).toBe("SESSION_REVOKED");
   });
 

@@ -46,6 +46,8 @@ export interface TestApp {
   otp: MemoryOtpSender;
   /** Moves the API clock forward (token expiry, OTP expiry, rotation grace). */
   advance(ms: number): void;
+  /** Sets the business day the API sees (TEST_TODAY unless set; null goes back to it). */
+  setToday(date: string | null): void;
   /** Messages "sent" (recorded, not delivered). */
   messenger: LogMessenger;
   /** Superuser/owner access to the test database, for assertions that bypass RLS. */
@@ -86,12 +88,13 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
   const otp = new MemoryOtpSender();
   const messenger = new LogMessenger();
   let offsetMs = 0;
+  let today: string | null = null;
   const app = await buildApp({
     config,
     db,
     tokens: await createTokenService(config),
     otp,
-    clock: { now: () => new Date(Date.now() + offsetMs), today: () => TEST_TODAY },
+    clock: { now: () => new Date(Date.now() + offsetMs), today: () => today ?? TEST_TODAY },
     cipher: createFieldCipher(undefined, "test"),
     messenger,
     errors: new ErrorLog({ ...config.errorLog, dir: options.logDir ?? null, webSourceMapsDir: options.webSourceMapsDir ?? null }),
@@ -106,6 +109,9 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
     owner,
     advance(ms) {
       offsetMs += ms;
+    },
+    setToday(date) {
+      today = date;
     },
     async close() {
       await app.close();
@@ -193,7 +199,7 @@ export async function signup(
   if (res.status !== 201) throw new Error(`signup failed: ${JSON.stringify(res.body)}`);
   return {
     token: res.body.accessToken,
-    refreshCookie: res.cookies.find((c) => c.name === "vy_rt")!.value,
+    refreshCookie: res.cookies.find((c) => c.name === "db_rt")!.value,
     userId: res.body.user.id,
     businessId: res.body.business.id,
     mobile,

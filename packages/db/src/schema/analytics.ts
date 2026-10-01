@@ -1,14 +1,20 @@
-import { date, doublePrecision, index, integer, pgTable, primaryKey, smallint, unique, uuid } from "drizzle-orm/pg-core";
-import { money, qty, rate, tstz } from "./columns.js";
+import type { AssociationRule } from "@digitalbahi/core";
+import { sql } from "drizzle-orm";
+import { check, date, doublePrecision, index, integer, jsonb, pgTable, primaryKey, smallint, text, unique, uuid, varchar } from "drizzle-orm/pg-core";
+import { money, pk, qty, rate, timestamps, tstz } from "./columns.js";
 import { brands, productCategories, products } from "./catalog.js";
 import { employees } from "./hr.js";
 import { customers } from "./parties.js";
-import { businessId } from "./platform.js";
+import { businessId, users } from "./platform.js";
+import { invoices } from "./sales.js";
 
 /**
- * Derived tables. They are caches of the transactional tables, rebuilt by
- * background jobs from the outbox (and fully recomputable nightly), so they
- * can be dropped and regenerated at any time without data loss.
+ * Derived tables. They are caches of the transactional tables, so they can be
+ * dropped and regenerated at any time without data loss. The purchase-history
+ * tables (customer_product_stats, customer_stats) are refreshed per customer
+ * by the outbox worker a few seconds after each bill, payment or note, and all
+ * of them, with product_associations, are rebuilt by the nightly job, which
+ * first checks that what the worker kept matches a fresh computation.
  */
 
 /** Per customer x product purchase history: powers invoice suggestions (see docs/07). */
@@ -102,12 +108,95 @@ export const customerStats = pgTable("customer_stats", {
   avgDaysToPay: doublePrecision(),
   /** Share of invoices paid by their due date (0..1). */
   onTimeRatio: doublePrecision(),
-  /** Payment behaviour score, 1 (poor) to 5 (excellent). */
+  /** Payment behaviour: 4 excellent, 3 good, 2 slow, 1 risky; empty with too few settled bills to tell. */
   paymentRating: smallint(),
   /** Amount past its due date. */
   overdueAmount: money().notNull().default("0"),
+  /**
+   * The customer's own "bought together" rules, mined from their bills with
+   * stricter thresholds than the store-wide ones ("usually bought with bread
+   * by this customer").
+   */
+  associations: jsonb().$type<AssociationRule[]>().notNull().default([]),
+  /** The day these figures (and the customer's product stats) were worked out for; the window ends on it. */
+  asOf: date({ mode: "string" }),
   updatedAt: tstz().notNull().defaultNow(),
 });
+
+/**
+ * Runs of the nightly analytics job, one per business and day. Inserting the
+ * row claims the run, so two API servers never both do it. `details` keeps
+ * what it found: customers rebuilt, drift between the worker's figures and a
+ * fresh computation, association rules mined, and cached balances that do not
+ * match their ledgers.
+ */
+export const analyticsRuns = pgTable(
+  "analytics_runs",
+  {
+    id: pk(),
+    businessId: businessId(),
+    /** Which job: nightly. */
+    job: varchar({ length: 30 }).notNull(),
+    /** The business day the run is for. */
+    asOf: date({ mode: "string" }).notNull(),
+    /** running, completed or failed. */
+    status: varchar({ length: 12 }).notNull().default("running"),
+    /** When the run was claimed and began. */
+    startedAt: tstz().notNull().defaultNow(),
+    /** When it completed or failed. */
+    finishedAt: tstz(),
+    /** What the run found, as JSON (counts, drift, mismatched balances with examples). */
+    details: jsonb().notNull().default({}),
+    /** Why it failed. */
+    error: text(),
+  },
+  (t) => [
+    unique("analytics_runs_uq").on(t.businessId, t.job, t.asOf),
+    check("analytics_runs_status_chk", sql`${t.status} in ('running', 'completed', 'failed')`),
+  ],
+);
+
+/** One suggestion as it was offered or taken on the billing screen. */
+export interface SuggestionFeedbackItem {
+  productId: string;
+  /** The tab it was under: reorder, frequent, together or last_order. */
+  group: string;
+  /** Its position in the list, 1 = first. */
+  rank: number;
+  /** Reason codes shown with it (due, overdue, frequent ...). */
+  reasons: string[];
+}
+
+/**
+ * What the billing screen offered and what was taken, one row per bill being
+ * made (the app makes the id, so a resend replaces instead of adding). Used to
+ * measure whether suggestions help: acceptance by reason and position, and the
+ * share of bill lines that came from them.
+ */
+export const suggestionFeedback = pgTable(
+  "suggestion_feedback",
+  {
+    /** Made by the app for the bill being made. */
+    id: uuid().primaryKey(),
+    businessId: businessId(),
+    /** The customer the bill was for. */
+    customerId: uuid()
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    /** The person billing. */
+    userId: uuid()
+      .notNull()
+      .references(() => users.id),
+    /** The bill it ended in, once saved. */
+    invoiceId: uuid().references(() => invoices.id),
+    /** Suggestions offered (first appearance of each product, up to 50). */
+    shown: jsonb().$type<SuggestionFeedbackItem[]>().notNull().default([]),
+    /** Suggestions added to the bill. */
+    added: jsonb().$type<SuggestionFeedbackItem[]>().notNull().default([]),
+    ...timestamps,
+  },
+  (t) => [index("suggestion_feedback_created_idx").on(t.businessId, t.createdAt)],
+);
 
 /**
  * Daily sales per product (and brand/category snapshot): product-wise,

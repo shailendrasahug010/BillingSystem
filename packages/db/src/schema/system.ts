@@ -137,7 +137,11 @@ export const outboxEvents = pgTable(
     processedAt: tstz(),
     createdAt: tstz().notNull().defaultNow(),
   },
-  (t) => [index("outbox_events_pending_idx").on(t.availableAt).where(sql`${t.processedAt} is null`)],
+  (t) => [
+    index("outbox_events_pending_idx").on(t.availableAt).where(sql`${t.processedAt} is null`),
+    // The worker takes one business's waiting events in order.
+    index("outbox_events_business_pending_idx").on(t.businessId, t.id).where(sql`${t.processedAt} is null`),
+  ],
 );
 
 /**

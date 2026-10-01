@@ -1,6 +1,6 @@
 # G. Invoice intelligence: how purchase-history suggestions work
 
-Implementation: `packages/core/src/suggestions/` (`stats.ts`, `associations.ts`, `engine.ts`) and `packages/core/src/search/products.ts`, covered by `packages/core/test/suggestions-search.test.ts`. The prototype's invoice screen runs this exact code on six months of sample history.
+Implementation: `packages/core/src/suggestions/` (`stats.ts`, `associations.ts`, `engine.ts`) and `packages/core/src/search/products.ts`, covered by `packages/core/test/suggestions-search.test.ts`; on the server (Phase 5.1) `apps/api/src/services/purchase-history.ts` (stored figures), `outbox-worker.ts` and `nightly-analytics.ts`, with the endpoints in `apps/api/src/modules/invoices/suggestions.ts`, covered by `apps/api/test/purchase-history.test.ts` and the browser flow `apps/web/e2e/purchase-history-flow.mjs`. The prototype's invoice screen runs the same core code on six months of sample history.
 
 ## 1. Promise to the user
 
@@ -27,8 +27,15 @@ flowchart LR
 ```
 
 * The invoice screen never scans years of invoice lines. It reads **one small, indexed table** (`customer_product_stats`, typically 20–200 rows per customer) plus a few association rows.
-* Stats update incrementally a few seconds after each invoice (outbox worker) and are rebuilt from scratch every night, so a bug or missed event self-heals.
-* Salespeople's phones sync stats for customers on today's route, so suggestions work offline.
+* Stats update a few seconds after each invoice (outbox worker) and are rebuilt from scratch every night, so a bug or missed event self-heals.
+* Salespeople's phones sync stats for customers on today's route, so suggestions work offline. *(Planned with offline sync, 5.3/5.4; today the device keeps the insight of the customers it opened.)*
+
+**As built (Phase 5.1).**
+
+* **Worker.** Every few seconds (`OUTBOX_WORKER_SECONDS`, default 5) the API takes each business's waiting `outbox_events` (`FOR UPDATE SKIP LOCKED`, so several servers can share the work). For an `invoice.posted` / `invoice.cancelled`, a payment received, cancelled or bounced, and a credit or debit note posted or cancelled, it works out that customer's figures again — **whole**, from their posted bills in the window, with the same `computeCustomerStats` the app runs — and replaces their `customer_product_stats` rows and `customer_stats` row (with purchase summary, sales, overdue amount, payment behaviour, the customer's own "bought together" rules and `as_of`, the day they are for). A per-customer advisory lock keeps two writers apart. A customer that fails is rolled back alone (savepoint) and their events are tried again after 1, 2, 4 … minutes, then set aside after 8 failures with the error kept; every failure is in the error log.
+* **Reading.** `GET /customers/:id/insight` (the billing screen) and `/suggestions` use the stored figures while they are at most two days old (`source: "stored"`), and otherwise work them out on the spot (`source: "live"`, nothing written). Both go through the same rounding as the columns, so the two give identical answers. For a customer with 360 bills of 15 lines a year, `/suggestions` took 7 ms at the 95th percentile from stored figures against 95 ms worked out live (`/insight`: 16 ms against 111 ms), on a laptop-class container.
+* **Nightly** (after `NIGHTLY_ANALYTICS_HOUR`, default 2:00, in each business's time zone; claimed by inserting the business's `analytics_runs` row for the day, so it runs once even with several servers): it first handles the business's waiting events, then for every customer with stored figures **works them out again for the day they were stored for and compares** (drift check — any difference means the worker missed something), rebuilds everyone for today (the window moves on daily), mines the store-wide rules (last 180 days, at most 50,000 bills) into `product_associations`, checks cached balances against their ledgers (`customers.balance` and `suppliers.balance` against `party_ledger_entries`, `stock_balances` against `stock_ledger`), and deletes processed outbox events older than 30 days. Drift and mismatches are kept in `analytics_runs.details` with examples and written to the error log; nothing is silently "fixed" but the derived figures. The 360-bill business above took 0.2 s.
+* Returns (credit notes) do not lower the quantities bought; a return or a payment only refreshes the customer's figures.
 
 ## 3. Per-customer statistics (`computeCustomerStats`)
 
@@ -86,7 +93,7 @@ Nightly, over all invoice baskets of the last 180 days (baskets larger than 60 l
 * `confidence(A→B) = baskets with A and B / baskets with A` — "of customers who buy A, how many also buy B"
 * `lift(A→B) = confidence / (baskets with B / all baskets)` — > 1 means a real affinity, not just that B is popular
 
-Kept only if `pairCount ≥ 5`, `confidence ≥ 0.25`, `lift ≥ 1.3`; at most 10 related products per product (highest lift × confidence). The same miner also runs on **each customer's own invoices** with stricter thresholds to find their personal combinations ("usually bought with bread by this customer").
+Kept only if `pairCount ≥ 5`, `confidence ≥ 0.25`, `lift ≥ 1.3`; at most 10 related products per product (highest lift × confidence). The same miner also runs on **each customer's own invoices** with stricter thresholds (`pairCount ≥ 3`, `confidence ≥ 0.6`, `lift ≥ 1.05`; kept in `customer_stats.associations`) to find their personal combinations ("usually bought with bread by this customer"). Until the first nightly run, the store-wide rules are mined on request from the last 3,000 bills and kept for 15 minutes.
 
 ## 6. Merging and ranking (`suggestProducts`)
 
@@ -121,7 +128,7 @@ Every product the customer buys repeatedly (≥ 2 orders), most urgent first (ov
 | Parle-G | 20 | 6 days ago | 13 days | 24 (two cases of 12) | Upcoming |
 | Coca-Cola | 12 | 31 days ago | 7 days | 12 | Lapsed |
 
-Each row has an **Add** button. It appears in the invoice suggestions (Reorder tab → table view), on the customer profile, and in the salesperson's route plan.
+Each row has an **Add** button. It appears in the invoice suggestions (Reorder tab → table view), on the customer profile, and in the salesperson's route plan. The API serves it per customer (`GET /customers/:id/reorder`) and across customers (`GET /reorder/due?routeId=&salespersonId=`: everyone with a due, overdue or lapsed habit, most urgent first, from the stored figures), which the route plan (5.4) will show.
 
 ## 8. Product search ranking (`searchProducts`)
 
@@ -166,12 +173,14 @@ Reasons are stored and transmitted as `{ code, params }` and rendered with trans
 | `suggestions.window_days` | 365 |
 | `suggestions.weights` | reorder 1 · frequent 0.6 · together 0.5 · last_order 0.3 |
 | Frequent threshold | order share ≥ 0.25 and ≥ 2 orders |
-| Association thresholds | pair count ≥ 5, confidence ≥ 0.25, lift ≥ 1.3 |
+| Association thresholds | pair count ≥ 5, confidence ≥ 0.25, lift ≥ 1.3 (a customer's own: ≥ 3, ≥ 0.6, ≥ 1.05) |
 | Out-of-stock factor | 0.5 |
+| `OUTBOX_WORKER_SECONDS` (server) | 5 (0 = off on this server) |
+| `NIGHTLY_SCHEDULER_SECONDS` · `NIGHTLY_ANALYTICS_HOUR` (server) | 600 · 2 |
 
 ## 12. Measuring whether it helps
 
-`POST /suggestions/feedback` records impressions and adds (product, reason, rank). Tracked per business: acceptance rate by reason and rank, share of invoice lines added from suggestions, time to complete an invoice, and — the real goal — lines per invoice and reactivation of lapsed habits. Weights are tuned from these numbers per business; a learned model (e.g. gradient-boosted ranking on the same features) can replace the weighted sum later behind the same provider interface, as long as it still produces reasons.
+`POST /suggestions/feedback` records impressions and adds (product, reason, rank). *Built (5.1):* the billing screen keeps, per bill, the suggestions that were on screen (first appearance of each, with its position in the whole list and its reason codes) and the ones added from them, and sends both once the bill is saved online (none for a bill saved offline or not saved; a taken suggestion later removed from the bill does not count). One `suggestion_feedback` row per bill; `GET /suggestions/feedback/summary?from=&to=` gives offered, taken and acceptance by reason and by position (1–3, 4–6, 7–12, 13+) and the share of bill lines that came from suggestions. Planned: time to complete an invoice and — the real goal — lines per invoice and reactivation of lapsed habits, and weights tuned per business from these numbers (today they are the `suggestions.weights` setting); a learned model (e.g. gradient-boosted ranking on the same features) can replace the weighted sum later behind the same provider interface, as long as it still produces reasons.
 
 ## 13. Cold start and edge cases
 

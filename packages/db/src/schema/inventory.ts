@@ -65,8 +65,8 @@ export const stockLedger = pgTable(
 /**
  * Current stock per product / warehouse / batch: a cache of the ledger updated
  * in the same transaction (SELECT ... FOR UPDATE on the row, then insert the
- * ledger row with the new balance). Reads are O(1); a nightly job re-checks
- * that it equals SUM(qty_in - qty_out).
+ * ledger row with the new balance). Reads are O(1); the nightly analytics job
+ * checks that it equals SUM(qty_in - qty_out) and reports any difference.
  */
 export const stockBalances = pgTable(
   "stock_balances",
