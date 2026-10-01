@@ -116,7 +116,8 @@ if (args.includes("--exe")) {
   // Plain (not shell) call: the paths may have spaces.
   // makensis on Linux crashes on non-ASCII file names (a dependency's test fixture has one) unless the locale is UTF-8.
   const env = process.platform === "win32" ? process.env : { ...process.env, LC_ALL: "C.UTF-8" };
-  execFileSync(makensis, [`-DVERSION=${VERSION}`, `-DBUNDLE=${BUNDLE}`, `-DOUTFILE=${exe}`, path.join(REPO, "installer/windows/DigitalBahi.nsi")], { stdio: "inherit", env });
+  // The files to pack, with this system's path separator (Windows makensis finds nothing behind a "/").
+  execFileSync(makensis, [`-DVERSION=${VERSION}`, `-DBUNDLE_FILES=${path.join(BUNDLE, "*.*")}`, `-DOUTFILE=${exe}`, path.join(REPO, "installer/windows/DigitalBahi.nsi")], { stdio: "inherit", env });
   console.log(`\n${exe}`);
 }
 console.log(`\nDone: ${BUNDLE}`);

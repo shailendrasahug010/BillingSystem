@@ -53,10 +53,18 @@ jobs:
       - name: Build DigitalBahi-Setup.exe
         run: node installer/build-bundle.mjs --exe
 
+      # Windows PowerShell, as when someone double-clicks the shortcut (PowerShell 7 as the parent
+      # would hand its own module paths down to the Windows PowerShell that DigitalBahi.cmd starts).
       - name: Install, start, use, restart and stop it
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+          function Remove-NodeFromPath {
+            $env:Path = ($env:Path -split ';' | Where-Object {
+              if (-not $_) { return $false }
+              try { -not (Test-Path -LiteralPath (Join-Path $_ 'node.exe')) } catch { $true }
+            }) -join ';'
+          }
           $exe = (Get-ChildItem dist-installer\DigitalBahi-Setup-*.exe | Select-Object -First 1).FullName
           Start-Process -FilePath $exe -ArgumentList '/S' -Wait
           $app = Join-Path $env:LOCALAPPDATA 'Programs\DigitalBahi'
@@ -67,7 +75,7 @@ jobs:
           $env:DIGITALBAHI_NO_PAUSE = '1'
           # As on a computer without Node.js (this one's PostgreSQL 14 is too old, so it is downloaded too).
           $withNode = $env:Path
-          $env:Path = ($env:Path -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'node.exe')) }) -join ';'
+          Remove-NodeFromPath
           function Show-Logs { Get-ChildItem "$data\logs" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 } }
           & "$app\DigitalBahi.cmd" start --no-browser
           if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'start failed' }
@@ -78,7 +86,7 @@ jobs:
           node installer/smoke-test.mjs
           if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'smoke test failed' }
 
-          $env:Path = ($env:Path -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'node.exe')) }) -join ';'
+          Remove-NodeFromPath
           & "$app\DigitalBahi.cmd" restart --no-browser
           if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'restart failed' }
           & "$app\DigitalBahi.cmd" status
@@ -91,6 +99,8 @@ jobs:
           Start-Process -FilePath "$app\Uninstall.exe" -ArgumentList '/S', "_?=$app" -Wait
           if (-not (Test-Path "$data\pgdata\PG_VERSION")) { throw 'the data was deleted' }
           if (Test-Path "$app\api") { throw 'the program was not removed' }
+          # The step's result is the last program's exit code otherwise ("status" above: 3, stopped).
+          exit 0
 
       - uses: actions/upload-artifact@v4
         with:

@@ -4,7 +4,7 @@
 ; Node.js and PostgreSQL when the computer has none and sets up the database.
 ;
 ; Built by installer/build-bundle.mjs --target win32-x64 --exe, which passes:
-;   -DVERSION=0.1.0 -DBUNDLE=<the built folder> -DOUTFILE=<the .exe>
+;   -DVERSION=0.1.0 -DBUNDLE_FILES=<the built folder>\*.* -DOUTFILE=<the .exe>
 
 Unicode true
 !include "MUI2.nsh"
@@ -13,8 +13,8 @@ Unicode true
 !ifndef VERSION
   !define VERSION "0.0.0"
 !endif
-!ifndef BUNDLE
-  !error "BUNDLE (the folder build-bundle.mjs made) is required"
+!ifndef BUNDLE_FILES
+  !error "BUNDLE_FILES (the files of the folder build-bundle.mjs made) is required"
 !endif
 !ifndef OUTFILE
   !define OUTFILE "DigitalBahi-Setup.exe"
@@ -73,7 +73,7 @@ Section "Digital Bahi"
   fresh:
 
   SetOutPath "$INSTDIR"
-  File /r "${BUNDLE}/*.*"
+  File /r "${BUNDLE_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   CreateDirectory "$SMPROGRAMS\Digital Bahi"
