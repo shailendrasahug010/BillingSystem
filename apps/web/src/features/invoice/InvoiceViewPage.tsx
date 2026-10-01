@@ -23,6 +23,7 @@ import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { InvoiceDocument } from "./InvoiceDocument";
 import { EInvoiceCard } from "./EInvoiceCard";
 import { ShippingBillCard } from "./ShippingBillCard";
+import { InvoiceReviewCard } from "./InvoiceReview";
 
 export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const { t, locale, money } = useI18n();
@@ -90,6 +91,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
               {t("offline.deviceCopy")}
             </Badge>
           )}
+          {live.data?.reviewStatus === "needs_review" && (
+            <Badge tone="warn" icon={<CloudOff size={13} />}>
+              {t("invoice.review.badge")}
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
@@ -123,6 +129,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
           )}
         </div>
       </div>
+      {LIVE && live.data?.reviewStatus && !deviceCopyAt && (
+        <div className="no-print">
+          <InvoiceReviewCard invoice={live.data} cancelled={status === "cancelled"} />
+        </div>
+      )}
       {LIVE && live.data && !deviceCopyAt && (
         <div className="no-print">
           <EInvoiceCard invoice={live.data} cancelled={status === "cancelled"} />

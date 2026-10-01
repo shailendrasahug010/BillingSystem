@@ -162,7 +162,12 @@ export const InvoiceListQuery = PageQuery.extend({
   to: IsoDate.optional(),
   status: z.enum(["posted", "cancelled", "all"]).default("all"),
   paymentStatus: z.enum(["unpaid", "partial", "paid", "open", "all"]).default("all"),
+  /** Bills made offline that were held for a manager (needs_review), or those already reviewed. */
+  review: z.enum(["needs_review", "reviewed"]).optional(),
 });
+
+/** Marks a bill held for review as reviewed (what was done about it, optionally). */
+export const InvoiceReviewBody = z.strictObject({ note: z.string().trim().max(500).optional() });
 
 export const PurchaseLineInput = z.strictObject({
   productId: Id,

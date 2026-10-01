@@ -103,3 +103,5 @@ export const gstPeriodStatus = pgEnum("gst_period_status", ["open", "locked", "f
 export const notificationSeverity = pgEnum("notification_severity", ["info", "success", "warning", "critical"]);
 export const jobStatus = pgEnum("job_status", ["queued", "running", "completed", "failed"]);
 export const syncMutationStatus = pgEnum("sync_mutation_status", ["applied", "rejected", "conflict"]);
+/** A bill made offline held for a manager (it broke a rule by the time it reached the server), then marked reviewed. */
+export const invoiceReviewStatus = pgEnum("invoice_review_status", ["needs_review", "reviewed"]);

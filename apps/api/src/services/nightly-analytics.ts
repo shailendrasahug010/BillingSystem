@@ -5,6 +5,7 @@ import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
 import { NOTIFICATION_KEEP_DAYS } from "./notifications.js";
+import { SYNC_KEEP_DAYS } from "./sync-changes.js";
 import { processBusinessOutbox, rootMessage } from "./outbox-worker.js";
 import {
   customerFigures,
@@ -32,8 +33,9 @@ import { getSettings } from "./settings.js";
  *  5. Checks the cached balances against their ledgers: customers.balance and
  *     suppliers.balance against party_ledger_entries, stock_balances against
  *     stock_ledger. Mismatches are reported, not changed.
- *  6. Deletes processed outbox events older than OUTBOX_KEEP_DAYS, and
- *     notifications older than NOTIFICATION_KEEP_DAYS.
+ *  6. Deletes processed outbox events older than OUTBOX_KEEP_DAYS,
+ *     notifications older than NOTIFICATION_KEEP_DAYS and the pull feed's
+ *     changes older than SYNC_KEEP_DAYS.
  *
  * What it found is kept in analytics_runs.details; drift and mismatches are
  * also written to the error log, where operators look.
@@ -70,6 +72,8 @@ export interface NightlyDetails {
   outbox: { processed: number; failed: number; deleted: number };
   /** Notifications older than NOTIFICATION_KEEP_DAYS deleted. */
   notificationsDeleted: number;
+  /** Pull-feed changes older than SYNC_KEEP_DAYS deleted. */
+  syncChangesDeleted: number;
   customers: number;
   statsRows: number;
   drift: DriftReport;
@@ -184,10 +188,15 @@ export async function nightlyForBusiness(deps: AppDeps, businessId: string, toda
       .delete(schema.notifications)
       .where(and(eq(schema.notifications.businessId, businessId), lt(schema.notifications.createdAt, new Date(deps.clock.now().getTime() - NOTIFICATION_KEEP_DAYS * 86_400_000).toISOString())))
       .returning({ id: schema.notifications.id });
+    const oldChanges = await tx
+      .delete(schema.syncChanges)
+      .where(and(eq(schema.syncChanges.businessId, businessId), lt(schema.syncChanges.createdAt, new Date(deps.clock.now().getTime() - SYNC_KEEP_DAYS * 86_400_000).toISOString())))
+      .returning({ id: schema.syncChanges.entityId });
     return {
       asOf: today,
       outbox: { ...outbox, deleted: deleted.length },
       notificationsDeleted: oldNotifications.length,
+      syncChangesDeleted: oldChanges.length,
       customers: customers.length,
       statsRows,
       drift,

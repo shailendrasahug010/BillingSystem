@@ -315,6 +315,7 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
                     )}
                     {s.serverTotal > 0 && <span className="num ml-auto">{money(s.serverTotal)}</span>}
                     {kind === "invoice" && Math.abs(s.serverTotal - s.total) >= 0.01 && <span className="w-full text-warn">{t("offline.totalChanged", { amount: money(s.serverTotal) })}</span>}
+                    {s.held && <span className="w-full text-warn">{t("offline.heldForReview")}</span>}
                     <span className="sr-only">{date(s.syncedAt.slice(0, 10))}</span>
                   </li>
                 );

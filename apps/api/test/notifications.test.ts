@@ -257,7 +257,9 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       ...["title", "body", "withExpired"].map((k) => `notifications.expiring_stock.${k}`),
       ...["pending_orders", "to_pack", "to_dispatch", "leave_request"].map((k) => `notifications.${k}.title`),
       ...["title", "noRun", "draft", "finalized"].map((k) => `notifications.salary_due.${k}`),
-      ...["order_waiting", "order_to_pack", "order_to_dispatch", "leave_requested", "leave_approved", "leave_rejected"].map((k) => `notifications.events.${k}`),
+      ...["order_waiting", "order_to_pack", "order_to_dispatch", "leave_requested", "leave_approved", "leave_rejected", "offline_review", "offline_reviewed"].map((k) => `notifications.events.${k}`),
+      // Why a bill made offline is held (the body of offline_review).
+      ...["price_changed", "customer_inactive", "product_inactive", "period_locked", "late_sync", "stock_short", "credit_limit", "credit_overdue"].map((k) => `notifications.review.${k}`),
     ];
 
     it("exist in every language the app has", () => {

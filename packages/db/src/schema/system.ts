@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, date, index, integer, jsonb, pgTable, primaryKey, smallint, text, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, date, index, integer, jsonb, pgTable, primaryKey, smallint, text, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import { pk, timestamps, tstz } from "./columns.js";
 import { jobStatus, notificationSeverity, syncMutationStatus } from "./enums.js";
 import { businessId, devices, files, users } from "./platform.js";
@@ -212,6 +212,35 @@ export const syncMutations = pgTable(
     receivedAt: tstz().notNull().defaultNow(),
   },
   (t) => [index("sync_mutations_device_idx").on(t.deviceId, t.receivedAt)],
+);
+
+/** A 64-bit transaction id (PostgreSQL's xid8), as text. */
+const xid8 = customType<{ data: string }>({ dataType: () => "xid8" });
+
+/**
+ * The pull feed's change log (Phase 5.3): which products, customers and
+ * suppliers changed, by transaction. Triggers on those tables (and on prices,
+ * barcodes, units and stock balances, for their product) add a row per record
+ * per transaction; nothing updates a row, so concurrent bills never wait on
+ * it. A device asks for everything from transactions at or after the oldest
+ * one still running when it last asked (GET /sync/pull), so a change that
+ * commits late is never missed. Rows older than 30 days are deleted nightly;
+ * a device that last pulled before that reloads the whole business.
+ */
+export const syncChanges = pgTable(
+  "sync_changes",
+  {
+    businessId: businessId(),
+    /** What changed: product, customer or supplier. */
+    entity: varchar({ length: 20 }).notNull(),
+    /** The record (for a price, barcode, unit or stock balance: its product). */
+    entityId: uuid().notNull(),
+    /** The transaction that changed it. */
+    xid: xid8().notNull().default(sql`pg_current_xact_id()`),
+    /** When, for deleting old rows. */
+    createdAt: tstz().notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.businessId, t.xid, t.entity, t.entityId] }), index("sync_changes_created_idx").on(t.createdAt)],
 );
 
 export const backups = pgTable(

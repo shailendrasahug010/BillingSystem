@@ -159,6 +159,8 @@ export interface SyncedEntry {
   serverNumber: string;
   serverTotal: number;
   syncedAt: string;
+  /** A bill the server took but held for a manager (it broke a rule by the time it arrived). */
+  held?: boolean;
 }
 
 export interface OfflineState {
@@ -423,8 +425,17 @@ async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt"
   switch (kindOf(e)) {
     case "invoice": {
       const bill = e as OutboxEntry;
-      const res = await api.post<{ id: string; invoiceNumber: string; grandTotal: string }>("/invoices", bill.body, { idempotencyKey: bill.id });
-      return { kind: "invoice", number: bill.number, customerName: bill.customerName, total: bill.total, serverId: res.id, serverNumber: res.invoiceNumber, serverTotal: Number(res.grandTotal) };
+      const res = await api.post<{ id: string; invoiceNumber: string; grandTotal: string; reviewStatus?: string | null }>("/invoices", bill.body, { idempotencyKey: bill.id });
+      return {
+        kind: "invoice",
+        number: bill.number,
+        customerName: bill.customerName,
+        total: bill.total,
+        serverId: res.id,
+        serverNumber: res.invoiceNumber,
+        serverTotal: Number(res.grandTotal),
+        ...(res.reviewStatus === "needs_review" ? { held: true } : {}),
+      };
     }
     case "payment": {
       const p = e as PaymentEntry;

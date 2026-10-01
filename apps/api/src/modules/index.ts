@@ -22,6 +22,7 @@ import { invoicesModule } from "./invoices/routes.js";
 import { suggestionsModule } from "./invoices/suggestions.js";
 import { notesModule } from "./notes/routes.js";
 import { notificationsModule } from "./notifications/routes.js";
+import { syncModule } from "./sync/routes.js";
 import { ordersModule } from "./orders/routes.js";
 import { partiesModule } from "./parties/routes.js";
 import { employeesModule } from "./people/employees.js";
@@ -60,6 +61,7 @@ export const MODULES: ApiModule[] = [
   messagingModule,
   messagingStatusModule,
   notificationsModule,
+  syncModule,
   backupsModule,
   ordersModule,
   logisticsModule,

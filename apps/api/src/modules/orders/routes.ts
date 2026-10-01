@@ -93,7 +93,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
       const today = deps.clock.today(ctx.timeZone);
       if (body.expectedDeliveryDate && body.expectedDeliveryDate < (body.orderDate ?? today)) throw badRequest("DELIVERY_BEFORE_ORDER", {}, "expectedDeliveryDate");
       // Priced by the same code as an invoice on the order date.
-      const sale = await prepareSale(tx, ctx, { customerId: body.customerId, invoiceDate: body.orderDate, lines: body.lines, charges: [] } as z.output<typeof InvoiceBody>, today);
+      const sale = await prepareSale(tx, ctx, { customerId: body.customerId, invoiceDate: body.orderDate, lines: body.lines, charges: [] } as z.output<typeof InvoiceBody>, today, { order: true });
       const t = sale.totals;
       const numbering = await nextDocumentNumber(tx, ctx.businessId, "sales_order", sale.invoiceDate, sale.business.financialYearStartMonth);
       const id = uuidv7();

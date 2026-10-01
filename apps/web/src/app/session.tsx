@@ -2,7 +2,7 @@ import type { BusinessSummary, MeResponse, SessionResponse } from "@digitalbahi/
 import { todayIn } from "@digitalbahi/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { applyMe, applyWorkspace, hydrateWorkspace, resetWorkspace, type WorkspaceData } from "../data/live";
+import { applyMe, applyWorkspace, loadWorkspace, pullWorkspace, resetWorkspace, type KeptWorkspace } from "../data/live";
 import { LIVE } from "../data/source";
 import { api, ApiError, onSessionChange, refreshSession, setSession } from "../lib/api";
 import { ensureDevice, removedDevices } from "../offline/device";
@@ -57,7 +57,25 @@ const SessionContext = createContext<SessionValue | null>(null);
  * (encrypted, opened with the person's device key from the server),
  * registers the device for offline bills and sends any work waiting.
  */
-async function keepOnDevice(res: SessionResponse, me: MeResponse, data: WorkspaceData, password?: string): Promise<void> {
+/** The business as last loaded, with where its pull feed stopped (to bring it up to date with only what changed). */
+let kept: KeptWorkspace | undefined;
+
+/** The copy saved on this device for this person and business, opened with the server's device key. */
+async function savedCopy(userId: string, businessId: string): Promise<KeptWorkspace | undefined> {
+  if (kept) return kept;
+  if (!(await unlockOnline(userId))) return undefined;
+  const saved = await loadSnapshot(userId, businessId);
+  return saved?.feed ? { data: saved.data, feed: saved.feed } : undefined;
+}
+
+/** Loads the business (only what changed, when a copy is kept) and remembers it for the next pull. */
+async function bringUpToDate(me: MeResponse, userId: string): Promise<KeptWorkspace> {
+  const base = await savedCopy(userId, me.business!.id);
+  kept = await loadWorkspace(me, base?.data && base.feed ? base : undefined);
+  return kept;
+}
+
+async function keepOnDevice(res: SessionResponse, me: MeResponse, current: KeptWorkspace, password?: string): Promise<void> {
   const userId = res.user.id;
   const businessId = me.business!.id;
   if (await unlockOnline(userId)) {
@@ -72,7 +90,7 @@ async function keepOnDevice(res: SessionResponse, me: MeResponse, data: Workspac
   // Recent bills for opening and returns without a connection, fetched in the background.
   await openDeviceDocuments(userId, businessId);
   void refreshDeviceDocuments(true);
-  void saveSnapshot({ user: res.user, business: res.business ?? me.business!, businesses: res.businesses, me, data, savedAt: new Date().toISOString() });
+  void saveSnapshot({ user: res.user, business: res.business ?? me.business!, businesses: res.businesses, me, data: current.data, ...(current.feed ? { feed: current.feed } : {}), savedAt: new Date().toISOString() });
   // Every device that keeps a copy is registered, so the owner can remove it (a series only for those who bill).
   void ensureDevice(userId, businessId).then(refreshDevice);
   void syncNow();
@@ -84,12 +102,17 @@ async function openSaved(snapshot: Snapshot): Promise<MeResponse> {
   const me = { ...snapshot.me, today: todayIn(snapshot.me.business!.timeZone) };
   applyMe(me);
   applyWorkspace(snapshot.data);
+  // Back online, only what changed since this copy is loaded.
+  kept = { data: snapshot.data, ...(snapshot.feed ? { feed: snapshot.feed } : {}) };
   await setOfflineScope(snapshot.user.id, snapshot.business.id);
   setOfflineMode(true);
   applyPendingEffects();
   await openDeviceDocuments(snapshot.user.id, snapshot.business.id);
   return me;
 }
+
+/** How often an open app asks what changed. */
+const PULL_EVERY_MS = 3 * 60_000;
 
 const offlineSession = (s: Snapshot): SessionResponse => ({ accessToken: "", expiresIn: 0, user: s.user, business: s.business, businesses: s.businesses });
 
@@ -162,6 +185,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         lockVault();
         clearOfflineScope();
         resetWorkspace();
+        kept = undefined;
         setMe(null);
         setStatus("signed-out");
         return;
@@ -169,6 +193,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!res.business) {
         clearOfflineScope();
         resetWorkspace();
+        kept = undefined;
         setMe(null);
         setStatus("no-business");
         return;
@@ -180,8 +205,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           setStatus("no-business");
           return;
         }
-        const data = await hydrateWorkspace(profile);
-        await keepOnDevice(res, profile, data, password);
+        // Another person or business: their copy is not this one.
+        if (kept && (current.current.session?.user.id !== res.user.id || current.current.me?.business?.id !== profile.business.id)) kept = undefined;
+        const loaded = await bringUpToDate(profile, res.user.id);
+        await keepOnDevice(res, profile, loaded, password);
         setMe(profile);
         setError(null);
         setStatus("ready");
@@ -214,9 +241,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!res || !res.business || res.user.id !== was?.user.id || res.business.id !== was.business?.id) return enter(res);
     try {
       const profile = await api.get<MeResponse>("/me");
-      const data = await hydrateWorkspace(profile);
+      const loaded = await bringUpToDate(profile, res.user.id);
       offlineMode.current = false;
-      await keepOnDevice(res, profile, data);
+      await keepOnDevice(res, profile, loaded);
       setSessionState(res);
       setMe(profile);
       void queryClient.invalidateQueries();
@@ -304,13 +331,49 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       onSynced(() => {
         const { session: s, me: m } = current.current;
         if (!s || !m || offlineMode.current) return;
-        void hydrateWorkspace(m)
-          .then((data) => keepOnDevice(s, m, data))
+        void bringUpToDate(m, s.user.id)
+          .then((loaded) => keepOnDevice(s, m, loaded))
           .then(() => queryClient.invalidateQueries())
           .catch(() => undefined);
       }),
     [],
   );
+
+  // While online: what others changed (prices, stock, balances, new customers) comes every few minutes and when the app is shown again.
+  useEffect(() => {
+    if (!LIVE) return;
+    let running = false;
+    const pull = async () => {
+      const { session: s, me: m } = current.current;
+      if (running || !s?.business || !m?.business || offlineMode.current || !kept?.feed || document.visibilityState !== "visible") return;
+      running = true;
+      try {
+        const next = await pullWorkspace(kept);
+        if (!next) {
+          kept = await loadWorkspace(m);
+        } else {
+          kept = { data: next.data, ...(next.feed ? { feed: next.feed } : {}) };
+          if (!next.changed) return;
+          applyWorkspace(next.data);
+        }
+        applyPendingEffects();
+        void saveSnapshot({ user: s.user, business: s.business, businesses: s.businesses, me: m, data: kept.data, ...(kept.feed ? { feed: kept.feed } : {}), savedAt: new Date().toISOString() });
+      } catch {
+        // No connection just now: the next round tries again.
+      } finally {
+        running = false;
+      }
+    };
+    const timer = setInterval(() => void pull(), PULL_EVERY_MS);
+    const shown = () => {
+      if (document.visibilityState === "visible") void pull();
+    };
+    document.addEventListener("visibilitychange", shown);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", shown);
+    };
+  }, []);
 
   /**
    * Moves into a session. With the password the person just typed, their

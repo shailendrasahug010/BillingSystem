@@ -21,6 +21,7 @@ import {
   deliveryStatus,
   documentKind,
   documentStatus,
+  invoiceReviewStatus,
   orderStatus,
   packingStatus,
   paymentStatus,
@@ -219,11 +220,29 @@ export const invoices = pgTable(
     deviceId: uuid().references(() => devices.id),
     /** Idempotency key from the client (offline sync retries cannot create duplicates). */
     clientId: uuid(),
+    /**
+     * A bill made offline that broke a rule by the time it reached the server
+     * (a price changed meanwhile, the customer or a product was made inactive,
+     * its GST month was locked, it was sent over a week late, or stock or
+     * credit went past a limit set to block) is accepted, as the customer
+     * already has it, and held for a manager: needs_review until someone with
+     * invoice.review marks it reviewed. Null for every other bill.
+     */
+    reviewStatus: invoiceReviewStatus(),
+    /** Why it was held: [{code, params}], codes price_changed, customer_inactive, product_inactive, period_locked, late_sync, stock_short, credit_limit, credit_overdue. */
+    reviewReasons: jsonb().$type<Array<{ code: string; params?: Record<string, string | number> }>>(),
+    /** User who marked it reviewed (or cancelled it while it was held). */
+    reviewedBy: uuid(),
+    /** When it was marked reviewed. */
+    reviewedAt: tstz(),
+    /** What the reviewer noted (for example the credit note issued for it). */
+    reviewNote: text(),
     ...auditColumns,
     ...versioned,
   },
   (t) => [
     unique("invoices_number_uq").on(t.businessId, t.financialYear, t.invoiceNumber),
+    index("invoices_review_idx").on(t.businessId, t.postedAt).where(sql`${t.reviewStatus} = 'needs_review'`),
     uniqueIndex("invoices_client_id_uq").on(t.businessId, t.clientId).where(sql`${t.clientId} is not null`),
     index("invoices_customer_idx").on(t.businessId, t.customerId, t.invoiceDate),
     index("invoices_date_idx").on(t.businessId, t.invoiceDate),

@@ -141,6 +141,99 @@ async function partyLedger(tx: Tx, ctx: RequestCtx, kind: PartyKind, id: string,
   };
 }
 
+type CustomerRowDb = {
+  id: string;
+  code: string;
+  name: string;
+  business_name: string | null;
+  customer_type: string;
+  mobile: string | null;
+  city: string | null;
+  gstin: string | null;
+  balance: string;
+  credit_limit: string | null;
+  credit_days: number;
+  route_id: string | null;
+  state_code: string;
+  address_line1: string | null;
+  pincode: string | null;
+  price_level_id: string | null;
+  category_id: string | null;
+  is_active: boolean;
+  version: number;
+  created_at: string;
+  overdue: string;
+  gst_registration: string;
+};
+
+/**
+ * Customers as the list (and the device's copy) shows them, with what is
+ * overdue on `today`. `rest` is the WHERE condition on `c`, with any ORDER BY
+ * and LIMIT after it.
+ */
+export async function customerRows(tx: Tx, today: string, rest: SQL) {
+  const rows = (
+    await tx.execute<CustomerRowDb>(sql`
+      select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
+             c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
+             c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue
+      from customers c
+      left join lateral (
+        select sum(i.balance_due) as amount from invoices i
+        where i.customer_id = c.id and i.status = 'posted' and i.balance_due > 0 and i.due_date < ${today}
+      ) od on true
+      where ${rest}`)
+  ).rows;
+  return rows.map((c) => ({
+    id: c.id,
+    code: c.code,
+    name: c.name,
+    businessName: c.business_name,
+    customerType: c.customer_type,
+    /** regular, consumer, sez, overseas…: exports and supplies to SEZ are billed differently. */
+    gstRegistration: c.gst_registration,
+    mobile: c.mobile,
+    city: c.city,
+    gstin: c.gstin,
+    balance: c.balance,
+    overdue: c.overdue,
+    creditLimit: c.credit_limit,
+    creditDays: c.credit_days,
+    routeId: c.route_id,
+    stateCode: c.state_code,
+    addressLine1: c.address_line1,
+    pincode: c.pincode,
+    priceLevelId: c.price_level_id,
+    categoryId: c.category_id,
+    isActive: c.is_active,
+    /** For If-Match on edits (an edit made offline is checked against it). */
+    version: c.version,
+    createdAt: new Date(c.created_at).toISOString(),
+  }));
+}
+
+/** Suppliers as the list (and the device's copy) shows them. */
+export function supplierRows(tx: Tx, where: SQL | undefined) {
+  const s = schema.suppliers;
+  return tx
+    .select({
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      companyName: s.companyName,
+      mobile: s.mobile,
+      city: s.city,
+      gstin: s.gstin,
+      stateCode: s.stateCode,
+      gstRegistration: s.gstRegistration,
+      balance: s.balance,
+      creditDays: s.creditDays,
+      isActive: s.isActive,
+    })
+    .from(s)
+    .where(where);
+}
+
 export const partiesModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
@@ -219,71 +312,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
       recent: { by: sql`c.created_at desc, c.id desc`, after: sql`(c.created_at, c.id) < (${String(cursor?.v)}::timestamptz, ${cursor?.id ?? null}::uuid)` },
     }[q.sort];
     if (cursor) where.push(order.after);
-    const rows = await tenant(ctx, async (tx) =>
-      (
-        await tx.execute<{
-          id: string;
-          code: string;
-          name: string;
-          business_name: string | null;
-          customer_type: string;
-          mobile: string | null;
-          city: string | null;
-          gstin: string | null;
-          balance: string;
-          credit_limit: string | null;
-          credit_days: number;
-          route_id: string | null;
-          state_code: string;
-          address_line1: string | null;
-          pincode: string | null;
-          price_level_id: string | null;
-          category_id: string | null;
-          is_active: boolean;
-          version: number;
-          created_at: string;
-          overdue: string;
-          gst_registration: string;
-        }>(sql`
-          select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
-                 c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
-                 c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue
-          from customers c
-          left join lateral (
-            select sum(i.balance_due) as amount from invoices i
-            where i.customer_id = c.id and i.status = 'posted' and i.balance_due > 0 and i.due_date < ${today}
-          ) od on true
-          where ${sql.join(where, sql` and `)}
-          order by ${order.by}
-          limit ${q.limit + 1}`)
-      ).rows,
-    );
-    const data = rows.map((c) => ({
-      id: c.id,
-      code: c.code,
-      name: c.name,
-      businessName: c.business_name,
-      customerType: c.customer_type,
-      /** regular, consumer, sez, overseas…: exports and supplies to SEZ are billed differently. */
-      gstRegistration: c.gst_registration,
-      mobile: c.mobile,
-      city: c.city,
-      gstin: c.gstin,
-      balance: c.balance,
-      overdue: c.overdue,
-      creditLimit: c.credit_limit,
-      creditDays: c.credit_days,
-      routeId: c.route_id,
-      stateCode: c.state_code,
-      addressLine1: c.address_line1,
-      pincode: c.pincode,
-      priceLevelId: c.price_level_id,
-      categoryId: c.category_id,
-      isActive: c.is_active,
-      /** For If-Match on edits (an edit made offline is checked against it). */
-      version: c.version,
-      createdAt: new Date(c.created_at).toISOString(),
-    }));
+    const data = await tenant(ctx, (tx) => customerRows(tx, today, sql`${sql.join(where, sql` and `)} order by ${order.by} limit ${q.limit + 1}`));
     return page(data, q.limit, (c) => ({ v: q.sort === "name" ? c.name : q.sort === "outstanding" ? c.balance : c.createdAt, id: c.id }));
   });
 
@@ -470,23 +499,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
     }
     if (cursor) where.push(sql`(${s.name}, ${s.id}) > (${String(cursor.v)}, ${cursor.id}::uuid)`);
     const rows = await tenant(ctx, (tx) =>
-      tx
-        .select({
-          id: s.id,
-          code: s.code,
-          name: s.name,
-          companyName: s.companyName,
-          mobile: s.mobile,
-          city: s.city,
-          gstin: s.gstin,
-          stateCode: s.stateCode,
-          gstRegistration: s.gstRegistration,
-          balance: s.balance,
-          creditDays: s.creditDays,
-          isActive: s.isActive,
-        })
-        .from(s)
-        .where(and(...where))
+      supplierRows(tx, and(...where))
         .orderBy(asc(s.name), asc(s.id))
         .limit(q.limit + 1),
     );

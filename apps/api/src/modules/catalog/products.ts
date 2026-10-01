@@ -34,6 +34,63 @@ function productOut(p: ProductRow, showCost: boolean) {
   return { ...rest, ...(showCost ? { purchasePrice, avgCost } : {}) };
 }
 
+/**
+ * Products as a device keeps them (GET /catalog, and the pull feed for the
+ * ones that changed): with barcodes, units, prices and total stock. Deleted
+ * products are left out; `ids` limits it to those.
+ */
+export async function catalogProducts(tx: Tx, ctx: RequestCtx, ids?: string[]) {
+  const showCost = can(ctx, "product.view_cost");
+  const products = await tx
+    .select()
+    .from(schema.products)
+    .where(and(eq(schema.products.businessId, ctx.businessId), isNull(schema.products.deletedAt), ...(ids ? [inArray(schema.products.id, ids)] : [])))
+    .orderBy(asc(schema.products.name));
+  if (ids && !products.length) return [];
+  const productIds = products.map((p) => p.id);
+  const [barcodes, units, prices, stock] = await inSequence([
+    () => (productIds.length ? tx.select().from(schema.productBarcodes).where(inArray(schema.productBarcodes.productId, productIds)) : []),
+    () => (productIds.length ? tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, productIds)) : []),
+    () => (productIds.length ? tx.select().from(schema.productPrices).where(inArray(schema.productPrices.productId, productIds)) : []),
+    () =>
+      tx
+        .select({ productId: schema.stockBalances.productId, qty: sql<string>`sum(${schema.stockBalances.qty})::text` })
+        .from(schema.stockBalances)
+        .where(and(eq(schema.stockBalances.businessId, ctx.businessId), ...(ids ? [inArray(schema.stockBalances.productId, productIds)] : [])))
+        .groupBy(schema.stockBalances.productId),
+  ]);
+  const group = <T extends { productId: string }>(rows: T[]) => {
+    const m = new Map<string, T[]>();
+    for (const row of rows) m.set(row.productId, [...(m.get(row.productId) ?? []), row]);
+    return m;
+  };
+  const [byBarcode, byUnit, byPrice] = [group(barcodes), group(units), group(prices)];
+  const stockOf = new Map(stock.map((x) => [x.productId, x.qty]));
+  return products.map((p) => ({
+    ...productOut(p, showCost),
+    barcodes: (byBarcode.get(p.id) ?? []).map((b) => ({ barcode: b.barcode, unitId: b.unitId })),
+    units: (byUnit.get(p.id) ?? []).map((u) => ({ unitId: u.unitId, conversionFactor: u.conversionFactor, isDefaultSale: u.isDefaultSale })),
+    prices: (byPrice.get(p.id) ?? []).map((x) => ({ priceLevelId: x.priceLevelId, unitId: x.unitId, price: x.price, discountPercent: x.discountPercent })),
+    stock: stockOf.get(p.id) ?? "0",
+  }));
+}
+
+/** The catalogue's lists that go with the products: tax categories, rate lists, units, brands and categories. */
+export async function catalogLists(tx: Tx, ctx: RequestCtx) {
+  const [taxCategories, priceLevels, units, brands, categories] = await inSequence([
+    () => listTaxCategories(tx, ctx.businessId),
+    () => tx.select().from(schema.priceLevels).where(eq(schema.priceLevels.businessId, ctx.businessId)),
+    () => tx.select().from(schema.units).where(eq(schema.units.businessId, ctx.businessId)),
+    () => tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands).where(and(eq(schema.brands.businessId, ctx.businessId), isNull(schema.brands.deletedAt))),
+    () =>
+      tx
+        .select({ id: schema.productCategories.id, name: schema.productCategories.name, parentId: schema.productCategories.parentId })
+        .from(schema.productCategories)
+        .where(and(eq(schema.productCategories.businessId, ctx.businessId), isNull(schema.productCategories.deletedAt))),
+  ]);
+  return { taxCategories, priceLevels, units, brands, categories };
+}
+
 async function validateRefs(tx: Tx, businessId: string, body: Partial<Body>, baseUnitId: string): Promise<void> {
   await assertOwned(tx, schema.taxCategories, businessId, body.taxCategoryId, "taxCategoryId");
   await assertOwned(tx, schema.brands, businessId, body.brandId, "brandId");
@@ -363,55 +420,11 @@ export const productsModule: ApiModule = async (app, deps) => {
    */
   r.get("/catalog", { preHandler: guard(deps, "product.view"), schema: { tags: ["catalog"] } }, async (request, reply) => {
     const ctx = request.ctx;
-    const showCost = can(ctx, "product.view_cost");
-    const body = await tenant(ctx, async (tx) => {
-      const products = await tx
-        .select()
-        .from(schema.products)
-        .where(and(eq(schema.products.businessId, ctx.businessId), isNull(schema.products.deletedAt)))
-        .orderBy(asc(schema.products.name));
-      const ids = products.map((p) => p.id);
-      const [barcodes, units, prices, stock, taxCategories, priceLevels, unitList, brands, categories] = await inSequence([
-        () => ids.length ? tx.select().from(schema.productBarcodes).where(inArray(schema.productBarcodes.productId, ids)) : [],
-        () => ids.length ? tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, ids)) : [],
-        () => ids.length ? tx.select().from(schema.productPrices).where(inArray(schema.productPrices.productId, ids)) : [],
-        () => tx
-          .select({ productId: schema.stockBalances.productId, qty: sql<string>`sum(${schema.stockBalances.qty})::text` })
-          .from(schema.stockBalances)
-          .where(eq(schema.stockBalances.businessId, ctx.businessId))
-          .groupBy(schema.stockBalances.productId),
-        () => listTaxCategories(tx, ctx.businessId),
-        () => tx.select().from(schema.priceLevels).where(eq(schema.priceLevels.businessId, ctx.businessId)),
-        () => tx.select().from(schema.units).where(eq(schema.units.businessId, ctx.businessId)),
-        () => tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands).where(and(eq(schema.brands.businessId, ctx.businessId), isNull(schema.brands.deletedAt))),
-        () => tx
-          .select({ id: schema.productCategories.id, name: schema.productCategories.name, parentId: schema.productCategories.parentId })
-          .from(schema.productCategories)
-          .where(and(eq(schema.productCategories.businessId, ctx.businessId), isNull(schema.productCategories.deletedAt))),
-      ]);
-      const group = <T extends { productId: string }>(rows: T[]) => {
-        const m = new Map<string, T[]>();
-        for (const row of rows) m.set(row.productId, [...(m.get(row.productId) ?? []), row]);
-        return m;
-      };
-      const [byBarcode, byUnit, byPrice] = [group(barcodes), group(units), group(prices)];
-      const stockOf = new Map(stock.map((s) => [s.productId, s.qty]));
-      return {
-        generatedAt: deps.clock.now().toISOString(),
-        products: products.map((p) => ({
-          ...productOut(p, showCost),
-          barcodes: (byBarcode.get(p.id) ?? []).map((b) => ({ barcode: b.barcode, unitId: b.unitId })),
-          units: (byUnit.get(p.id) ?? []).map((u) => ({ unitId: u.unitId, conversionFactor: u.conversionFactor, isDefaultSale: u.isDefaultSale })),
-          prices: (byPrice.get(p.id) ?? []).map((x) => ({ priceLevelId: x.priceLevelId, unitId: x.unitId, price: x.price, discountPercent: x.discountPercent })),
-          stock: stockOf.get(p.id) ?? "0",
-        })),
-        taxCategories,
-        priceLevels,
-        units: unitList,
-        brands,
-        categories,
-      };
-    });
+    const body = await tenant(ctx, async (tx) => ({
+      generatedAt: deps.clock.now().toISOString(),
+      products: await catalogProducts(tx, ctx),
+      ...(await catalogLists(tx, ctx)),
+    }));
     reply.header("cache-control", "private, no-store");
     return body;
   });

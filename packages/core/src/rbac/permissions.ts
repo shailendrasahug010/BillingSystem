@@ -22,6 +22,8 @@ export const PERMISSION_CATALOG = {
     "override_price",
     "override_credit_limit",
     "backdate",
+    /** Bills made offline that were held because they broke a rule by the time they reached the server. */
+    "review",
   ],
   purchase: ["view", "create", "update", "cancel"],
   packing: ["view", "pack"],

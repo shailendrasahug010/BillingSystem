@@ -389,6 +389,16 @@
       "editShippingBill": "Change shipping bill",
       "shippingBillSaved": "Shipping bill saved",
       "shippingBillMissing": "Shipping bill not added yet"
+    },
+    "review": {
+      "title": "Made offline, held for review",
+      "reviewedTitle": "Made offline, reviewed",
+      "hint": "It reached the server after something had changed. It is posted (stock and the customer's balance have moved). Check it, then mark it reviewed; if it should not stand, cancel it or issue a credit note.",
+      "note": "What was done (optional)",
+      "markReviewed": "Mark reviewed",
+      "done": "Marked reviewed",
+      "reviewedBy": "Reviewed by {{name}}, {{when}}",
+      "badge": "Held for review"
     }
   },
   "suggestions": {
@@ -1049,7 +1059,8 @@
     "EWAY_BILL_HAS_ERRORS": "{{number}} cannot go to the e-way bill portal yet: see what to fix in GST Reports → E-way bill.",
     "NO_EWAY_BILLS_DUE": "No bill on this trip needs an e-way bill.",
     "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice.",
-    "REMINDER_RULE_OFF": "Switch the reminder rule on first."
+    "REMINDER_RULE_OFF": "Switch the reminder rule on first.",
+    "NOT_HELD_FOR_REVIEW": "This bill is not held for review."
   },
   "validation": {
     "required": "This field is required",
@@ -1476,6 +1487,7 @@
       "override_price": "Override price",
       "override_credit_limit": "Override credit limit",
       "backdate": "Backdate",
+      "review": "Review held offline bills",
       "pack": "Pack",
       "dispatch": "Dispatch",
       "deliver": "Deliver",
@@ -2242,7 +2254,8 @@
     "wiped": "The owner removed this device, so the copy of {{business}} kept on it has been deleted.",
     "theBusiness": "the business",
     "wipedWaiting_one": "{{count}} entry that had not been sent was deleted with it.",
-    "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them."
+    "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them.",
+    "heldForReview": "Held for review: the server took it, and a manager will check it"
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"
@@ -2593,7 +2606,10 @@
     "entries_other": "{{count}} entries",
     "onLeaveToday_one": "{{count}} on leave today",
     "onLeaveToday_other": "{{count}} on leave today",
-    "open": "Open"
+    "open": "Open",
+    "reviewHeld": "Offline bills to review",
+    "moreReasons_one": "and {{count}} more",
+    "moreReasons_other": "and {{count}} more"
   },
   "reportViews": {
     "menu": "Saved views",
@@ -2844,7 +2860,20 @@
       "leave_approved_one": "Your {{type}} leave of {{count}} day ({{from, date}} to {{to, date}}) is approved",
       "leave_approved_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) is approved",
       "leave_rejected_one": "Your {{type}} leave of {{count}} day ({{from, date}} to {{to, date}}) was not approved",
-      "leave_rejected_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) was not approved"
+      "leave_rejected_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) was not approved",
+      "offline_review": "Bill {{number}} for {{customer}} ({{total, currency}}), made offline, is held for review",
+      "offline_reviewed": "Your bill {{number}} for {{customer}} was reviewed by {{reviewer}}"
+    },
+    "review": {
+      "price_changed": "{{product}} was billed at {{billed, currency}}; the rate list says {{list, currency}}.",
+      "customer_inactive": "{{customer}} had been made inactive.",
+      "product_inactive": "{{product}} had been made inactive.",
+      "period_locked": "Its GST month, {{month}}, is already locked or filed.",
+      "late_sync": "It reached the server {{days}} days after it was made.",
+      "stock_short": "{{product}}: {{requested}} sold with {{available}} in stock, where selling short of stock is blocked.",
+      "credit_limit": "{{customer}} went over the credit limit of {{limit, currency}} by {{excess, currency}}.",
+      "credit_overdue_one": "{{customer}} has {{count}} bill overdue ({{amount, currency}}), which blocks new bills.",
+      "credit_overdue_other": "{{customer}} has {{count}} bills overdue ({{amount, currency}}), which blocks new bills."
     }
   }
 }

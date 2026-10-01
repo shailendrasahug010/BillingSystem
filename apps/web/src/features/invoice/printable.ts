@@ -1,6 +1,7 @@
 import { dec, type ZeroRatedType } from "@digitalbahi/core";
 import { BUSINESS, customerById, invoiceTotals, productById, WORKSPACE } from "../../data/db";
 import type { Invoice } from "../../data/types";
+import type { ReviewFields } from "./InvoiceReview";
 
 /** Everything the printed invoice shows, independent of where it came from. */
 export interface PrintableInvoice {
@@ -126,7 +127,7 @@ export function printableFromDemo(invoice: Invoice): PrintableInvoice {
 }
 
 /** API invoice detail (GET /invoices/:id): the stored tax snapshot, never recomputed. */
-export interface ApiInvoice {
+export interface ApiInvoice extends Omit<ReviewFields, "id"> {
   id: string;
   invoiceNumber: string;
   invoiceDate: string;

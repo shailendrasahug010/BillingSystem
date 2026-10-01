@@ -1,4 +1,4 @@
-import { BadgeIndianRupee, Bell, Boxes, CalendarDays, ClipboardList, Hourglass, Package, Truck, Wallet, type LucideIcon } from "lucide-react";
+import { BadgeIndianRupee, Bell, Boxes, CalendarDays, ClipboardList, CloudOff, Hourglass, Package, Truck, Wallet, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { cn } from "../../lib/cn";
@@ -20,6 +20,8 @@ const ICONS: Record<string, LucideIcon> = {
   leave_approved: CalendarDays,
   leave_rejected: CalendarDays,
   salary_due: BadgeIndianRupee,
+  offline_review: CloudOff,
+  offline_reviewed: CloudOff,
 };
 
 const TINTS: Record<Severity, string> = {

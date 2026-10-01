@@ -1,4 +1,5 @@
 import type { BusinessSummary, MeResponse, SessionResponse } from "@digitalbahi/contracts";
+import type { FeedState } from "../data/feed";
 import type { WorkspaceData } from "../data/live";
 import { idbDelete, idbGet, idbKeys, idbPut } from "./idb";
 import { isSealed, seal, unseal, type Sealed } from "./vault";
@@ -15,6 +16,8 @@ export interface Snapshot {
   businesses: BusinessSummary[];
   me: MeResponse;
   data: WorkspaceData;
+  /** Where the pull feed stopped for this copy (absent in copies saved before the feed): the next start loads only what changed. */
+  feed?: FeedState;
   savedAt: string;
 }
 

@@ -176,6 +176,13 @@
       "when": 1790852958514,
       "tag": "0024_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790867949777,
+      "tag": "0025_offline_sync",
+      "breakpoints": true
     }
   ]
 }

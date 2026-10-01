@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 95 |
-| Columns | 1572 |
-| Foreign keys | 253 |
+| Tables | 96 |
+| Columns | 1582 |
+| Foreign keys | 254 |
 | Unique constraints | 46 |
 | Check constraints | 57 |
-| Indexes (besides primary keys and unique constraints) | 119 |
-| Triggers | 66 |
-| Tables with row-level security | 89 |
-| Enums | 38 |
-| Functions | 13 |
-| Migrations | 25 (last: `0024_notifications`) |
+| Indexes (besides primary keys and unique constraints) | 121 |
+| Triggers | 73 |
+| Tables with row-level security | 90 |
+| Enums | 39 |
+| Functions | 14 |
+| Migrations | 26 (last: `0025_offline_sync`) |
 
 ## How the database is set up
 
@@ -43,7 +43,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Payroll:** [`salary_components`](#salary_components), [`employee_salary_structures`](#employee_salary_structures), [`employee_salary_structure_components`](#employee_salary_structure_components), [`employee_advances`](#employee_advances), [`payroll_runs`](#payroll_runs), [`salary_slips`](#salary_slips), [`salary_slip_lines`](#salary_slip_lines)
 * **Expenses:** [`expense_categories`](#expense_categories), [`expenses`](#expenses)
 * **GST returns and configuration:** [`gst_transactions`](#gst_transactions), [`gst_return_periods`](#gst_return_periods), [`gst_exports`](#gst_exports), [`gst_config`](#gst_config)
-* **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`notification_receipts`](#notification_receipts), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
+* **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`notification_receipts`](#notification_receipts), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`sync_changes`](#sync_changes), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
 * **Analytics (derived, rebuildable):** [`customer_product_stats`](#customer_product_stats), [`product_associations`](#product_associations), [`customer_stats`](#customer_stats), [`analytics_runs`](#analytics_runs), [`suggestion_feedback`](#suggestion_feedback), [`sales_daily_product`](#sales_daily_product), [`sales_daily_customer`](#sales_daily_customer)
 * **WhatsApp and email:** [`messaging_settings`](#messaging_settings), [`messages`](#messages)
 * [Enums](#enums) · [Functions](#functions) · [Migrations](#migrations)
@@ -135,7 +135,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 86 tables by `business_id`
+* Referenced by: 87 tables by `business_id`
 
 ### `settings`
 
@@ -667,6 +667,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 * Index `customers_name_trgm_idx`: gin `(name gin_trgm_ops)`
 * Index `customers_route_idx`: btree `(business_id, route_id)`
 * Trigger `customers_set_updated_at`: before update, each row → `set_updated_at()`
+* Trigger `customers_sync_change`: after insert or delete or update, each row → `track_sync_change('customer', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`customer_addresses`](#customer_addresses).customer_id, [`sales_orders`](#sales_orders).customer_id, [`invoices`](#invoices).customer_id, [`credit_debit_notes`](#credit_debit_notes).customer_id, [`payments`](#payments).customer_id, [`party_ledger_entries`](#party_ledger_entries).customer_id, [`collection_notes`](#collection_notes).customer_id, [`customer_product_stats`](#customer_product_stats).customer_id, [`customer_stats`](#customer_stats).customer_id, [`suggestion_feedback`](#suggestion_feedback).customer_id, [`sales_daily_customer`](#sales_daily_customer).customer_id
 
@@ -741,6 +742,7 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 * Index `suppliers_gstin_idx`: btree `(business_id, gstin)`
 * Index `suppliers_name_trgm_idx`: gin `(name gin_trgm_ops)`
 * Trigger `suppliers_set_updated_at`: before update, each row → `set_updated_at()`
+* Trigger `suppliers_sync_change`: after insert or delete or update, each row → `track_sync_change('supplier', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`products`](#products).preferred_supplier_id, [`purchases`](#purchases).supplier_id, [`supplier_items`](#supplier_items).supplier_id, [`credit_debit_notes`](#credit_debit_notes).supplier_id, [`payments`](#payments).supplier_id, [`party_ledger_entries`](#party_ledger_entries).supplier_id, [`expenses`](#expenses).supplier_id
 
@@ -914,6 +916,7 @@ Effective-dated GST rates per category, optionally conditional on unit value. Se
 * Index `products_name_trgm_idx`: gin `(name gin_trgm_ops)`
 * Index `products_sku_uq`: unique, btree `(business_id, sku) WHERE ((deleted_at IS NULL) AND (sku IS NOT NULL))`
 * Trigger `products_set_updated_at`: before update, each row → `set_updated_at()`
+* Trigger `products_sync_change`: after insert or delete or update, each row → `track_sync_change('product', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`products`](#products).parent_product_id, [`product_units`](#product_units).product_id, [`product_barcodes`](#product_barcodes).product_id, [`product_prices`](#product_prices).product_id, [`product_images`](#product_images).product_id, [`batches`](#batches).product_id, [`stock_ledger`](#stock_ledger).product_id, [`stock_balances`](#stock_balances).product_id, [`stock_adjustment_items`](#stock_adjustment_items).product_id, [`stock_transfer_items`](#stock_transfer_items).product_id, [`purchase_items`](#purchase_items).product_id, [`supplier_items`](#supplier_items).product_id, [`sales_order_items`](#sales_order_items).product_id, [`invoice_items`](#invoice_items).product_id, [`packing_items`](#packing_items).product_id, [`credit_debit_note_items`](#credit_debit_note_items).product_id, [`customer_product_stats`](#customer_product_stats).product_id, [`product_associations`](#product_associations).product_id, [`product_associations`](#product_associations).related_product_id, [`sales_daily_product`](#sales_daily_product).product_id
 
@@ -938,6 +941,7 @@ Alternate units: 1 BOX = 24 PCS, 1 CASE = 12 BOX.
 * Check `product_units_factor_chk`: `(conversion_factor > 0::numeric)`
 * Unique `product_units_uq`: `(product_id, unit_id)`
 * Trigger `product_units_set_updated_at`: before update, each row → `set_updated_at()`
+* Trigger `product_units_sync_change`: after insert or delete or update, each row → `track_sync_change('product', 'product_id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `product_barcodes`
@@ -959,6 +963,7 @@ Several barcodes per product (manufacturer EAN, case barcode, internal label).
 * Unique `product_barcodes_uq`: `(business_id, barcode)`
 * Index `product_barcodes_product_idx`: btree `(product_id)`
 * Trigger `product_barcodes_set_updated_at`: before update, each row → `set_updated_at()`
+* Trigger `product_barcodes_sync_change`: after insert or delete or update, each row → `track_sync_change('product', 'product_id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `product_prices`
@@ -981,6 +986,7 @@ Price per price level and unit.
 * Check `product_prices_price_chk`: `(price >= 0::numeric)`
 * Primary key `product_id, price_level_id, unit_id`
 * Trigger `product_prices_set_updated_at`: before update, each row → `set_updated_at()`
+* Trigger `product_prices_sync_change`: after insert or delete or update, each row → `track_sync_change('product', 'product_id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `product_images`
@@ -1078,6 +1084,7 @@ Current stock per product / warehouse / batch: a cache of the ledger updated in 
 * Unique `stock_balances_uq`: `NULLS NOT DISTINCT (business_id, product_id, warehouse_id, batch_id)`
 * Index `stock_balances_product_idx`: btree `(product_id)`
 * Trigger `stock_balances_set_updated_at`: before update, each row → `set_updated_at()`
+* Trigger `stock_balances_sync_change`: after insert or delete or update, each row → `track_sync_change('product', 'product_id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `stock_adjustments`
@@ -1489,6 +1496,11 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 | `port_code` | varchar(6) |  |  | Port code of the shipping bill (6 characters). |
 | `lut_arn` | varchar(20) |  |  | Without payment of IGST: the letter of undertaking (ARN) it was made under, printed on the invoice. |
 | `eway_bill_date` | timestamptz |  |  | When the e-way bill was generated. |
+| `review_status` | [invoice_review_status](#enum-invoice_review_status) |  |  | A bill made offline that broke a rule by the time it reached the server (a price changed meanwhile, the customer or a product was made inactive, its GST month was locked, it was sent over a week late, or stock or credit went past a limit set to block) is accepted, as the customer already has it, and held for a manager: needs_review until someone with invoice.review marks it reviewed. Null for every other bill. |
+| `review_reasons` | jsonb |  |  | Why it was held: [{code, params}], codes price_changed, customer_inactive, product_inactive, period_locked, late_sync, stock_short, credit_limit, credit_overdue. |
+| `reviewed_by` | uuid |  |  | User who marked it reviewed (or cancelled it while it was held). |
+| `reviewed_at` | timestamptz |  |  | When it was marked reviewed. |
+| `review_note` | text |  |  | What the reviewer noted (for example the credit note issued for it). |
 
 * Check `invoices_number_format_chk`: `(invoice_number IS NULL OR invoice_number::text ~ '^[A-Za-z0-9/-]{1,16}$'::text)`
 * Unique `invoices_number_uq`: `(business_id, financial_year, invoice_number)`
@@ -1499,6 +1511,7 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 * Index `invoices_customer_idx`: btree `(business_id, customer_id, invoice_date)`
 * Index `invoices_date_idx`: btree `(business_id, invoice_date)`
 * Index `invoices_open_idx`: btree `(business_id, customer_id, due_date) WHERE ((status = 'posted'::document_status) AND (balance_due > (0)::numeric))`
+* Index `invoices_review_idx`: btree `(business_id, posted_at) WHERE (review_status = 'needs_review'::invoice_review_status)`
 * Index `invoices_salesperson_idx`: btree `(business_id, salesperson_id, invoice_date)`
 * Trigger `invoices_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `invoices_period_lock`: before update, each row → `invoices_period_lock_guard()`
@@ -2498,6 +2511,22 @@ Server-side log of mutations received from offline devices. The client's mutatio
 * Index `sync_mutations_device_idx`: btree `(device_id, received_at)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
+### `sync_changes`
+
+The pull feed's change log (Phase 5.3): which products, customers and suppliers changed, by transaction. Triggers on those tables (and on prices, barcodes, units and stock balances, for their product) add a row per record per transaction; nothing updates a row, so concurrent bills never wait on it. A device asks for everything from transactions at or after the oldest one still running when it last asked (GET /sync/pull), so a change that commits late is never missed. Rows older than 30 days are deleted nightly; a device that last pulled before that reloads the whole business.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `business_id` | uuid | ✓ |  | **Primary key** (with `xid`, `entity`, `entity_id`). → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `entity` | varchar(20) | ✓ |  | **Primary key** (with `business_id`, `xid`, `entity_id`). What changed: product, customer or supplier. |
+| `entity_id` | uuid | ✓ |  | **Primary key** (with `business_id`, `xid`, `entity`). The record (for a price, barcode, unit or stock balance: its product). |
+| `xid` | xid8 | ✓ | `pg_current_xact_id()` | **Primary key** (with `business_id`, `entity`, `entity_id`). The transaction that changed it. |
+| `created_at` | timestamptz | ✓ | `now()` | When, for deleting old rows. |
+
+* Primary key `business_id, xid, entity, entity_id`
+* Index `sync_changes_created_idx`: btree `(created_at)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+
 ### `backups`
 
 | Column | Type | Required | Default | Description |
@@ -2883,6 +2912,14 @@ Values: `open`, `locked`, `filed`
 
 Used by: [`gst_return_periods`](#gst_return_periods).status
 
+### Enum `invoice_review_status`
+
+A bill made offline held for a manager (it broke a rule by the time it reached the server), then marked reviewed.
+
+Values: `needs_review`, `reviewed`
+
+Used by: [`invoices`](#invoices).review_status
+
 ### Enum `itc_eligibility`
 
 Values: `eligible`, `ineligible`, `capital_goods`, `input_services`
@@ -3044,6 +3081,7 @@ Written in the migrations; triggers use them to keep the rules no application bu
 | `outbox_pending_businesses(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid) | sql | The businesses with outbox events waiting, for the API's outbox worker. It runs without a session, and row-level security hides every business's events until one is chosen; this answers only "whose events are waiting" (the events are then taken and handled inside that business). |
 | `reminder_rules_due(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses with a daily reminder check due: an active rule not yet run on the business's current date, whose hour (config.hour, else the type's default) has come in its time zone. Without a session, row-level security hides businesses and rules; this answers only "whose turn is it" (the rules are then claimed and checked inside that business). |
 | `set_updated_at()` | trigger | plpgsql | updated_at is maintained automatically on every table that has it. Trigger on 55 tables. |
+| `track_sync_change()` | trigger | plpgsql | Records that a product, customer or supplier changed in this transaction (once per record per transaction). TG_ARGV[0] is the entity, TG_ARGV[1] the column holding its id. SECURITY DEFINER: a change made in any context (a restore, a job) is recorded, whatever the session's business. Trigger on [`customers`](#customers), [`suppliers`](#suppliers), [`products`](#products), [`product_units`](#product_units), [`product_barcodes`](#product_barcodes), [`product_prices`](#product_prices), [`stock_balances`](#stock_balances). |
 | `user_in_other_business(p_user uuid, p_business uuid)` | boolean | sql | Whether a member's account is also in another business. A business may set the user ID and password only of accounts it alone uses (its staff), never of someone who also works elsewhere. Row-level security hides other businesses' memberships from the API, so this answers the one question with the owner's rights and nothing more. |
 | `whatsapp_status_business(p_key text)` | uuid | sql | The business a status callback belongs to, from the key in its address. Callbacks come without a session, and row-level security hides every business's settings until one is chosen; this answers only that question. |
 
@@ -3051,4 +3089,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync`

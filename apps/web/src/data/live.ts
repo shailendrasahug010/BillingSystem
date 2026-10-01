@@ -9,7 +9,8 @@ import {
   type TaxCategory,
   type TaxRateRule,
 } from "@digitalbahi/core";
-import { api, fetchAll } from "../lib/api";
+import { api, ApiError, fetchAll } from "../lib/api";
+import { accessKey, applyPull, pageChanges, type FeedState, type PullPage } from "./feed";
 import {
   BRANDS,
   BUSINESS,
@@ -32,7 +33,7 @@ import type { Customer, Invoice, Product } from "./types";
 
 // ---------------------------------------------------------------- API shapes (subset)
 
-interface CatalogProduct {
+export interface CatalogProduct {
   id: string;
   name: string;
   nameLocal: string | null;
@@ -58,7 +59,7 @@ interface CatalogProduct {
   stock: string;
 }
 
-interface Catalog {
+export interface Catalog {
   products: CatalogProduct[];
   taxCategories: Array<{ id: string; name: string; kind: TaxCategory["kind"]; rules: Array<TaxRateRule & { gstRate: string }> }>;
   priceLevels: Array<{ id: string; name: string; isDefault: boolean }>;
@@ -350,10 +351,66 @@ export function applyWorkspace(data: WorkspaceData): void {
 
 /** Loads the business from the server; returns what it loaded so it can be kept on the device. */
 export async function hydrateWorkspace(me: MeResponse): Promise<WorkspaceData> {
+  return (await loadWorkspace(me)).data;
+}
+
+/** The business as kept on the device, with where its pull feed stopped. */
+export interface KeptWorkspace {
+  data: WorkspaceData;
+  feed?: FeedState;
+}
+
+/**
+ * Brings the business up to date and puts it in place: with only what
+ * changed (the pull feed) when the device has a copy loaded for the same
+ * access, else everything (after taking a cursor, so nothing that changes
+ * during the load is missed). Returns what to keep on the device.
+ */
+export async function loadWorkspace(me: MeResponse, kept?: KeptWorkspace): Promise<Required<Pick<KeptWorkspace, "data">> & KeptWorkspace> {
   applyMe(me);
+  const access = accessKey(me.permissions);
+  const pulled = kept?.feed && kept.feed.access === access ? await pullWorkspace(kept) : null;
+  if (pulled) {
+    applyWorkspace(pulled.data);
+    return pulled;
+  }
+  let start: PullPage | null = null;
+  try {
+    start = await api.get<PullPage>("/sync/pull");
+  } catch (e) {
+    // A server without the feed: the copy is loaded whole every time, as before.
+    if (!(e instanceof ApiError && e.status === 404)) throw e;
+  }
   const data = await fetchWorkspace();
   applyWorkspace(data);
-  return data;
+  return { data, ...(start ? { feed: { cursor: start.cursor, ...(start.listsHash ? { listsHash: start.listsHash } : {}), access } } : {}) };
+}
+
+/**
+ * What changed since the device's copy, applied to it (not put in place).
+ * Null when it cannot be brought up to date that way (no feed, a cursor too
+ * old or not understood): the caller loads everything.
+ */
+export async function pullWorkspace(kept: KeptWorkspace): Promise<(KeptWorkspace & { changed: boolean }) | null> {
+  if (!kept.feed) return null;
+  let { data, feed } = kept as Required<KeptWorkspace>;
+  let changed = false;
+  for (;;) {
+    let page: PullPage;
+    try {
+      page = await api.get<PullPage>("/sync/pull", { cursor: feed.cursor, lists: feed.listsHash });
+    } catch (e) {
+      if (e instanceof ApiError && (e.code === "INVALID_CURSOR" || e.status === 404)) return null;
+      throw e;
+    }
+    if (page.reset) return null;
+    if (pageChanges(page)) {
+      data = applyPull(data, page);
+      changed = true;
+    }
+    feed = { ...feed, cursor: page.cursor, ...(page.listsHash ? { listsHash: page.listsHash } : {}) };
+    if (!page.more) return { data, feed, changed };
+  }
 }
 
 /** Adds or refreshes one supplier after it was created or edited. */

@@ -389,6 +389,16 @@
       "editShippingBill": "शिपिंग बिल बदलें",
       "shippingBillSaved": "शिपिंग बिल सेव हुआ",
       "shippingBillMissing": "शिपिंग बिल अभी नहीं जोड़ा"
+    },
+    "review": {
+      "title": "ऑफ़लाइन बना, जाँच के लिए रुका",
+      "reviewedTitle": "ऑफ़लाइन बना, जाँच हो चुकी",
+      "hint": "यह कुछ बदलने के बाद सर्वर पर पहुँचा। यह पोस्ट हो चुका है (स्टॉक और ग्राहक का बकाया बदल गया है)। इसे जाँचें, फिर जाँचा हुआ मानें; अगर यह सही नहीं है तो इसे रद्द करें या क्रेडिट नोट बनाएँ।",
+      "note": "क्या किया गया (वैकल्पिक)",
+      "markReviewed": "जाँचा हुआ मानें",
+      "done": "जाँचा हुआ माना गया",
+      "reviewedBy": "{{name}} ने जाँचा, {{when}}",
+      "badge": "जाँच के लिए रुका"
     }
   },
   "suggestions": {
@@ -1049,7 +1059,8 @@
     "EWAY_BILL_HAS_ERRORS": "{{number}} अभी ई-वे बिल पोर्टल पर नहीं जा सकता: GST रिपोर्ट → ई-वे बिल में देखें।",
     "NO_EWAY_BILLS_DUE": "इस ट्रिप के किसी बिल को ई-वे बिल की ज़रूरत नहीं।",
     "EWAY_BILL_BEFORE_INVOICE": "ई-वे बिल की तारीख इनवॉइस से पहले नहीं हो सकती।",
-    "REMINDER_RULE_OFF": "पहले रिमाइंडर नियम चालू करें।"
+    "REMINDER_RULE_OFF": "पहले रिमाइंडर नियम चालू करें।",
+    "NOT_HELD_FOR_REVIEW": "यह बिल जाँच के लिए रोका नहीं गया है।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -1476,6 +1487,7 @@
       "override_price": "कीमत बदलें (बिल में)",
       "override_credit_limit": "क्रेडिट सीमा पार करें",
       "backdate": "पुरानी तारीख",
+      "review": "रोके गए ऑफ़लाइन बिल जाँचें",
       "pack": "पैक करें",
       "dispatch": "डिस्पैच करें",
       "deliver": "डिलीवर करें",
@@ -2242,7 +2254,8 @@
     "wiped": "मालिक ने यह डिवाइस हटा दिया है, इसलिए इस पर रखी {{business}} की कॉपी हटा दी गई है।",
     "theBusiness": "व्यापार",
     "wipedWaiting_one": "न भेजी गई {{count}} एंट्री भी साथ में हटा दी गई।",
-    "wipedWaiting_other": "न भेजी गई {{count}} एंट्री भी साथ में हटा दी गईं।"
+    "wipedWaiting_other": "न भेजी गई {{count}} एंट्री भी साथ में हटा दी गईं।",
+    "heldForReview": "जाँच के लिए रोका गया: सर्वर ने ले लिया, मैनेजर इसे जाँचेंगे"
   },
   "pdf": {
     "page": "पृष्ठ {{page}} / {{count}}"
@@ -2593,7 +2606,10 @@
     "entries_other": "{{count}} एंट्री",
     "onLeaveToday_one": "आज {{count}} छुट्टी पर",
     "onLeaveToday_other": "आज {{count}} छुट्टी पर",
-    "open": "खोलें"
+    "open": "खोलें",
+    "reviewHeld": "जाँच के लिए रुके ऑफ़लाइन बिल",
+    "moreReasons_one": "और {{count}}",
+    "moreReasons_other": "और {{count}}"
   },
   "reportViews": {
     "menu": "सेव किए व्यू",
@@ -2844,7 +2860,20 @@
       "leave_approved_one": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर हो गई",
       "leave_approved_other": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर हो गई",
       "leave_rejected_one": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर नहीं हुई",
-      "leave_rejected_other": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर नहीं हुई"
+      "leave_rejected_other": "आपकी {{count}} दिन की {{type}} छुट्टी ({{from, date}} से {{to, date}}) मंज़ूर नहीं हुई",
+      "offline_review": "ऑफ़लाइन बना बिल {{number}} ({{customer}}, {{total, currency}}) जाँच के लिए रोका गया है",
+      "offline_reviewed": "आपका बिल {{number}} ({{customer}}) {{reviewer}} ने जाँच लिया"
+    },
+    "review": {
+      "price_changed": "{{product}} {{billed, currency}} पर बिल हुआ; रेट लिस्ट में {{list, currency}} है।",
+      "customer_inactive": "{{customer}} को निष्क्रिय कर दिया गया था।",
+      "product_inactive": "{{product}} को निष्क्रिय कर दिया गया था।",
+      "period_locked": "इसका GST महीना, {{month}}, लॉक या फ़ाइल हो चुका है।",
+      "late_sync": "यह बनने के {{days}} दिन बाद सर्वर पर पहुँचा।",
+      "stock_short": "{{product}}: स्टॉक {{available}} था और {{requested}} बेचा गया, जबकि कम स्टॉक पर बेचना रोका गया है।",
+      "credit_limit": "{{customer}} {{limit, currency}} की क्रेडिट सीमा से {{excess, currency}} ऊपर चला गया।",
+      "credit_overdue_one": "{{customer}} का {{count}} बिल ({{amount, currency}}) देय तारीख पार कर चुका है, जिससे नए बिल रुकते हैं।",
+      "credit_overdue_other": "{{customer}} के {{count}} बिल ({{amount, currency}}) देय तारीख पार कर चुके हैं, जिससे नए बिल रुकते हैं।"
     }
   }
 }

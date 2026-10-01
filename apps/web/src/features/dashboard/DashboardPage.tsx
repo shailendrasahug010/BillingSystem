@@ -39,7 +39,7 @@ import { useStoreVersion, type RangeKey } from "../../data/store";
 import { useSession } from "../../app/session";
 import { useDashboardView, type Grain } from "./data";
 import { LIVE } from "../../data/source";
-import { ExpensesCard, LeaveCard, PayrollCard, PeopleCard, PromisesCard, QueueCard, roleHeroFigures, useHome } from "./RoleHome";
+import { ExpensesCard, LeaveCard, PayrollCard, PeopleCard, PromisesCard, QueueCard, ReviewCard, roleHeroFigures, useHome } from "./RoleHome";
 import { cn } from "../../lib/cn";
 
 
@@ -306,6 +306,7 @@ export function DashboardPage() {
       {/* The person's own work today, from what their role covers. */}
       {LIVE && home && (() => {
         const cards = [
+          home.review && <ReviewCard key="review" data={home.review} />,
           !full && home.orders?.packNext && <QueueCard key="pack" stage="pack" rows={home.orders.packNext} count={home.orders.toPack ?? 0} />,
           !full && home.orders?.dispatchNext && <QueueCard key="dispatch" stage="dispatch" rows={home.orders.dispatchNext} count={home.orders.toDispatch ?? 0} />,
           home.collections && <PromisesCard key="promises" data={home.collections} />,

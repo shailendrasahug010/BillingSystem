@@ -76,7 +76,7 @@ function monthName(month: string, locale: LocaleCode): string {
 }
 
 /** The parameters as the texts use them: months spelled out, a dash for a missing value. */
-function displayParams(params: Record<string, unknown>, locale: LocaleCode): Record<string, string | number> {
+export function displayParams(params: Record<string, unknown>, locale: LocaleCode): Record<string, string | number> {
   const out: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(params)) {
     if (typeof v === "number") out[k] = v;
@@ -122,6 +122,7 @@ export function useTimeAgo(): (iso: string) => string {
 /** The screen where the person acts on a notification. */
 export function targetRoute(n: Pick<NotificationRow, "type" | "entityType" | "entityId">): Route | null {
   if (n.entityType === "sales_order" && n.entityId) return { name: "order-view", orderId: n.entityId };
+  if (n.entityType === "invoice" && n.entityId) return { name: "invoice-view", invoiceId: n.entityId };
   switch (n.type) {
     case "customer_payment_due":
       return { name: "outstanding" };

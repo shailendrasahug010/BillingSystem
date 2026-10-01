@@ -50,7 +50,8 @@ page.on("response", (r) => {
   if (r.status() >= 400) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
 });
 page.on("requestfailed", (r) => {
-  if (!offline && r.url().includes("/api/")) errors.push(`failed ${r.method()} ${r.url()}`);
+  // The live notifications stream is cut by design when the page reloads or the network goes.
+  if (!offline && r.url().includes("/api/") && !r.url().includes("/notifications/stream")) errors.push(`failed ${r.method()} ${r.url()}`);
 });
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
 const dialog = () => page.getByRole("dialog");
