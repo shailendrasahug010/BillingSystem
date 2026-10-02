@@ -29,11 +29,11 @@ In the code the name is written `digitalbahi`: the `@digitalbahi/*` packages, th
 
 ```
 apps/
-  api/            Fastify REST API, multi-tenant, with its background workers (292 integration tests against PostgreSQL)
-  web/            React 19 + Vite + Tailwind 4 — live on the API; demo mode for previews
+  api/            Fastify REST API, multi-tenant, with its background workers (334 integration tests against PostgreSQL)
+  web/            React 19 + Vite + Tailwind 4 — live on the API; demo mode for previews (30 unit tests)
   mobile/         The Android app: the web app packaged with Capacitor, with Bluetooth printing, the ML Kit scanner, the share sheet, printing and push
 packages/
-  core/           Pure TypeScript business logic shared by server and clients (117 tests)
+  core/           Pure TypeScript business logic shared by server and clients (139 tests)
   contracts/      Zod request schemas and response types shared by API and clients
   i18n/           English + Hindi catalogues, Indian number/date/currency formatting (14 tests)
   db/             PostgreSQL schema (Drizzle), SQL migrations, roles, seeds, database reference generator (10 tests)
