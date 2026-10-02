@@ -11,7 +11,8 @@ import { LIVE } from "../../data/source";
 import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { downloadCsv, downloadReport } from "../../lib/download";
-import { applyFilters, cityKey, placesOf, sumMoney, type Filters, type OutstandingRow, type Sort, useOutstandingRows } from "./data";
+import { cityKey } from "../../lib/places";
+import { applyFilters, placesOf, sumMoney, type Filters, type OutstandingRow, type Sort, useOutstandingRows } from "./data";
 import { OutstandingDetailDialog, PromiseLine } from "./OutstandingDetailDialog";
 import { OutstandingListPrint } from "./OutstandingPrint";
 

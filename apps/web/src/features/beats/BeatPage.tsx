@@ -1,4 +1,4 @@
-import { ChevronRight, MapPinned, Phone, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
+import { ChevronRight, MapPin, MapPinned, Phone, RefreshCw, RotateCcw, WifiOff } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -9,20 +9,22 @@ import { CountUp, EmptyState, Segmented, Skeleton } from "../../components/ui/mi
 import { ErrorNote, PageHeader, TAB_TRIGGER } from "../../components/ui/Page";
 import { allowed } from "../../data/db";
 import { cn } from "../../lib/cn";
+import { byCity } from "../../lib/places";
 import { useOffline } from "../../offline/sync";
 import { BeatCustomerSheet } from "./BeatCustomerSheet";
 import { BeatReport } from "./BeatReport";
 import { CallBadge } from "./CallBadge";
-import { productive, useBeat, useRoutes, weekdayName } from "./data";
+import { productive, useBeat, useRoutes, weekdayName, type BeatCustomer } from "./data";
 import { RoutesTab } from "./RoutesTab";
 
 /**
  * Beat (Phase 5.4): the salesperson's day on their routes. Today: the shops
  * of the day's routes in the order they are called on, what each is due to
  * buy again, and how the day is going; a shop opens with its bill, order,
- * payment, "no order" (and why) and call buttons. Works without a
- * connection from the beat kept on the phone. Managers also arrange the
- * routes (weekdays, salesperson, shops in order) and see each
+ * payment, "no order" (and why) and call buttons; on a beat through several
+ * towns, a chip per town shows one at a time. Works without a connection
+ * from the beat kept on the phone. Managers also arrange the routes
+ * (weekdays, salesperson, shops in order, a city's at once) and see each
  * salesperson's day against the plan.
  */
 export function BeatPage() {
@@ -79,11 +81,16 @@ function TodayBeat() {
   const data = useBeat(routeId);
   const routes = useRoutes();
   const [show, setShow] = useState<Show>("todo");
+  const [place, setPlace] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const beat = data.beat;
-  const todo = beat?.customers.filter((c) => !c.today) ?? [];
-  const done = beat?.customers.filter((c) => c.today) ?? [];
-  const shown = show === "todo" ? todo : show === "done" ? done : (beat?.customers ?? []);
+  // The beat's towns in the order the route reaches them; one picked shows only its shops.
+  const cities = useMemo(() => byCity(beat?.customers ?? [], (c) => c.city), [beat]);
+  const at = cities.length > 1 ? cities.find((g) => g.key === place) : undefined;
+  const here = at?.rows ?? beat?.customers ?? [];
+  const todo = here.filter((c) => !c.today);
+  const done = here.filter((c) => c.today);
+  const shown = show === "todo" ? todo : show === "done" ? done : here;
   const open = beat?.customers.find((c) => c.id === openId) ?? null;
   const multiRoute = (beat?.routes.length ?? 0) > 1;
   const routeName = useMemo(() => new Map(beat?.routes.map((r) => [r.id, r.name]) ?? []), [beat]);
@@ -105,7 +112,15 @@ function TodayBeat() {
         </div>
         <div className="flex items-center gap-2">
           {routes.data && routes.data.length > 0 && (
-            <Select aria-label={t("beat.whichRoute")} value={routeId ?? ""} onChange={(e) => setRouteId(e.target.value || null)} className="w-48">
+            <Select
+              aria-label={t("beat.whichRoute")}
+              value={routeId ?? ""}
+              onChange={(e) => {
+                setRouteId(e.target.value || null);
+                setPlace(null);
+              }}
+              className="w-48"
+            >
               <option value="">{t("beat.myBeat")}</option>
               {routes.data
                 .filter((r) => r.isActive)
@@ -163,6 +178,17 @@ function TodayBeat() {
             </div>
           </section>
 
+          {cities.length > 1 && (
+            <div className="scroll-x -mx-4 px-4 sm:mx-0 sm:px-0" role="group" aria-label={t("beat.byCity")}>
+              <div className="flex gap-2 pb-1">
+                <PlaceChip label={t("beat.allCities")} shops={beat.customers} active={!at} onClick={() => setPlace(null)} />
+                {cities.map((g) => (
+                  <PlaceChip key={g.key} label={g.label ?? t("collect.noCity")} shops={g.rows} active={at?.key === g.key} onClick={() => setPlace(g.key)} pin />
+                ))}
+              </div>
+            </div>
+          )}
+
           <Segmented
             label={t("beat.show")}
             value={show}
@@ -170,7 +196,7 @@ function TodayBeat() {
             options={[
               { value: "todo", label: `${t("beat.toVisit")} · ${todo.length}` },
               { value: "done", label: `${t("beat.done")} · ${done.length}` },
-              { value: "all", label: `${t("common.all")} · ${beat.customers.length}` },
+              { value: "all", label: `${t("common.all")} · ${here.length}` },
             ]}
           />
 
@@ -226,6 +252,28 @@ function TodayBeat() {
 
       {open && beat && <BeatCustomerSheet customer={open} date={beat.date} onClose={() => setOpenId(null)} working={offline.offlineMode || !offline.online} />}
     </div>
+  );
+}
+
+/** A town on the beat: its shops called on of those planned. */
+function PlaceChip({ label, shops, active, onClick, pin }: { label: string; shops: BeatCustomer[]; active: boolean; onClick(): void; pin?: boolean }) {
+  const { t } = useI18n();
+  const called = shops.filter((c) => c.today).length;
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`${label}: ${t("beat.calledOf", { called, planned: shops.length })}`}
+      onClick={onClick}
+      className={cn(
+        "press flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors",
+        active ? "border-accent bg-accent text-white shadow-card" : "border-line bg-surface text-ink hover:border-line-strong",
+      )}
+    >
+      {pin && <MapPin size={13} className={active ? "text-white/80" : "text-ink-3"} aria-hidden />}
+      {label}
+      <span className={cn("num rounded-full px-1.5 text-[11px] font-medium", active ? "bg-white/20" : "bg-surface-2 text-ink-3")}>{`${called}/${shops.length}`}</span>
+    </button>
   );
 }
 

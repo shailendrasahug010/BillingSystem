@@ -7,7 +7,10 @@
  * Bansal is shut: "no order", shop closed -> the connection goes: the beat
  * still shows from the phone, Chouhan's bill screen still suggests his
  * soap (from the beat), and a visit is kept on the phone -> back online it
- * is sent -> the owner's team report shows the day against the plan.
+ * is sent -> the owner's team report shows the day against the plan ->
+ * a route through Dewas and Sonkatch made city by city (Dewas however it
+ * was typed; its shop on another route comes unticked, and moves when
+ * ticked) -> that beat shows one town at a time.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true and
  * the outbox worker on (it keeps each customer's buying figures):
@@ -79,10 +82,17 @@ const customer = (name) => api("POST", "/customers", token, { name, stateCode: "
 const anand = await customer("Anand Kirana");
 const bansal = await customer("Bansal Stores");
 const chouhan = await customer("Chouhan General");
+// Shops in two other towns, on no route (Dewas typed three ways).
+const town = (name, city, pincode, i) => api("POST", "/customers", token, { name, stateCode: "23", city, pincode, mobile: `9827${run}${i}`, creditDays: 7 });
+await town("Dewas Traders", "Dewas", "455001", 1);
+await town("Malwa Kirana", "DEWAS", "455001", 2);
+await town("Shree Ganesh Stores", " dewas", "455111", 3);
+const bhawani = await town("Bhawani Provision", "Dewas", "455001", 4);
+await town("Sonkatch Agencies", "Sonkatch", "455118", 5);
 // Anand buys tea every 7 days, Chouhan soap every 10: both are due again.
 for (const n of [36, 29, 22, 15, 8]) await api("POST", "/invoices", token, { customerId: anand.id, invoiceDate: daysAgo(n), lines: [{ productId: tea.id, qty: "6" }] });
 for (const n of [42, 32, 22, 12]) await api("POST", "/invoices", token, { customerId: chouhan.id, invoiceDate: daysAgo(n), lines: [{ productId: soap.id, qty: "24" }] });
-log(`owner, Ravi (sales), 3 shops; today is ${dayName(todayNo)} ${today}`);
+log(`owner, Ravi (sales), 3 shops (and 5 in Dewas and Sonkatch); today is ${dayName(todayNo)} ${today}`);
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
@@ -113,7 +123,7 @@ if (JSON.stringify(order) !== JSON.stringify(["Chouhan General", "Anand Kirana",
 await desk.screenshot({ path: `${OUT}/beat-1-route.png` });
 await routeDialog.getByRole("button", { name: "Save", exact: true }).click();
 await desk.getByText("Route saved").first().waitFor({ timeout: 15000 });
-await desk.getByText(/Ravi Salesman · 3 shops/).waitFor({ timeout: 15000 });
+await desk.getByText("Ravi Salesman · 3 shops · Indore").waitFor({ timeout: 15000 });
 const seq = (await api("GET", `/beats/today`, token)).customers.map((c) => `${c.name}:${c.sequence}`);
 if (JSON.stringify(seq) !== JSON.stringify(["Chouhan General:1", "Anand Kirana:2", "Bansal Stores:3"])) errors.push(`route on the server: ${seq}`);
 log("desk: route Vijay Nagar,", dayName(todayNo), "and", dayName(otherDay), "by Ravi, shops", order.join(" → "));
@@ -207,6 +217,69 @@ const cells = (await row.locator("td").allInnerTexts()).map((s) => s.trim());
 if (cells.slice(1, 6).join("|") !== "Ravi Salesman|3|3|1|0" || cells[7] !== "₹756" || !cells[9].includes("Shop closed × 1")) errors.push(`report row: ${cells.join(" | ")}`);
 await desk.screenshot({ path: `${OUT}/beat-7-report.png` });
 log("desk: team report", cells.slice(1).join(" | "));
+
+// 9. A route through Dewas and Sonkatch, a city's shops at once. Bhawani is on another route already.
+const highway = await api("POST", "/routes", token, { name: "Dewas Highway" });
+await api("PUT", `/routes/${highway.id}/order`, token, { customerIds: [bhawani.id] });
+await desk.reload();
+await desk.getByRole("tab", { name: "Routes" }).click();
+await desk.getByText("No salesperson · 1 shop · Dewas").waitFor({ timeout: 15000 });
+await desk.getByRole("button", { name: "New route" }).click();
+await desk.fill("#route-name", "Dewas town");
+await desk.selectOption("#route-salesperson", { label: "Ravi Salesman" });
+await routeDialog.getByRole("button", { name: dayName(otherDay), exact: true }).click();
+const cityChoices = (await desk.locator("#route-add-city option").allInnerTexts()).map((s) => s.trim());
+if (JSON.stringify(cityChoices) !== JSON.stringify(["Add a city's shops…", "Dewas · 4 shops", "Indore · 3 shops", "Sonkatch · 1 shop"])) errors.push(`city choices: ${cityChoices}`);
+await desk.selectOption("#route-add-city", { label: "Dewas · 4 shops" });
+const dewas = routeDialog.getByRole("group", { name: "Dewas" });
+const listed = async () => (await dewas.locator("li label > span > span:first-child").allInnerTexts()).map((s) => s.trim());
+// By PIN code, then name; the shops on no route come ticked.
+if (JSON.stringify(await listed()) !== JSON.stringify(["Bhawani Provision", "Dewas Traders", "Malwa Kirana", "Shree Ganesh Stores"])) errors.push(`Dewas shops: ${await listed()}`);
+const tickedNow = async () => {
+  const out = [];
+  for (const name of await listed()) if (await dewas.getByRole("checkbox", { name: new RegExp(`^${name}`) }).isChecked()) out.push(name);
+  return out;
+};
+if (JSON.stringify(await tickedNow()) !== JSON.stringify(["Dewas Traders", "Malwa Kirana", "Shree Ganesh Stores"])) errors.push(`ticked in Dewas: ${await tickedNow()}`);
+if (!(await dewas.getByText("now on Dewas Highway").count())) errors.push("Bhawani: not shown as on Dewas Highway");
+await desk.screenshot({ path: `${OUT}/beat-8-city.png` });
+await dewas.getByRole("button", { name: "Add 3 shops" }).click();
+await desk.selectOption("#route-add-city", { label: "Sonkatch · 1 shop" });
+await routeDialog.getByRole("group", { name: "Sonkatch" }).getByRole("button", { name: "Add 1 shop" }).click();
+// Dewas again: the three are on the list; Bhawani, ticked now, moves here.
+await desk.selectOption("#route-add-city", { label: "Dewas · 4 shops" });
+await dewas.getByText("3 of its shops are on this route already.").waitFor();
+await dewas.getByRole("checkbox", { name: /^Bhawani Provision/ }).check();
+await dewas.getByRole("button", { name: "Add 1 shop" }).click();
+await routeDialog.getByRole("button", { name: "Move Bhawani Provision up" }).click();
+const townOrder = (await routeDialog.locator("ol li p.truncate.text-\\[14px\\]").allInnerTexts()).map((s) => s.trim());
+const expected = ["Dewas Traders", "Malwa Kirana", "Shree Ganesh Stores", "Bhawani Provision", "Sonkatch Agencies"];
+if (JSON.stringify(townOrder) !== JSON.stringify(expected)) errors.push(`Dewas town in the dialog: ${townOrder}`);
+await routeDialog.getByRole("button", { name: "Save", exact: true }).click();
+await desk.getByText("Route saved").first().waitFor({ timeout: 15000 });
+await desk.getByText("Ravi Salesman · 5 shops · Dewas, Sonkatch").waitFor({ timeout: 15000 });
+await desk.getByText("No salesperson · 0 shops").waitFor({ timeout: 15000 });
+const dewasTown = (await api("GET", "/routes", token)).data.find((r) => r.name === "Dewas town");
+const townSeq = (await api("GET", `/beats/today?routeId=${dewasTown.id}`, token)).customers.map((c) => c.name);
+if (JSON.stringify(townSeq) !== JSON.stringify(expected)) errors.push(`Dewas town on the server: ${townSeq}`);
+log("desk: route Dewas town made city by city:", townSeq.join(" → "), "(Bhawani moved off Dewas Highway)");
+
+// 10. That beat, one town at a time.
+await desk.getByRole("tab", { name: "Today" }).click();
+await desk.getByRole("combobox", { name: "Which route" }).selectOption({ label: "Dewas town" });
+await desk.getByText("0 of 5 shops called").waitFor({ timeout: 15000 });
+const townChips = desk.getByRole("group", { name: "Shops by city" });
+const towns = townChips.getByRole("button");
+const chips = await towns.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+if (JSON.stringify(chips) !== JSON.stringify(["All cities: 0 of 5 shops called", "Dewas: 0 of 4 shops called", "Sonkatch: 0 of 1 shops called"])) errors.push(`town chips: ${chips}`);
+await townChips.getByRole("button", { name: /^Sonkatch/ }).click();
+const deskNames = async () => (await desk.locator("ul li button p.truncate.text-\\[15px\\]").allInnerTexts()).map((s) => s.trim());
+await desk.getByRole("radio", { name: "To visit · 1" }).waitFor({ timeout: 15000 });
+if (JSON.stringify(await deskNames()) !== JSON.stringify(["Sonkatch Agencies"])) errors.push(`Sonkatch only: ${await deskNames()}`);
+await desk.screenshot({ path: `${OUT}/beat-9-town.png` });
+await townChips.getByRole("button", { name: /^All cities/ }).click();
+await desk.getByRole("radio", { name: "To visit · 5" }).waitFor({ timeout: 15000 });
+log("desk: Dewas town's beat by town:", chips.join(" | "));
 
 await browser.close();
 if (errors.length) {

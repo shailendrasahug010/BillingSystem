@@ -5,6 +5,7 @@ import { CUSTOMERS, customerById, PAYMENTS, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { customerInsight, useStoreVersion } from "../../data/store";
 import { api } from "../../lib/api";
+import { byCity, cityKey } from "../../lib/places";
 import { unreachable, useOffline } from "../../offline/sync";
 
 export type Sort = "amount" | "overdue" | "oldest" | "name" | "promise";
@@ -228,9 +229,6 @@ export function useOutstandingDetail(row: OutstandingRow | null, source: "server
 /** Adds rupee amounts in whole paise, so a total never drifts from its parts. */
 export const sumMoney = (values: number[]) => values.reduce((acc, v) => acc + Math.round(v * 100), 0) / 100;
 
-/** "Dewas", " dewas" and "DEWAS" are one place. */
-export const cityKey = (city: string | null) => (city ?? "").trim().toLowerCase();
-
 export interface Place {
   key: string;
   label: string | null;
@@ -240,23 +238,8 @@ export interface Place {
 
 /** The places with money owed, largest first; customers without a city last. */
 export function placesOf(rows: OutstandingRow[]): Place[] {
-  const map = new Map<string, Place & { spellings: Map<string, number> }>();
-  for (const r of rows) {
-    const key = cityKey(r.city);
-    const p = map.get(key) ?? { key, label: null, customers: 0, total: 0, spellings: new Map() };
-    p.customers += 1;
-    p.total = sumMoney([p.total, r.outstanding]);
-    const spelt = r.city?.trim();
-    if (spelt) p.spellings.set(spelt, (p.spellings.get(spelt) ?? 0) + 1);
-    map.set(key, p);
-  }
-  // The place is shown as most customers write it ("Dewas" over "DEWAS" on a tie).
-  const shout = (s: string) => s === s.toUpperCase();
-  return [...map.values()]
-    .map(({ spellings, ...p }) => ({
-      ...p,
-      label: [...spellings].sort(([a, n], [b, m]) => m - n || Number(shout(a)) - Number(shout(b)) || a.localeCompare(b))[0]?.[0] ?? null,
-    }))
+  return byCity(rows, (r) => r.city)
+    .map((g) => ({ key: g.key, label: g.label, customers: g.rows.length, total: sumMoney(g.rows.map((r) => r.outstanding)) }))
     .sort((a, b) => (a.key === "" ? 1 : b.key === "" ? -1 : b.total - a.total));
 }
 

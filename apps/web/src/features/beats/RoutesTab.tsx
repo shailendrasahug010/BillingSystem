@@ -14,19 +14,23 @@ import { useToast } from "../../components/ui/Toast";
 import { allowed, CUSTOMERS, customerById } from "../../data/db";
 import { customerRow, requestPull } from "../../data/live";
 import { useStoreVersion } from "../../data/store";
+import type { Customer } from "../../data/types";
 import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
+import { byCity } from "../../lib/places";
 import { useOffline } from "../../offline/sync";
 import { searchCustomers } from "../invoice/CustomerPicker";
 import { useEmployeeOptions } from "../people/api";
-import { useRoutes, weekdayName, type RouteRow } from "./data";
+import { AddByCity } from "./AddByCity";
+import { ROUTE_MAX_SHOPS, useRoutes, weekdayName, type RouteRow, type RouteShop } from "./data";
 
 const WEEK = [1, 2, 3, 4, 5, 6, 7];
 
 /**
  * The routes (managers): on which weekdays each is worked, by whom, and its
- * shops in the order they are called on. A shop belongs to one route;
- * adding it here moves it from the one it was on.
+ * shops in the order they are called on, added one by one or a city's at
+ * once. A shop belongs to one route; adding it here moves it from the one it
+ * was on.
  */
 export function RoutesTab() {
   const { t, locale } = useI18n();
@@ -35,15 +39,25 @@ export function RoutesTab() {
   const employees = useEmployeeOptions();
   const [editing, setEditing] = useState<RouteRow | "new" | null>(null);
   const employeeName = useMemo(() => new Map((employees.data ?? []).map((e) => [e.id, e.name])), [employees.data]);
-  // Shops per route, from the customers on this device (they follow a change of route at the next pull).
+  // Each route's shops and their cities, from the customers on this device (they follow a change of route at the next pull).
   const version = useStoreVersion();
-  const shops = useMemo(() => {
-    const n = new Map<string, number>();
+  const onRoutes = useMemo(() => {
+    const byRoute = new Map<string, Customer[]>();
     for (const c of CUSTOMERS) {
       const routeId = customerRow(c.id)?.routeId;
-      if (routeId) n.set(routeId, (n.get(routeId) ?? 0) + 1);
+      if (!routeId) continue;
+      const shops = byRoute.get(routeId);
+      if (shops) shops.push(c);
+      else byRoute.set(routeId, [c]);
     }
-    return n;
+    const places = (shops: Customer[]) => {
+      // The cities with most of the route's shops first.
+      const cities = byCity(shops, (c) => c.city)
+        .sort((a, b) => b.rows.length - a.rows.length)
+        .flatMap((g) => (g.label ? [g.label] : []));
+      return cities.length > 3 ? `${cities.slice(0, 3).join(", ")} +${cities.length - 3}` : cities.join(", ");
+    };
+    return new Map([...byRoute].map(([id, shops]) => [id, { shops: shops.length, places: places(shops) }]));
   }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (offline.offlineMode || !offline.online) return <EmptyState icon={<MapPinned size={22} />} title={t("beat.routesOffline")} />;
@@ -75,7 +89,9 @@ export function RoutesTab() {
                     {!r.isActive && <span className="ml-2 text-[12px] font-normal text-ink-3">({t("beat.inactive")})</span>}
                   </p>
                   <p className="truncate text-[12.5px] text-ink-3">
-                    {[r.salespersonId ? (employeeName.get(r.salespersonId) ?? "—") : t("beat.noSalesperson"), t("beat.shops", { count: shops.get(r.id) ?? 0 })].join(" · ")}
+                    {[r.salespersonId ? (employeeName.get(r.salespersonId) ?? "—") : t("beat.noSalesperson"), t("beat.shops", { count: onRoutes.get(r.id)?.shops ?? 0 }), onRoutes.get(r.id)?.places]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {(r.visitDays ?? []).length === 0 ? (
@@ -100,16 +116,10 @@ export function RoutesTab() {
   );
 }
 
-interface Shop {
-  id: string;
-  name: string;
-  city: string | null;
-}
-
 /** A route's name, weekdays and salesperson, and its shops in calling order. */
 function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose(): void }) {
   const i18n = useI18n();
-  const { t, locale } = i18n;
+  const { t, locale, number } = i18n;
   const toast = useToast();
   const qc = useQueryClient();
   const employees = useEmployeeOptions();
@@ -117,7 +127,7 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose(): vo
   const [days, setDays] = useState<number[]>(route?.visitDays ?? []);
   const [salesperson, setSalesperson] = useState(route?.salespersonId ?? "");
   const [active, setActive] = useState(route?.isActive ?? true);
-  const [shops, setShops] = useState<Shop[] | null>(route ? null : []);
+  const [shops, setShops] = useState<RouteShop[] | null>(route ? null : []);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -135,7 +145,7 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose(): vo
     };
   }, [route]);
 
-  const change = (next: Shop[]) => {
+  const change = (next: RouteShop[]) => {
     setShops(next);
     setTouched(true);
   };
@@ -151,6 +161,8 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose(): vo
     if (!c || !shops || shops.some((s) => s.id === c.id)) return;
     change([...shops, { id: c.id, name: c.businessName || c.name, city: c.city.trim() || null }]);
   };
+  const listed = useMemo(() => new Set((shops ?? []).map((s) => s.id)), [shops]);
+  const tooMany = (shops?.length ?? 0) > ROUTE_MAX_SHOPS;
 
   const save = async () => {
     setBusy(true);
@@ -182,7 +194,7 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose(): vo
       footer={
         <>
           <Button onClick={onClose}>{t("common.cancel")}</Button>
-          <Button variant="primary" disabled={busy || !name.trim() || shops === null} onClick={() => void save()}>
+          <Button variant="primary" disabled={busy || !name.trim() || shops === null || tooMany} onClick={() => void save()}>
             {busy ? t("common.saving") : t("common.save")}
           </Button>
         </>
@@ -257,19 +269,27 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose(): vo
                   ))}
                 </ol>
               )}
-              <SearchSelect
-                id="route-add-shop"
-                value={null}
-                onChange={add}
-                placeholder={t("beat.addShop")}
-                clearLabel={t("common.clear")}
-                emptyText={t("search.noResults")}
-                search={(q) =>
-                  searchCustomers(q)
-                    .filter((c) => !shops.some((s) => s.id === c.id))
-                    .map((c) => ({ id: c.id, label: c.businessName || c.name, sub: [c.code, c.city, c.route].filter(Boolean).join(" · ") }))
-                }
-              />
+              {tooMany && (
+                <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger" role="alert">
+                  {t("beat.tooManyShops", { max: number(ROUTE_MAX_SHOPS, 0), shops: number(shops.length, 0) })}
+                </p>
+              )}
+              <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2">
+                <SearchSelect
+                  id="route-add-shop"
+                  value={null}
+                  onChange={add}
+                  placeholder={t("beat.addShop")}
+                  clearLabel={t("common.clear")}
+                  emptyText={t("search.noResults")}
+                  search={(q) =>
+                    searchCustomers(q)
+                      .filter((c) => !listed.has(c.id))
+                      .map((c) => ({ id: c.id, label: c.businessName || c.name, sub: [c.code, c.city, c.route].filter(Boolean).join(" · ") }))
+                  }
+                />
+                <AddByCity routeId={route?.id ?? null} listed={listed} onAdd={(added) => change([...shops, ...added])} />
+              </div>
             </>
           )}
         </section>

@@ -345,6 +345,16 @@ export interface RouteRow {
   isActive: boolean;
 }
 
+/** A shop on a route being arranged. */
+export interface RouteShop {
+  id: string;
+  name: string;
+  city: string | null;
+}
+
+/** The most shops a route takes (the server's limit). */
+export const ROUTE_MAX_SHOPS = 1000;
+
 /** Every route of the business (online). */
 export function useRoutes() {
   const offline = useOffline();

@@ -3207,7 +3207,20 @@
     "planned": "Planned",
     "calledCol": "Called",
     "offPlan": "Off plan",
-    "whyNoOrder": "Why no order"
+    "whyNoOrder": "Why no order",
+    "addCity": "Add a city's shops…",
+    "allHere": "Every shop of {{city}} is on this route.",
+    "alreadyHere_one": "{{count}} of its shops is on this route already.",
+    "alreadyHere_other": "{{count}} of its shops are on this route already.",
+    "findShops": "Find by name, address or PIN",
+    "tickAll": "Select all ({{n}})",
+    "onRoute": "now on {{route}}",
+    "onOtherRoute": "now on another route",
+    "addShops_one": "Add {{count}} shop",
+    "addShops_other": "Add {{count}} shops",
+    "tooManyShops": "A route takes up to {{max}} shops, and this one has {{shops}}. Take some off to save it.",
+    "byCity": "Shops by city",
+    "allCities": "All cities"
   },
   "thermal": {
     "title": "Receipt printer",
