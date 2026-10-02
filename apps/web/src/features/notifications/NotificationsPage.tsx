@@ -160,6 +160,12 @@ function Rules() {
 
   const save = async (rule: ReminderRule, patch: RulePatch) => {
     setSaving(rule.type);
+    // The change shows at once (a switch that went back until the server answered looked as if it had not worked).
+    const before = client.getQueryData<{ data: ReminderRule[] }>(RULES_KEY);
+    client.setQueryData<{ data: ReminderRule[] }>(
+      RULES_KEY,
+      (d) => d && { data: d.data.map((r) => (r.type === rule.type ? { ...r, ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}), config: { ...r.config, ...patch.config } } : r)) },
+    );
     try {
       const updated = await api.patch<ReminderRule>(`/reminder-rules/${rule.type}`, patch);
       client.setQueryData<{ data: ReminderRule[] }>(RULES_KEY, (d) => d && { data: d.data.map((r) => (r.type === updated.type ? updated : r)) });
@@ -167,6 +173,7 @@ function Rules() {
       if (rule.type === "customer_reminders") void client.invalidateQueries({ queryKey: DUE_KEY });
       toast({ tone: "success", title: t("notifications.rules.saved") });
     } catch (e) {
+      client.setQueryData(RULES_KEY, before);
       toast({ tone: "danger", title: t(`notifications.rules.types.${rule.type}.name` as TranslationKey), body: e instanceof ApiError ? translateError(i18n, e) : "" });
     } finally {
       setSaving(null);
