@@ -106,6 +106,8 @@ await page.fill("#c-business", "Gulf Traders LLC");
 await page.fill("#c-mobile", `98260${run}`);
 await page.screenshot({ path: `${OUT}/export-1-customer-form.png` });
 await dialog.getByRole("button", { name: "Save", exact: true }).click();
+// Saved when the form closes (a "Customer saved" toast can still be the one before).
+await dialog.waitFor({ state: "detached", timeout: 15000 });
 await toast("Customer saved");
 await page.getByRole("button", { name: "Add customer" }).click();
 dialog = page.getByRole("dialog");
@@ -116,7 +118,7 @@ await page.fill("#c-mobile", `98261${run}`);
 await page.fill("#c-gstin", sezGstin);
 check((await page.inputValue("#c-state")) === "27", "state filled from the SEZ unit's GSTIN");
 await dialog.getByRole("button", { name: "Save", exact: true }).click();
-await toast("Customer saved");
+await dialog.waitFor({ state: "detached", timeout: 15000 });
 const customers = (await api("GET", "/customers?q=", token)).data;
 const gulf = customers.find((c) => c.name === "Gulf Traders LLC");
 const sez = customers.find((c) => c.name === "Pune SEZ Unit");

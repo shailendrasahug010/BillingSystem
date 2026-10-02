@@ -235,7 +235,8 @@ await page.selectOption("#quick-unit-2", { label: "DOZ — Dozen" });
 await page.fill("#quick-letter-2", "d");
 await page.screenshot({ path: `${OUT}/invoice-screen-3b-settings.png` });
 await unitsRow.getByRole("button", { name: "Save", exact: true }).click();
-await page.getByText("Settings saved").first().waitFor({ timeout: 15000 });
+// Saved: the row offers to go back to the app's own (a "Settings saved" toast may still be an older one).
+await unitsRow.getByRole("button", { name: "Back to B, C, S" }).waitFor({ timeout: 15000 });
 const stored = (await api("GET", "/settings", token))["invoice.quick_units"];
 if (JSON.stringify(stored) !== JSON.stringify([{ unitId: units.BOX, alias: "B" }, { unitId: units.CTN, alias: "C" }, { unitId: units.DOZ, alias: "D" }])) errors.push(`saved buttons: ${JSON.stringify(stored)}`);
 await newBill(page);
@@ -246,7 +247,8 @@ log("Settings: the third button made the dozen, D; the next bill shows B, C, D")
 // Back to the app's own.
 await page.goto(`${WEB}/#settings`);
 await unitsRow.getByRole("button", { name: "Back to B, C, S" }).click();
-await page.getByText("Settings saved").first().waitFor({ timeout: 15000 });
+// Back to the app's own: the button goes once the setting is cleared.
+await unitsRow.getByRole("button", { name: "Back to B, C, S" }).waitFor({ state: "detached", timeout: 15000 });
 if ((await api("GET", "/settings", token))["invoice.quick_units"] !== null) errors.push("Back to B, C, S did not clear the setting");
 
 // 3. A phone: one line a name, a suggestion card tapped on its text, then a row of chips.
