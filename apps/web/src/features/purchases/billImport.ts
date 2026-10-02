@@ -1,6 +1,7 @@
 import type { BillFileBill, BillFileLine } from "@digitalbahi/core";
 import { WORKSPACE } from "../../data/db";
 import type { Product } from "../../data/types";
+import { uuid } from "../../lib/uuid";
 
 export type MatchedBy = "supplier_item" | "barcode" | "code" | "name";
 
@@ -58,7 +59,7 @@ export interface DraftLine {
 
 export function draftFromMatch(fileName: string, bill: BillFileBill, match: MatchResponse, scanned = false): PurchaseDraft {
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     fileName,
     ...(scanned ? { scanned } : {}),
     billNumber: bill.billNumber ?? "",
@@ -69,7 +70,7 @@ export function draftFromMatch(fileName: string, bill: BillFileBill, match: Matc
     duplicate: match.duplicate,
     items: bill.lines.map((file, i) => {
       const m = match.lines[i];
-      return { key: crypto.randomUUID(), file, productId: m?.productId ?? null, unitId: m?.unitId ?? null, matchedBy: m?.matchedBy ?? null, candidates: m?.candidates ?? [] };
+      return { key: uuid(), file, productId: m?.productId ?? null, unitId: m?.unitId ?? null, matchedBy: m?.matchedBy ?? null, candidates: m?.candidates ?? [] };
     }),
   };
 }

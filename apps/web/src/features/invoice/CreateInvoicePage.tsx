@@ -80,8 +80,10 @@ function ShareDialog({ text, onClose }: { text: string | null; onClose(): void }
         <Button
           icon={copied ? <Check size={16} /> : <Copy size={16} />}
           onClick={() => {
+            // No clipboard on a page that is not secure (plain http at a network address): select it to copy by hand.
+            if (!navigator.clipboard) return ref.current?.select();
             navigator.clipboard
-              ?.writeText(text ?? "")
+              .writeText(text ?? "")
               .then(() => setCopied(true))
               .catch(() => ref.current?.select());
           }}

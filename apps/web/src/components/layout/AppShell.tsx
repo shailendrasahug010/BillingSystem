@@ -323,8 +323,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
     .filter((a) => allowed(a.permission))
     .slice(0, 8);
 
-  // The phone's bottom bar: Customers and Products for the roles that have
-  // them, otherwise that role's own main screens (Packing, Employees, Leave…).
+  // The phone's bottom bar: Customers and Outstanding for the roles that have
+  // them, otherwise that role's own main screens (Products, Packing, Leave…).
   const navModules = visibleModules();
   const used = new Set<string>();
   const slot = (prefs: string[]) => {
@@ -333,7 +333,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
     return m;
   };
   const slotA = slot(["customers", "packing", "employees", "orders", "payments", "purchases", "expenses", "reports", "gst"]);
-  const slotB = slot(["products", "dispatch", "leave", "inventory", "payroll", "suppliers", "reports", "audit", "settings"]);
+  const slotB = slot(["outstanding", "products", "dispatch", "leave", "inventory", "payroll", "suppliers", "reports", "audit", "settings"]);
   const fromModule = (m: ModuleDef | undefined) => m && { key: m.key, label: t(m.label), icon: <m.icon size={20} />, route: m.route };
 
   const bottomItems = (

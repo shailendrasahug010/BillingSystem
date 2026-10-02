@@ -1,4 +1,5 @@
 import { ApiError, currentAccessToken } from "./api";
+import { uuid } from "./uuid";
 
 /**
  * Errors the app meets in the browser — a screen that crashed, a promise that
@@ -25,12 +26,7 @@ export function setErrorScreen(name: string): void {
 
 /** A reference for the person to quote (a UUID, as the server's). */
 export function newReference(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  const b = Array.from({ length: 16 }, () => Math.floor(Math.random() * 256));
-  b[6] = (b[6]! & 0x0f) | 0x40;
-  b[8] = (b[8]! & 0x3f) | 0x80;
-  const h = b.map((x) => x.toString(16).padStart(2, "0")).join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  return uuid();
 }
 
 function worthReporting(error: unknown): boolean {

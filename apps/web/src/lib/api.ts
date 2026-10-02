@@ -1,4 +1,5 @@
 import type { SessionResponse } from "@digitalbahi/contracts";
+import { uuid } from "./uuid";
 
 /**
  * HTTP client for the Digital Bahi API. The access token lives only in memory; the
@@ -207,5 +208,5 @@ export async function fetchAll<T>(path: string, query: Query = {}, pageSize = 20
 }
 
 export function newIdempotencyKey(): string {
-  return crypto.randomUUID();
+  return uuid();
 }

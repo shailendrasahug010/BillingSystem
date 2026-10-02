@@ -36,6 +36,7 @@ import { ProductEditor, type ProductPrefill } from "../products/ProductEditor";
 import { searchSuppliers, supplierLabel } from "../suppliers/search";
 import { lineFromItem, newProductFrom, type ImportedItem, type PurchaseDraft } from "./billImport";
 import { NewProductsDialog } from "./NewProductsDialog";
+import { uuid } from "../../lib/uuid";
 
 interface Line {
   key: string;
@@ -150,7 +151,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
     setLines((ls) => [
       ...ls,
       {
-        key: crypto.randomUUID(),
+        key: uuid(),
         productId,
         unitId: pack?.unitId ?? p.unitId ?? "",
         qty: "1",
@@ -639,7 +640,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
           <Card className="p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[16px] font-semibold text-ink">{t("purchase.charges")}</h2>
-              <Button size="sm" icon={<Plus size={14} />} onClick={() => setCharges((cs) => [...cs, { key: crypto.randomUUID(), label: t("purchase.freight"), amount: "", gstRate: "" }])}>
+              <Button size="sm" icon={<Plus size={14} />} onClick={() => setCharges((cs) => [...cs, { key: uuid(), label: t("purchase.freight"), amount: "", gstRate: "" }])}>
                 {t("purchase.addCharge")}
               </Button>
             </div>

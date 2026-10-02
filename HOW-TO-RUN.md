@@ -170,7 +170,13 @@ While the app runs on your computer (section 1), a phone on the **same Wi-Fi** c
 2. On the phone, open the **Network** address in Chrome (Android) or Safari (iPhone).
 3. If the phone cannot connect, allow Node.js through the computer's firewall (Windows asks the first time; choose **Private networks**), and check that both are on the same Wi-Fi.
 
-This is for trying it out. To **install** the app on a phone, the browser needs a secure (https) address, which you get with section 5. Browsers treat only `localhost` as secure without https, so on the computer itself you can install it right away (section 3).
+This is for trying it out. Browsers treat a plain `http://` network address as not secure and switch off a few things there. Billing, payments, Outstanding and the rest work, but on the phone:
+
+* the app cannot be **installed**;
+* it cannot keep its copy for **billing without internet**;
+* **WhatsApp** opens with the message only, without the PDF file attached.
+
+These need a secure (https) address, which you get with section 5. Browsers treat only `localhost` as secure without https, so on the computer itself everything works, and you can install it right away (section 3).
 
 To try the installed app exactly as users will get it (it opens without internet and updates itself), build it and serve the built app instead of the development one:
 
