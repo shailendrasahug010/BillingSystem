@@ -206,6 +206,41 @@ export const RouteBody = z.strictObject({
   salespersonId: Id.nullable().optional(),
 });
 
+/**
+ * The order customers are called on along a route: those listed get places
+ * 1, 2, 3… (and move onto the route). The rest of the route follow by name,
+ * or with `others: "remove"` are taken off it (the list is then the route).
+ */
+export const RouteOrderBody = z.strictObject({ customerIds: z.array(Id).max(1000), others: z.enum(["after", "remove"]).default("after") });
+
+/** Why a call ended without an order. */
+export const VISIT_REASONS = ["shop_closed", "owner_absent", "stock_enough", "no_money", "rate_issue", "other"] as const;
+
+/** A call on a customer that left no bill, order or payment: checked in, or no order and why (Phase 5.4). */
+export const VisitBody = z
+  .strictObject({
+    customerId: Id,
+    routeId: Id.nullable().optional(),
+    visitDate: IsoDate.optional(),
+    outcome: z.enum(["visited", "no_order"]),
+    reason: z.enum(VISIT_REASONS).optional(),
+    note: z.string().trim().max(500).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    /** When it happened on the phone (made offline: earlier than it arrives). */
+    visitedAt: z.iso.datetime({ offset: true }).optional(),
+  })
+  .refine((b) => b.outcome !== "no_order" || b.reason !== undefined, { message: "Say why there was no order", path: ["reason"] });
+
+/** Today's beat: the person's routes for the day (or one route), with `insights` the customers' buying for offline suggestions. */
+export const BeatQuery = z.object({
+  date: IsoDate.optional(),
+  routeId: Id.optional(),
+  insights: z.enum(["0", "1"]).default("0"),
+});
+
+export const BeatReportQuery = z.object({ from: IsoDate, to: IsoDate });
+
 export const CustomerCategoryBody = z.strictObject({ name: z.string().trim().min(1).max(100) });
 
 export const SettingBody = z.strictObject({ value: z.unknown() });

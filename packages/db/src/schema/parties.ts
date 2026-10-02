@@ -5,6 +5,7 @@ import {
   check,
   date,
   index,
+  integer,
   pgTable,
   smallint,
   text,
@@ -104,6 +105,8 @@ export const customers = pgTable(
     categoryId: uuid().references(() => customerCategories.id),
     /** Beat (route) the customer is on, for salespeople and collection lists. */
     routeId: uuid().references(() => salesRoutes.id),
+    /** Place on the route: the order the salesperson visits in (empty: after the numbered ones, by name). */
+    routeSequence: integer(),
     /** Salesperson in charge of the customer. */
     salesRepId: uuid().references(() => employees.id),
     /** Amount owed when the customer was brought into the app. */

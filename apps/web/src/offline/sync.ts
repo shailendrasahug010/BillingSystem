@@ -11,8 +11,8 @@ import { isSealed, seal, unseal, type Sealed } from "./vault";
 /**
  * Work done without a connection waits here (on the device, in IndexedDB)
  * until the server takes it: bills, payments, orders, new customers, changes
- * to customers, collectors' visit notes, purchase bills, expenses, returns,
- * discount notes and cancelled bills. Each is sent with its own
+ * to customers, collectors' visit notes, salespeople's calls (no order and
+ * why), purchase bills, expenses, returns, discount notes and cancelled bills. Each is sent with its own
  * Idempotency-Key, so a send cut off half-way is simply sent again; the
  * server keeps the number the device gave a bill, and a new customer keeps
  * the id it was billed under. Up to 25 go in one request (POST /sync/push),
@@ -176,7 +176,19 @@ export interface CancelEntry extends EntryBase {
   body: { reason: string };
 }
 
-export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | PurchaseEntry | ExpenseEntry | ReturnEntry | PriceNoteEntry | CancelEntry;
+/** A salesperson's call on the beat that left no bill, order or payment: checked in, or no order and why. */
+export interface VisitEntry extends EntryBase {
+  kind: "visit";
+  customerId: string;
+  customerName: string;
+  outcome: "visited" | "no_order";
+  reason: string | null;
+  /** The day of the call. */
+  date: string;
+  body: Record<string, unknown>;
+}
+
+export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | PurchaseEntry | ExpenseEntry | ReturnEntry | PriceNoteEntry | CancelEntry | VisitEntry;
 export type QueuedKind = NonNullable<QueuedEntry["kind"]>;
 export const kindOf = (e: { kind?: QueuedKind }): QueuedKind => e.kind ?? "invoice";
 
@@ -367,7 +379,7 @@ function customerOf(e: QueuedEntry): string | null {
   if (kind === "payment") return (e as PaymentEntry).direction === "in" ? (e as PaymentEntry).partyId : null;
   if (kind === "purchase" || kind === "expense") return null;
   if (kind === "return" || kind === "price-note") return (e as ReturnEntry | PriceNoteEntry).side === "sale" ? (e as ReturnEntry | PriceNoteEntry).partyId : null;
-  return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | CancelEntry).customerId;
+  return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | CancelEntry | VisitEntry).customerId;
 }
 
 /**
@@ -438,6 +450,7 @@ function applyEffects(e: QueuedEntry, sign: 1 | -1): void {
     case "order":
     case "collection-note":
     case "expense":
+    case "visit":
       return;
   }
 }
@@ -568,6 +581,10 @@ function syncedFrom(e: QueuedEntry, res: Record<string, unknown>): Omit<SyncedEn
       const n = e as CollectionNoteEntry;
       return { kind: "collection-note", number: "", customerName: n.customerName, total: n.amount ?? 0, serverId: text("id"), serverNumber: "", serverTotal: n.amount ?? 0 };
     }
+    case "visit": {
+      const v = e as VisitEntry;
+      return { kind: "visit", number: "", customerName: v.customerName, total: 0, serverId: text("id"), serverNumber: "", serverTotal: 0 };
+    }
   }
 }
 
@@ -633,6 +650,8 @@ async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt"
     }
     case "collection-note":
       return syncedFrom(e, await api.post("/collections/notes", (e as CollectionNoteEntry).body, { idempotencyKey: e.id }));
+    case "visit":
+      return syncedFrom(e, await api.post("/visits", (e as VisitEntry).body, { idempotencyKey: e.id }));
   }
 }
 
@@ -657,6 +676,8 @@ function pushItem(e: QueuedEntry, inBatch: ReadonlySet<string>): Record<string, 
       return { id: e.id, kind: "expense", body: (e as ExpenseEntry).body };
     case "collection-note":
       return { id: e.id, kind: "collection-note", ...after, body: (e as CollectionNoteEntry).body };
+    case "visit":
+      return { id: e.id, kind: "visit", ...after, body: (e as VisitEntry).body };
     case "return": {
       const r = e as ReturnEntry;
       return { id: e.id, kind: r.side === "sale" ? "sale-return" : "purchase-return", ...target(r.documentId), body: r.body };

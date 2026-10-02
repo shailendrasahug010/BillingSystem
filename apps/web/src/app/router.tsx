@@ -15,6 +15,8 @@ export type Route =
   | { name: "customer"; customerId: string }
   /** Money to collect, by city and route (collectors). */
   | { name: "outstanding" }
+  /** Today's beat: the salesperson's routes and shops (Phase 5.4). */
+  | { name: "beat" }
   | { name: "products" }
   | { name: "settings" }
   | { name: "design-system" }
@@ -60,6 +62,7 @@ const HASH_ROUTES: Record<string, Route> = {
   invoice: { name: "invoice-new" },
   customers: { name: "customers" },
   outstanding: { name: "outstanding" },
+  beat: { name: "beat" },
   products: { name: "products" },
   settings: { name: "settings" },
   design: { name: "design-system" },

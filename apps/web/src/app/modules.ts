@@ -25,6 +25,7 @@ import {
   ChartPie,
   Factory,
   HandCoins,
+  MapPinned,
   History,
   MessagesSquare,
 } from "lucide-react";
@@ -71,6 +72,7 @@ export const MODULES: ModuleDef[] = [
   { key: "customers", label: "nav.customers", icon: Users, group: "daily", route: { name: "customers" }, permission: "customer.view" },
   { key: "payments", label: "nav.payments", icon: Wallet, group: "daily", route: planned("payments"), permission: "payment.view", phase: 3 },
   { key: "outstanding", label: "nav.outstanding", icon: HandCoins, group: "daily", route: { name: "outstanding" }, permission: "customer.view_ledger" },
+  { key: "beat", label: "nav.beat", icon: MapPinned, group: "daily", route: { name: "beat" }, permission: "customer.view" },
   { key: "messages", label: "nav.messages", icon: MessagesSquare, group: "daily", route: planned("messages"), permission: "message.send", phase: 5 },
 
   { key: "products", label: "nav.products", icon: Package, group: "stock", route: { name: "products" }, permission: "product.view" },
@@ -117,6 +119,8 @@ export function visibleModules(): ModuleDef[] {
   return MODULES.filter((m) => {
     if (LIVE && m.route.name === "planned" && !LIVE_MODULES.has(m.route.module)) return false;
     if (LIVE && m.route.name === "design-system") return false;
+    // The beat comes from the server (routes, calls, what is due): not in the demo.
+    if (!LIVE && m.route.name === "beat") return false;
     return m.key === "dashboard" || allowed(m.permission);
   });
 }

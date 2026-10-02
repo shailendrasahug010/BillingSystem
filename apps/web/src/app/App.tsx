@@ -55,6 +55,7 @@ const NotificationsPage = lazy(() => import("../features/notifications/Notificat
 const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 const OutstandingPage = lazy(() => import("../features/outstanding/OutstandingPage").then((m) => ({ default: m.OutstandingPage })));
+const BeatPage = lazy(() => import("../features/beats/BeatPage").then((m) => ({ default: m.BeatPage })));
 const DesignSystemPage = lazy(() => import("../features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
 
 function ScreenLoading() {
@@ -82,6 +83,8 @@ function Screen({ route }: { route: Route }) {
       return <CustomerProfilePage customerId={route.customerId} />;
     case "outstanding":
       return <OutstandingPage />;
+    case "beat":
+      return <BeatPage />;
     case "products":
       return <ProductsPage />;
     case "settings":

@@ -236,7 +236,8 @@ The phone needs the **https** address of your server (section 5).
 
 ### On the phone
 
-* The bottom bar has **Home, Customers, + (create), Products, More**; everything else is under **More**.
+* The bottom bar has **Home, Customers, + (create), Outstanding, More** (roles that do not collect money get their own screen in Outstanding's place); everything else, Products included, is under **More**.
+* **Beat** (under **More**) is a salesperson's day: the shops of today's routes in the order they are visited, what each is due to buy again, and how many have been called on. A shop opens with **New bill**, **Order** (it starts with the products due, at the quantities the shop usually takes), **Receive payment**, **No order** (and why), **Visited only**, Call and WhatsApp. It works without internet from the beat kept on the phone. The owner sets the routes up under **Beat → Routes** (the days each is worked, the salesperson, and the shops in order) and sees each salesperson's day under **Beat → Team report**. A salesperson is matched to their routes by the employee record with the same mobile number.
 * Barcode entry works with a Bluetooth scanner, which types like a keyboard.
 * **Send** on an invoice, note or receipt sends it from the firm's WhatsApp Business number or by email, with the PDF, without opening WhatsApp on the phone (set up once in **Settings → WhatsApp, SMS & email**, see section 5). **Messages** lists everything sent and sends **payment reminders** to customers with overdue bills; **Notifications → Reminder rules → Payment reminders to customers** sends them by itself on a schedule.
 * Invoices, notes and receipts also go out from their **WhatsApp** button: on a phone it shares the **PDF file** with the message (pick WhatsApp and the chat); on a computer it opens WhatsApp with the message, and you attach the file from **Download PDF**.

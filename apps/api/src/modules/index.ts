@@ -9,6 +9,7 @@ import { documentsModule } from "./documents/routes.js";
 import { messagingModule } from "./messaging/routes.js";
 import { messagingStatusModule } from "./messaging/status-webhook.js";
 import { backupsModule } from "./backups/routes.js";
+import { beatsModule } from "./beats/routes.js";
 import { expensesModule } from "./expenses/routes.js";
 import { eInvoiceModule } from "./gst/einvoice.js";
 import { gstModule } from "./gst/routes.js";
@@ -55,6 +56,7 @@ export const MODULES: ApiModule[] = [
   catalogMastersModule,
   productsModule,
   partiesModule,
+  beatsModule,
   importsModule,
   ocrModule,
   invoicesModule,

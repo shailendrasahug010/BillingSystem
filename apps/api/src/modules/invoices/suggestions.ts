@@ -136,6 +136,138 @@ const reorderJson = (stats: Map<string, CustomerProductStats>, products: Map<str
 const rate = (added: number, shown: number) => (shown ? Math.round((added / shown) * 1000) / 1000 : null);
 const RANK_BUCKETS = ["1-3", "4-6", "7-12", "13+"] as const;
 
+/**
+ * A customer's buying and paying as the billing screen reads it (the
+ * store-wide "bought together" rules apart): per-product statistics, payment
+ * behaviour, open bills, their own rules. Also cached on phones for the
+ * day's beat, so suggestions work there without a connection.
+ */
+export async function customerInsightJson(tx: Tx, businessId: string, customer: { id: string; balance: string }, today: string, windowDays: number) {
+  const since = addDays(today, -windowDays);
+  const history = await purchaseHistory(tx, businessId, customer.id, today, windowDays);
+  const invoices = (
+    await tx.execute<{ id: string; number: string; date: string; due_date: string; total: string; paid: string; balance: string; settled_on: string | null }>(sql`
+      select i.id, i.invoice_number as number, i.invoice_date::text as date, coalesce(i.due_date, i.invoice_date)::text as due_date,
+             i.grand_total::text as total, i.amount_paid::text as paid, i.balance_due::text as balance,
+             case when i.balance_due = 0 then (
+               select max(p.payment_date)::text from payment_allocations a join payments p on p.id = a.payment_id
+               where a.invoice_id = i.id and a.reversed_at is null) end as settled_on
+      from invoices i
+      where i.business_id = ${businessId} and i.customer_id = ${customer.id} and i.status = 'posted'
+        and (i.invoice_date >= ${since} or i.balance_due > 0)
+      order by i.invoice_date`)
+  ).rows;
+  const inWindow = invoices.filter((i) => i.date >= since);
+  const open = invoices.filter((i) => Number(i.balance) > 0);
+  const overdue = open.filter((i) => i.due_date < today);
+  const totalSales = inWindow.reduce((acc, i) => acc + Number(i.total), 0);
+  return {
+    asOf: today,
+    windowDays,
+    source: history.source,
+    summary: history.summary,
+    stats: [...history.stats.values()].map(statsJson),
+    totalSales: totalSales.toFixed(2),
+    invoiceCount: inWindow.length,
+    avgOrderValue: inWindow.length ? (totalSales / inWindow.length).toFixed(2) : "0.00",
+    outstanding: customer.balance,
+    overdue: overdue.reduce((acc, i) => acc + Number(i.balance), 0).toFixed(2),
+    overdueCount: overdue.length,
+    oldestOverdueDays: overdue.length ? Math.max(...overdue.map((i) => daysBetween(i.due_date, today))) : 0,
+    lastPurchase: history.summary.lastInvoiceOn,
+    behaviour: paymentBehaviour(
+      inWindow.map((i) => ({ date: i.date, dueDate: i.due_date, settledOn: i.settled_on })),
+      today,
+    ),
+    openInvoices: open.map((i) => ({ id: i.id, number: i.number, date: i.date, dueDate: i.due_date, total: i.total, paid: i.paid, balance: i.balance })),
+    customerAssociations: history.customerAssociations,
+  };
+}
+
+/**
+ * Customers with products due to be bought again (by each product's usual
+ * interval), most urgent first, each with up to 10 products: overdue, due,
+ * lapsed. On a route, of a salesperson, or of the customers given.
+ */
+export async function reorderDueCustomers(tx: Tx, businessId: string, today: string, filter: { routeId?: string; salespersonId?: string; customerIds?: readonly string[] }) {
+  const rows = await tx.execute<{
+    customer_id: string;
+    customer_name: string;
+    city: string | null;
+    route_id: string | null;
+    product_id: string;
+    product_name: string;
+    order_multiple: string | null;
+    order_count: number;
+    order_share: number;
+    total_qty: string;
+    avg_qty: string;
+    last_qty: string;
+    last_rate: string | null;
+    recent_qtys: string[];
+    first_purchased_on: string;
+    last_purchased_on: string;
+    typical_interval_days: number;
+  }>(sql`
+    select c.id as customer_id, c.name as customer_name, c.city, c.route_id,
+           s.product_id, p.name as product_name, pu.conversion_factor::text as order_multiple,
+           s.order_count, s.order_share, s.total_qty::text, s.avg_qty::text, s.last_qty::text, s.last_rate::text,
+           s.recent_qtys::text[] as recent_qtys, s.first_purchased_on::text, s.last_purchased_on::text, s.typical_interval_days
+    from customer_product_stats s
+    join customers c on c.id = s.customer_id and c.deleted_at is null and c.is_active
+    join products p on p.id = s.product_id and p.deleted_at is null and p.is_active
+    left join lateral (select conversion_factor from product_units u where u.product_id = p.id and u.is_default_sale limit 1) pu on true
+    where s.business_id = ${businessId} and s.typical_interval_days > 0
+      and (${today}::date - s.last_purchased_on) >= 0.75 * s.typical_interval_days
+      and (${today}::date - s.last_purchased_on) <= 6 * s.typical_interval_days
+      ${filter.routeId ? sql`and c.route_id = ${filter.routeId}` : sql``}
+      ${filter.salespersonId ? sql`and c.sales_rep_id = ${filter.salespersonId}` : sql``}
+      ${filter.customerIds ? (filter.customerIds.length ? sql`and c.id in (${sql.join(filter.customerIds.map((id) => sql`${id}::uuid`), sql`, `)})` : sql`and false`) : sql``}
+    order by c.name, c.id`);
+  const URGENCY = { overdue: 0, due: 1, lapsed: 2 } as const;
+  type Due = { productId: string; productName: string; status: keyof typeof URGENCY; ratio: number; daysSinceLast: number; typicalIntervalDays: number; lastQty: string; suggestedQty: string };
+  const byCustomer = new Map<string, { customerId: string; name: string; city: string | null; routeId: string | null; products: Due[] }>();
+  for (const row of rows.rows) {
+    const stats = fromStatsRow(
+      {
+        productId: row.product_id,
+        orderCount: row.order_count,
+        orderShare: row.order_share,
+        totalQty: row.total_qty,
+        avgQty: row.avg_qty,
+        lastQty: row.last_qty,
+        lastRate: row.last_rate,
+        recentQtys: row.recent_qtys,
+        firstPurchasedOn: row.first_purchased_on,
+        lastPurchasedOn: row.last_purchased_on,
+        typicalIntervalDays: row.typical_interval_days,
+      } satisfies StatsRow,
+      today,
+    );
+    const { status, ratio } = reorderStatus(stats.daysSinceLast, row.typical_interval_days);
+    if (status !== "due" && status !== "overdue" && status !== "lapsed") continue;
+    const entry = byCustomer.get(row.customer_id) ?? { customerId: row.customer_id, name: row.customer_name, city: row.city, routeId: row.route_id, products: [] };
+    entry.products.push({
+      productId: row.product_id,
+      productName: row.product_name,
+      status,
+      ratio: Math.round(ratio * 100) / 100,
+      daysSinceLast: stats.daysSinceLast,
+      typicalIntervalDays: row.typical_interval_days,
+      lastQty: stats.lastQty.toString(),
+      suggestedQty: suggestedQty(stats, row.order_multiple).toString(),
+    });
+    byCustomer.set(row.customer_id, entry);
+  }
+  const customers = [...byCustomer.values()].map((c) => {
+    const count = (s: Due["status"]) => c.products.filter((p) => p.status === s).length;
+    c.products.sort((a, b) => URGENCY[a.status] - URGENCY[b.status] || b.ratio - a.ratio || a.productName.localeCompare(b.productName));
+    return { ...c, overdue: count("overdue"), due: count("due"), lapsed: count("lapsed"), products: c.products.slice(0, 10) };
+  });
+  customers.sort((a, b) => b.overdue - a.overdue || b.due - a.due || b.lapsed - a.lapsed || a.name.localeCompare(b.name));
+  return customers;
+}
+
 export const suggestionsModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
 
@@ -155,46 +287,7 @@ export const suggestionsModule: ApiModule = async (app, deps) => {
       return withTenant(deps.db, ctx, async (tx) => {
         const customer = await findCustomer(tx, ctx, request.params.id);
         const windowDays = (await getSettings(tx, ctx.businessId, ["suggestions.window_days"] as const))["suggestions.window_days"];
-        const since = addDays(today, -windowDays);
-        const history = await purchaseHistory(tx, ctx.businessId, customer.id, today, windowDays);
-        const invoices = (
-          await tx.execute<{ id: string; number: string; date: string; due_date: string; total: string; paid: string; balance: string; settled_on: string | null }>(sql`
-            select i.id, i.invoice_number as number, i.invoice_date::text as date, coalesce(i.due_date, i.invoice_date)::text as due_date,
-                   i.grand_total::text as total, i.amount_paid::text as paid, i.balance_due::text as balance,
-                   case when i.balance_due = 0 then (
-                     select max(p.payment_date)::text from payment_allocations a join payments p on p.id = a.payment_id
-                     where a.invoice_id = i.id and a.reversed_at is null) end as settled_on
-            from invoices i
-            where i.business_id = ${ctx.businessId} and i.customer_id = ${customer.id} and i.status = 'posted'
-              and (i.invoice_date >= ${since} or i.balance_due > 0)
-            order by i.invoice_date`)
-        ).rows;
-        const inWindow = invoices.filter((i) => i.date >= since);
-        const open = invoices.filter((i) => Number(i.balance) > 0);
-        const overdue = open.filter((i) => i.due_date < today);
-        const totalSales = inWindow.reduce((acc, i) => acc + Number(i.total), 0);
-        return {
-          asOf: today,
-          windowDays,
-          source: history.source,
-          summary: history.summary,
-          stats: [...history.stats.values()].map(statsJson),
-          totalSales: totalSales.toFixed(2),
-          invoiceCount: inWindow.length,
-          avgOrderValue: inWindow.length ? (totalSales / inWindow.length).toFixed(2) : "0.00",
-          outstanding: customer.balance,
-          overdue: overdue.reduce((acc, i) => acc + Number(i.balance), 0).toFixed(2),
-          overdueCount: overdue.length,
-          oldestOverdueDays: overdue.length ? Math.max(...overdue.map((i) => daysBetween(i.due_date, today))) : 0,
-          lastPurchase: history.summary.lastInvoiceOn,
-          behaviour: paymentBehaviour(
-            inWindow.map((i) => ({ date: i.date, dueDate: i.due_date, settledOn: i.settled_on })),
-            today,
-          ),
-          openInvoices: open.map((i) => ({ id: i.id, number: i.number, date: i.date, dueDate: i.due_date, total: i.total, paid: i.paid, balance: i.balance })),
-          customerAssociations: history.customerAssociations,
-          storeAssociations: await storeAssociations(tx, ctx.businessId, today),
-        };
+        return { ...(await customerInsightJson(tx, ctx.businessId, customer, today, windowDays)), storeAssociations: await storeAssociations(tx, ctx.businessId, today) };
       });
     },
   );
@@ -272,80 +365,7 @@ export const suggestionsModule: ApiModule = async (app, deps) => {
     const q = request.query;
     const today = deps.clock.today(ctx.timeZone);
     return withTenant(deps.db, ctx, async (tx) => {
-      const rows = await tx.execute<{
-        customer_id: string;
-        customer_name: string;
-        city: string | null;
-        route_id: string | null;
-        product_id: string;
-        product_name: string;
-        order_multiple: string | null;
-        order_count: number;
-        order_share: number;
-        total_qty: string;
-        avg_qty: string;
-        last_qty: string;
-        last_rate: string | null;
-        recent_qtys: string[];
-        first_purchased_on: string;
-        last_purchased_on: string;
-        typical_interval_days: number;
-      }>(sql`
-        select c.id as customer_id, c.name as customer_name, c.city, c.route_id,
-               s.product_id, p.name as product_name, pu.conversion_factor::text as order_multiple,
-               s.order_count, s.order_share, s.total_qty::text, s.avg_qty::text, s.last_qty::text, s.last_rate::text,
-               s.recent_qtys::text[] as recent_qtys, s.first_purchased_on::text, s.last_purchased_on::text, s.typical_interval_days
-        from customer_product_stats s
-        join customers c on c.id = s.customer_id and c.deleted_at is null and c.is_active
-        join products p on p.id = s.product_id and p.deleted_at is null and p.is_active
-        left join lateral (select conversion_factor from product_units u where u.product_id = p.id and u.is_default_sale limit 1) pu on true
-        where s.business_id = ${ctx.businessId} and s.typical_interval_days > 0
-          and (${today}::date - s.last_purchased_on) >= 0.75 * s.typical_interval_days
-          and (${today}::date - s.last_purchased_on) <= 6 * s.typical_interval_days
-          ${q.routeId ? sql`and c.route_id = ${q.routeId}` : sql``}
-          ${q.salespersonId ? sql`and c.sales_rep_id = ${q.salespersonId}` : sql``}
-        order by c.name, c.id`);
-      const URGENCY = { overdue: 0, due: 1, lapsed: 2 } as const;
-      type Due = { productId: string; productName: string; status: keyof typeof URGENCY; ratio: number; daysSinceLast: number; typicalIntervalDays: number; lastQty: string; suggestedQty: string };
-      const byCustomer = new Map<string, { customerId: string; name: string; city: string | null; routeId: string | null; products: Due[] }>();
-      for (const row of rows.rows) {
-        const stats = fromStatsRow(
-          {
-            productId: row.product_id,
-            orderCount: row.order_count,
-            orderShare: row.order_share,
-            totalQty: row.total_qty,
-            avgQty: row.avg_qty,
-            lastQty: row.last_qty,
-            lastRate: row.last_rate,
-            recentQtys: row.recent_qtys,
-            firstPurchasedOn: row.first_purchased_on,
-            lastPurchasedOn: row.last_purchased_on,
-            typicalIntervalDays: row.typical_interval_days,
-          } satisfies StatsRow,
-          today,
-        );
-        const { status, ratio } = reorderStatus(stats.daysSinceLast, row.typical_interval_days);
-        if (status !== "due" && status !== "overdue" && status !== "lapsed") continue;
-        const entry = byCustomer.get(row.customer_id) ?? { customerId: row.customer_id, name: row.customer_name, city: row.city, routeId: row.route_id, products: [] };
-        entry.products.push({
-          productId: row.product_id,
-          productName: row.product_name,
-          status,
-          ratio: Math.round(ratio * 100) / 100,
-          daysSinceLast: stats.daysSinceLast,
-          typicalIntervalDays: row.typical_interval_days,
-          lastQty: stats.lastQty.toString(),
-          suggestedQty: suggestedQty(stats, row.order_multiple).toString(),
-        });
-        byCustomer.set(row.customer_id, entry);
-      }
-      const customers = [...byCustomer.values()].map((c) => {
-        const count = (s: Due["status"]) => c.products.filter((p) => p.status === s).length;
-        c.products.sort((a, b) => URGENCY[a.status] - URGENCY[b.status] || b.ratio - a.ratio || a.productName.localeCompare(b.productName));
-        return { ...c, overdue: count("overdue"), due: count("due"), lapsed: count("lapsed"), products: c.products.slice(0, 10) };
-      });
-      customers.sort((a, b) => b.overdue - a.overdue || b.due - a.due || b.lapsed - a.lapsed || a.name.localeCompare(b.name));
+      const customers = await reorderDueCustomers(tx, ctx.businessId, today, { ...(q.routeId ? { routeId: q.routeId } : {}), ...(q.salespersonId ? { salespersonId: q.salespersonId } : {}) });
       return { asOf: today, customers: customers.slice(0, q.limit) };
     });
   });

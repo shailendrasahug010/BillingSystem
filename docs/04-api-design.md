@@ -131,8 +131,17 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 | `GET /customers/:id/suggestions?cart=p1,p2&limit=24` ★ | Ranked suggestions with reason codes and suggested quantities (see [07-invoice-intelligence.md](07-invoice-intelligence.md)) |
 | `GET /customers/:id/reorder` ★ | The reorder table: product, last qty, last purchase, typical interval, suggested qty, status |
 | `GET /reorder/due?routeId=&salespersonId=` | Customers due to reorder, most urgent first (a salesperson's list for the beat) |
-| `GET /customers/:id/purchase-stats?since=` | Raw per-product stats for the device cache (planned, with offline sync of a day's beat) |
+| `GET /customers/:id/purchase-stats?since=` | Raw per-product stats for the device cache (not built: today's beat brings each customer's buying, below) |
 | `POST /suggestions/feedback` · `GET /suggestions/feedback/summary` | What the billing screen offered and what was taken, per bill; acceptance by reason and position |
+
+### Beats (Phase 5.4)
+
+| Method & path | Purpose |
+|---|---|
+| `GET /beats/today?date=&routeId=&insights=1` | The person's routes for the weekday (their own when they are a route's salesperson, found by the employee linked to them or with their mobile; every route of the day otherwise; or the one asked for), the shops in calling order with what they owe, overdue, the last call, the products due to buy again (status, suggested quantity) and what came of today's call (bill, order, payment, note, no order and why, visited; amounts). With `insights=1` each shop's buying (the `/customers/:id/insight` shape) and the store-wide rules, so the phone suggests products without a connection. `customer.view` |
+| `POST /visits` | A call that left no document: `visited`, or `no_order` with a reason (`shop_closed`, `owner_absent`, `stock_enough`, `no_money`, `rate_issue`, `other`) and a note. The Idempotency-Key (required) is the visit's id, so one made offline and sent twice is kept once (200 with `idempotent-replay`). Also a `/sync/push` kind (`visit`). `customer.view` |
+| `PUT /routes/:id/order` | `{customerIds, others: "after" \| "remove"}`: the shops in calling order (listed shops move onto the route); the rest of the route follows by name, or is taken off it. `customer.update` |
+| `GET /reports/beats?from=&to=` | Per day and salesperson (at most 62 days): shops planned that weekday, called on (whoever entered the call), missed, productive (a bill or an order), calls off the plan (their own), billed, booked and collected, and the reasons for no order. `report.view_sales` |
 
 ### Fulfilment
 

@@ -121,7 +121,8 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
             : bill
               ? bill.total
               : null;
-  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" || entry.kind === "price-note" ? entry.date : bill ? bill.date : null;
+  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" || entry.kind === "price-note" || entry.kind === "visit" ? entry.date : bill ? bill.date : null;
+  const visit = entry.kind === "visit" ? (entry.outcome === "no_order" && entry.reason ? `${t("beat.outcome.no_order")}: ${t(`beat.reasons.${entry.reason as "other"}`)}` : t(`beat.outcome.${entry.outcome}`)) : null;
   const conflict = kind === "customer-edit" && entry.error?.code === "VERSION_CONFLICT";
   const removeText =
     kind === "invoice" ? t("offline.removeConfirm", { number: bill!.number }) : kind === "customer" ? t("offline.removeCustomerConfirm", { name }) : t("offline.removeEntryConfirm", { what: label(entry).toLowerCase(), name });
@@ -146,7 +147,7 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
         )}
       </div>
       <p className="text-[12.5px] text-ink-3">
-        {[name, when ? date(when) : null, entry.kind === "customer-edit" ? t("offline.detailsChanged") : null].filter(Boolean).join(" · ")}
+        {[name, when ? date(when) : null, entry.kind === "customer-edit" ? t("offline.detailsChanged") : null, visit].filter(Boolean).join(" · ")}
       </p>
       {failed && entry.error && (
         <>

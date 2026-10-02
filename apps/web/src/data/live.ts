@@ -513,7 +513,7 @@ export function resetWorkspace(): void {
 
 // ---------------------------------------------------------------- customer insight
 
-interface InsightResponse {
+export interface InsightResponse {
   summary: CustomerSummary;
   stats: Array<{
     productId: string;
@@ -544,7 +544,11 @@ interface InsightResponse {
 }
 
 export async function fetchInsight(customerId: string): Promise<CustomerInsight> {
-  const r = await api.get<InsightResponse>(`/customers/${customerId}/insight`);
+  return insightFrom(customerId, await api.get<InsightResponse>(`/customers/${customerId}/insight`));
+}
+
+/** A customer's buying as the server sends it (also with today's beat), ready for the suggestion engine. */
+export function insightFrom(customerId: string, r: InsightResponse): CustomerInsight {
   const stats = new Map<string, CustomerProductStats>(
     r.stats.map((s) => [
       s.productId,

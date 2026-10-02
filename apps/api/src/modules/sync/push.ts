@@ -30,6 +30,7 @@ const KINDS = {
   "sale-price-note": { method: "POST", path: (t: string) => `/invoices/${t}/price-notes` },
   "purchase-price-note": { method: "POST", path: (t: string) => `/purchases/${t}/price-notes` },
   "invoice-cancel": { method: "POST", path: (t: string) => `/invoices/${t}/cancel` },
+  visit: { method: "POST", path: () => "/visits" },
 } as const;
 type Kind = keyof typeof KINDS;
 const NEEDS_TARGET = new Set<Kind>(["customer-edit", "sale-return", "purchase-return", "sale-price-note", "purchase-price-note", "invoice-cancel"]);

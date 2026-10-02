@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 97 |
-| Columns | 1612 |
-| Foreign keys | 257 |
+| Tables | 98 |
+| Columns | 1626 |
+| Foreign keys | 261 |
 | Unique constraints | 46 |
-| Check constraints | 57 |
-| Indexes (besides primary keys and unique constraints) | 124 |
+| Check constraints | 59 |
+| Indexes (besides primary keys and unique constraints) | 126 |
 | Triggers | 73 |
-| Tables with row-level security | 91 |
+| Tables with row-level security | 92 |
 | Enums | 39 |
 | Functions | 14 |
-| Migrations | 28 (last: `0027_push_tokens`) |
+| Migrations | 29 (last: `0028_beats`) |
 
 ## How the database is set up
 
@@ -34,6 +34,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Access: users' roles, sessions and sign-in:** [`permissions`](#permissions), [`roles`](#roles), [`role_permissions`](#role_permissions), [`business_members`](#business_members), [`refresh_tokens`](#refresh_tokens), [`otp_challenges`](#otp_challenges)
 * **Employees, attendance and leave:** [`departments`](#departments), [`employees`](#employees), [`attendance`](#attendance), [`leave_types`](#leave_types), [`leave_balances`](#leave_balances), [`leave_requests`](#leave_requests)
 * **Customers and suppliers:** [`price_levels`](#price_levels), [`customer_categories`](#customer_categories), [`sales_routes`](#sales_routes), [`customers`](#customers), [`customer_addresses`](#customer_addresses), [`suppliers`](#suppliers)
+* **beats:** [`customer_visits`](#customer_visits)
 * **Products, units and tax:** [`brands`](#brands), [`product_categories`](#product_categories), [`units`](#units), [`tax_categories`](#tax_categories), [`tax_rates`](#tax_rates), [`products`](#products), [`product_units`](#product_units), [`product_barcodes`](#product_barcodes), [`product_prices`](#product_prices), [`product_images`](#product_images), [`batches`](#batches)
 * **Stock:** [`stock_ledger`](#stock_ledger), [`stock_balances`](#stock_balances), [`stock_adjustments`](#stock_adjustments), [`stock_adjustment_items`](#stock_adjustment_items), [`stock_transfers`](#stock_transfers), [`stock_transfer_items`](#stock_transfer_items)
 * **Purchases:** [`purchases`](#purchases), [`purchase_items`](#purchase_items), [`supplier_items`](#supplier_items)
@@ -94,7 +95,7 @@ A login identity. One user can belong to several businesses with different roles
 * Index `users_mobile_uq`: unique, btree `(mobile)`
 * Index `users_username_uq`: unique, btree `(username)`
 * Trigger `users_set_updated_at`: before update, each row → `set_updated_at()`
-* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`notifications`](#notifications).user_id, [`notification_receipts`](#notification_receipts).user_id, [`push_tokens`](#push_tokens).user_id, [`report_views`](#report_views).user_id, [`suggestion_feedback`](#suggestion_feedback).user_id
+* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`customer_visits`](#customer_visits).user_id, [`notifications`](#notifications).user_id, [`notification_receipts`](#notification_receipts).user_id, [`push_tokens`](#push_tokens).user_id, [`report_views`](#report_views).user_id, [`suggestion_feedback`](#suggestion_feedback).user_id
 
 ### `businesses`
 
@@ -135,7 +136,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 88 tables by `business_id`
+* Referenced by: 89 tables by `business_id`
 
 ### `settings`
 
@@ -618,7 +619,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 * Unique `sales_routes_name_uq`: `(business_id, name)`
 * Trigger `sales_routes_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`customers`](#customers).route_id
+* Referenced by: [`customers`](#customers).route_id, [`customer_visits`](#customer_visits).route_id
 
 ### `customers`
 
@@ -664,6 +665,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 | `reminders_opt_out` | boolean | ✓ | `false` | No automatic or bulk payment reminders to this customer (asked for, or replied STOP). |
 | `reminders_opt_out_at` | timestamptz |  |  | When the customer stopped payment reminders. |
 | `reminders_opt_out_by` | varchar(10) |  |  | How: staff (on the customer's page) or reply (they wrote STOP on WhatsApp). |
+| `route_sequence` | integer |  |  | Place on the route: the order the salesperson visits in (empty: after the numbered ones, by name). |
 
 * Check `customers_b2b_gstin_chk`: `(customer_type = 'b2c'::customer_type OR gstin IS NOT NULL)`
 * Check `customers_credit_days_chk`: `(credit_days >= 0)`
@@ -678,7 +680,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 * Trigger `customers_set_updated_at`: before update, each row → `set_updated_at()`
 * Trigger `customers_sync_change`: after insert or delete or update, each row → `track_sync_change('customer', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`customer_addresses`](#customer_addresses).customer_id, [`sales_orders`](#sales_orders).customer_id, [`invoices`](#invoices).customer_id, [`credit_debit_notes`](#credit_debit_notes).customer_id, [`payments`](#payments).customer_id, [`party_ledger_entries`](#party_ledger_entries).customer_id, [`collection_notes`](#collection_notes).customer_id, [`customer_product_stats`](#customer_product_stats).customer_id, [`customer_stats`](#customer_stats).customer_id, [`suggestion_feedback`](#suggestion_feedback).customer_id, [`sales_daily_customer`](#sales_daily_customer).customer_id
+* Referenced by: [`customer_addresses`](#customer_addresses).customer_id, [`customer_visits`](#customer_visits).customer_id, [`sales_orders`](#sales_orders).customer_id, [`invoices`](#invoices).customer_id, [`credit_debit_notes`](#credit_debit_notes).customer_id, [`payments`](#payments).customer_id, [`party_ledger_entries`](#party_ledger_entries).customer_id, [`collection_notes`](#collection_notes).customer_id, [`customer_product_stats`](#customer_product_stats).customer_id, [`customer_stats`](#customer_stats).customer_id, [`suggestion_feedback`](#suggestion_feedback).customer_id, [`sales_daily_customer`](#sales_daily_customer).customer_id
 
 ### `customer_addresses`
 
@@ -754,6 +756,34 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 * Trigger `suppliers_sync_change`: after insert or delete or update, each row → `track_sync_change('supplier', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`products`](#products).preferred_supplier_id, [`purchases`](#purchases).supplier_id, [`supplier_items`](#supplier_items).supplier_id, [`credit_debit_notes`](#credit_debit_notes).supplier_id, [`payments`](#payments).supplier_id, [`party_ledger_entries`](#party_ledger_entries).supplier_id, [`expenses`](#expenses).supplier_id
+
+## beats
+
+### `customer_visits`
+
+A salesperson's call on a customer on their beat (Phase 5.4) when it left no document: they checked in, or found no order and said why. Bills, orders, payments and visit notes made for the customer that day count as visits by themselves; this row records the calls that would otherwise leave no trace. The id is made on the phone (the request's Idempotency-Key), so a visit recorded offline and sent twice is kept once.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ |  | **Primary key.** Made on the phone (the request's Idempotency-Key), so the visit is kept once however often it is sent. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `customer_id` | uuid | ✓ |  | → [`customers`](#customers).id. The customer called on. |
+| `route_id` | uuid |  |  | → [`sales_routes`](#sales_routes).id. The route it was on (empty for a call off the day's beat). |
+| `user_id` | uuid | ✓ |  | → [`users`](#users).id. Who called. |
+| `visit_date` | date | ✓ |  | The business day of the call. |
+| `outcome` | varchar(12) | ✓ |  | visited (checked in) or no_order (nothing bought, with a reason). |
+| `reason` | varchar(20) |  |  | Why there was no order: shop_closed, owner_absent, stock_enough, no_money, rate_issue or other. |
+| `note` | text |  |  | What the salesperson noted (when to come back, what the shop said). |
+| `latitude` | numeric(9,6) |  |  | Where the phone was, when the person allowed it. |
+| `longitude` | numeric(9,6) |  |  | With the latitude. |
+| `visited_at` | timestamptz | ✓ |  | When it happened on the phone (it may reach the server later). |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+
+* Check `customer_visits_outcome_chk`: `(outcome::text = ANY (ARRAY['visited'::character varying, 'no_order'::character varying]::text[]))`
+* Check `customer_visits_reason_chk`: `(outcome::text <> 'no_order'::text OR reason IS NOT NULL)`
+* Index `customer_visits_customer_idx`: btree `(business_id, customer_id, visit_date)`
+* Index `customer_visits_day_idx`: btree `(business_id, visit_date, user_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ## Products, units and tax
 
@@ -3131,4 +3161,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats`
