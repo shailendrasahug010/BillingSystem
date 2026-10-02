@@ -1,4 +1,4 @@
-import { MessageCircle, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
@@ -11,6 +11,7 @@ import type { SavedPayment } from "../payments/PaymentDialog";
 import { ReceiptDocument, type PrintablePayment } from "../payments/ReceiptDocument";
 import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
 import { paymentReceipt } from "../../lib/thermal/receipts";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 type Kept = Extract<SavedPayment, { offline: unknown }>["offline"];
 
@@ -65,7 +66,7 @@ export function ProvisionalReceiptDialog({ payment, mobile, onClose }: { payment
             {t("receipt.print")}
           </Button>
           <ThermalPrintButton receipt={() => paymentReceipt(printable, printLocale)} />
-          <Button icon={<MessageCircle size={16} />} disabled={!whatsappNumber(mobile)} onClick={share}>
+          <Button icon={<WhatsAppIcon size={16} />} disabled={!whatsappNumber(mobile)} onClick={share}>
             {t("collect.shareReceipt")}
           </Button>
           <Button variant="primary" onClick={onClose}>

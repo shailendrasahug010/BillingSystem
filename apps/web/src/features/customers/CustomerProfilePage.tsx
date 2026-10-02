@@ -1,5 +1,5 @@
 import { buildReorderList, daysBetween, findState } from "@digitalbahi/core";
-import { ArrowLeft, ClipboardPlus, MapPin, MessageCircle, Pencil, Phone, Receipt, Wallet } from "lucide-react";
+import { ArrowLeft, ClipboardPlus, MapPin, Pencil, Phone, Receipt, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -23,6 +23,7 @@ import { editCustomer, NotKeptOffline } from "./saveCustomer";
 import { translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 import { customerKind, kindLabel } from "./customerKind";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 /** The day (YYYY-MM-DD, this device's time zone) of an instant. */
 const localDay = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
@@ -161,7 +162,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               <Button icon={<Phone size={16} />} title={customer.mobile} onClick={() => (window.location.href = `tel:${customer.mobile.replace(/\s/g, "")}`)}>
                 {t("common.call")}
               </Button>
-              <Button icon={<MessageCircle size={16} />} onClick={() => shareOnWhatsApp("", customer.mobile)}>
+              <Button icon={<WhatsAppIcon size={16} />} onClick={() => shareOnWhatsApp("", customer.mobile)}>
                 {t("common.whatsapp")}
               </Button>
             </>

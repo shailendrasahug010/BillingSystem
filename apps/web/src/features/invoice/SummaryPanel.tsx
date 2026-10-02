@@ -1,5 +1,5 @@
 import { findState, PAYMENT_METHODS, type PaymentMethod } from "@digitalbahi/core";
-import { MessageCircle, Printer, Save } from "lucide-react";
+import { Printer, Save } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { ariaShortcut, INVOICE_SHORTCUTS } from "../../app/shortcuts";
@@ -10,6 +10,7 @@ import { allowed, BUSINESS, WORKSPACE } from "../../data/db";
 import { cn } from "../../lib/cn";
 import { lutValidOn, type DraftView } from "./useInvoiceDraft";
 import { stateName } from "../../lib/states";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 function Row({ label, value, strong, muted, negative }: { label: ReactNode; value: string; strong?: boolean; muted?: boolean; negative?: boolean }) {
   return (
@@ -240,20 +241,15 @@ export function SummaryPanel({
         {(allowed("invoice.print") || allowed("invoice.share")) && (
           <div className="flex gap-2">
             {allowed("invoice.print") && (
-              <Button className="flex-1" icon={<Printer size={16} />} disabled={cannotSave} onClick={() => onSave("print")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.saveAndPrint)}>
+              <Button className="min-w-0 flex-1 px-2.5" icon={<Printer size={16} />} disabled={cannotSave} onClick={() => onSave("print")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.saveAndPrint)} title={t("shortcuts.saveAndPrint")}>
                 {t("invoice.saveAndPrint")}
-                <Kbd keys={INVOICE_SHORTCUTS.saveAndPrint} className={cn(keyHint, "ml-1")} />
               </Button>
             )}
-            {/* Beside Save & print, WhatsApp is its icon (named for screen readers). */}
-            {allowed("invoice.share") &&
-              (allowed("invoice.print") ? (
-                <Button icon={<MessageCircle size={16} />} disabled={cannotSave} onClick={() => onSave("share")} aria-label={t("common.whatsapp")} title={t("common.whatsapp")} />
-              ) : (
-                <Button className="flex-1" icon={<MessageCircle size={16} />} disabled={cannotSave} onClick={() => onSave("share")}>
-                  {t("common.whatsapp")}
-                </Button>
-              ))}
+            {allowed("invoice.share") && (
+              <Button className="min-w-0 flex-1 px-2.5" icon={<WhatsAppIcon size={17} />} disabled={cannotSave} onClick={() => onSave("share")}>
+                {t("common.whatsapp")}
+              </Button>
+            )}
           </div>
         )}
       </div>

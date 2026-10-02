@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { VISIT_REASONS } from "@digitalbahi/contracts";
 import { translateError } from "@digitalbahi/i18n";
-import { ClipboardList, MapPinCheck, MessageCircle, Phone, Receipt, UserRound, Wallet, XCircle } from "lucide-react";
+import { ClipboardList, MapPinCheck, Phone, Receipt, UserRound, Wallet, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -20,6 +20,7 @@ import { PaymentDialog, type SavedPayment } from "../payments/PaymentDialog";
 import { PaymentDetailDialog } from "../payments/PaymentsPage";
 import { CallBadge } from "./CallBadge";
 import { recordVisit, type BeatCustomer } from "./data";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 type Stage = "sheet" | "order" | "collect" | "no-order";
 type Reason = (typeof VISIT_REASONS)[number];
@@ -140,7 +141,7 @@ export function BeatCustomerSheet({ customer, date, working, onClose }: { custom
             <Button size="sm" icon={<Phone size={15} />} disabled={!customer.mobile} onClick={() => (window.location.href = `tel:${(customer.mobile ?? "").replace(/\s/g, "")}`)}>
               {t("common.call")}
             </Button>
-            <Button size="sm" icon={<MessageCircle size={15} />} disabled={!whatsappNumber(customer.mobile)} onClick={whatsapp}>
+            <Button size="sm" icon={<WhatsAppIcon size={15} />} disabled={!whatsappNumber(customer.mobile)} onClick={whatsapp}>
               WhatsApp
             </Button>
           </div>

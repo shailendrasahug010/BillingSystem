@@ -4,7 +4,8 @@
  * is added by clicking its card anywhere (its name, not the +qty) -> the
  * suggestions fold into one row, and a chip adds another -> ten lines: the
  * table fits its card (the amounts are on screen, no sideways scrolling),
- * the search stays at the top and Save stays in view -> Ctrl+S saves ->
+ * the search stays at the top and Save stays in view -> Ctrl+S saves and a
+ * popup says "Invoice added successfully" (print, view, WhatsApp, new) ->
  * another bill: the line of Rin (also sold by the box) has a unit list,
  * "P · PCS" and "B · BOX (24 PCS)", and starts in pieces; "2b" typed in the
  * quantity makes it 2 boxes at the box price, "p" pieces again, the list and
@@ -109,6 +110,15 @@ async function addBySearch(page, name) {
   await page.getByRole("option", { name: new RegExp(name.split(" ")[0]) }).first().click({ timeout: 8000 });
   await page.getByLabel(`Qty ${name}`).waitFor();
 }
+/** The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill. */
+async function savedBill(page) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 const lineNames = (page) => page.locator("section[aria-labelledby='items-h'] tbody tr td:nth-child(2) p:first-child").allInnerTexts();
 
 // 2. A laptop: suggestions, many lines, Ctrl+S.
@@ -171,7 +181,13 @@ log(`${names.length} lines: the table fits (${fit.table}px in ${fit.card}px), li
 // Ctrl+S saves.
 await page.getByLabel(`Qty ${names.at(-1)}`).fill("3");
 await page.keyboard.press("Control+s");
-await page.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 15000 });
+// Saved: the popup says so, with what next.
+const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+await popup.waitFor({ timeout: 15000 });
+await page.screenshot({ path: `${OUT}/invoice-screen-2b-saved.png` });
+for (const button of ["Print", "View invoice", "New invoice", "Send on WhatsApp"]) if (!(await popup.getByRole("button", { name: button }).count())) errors.push(`saved popup: no ${button}`);
+log("saved popup:", (await popup.innerText()).replace(/\s+/g, " ").slice(0, 120));
+await savedBill(page);
 const saved = await invoicesOf();
 if (saved.length !== before + 1) errors.push(`Ctrl+S: ${saved.length - before} bills saved`);
 else {
@@ -323,7 +339,7 @@ const barBox = await bar.boundingBox();
 if (!barBox || barBox.y + barBox.height > 768) errors.push(`tablet: Save not at the foot of the screen: ${JSON.stringify(barBox)}`);
 await tab.screenshot({ path: `${OUT}/invoice-screen-5-tablet.png` });
 await bar.click();
-await tab.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 15000 });
+await savedBill(tab);
 if ((await invoicesOf()).length !== before + 3) errors.push("tablet: the bill was not saved from the bar");
 log("1024 px: the total bar's Save saved the bill");
 

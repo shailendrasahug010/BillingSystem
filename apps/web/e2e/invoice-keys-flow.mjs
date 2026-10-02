@@ -48,6 +48,19 @@ page.on("response", (r) => {
   if (r.status() >= 400) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
 });
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 const focused = () => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.id ?? "");
 const expectFocus = async (label, step) => {
   await page.waitForTimeout(150);
@@ -130,7 +143,14 @@ await page.screenshot({ path: `${OUT}/keys-1b-box.png` });
 await page.keyboard.press("F2");
 await expectFocus("Search product", "F2");
 await page.keyboard.press("Control+Enter");
-await toast(/Invoice INV\/.* saved/);
+// The popup says it was saved; Enter (on "New invoice") closes it and the next bill starts at the customer.
+const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+await popup.waitFor({ timeout: 15000 });
+await popup.getByText(/INV\/\d\d-\d\d\/00001/).waitFor();
+await page.screenshot({ path: `${OUT}/keys-1c-saved.png` });
+await page.keyboard.press("Enter");
+await popup.waitFor({ state: "detached" });
+await expectFocus("Search customer", "after closing the saved popup with Enter");
 let list = await bills();
 if (list.length !== 1 || !list[0].partyName?.includes("Sharma") || list[0].grandTotal !== "3927.00") errors.push(`bills: ${JSON.stringify(list.map((b) => [b.invoiceNumber, b.partyName, b.grandTotal]))}`);
 const first = await api("GET", `/invoices/${list[0].id}`, token);
@@ -154,7 +174,7 @@ await page.keyboard.type("fortune");
 await page.getByRole("option", { name: /Fortune Oil 1L/ }).waitFor();
 await page.keyboard.press("Enter");
 await page.keyboard.press("Control+Enter");
-await toast(/Invoice INV\/.*00002 saved/);
+if (!/00002$/.test(await savedBill(page))) errors.push("900 px: the second bill was not saved as 00002");
 await page.screenshot({ path: `${OUT}/keys-2-tablet.png` });
 log("900 px wide: F3, F2 and Ctrl+Enter work on the full invoice screen");
 

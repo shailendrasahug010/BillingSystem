@@ -412,7 +412,16 @@
       "reasonHint": "At least 3 letters; kept with the bill"
     },
     "unitKeys": "a letter after the qty picks the unit: {{letters}}",
-    "unitOnly": "Sold by {{unit}} only. To bill it in boxes or strips, add them to the product."
+    "unitOnly": "Sold by {{unit}} only. To bill it in boxes or strips, add them to the product.",
+    "added": "Invoice added successfully",
+    "viewBill": "View invoice",
+    "nextBill": "New invoice",
+    "receivedAmount": "Received {{amount}}",
+    "balanceAmount": "Balance {{amount}}",
+    "paidInFull": "Paid in full",
+    "sendOnWhatsApp": "Send on WhatsApp",
+    "copyMessage": "Copy message",
+    "copied": "Copied"
   },
   "suggestions": {
     "title": "Smart suggestions",
@@ -1118,7 +1127,10 @@
     "amount": "Enter a valid number",
     "hsn": "HSN must be 4, 6 or 8 digits",
     "positive": "Must be more than zero",
-    "ifsc": "Enter a valid IFSC, e.g. SBIN0001234"
+    "ifsc": "Enter a valid IFSC, e.g. SBIN0001234",
+    "tooShort": "At least {{min}} characters",
+    "passwordShort": "At least 8 characters",
+    "email": "Enter a valid email address"
   },
   "designSystem": {
     "title": "Design system",

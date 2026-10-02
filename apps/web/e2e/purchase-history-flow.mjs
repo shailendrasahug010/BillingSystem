@@ -52,6 +52,19 @@ async function until(what, check, ms = 20000) {
 const daysAgo = (days) => new Date(Date.now() + 5.5 * 3_600_000 - days * 86_400_000).toISOString().slice(0, 10);
 
 const errors = [];
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 let signedIn = false;
 const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -120,7 +133,7 @@ try {
   await page.keyboard.press("Enter");
   await page.getByLabel("Qty Bread 400g").fill("10");
   await page.keyboard.press("Control+Enter");
-  await page.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 10000 });
+  await savedBill(page);
   log("milk added from the suggestions, bread from the search; bill saved");
 
   // 5. The screen sent what it offered and what was taken.

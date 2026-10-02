@@ -34,6 +34,19 @@ async function api(method, path, token, body) {
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 const errors = [];
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 let signedIn = false;
 page.on("pageerror", (e) => errors.push(e.message));
 // Failed requests are caught by the response listener; the browser's own "Failed to load resource" lines repeat them.
@@ -49,10 +62,24 @@ await page.goto(WEB);
 await page.getByRole("heading", { name: "Welcome back" }).waitFor();
 log("auth screen shown");
 await page.getByRole("button", { name: "Create account" }).click();
+// What is missing or wrong is said on this panel, at each field, before any code is sent.
+await page.fill("#su-mobile", "12345");
+await page.fill("#su-password", "short");
+await page.getByRole("button", { name: "Send OTP" }).click();
+const fieldError = async (id) => (await page.locator(`#${id}`).getAttribute("aria-invalid")) === "true";
+for (const id of ["su-name", "su-mobile", "su-password", "su-business"]) {
+  if (!(await fieldError(id))) errors.push(`sign-up: ${id} not marked`);
+}
+for (const text of ["This field is required", "Enter a 10-digit mobile number", "At least 8 characters"]) await page.getByText(text).first().waitFor();
+if (await page.locator("#auth-otp").count()) errors.push("sign-up: the code was asked for with fields missing");
+if ((await page.evaluate(() => document.activeElement?.id)) !== "su-name") errors.push("sign-up: the first field missing has not got the cursor");
+await page.screenshot({ path: `${OUT}/e2e-0-signup-missing.png` });
+log("sign-up with fields missing: each said at its field, no code sent");
 await page.fill("#su-name", "Ravi Kumar");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
 await page.fill("#su-business", "Ravi Distributors");
+if (await page.getByText("This field is required").count()) errors.push("sign-up: a message stayed after the field was filled");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
@@ -93,16 +120,15 @@ await page.screenshot({ path: `${OUT}/e2e-2-invoice-draft.png` });
 const grandUi = await page.locator("aside[aria-label='Bill summary']").innerText();
 log("summary panel:", grandUi.replace(/\s+/g, " ").slice(0, 200));
 await page.getByRole("button", { name: "Save invoice" }).click();
-const toast = page.getByText(/Invoice INV\/\d\d-\d\d\/00001 saved/);
-await toast.waitFor({ timeout: 15000 });
-log("toast:", await toast.textContent());
+const savedNumber = await savedBill(page, { view: true });
+if (!/^INV\/\d\d-\d\d\/00001$/.test(savedNumber)) errors.push(`saved popup: ${savedNumber}`);
+log("saved popup: Invoice added successfully,", savedNumber);
 
 // 4. Server agrees.
 const invoices = await api("GET", "/invoices", token);
 log("server invoices:", invoices.data.map((i) => `${i.invoiceNumber} ${i.partyName} ${i.grandTotal}`).join(" | "));
 
-// 5. Invoice view (stored snapshot) and dashboard.
-await page.getByRole("button", { name: "Details" }).click();
+// 5. Invoice view (stored snapshot, opened from the popup) and dashboard.
 await page.getByRole("heading", { name: /INV\/\d\d-\d\d\/00001/ }).waitFor({ timeout: 15000 });
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/e2e-3-invoice-view.png`, fullPage: true });

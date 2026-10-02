@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LocaleCode } from "@digitalbahi/i18n";
 import { Tabs } from "radix-ui";
-import { Mail, MessageCircle, MessageSquareText, RotateCcw, Send } from "lucide-react";
+import { Mail, MessageSquareText, RotateCcw, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { MessageStatus, showRecipient, useChannels, type MessageRow } from "../../components/messaging/SendDialog";
@@ -15,6 +15,7 @@ import { allowed, WORKSPACE } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { usePaged } from "../../lib/usePaged";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 type Channel = "whatsapp" | "sms" | "email";
 
@@ -132,7 +133,7 @@ function SentList() {
         ) : (
           <ul className="divide-y divide-line">
             {list.rows.map((m) => {
-              const Icon = m.channel === "email" ? Mail : m.channel === "sms" ? MessageSquareText : MessageCircle;
+              const Icon = m.channel === "email" ? Mail : m.channel === "sms" ? MessageSquareText : WhatsAppIcon;
               const expanded = open === m.id;
               return (
                 <li key={m.id}>

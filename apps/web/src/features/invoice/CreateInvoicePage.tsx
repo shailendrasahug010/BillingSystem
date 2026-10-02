@@ -1,5 +1,5 @@
 import { translateError } from "@digitalbahi/i18n";
-import { ArrowLeft, ArrowRight, Camera, Check, Copy, Printer, Save, ScanBarcode, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, Printer, Save, ScanBarcode, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -25,6 +25,7 @@ import { LineItems } from "./LineItems";
 import { ProductSearch } from "./ProductSearch";
 import { SuggestionsPanel } from "./SuggestionsPanel";
 import { SummaryPanel } from "./SummaryPanel";
+import { InvoiceSavedDialog, type SavedNotice } from "./InvoiceSavedDialog";
 import { saleUnits } from "./units";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
@@ -123,32 +124,6 @@ function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChan
   );
 }
 
-function ShareDialog({ text, onClose }: { text: string | null; onClose(): void }) {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  return (
-    <Dialog open={text !== null} onOpenChange={(v) => !v && onClose()} title={t("invoice.saveAndShare")} size="md" closeLabel={t("common.close")}>
-      <textarea ref={ref} readOnly value={text ?? ""} rows={9} className="w-full rounded-lg border border-line bg-surface-2 p-3 font-mono text-[12.5px] text-ink" />
-      <div className="mt-3 flex justify-end">
-        <Button
-          icon={copied ? <Check size={16} /> : <Copy size={16} />}
-          onClick={() => {
-            // No clipboard on a page that is not secure (plain http at a network address): select it to copy by hand.
-            if (!navigator.clipboard) return ref.current?.select();
-            navigator.clipboard
-              .writeText(text ?? "")
-              .then(() => setCopied(true))
-              .catch(() => ref.current?.select());
-          }}
-        >
-          {copied ? "Copied" : "Copy message"}
-        </Button>
-      </div>
-    </Dialog>
-  );
-}
-
 /**
  * The number shown before saving: demo mode knows it; live numbers are
  * assigned by the server, except offline, where the device gives its own.
@@ -180,7 +155,7 @@ function useSave(view: DraftView) {
   const { t, money } = i18n;
   const toast = useToast();
   const { navigate } = useRouter();
-  const [shareText, setShareText] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedNotice | null>(null);
   const saving = useRef(false);
   const idempotencyKey = useRef(newIdempotencyKey());
 
@@ -188,39 +163,45 @@ function useSave(view: DraftView) {
     (invoice: SavedInvoice, mode: "save" | "print" | "share", offline: boolean) => {
       const { customer, dueDate } = view;
       const warning = invoice.warnings[0];
-      toast({
-        tone: offline ? "offline" : warning ? "info" : "success",
-        title: t("invoice.saved", { number: invoice.number }),
-        ...(offline
-          ? { body: t("invoice.savedOffline") }
-          : warning
-            ? { body: t((WARNING_KEYS[warning.code] ?? "errors.generic") as "errors.generic", warning.params) }
-            : { body: `${customer!.businessName} · ${money(invoice.total)}` }),
-        action: { label: t("common.details"), onClick: () => navigate({ name: "invoice-view", invoiceId: invoice.id }) },
-      });
+      const warningText = warning ? t((WARNING_KEYS[warning.code] ?? "errors.generic") as "errors.generic", warning.params) : null;
       // Feedback on the suggestions goes with a bill saved online (the server knows that bill).
       if (offline) view.feedback.reset();
       else view.feedback.send(invoice.id, view.draft.lines.map((l) => l.productId));
       view.dispatch({ type: "reset" });
       // Save & print: the bill opens with the print dialog.
-      if (mode === "print") navigate({ name: "invoice-view", invoiceId: invoice.id, print: true });
-      if (mode === "share") {
-        const balance = invoice.total - invoice.paid;
-        setShareText(
-          [
-            `${BUSINESS.name}`,
-            `Invoice ${invoice.number} · ${invoice.date.split("-").reverse().join("/")}`,
-            `${customer!.businessName}`,
-            `Items: ${invoice.lineCount}`,
-            `Total: ${money(invoice.total)}`,
-            invoice.paid > 0 ? `Received: ${money(invoice.paid)}` : "",
-            balance > 0 ? `Balance due: ${money(balance)} by ${dueDate.split("-").reverse().join("/")}` : "Paid in full. Thank you!",
-            BUSINESS.bank.upi ? `UPI: ${BUSINESS.bank.upi}` : "",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        );
+      if (mode === "print") {
+        toast({
+          tone: offline ? "offline" : warning ? "info" : "success",
+          title: t("invoice.saved", { number: invoice.number }),
+          ...(offline ? { body: t("invoice.savedOffline") } : warningText ? { body: warningText } : { body: `${customer!.businessName} · ${money(invoice.total)}` }),
+        });
+        navigate({ name: "invoice-view", invoiceId: invoice.id, print: true });
+        return;
       }
+      const balance = invoice.total - invoice.paid;
+      setSaved({
+        id: invoice.id,
+        number: invoice.number,
+        customerName: customer!.businessName,
+        mobile: customer!.mobile ?? null,
+        total: invoice.total,
+        paid: invoice.paid,
+        offline,
+        warning: warningText,
+        share: mode === "share",
+        shareText: [
+          `${BUSINESS.name}`,
+          `Invoice ${invoice.number} · ${invoice.date.split("-").reverse().join("/")}`,
+          `${customer!.businessName}`,
+          `Items: ${invoice.lineCount}`,
+          `Total: ${money(invoice.total)}`,
+          invoice.paid > 0 ? `Received: ${money(invoice.paid)}` : "",
+          balance > 0 ? `Balance due: ${money(balance)} by ${dueDate.split("-").reverse().join("/")}` : "Paid in full. Thank you!",
+          BUSINESS.bank.upi ? `UPI: ${BUSINESS.bank.upi}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      });
     },
     [view, toast, t, money, navigate],
   );
@@ -286,7 +267,7 @@ function useSave(view: DraftView) {
     },
     [view, toast, t, i18n, afterSave],
   );
-  return { save, shareText, closeShare: () => setShareText(null) };
+  return { save, saved, closeSaved: () => setSaved(null) };
 }
 
 function DesktopInvoice({ view }: { view: DraftView }) {
@@ -299,7 +280,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
   const [adding, setAdding] = useState<string | null>(null);
   // null: the suggestions fold into one row once the bill has lines; true / false once the user chose.
   const [suggestionsOpen, setSuggestionsOpen] = useState<boolean | null>(null);
-  const { save, shareText, closeShare } = useSave(view);
+  const { save, saved, closeSaved } = useSave(view);
   const { draft, dispatch, customer, insight, totals, error, credit } = view;
   const numberLabel = useNextNumberLabel(draft.date);
   const blocked = isBlocked(view);
@@ -368,7 +349,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-3">
           {customer && insight ? (
             <CustomerStrip customer={customer} insight={insight} credit={credit} onClear={() => dispatch({ type: "customer", customerId: null })} />
@@ -391,7 +372,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
           )}
 
           {/* Stays under the top bar while the lines scroll: the search, and the suggestions once folded into a row. */}
-          <div className="sticky top-14 z-20 -mx-2 flex flex-col gap-2 bg-bg/85 px-2 py-2 backdrop-blur-md lg:top-16">
+          <div data-overlay="top" className="sticky top-14 z-20 -mx-2 flex flex-col gap-2 bg-bg/85 px-2 py-2 backdrop-blur-md lg:top-16">
             <ProductSearch ref={productRef} customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
             {strip && suggestions(true)}
           </div>
@@ -436,7 +417,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
       {/* Below 1280 px the summary is under the lines: the total and Save stay at the foot of the screen. */}
       {draft.lines.length > 0 && (
         <>
-          <div className="glass fixed inset-x-3 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop lg:right-8 lg:bottom-4 lg:left-[calc(256px+2rem)] xl:hidden">
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:right-8 lg:bottom-4 lg:left-[calc(256px+2rem)] xl:hidden">
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
@@ -466,7 +447,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
           setTimeout(() => productRef.current?.focus(), 0);
         }}
       />
-      <ShareDialog text={shareText} onClose={closeShare} />
+      <InvoiceSavedDialog notice={saved} onClose={closeSaved} onNext={() => customerRef.current?.focus()} />
     </div>
   );
 }
@@ -474,7 +455,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
 /** Phone flow: Customer → Products → Review & pay, big targets, sticky total. */
 function MobileInvoice({ view }: { view: DraftView }) {
   const { t, money, locale } = useI18n();
-  const { save, shareText, closeShare } = useSave(view);
+  const { save, saved, closeSaved } = useSave(view);
   const [step, setStep] = useState(view.customer ? 1 : 0);
   const [scanOpen, setScanOpen] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
@@ -601,7 +582,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
             </span>
             <span className="text-[13px] font-medium text-accent">{t("invoice.changeCustomer")}</span>
           </button>
-          <div className="sticky top-14 z-20 -mx-4 bg-bg/85 px-4 py-2 backdrop-blur-md">
+          <div data-overlay="top" className="sticky top-14 z-20 -mx-4 bg-bg/85 px-4 py-2 backdrop-blur-md">
             <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
           </div>
           <SuggestionsPanel
@@ -634,7 +615,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
               onBackToSearch={() => productRef.current?.focus()}
             />
           </section>
-          <div className="glass fixed inset-x-3 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop">
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
             <div className="mx-auto flex max-w-xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
@@ -683,7 +664,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
           toProducts();
         }}
       />
-      <ShareDialog text={shareText} onClose={closeShare} />
+      <InvoiceSavedDialog notice={saved} onClose={closeSaved} onNext={() => customerRef.current?.focus()} />
     </div>
   );
 }

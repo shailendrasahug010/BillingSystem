@@ -9,6 +9,8 @@ const config: CapacitorConfig = {
   appId: "in.digitalbahi.app",
   appName: "Digital Bahi",
   webDir: "../web/dist",
+  // Pinch to zoom, as in a browser (the WebView turns it off unless asked).
+  zoomEnabled: true,
   android: {
     // Pages come from https://localhost; the server is reached over https only.
     allowMixedContent: false,

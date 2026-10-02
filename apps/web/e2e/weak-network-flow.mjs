@@ -39,6 +39,19 @@ async function api(method, path, token, body) {
 }
 
 const errors = [];
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
 /** A phone: its own browser profile, phone-sized, with its own network. */
@@ -81,7 +94,7 @@ const keptOnDevice = (p) =>
 
 /** A bill on the phone's bill screen; returns the number the device gave it. */
 let current = null;
-async function bill(p, customer, qty) {
+async function bill(p, customer, qty, { view = false } = {}) {
   const page = p.page;
   current = page;
   await page.goto(`${WEB}/#invoice`);
@@ -103,9 +116,7 @@ async function bill(p, customer, qty) {
   // On a phone: on to the review step, then save.
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "Save invoice" }).click();
-  const saved = page.getByText(/Invoice A\d+\/26-27\/\d{4} saved/).first();
-  await saved.waitFor({ timeout: 20000 });
-  return (await saved.textContent()).match(/A\d+\/26-27\/\d{4}/)[0];
+  return savedBill(page, { view });
 }
 
 try {
@@ -164,9 +175,8 @@ try {
   for (const p of [a, b, c]) await setOffline(p, true);
   const made = { owner: [], [staff[0].name]: [], [staff[1].name]: [] };
   made.owner.push(await bill(a, "Sharma", 3));
-  made.owner.push(await bill(a, "Gupta", 2));
-  // The owner cancels the second bill before it was ever sent.
-  await a.page.getByRole("button", { name: "Details" }).first().click();
+  // The owner opens the second bill from its popup and cancels it before it was ever sent.
+  made.owner.push(await bill(a, "Gupta", 2, { view: true }));
   await a.page.getByRole("heading", { name: made.owner[1] }).waitFor({ timeout: 20000 });
   await a.page.getByRole("button", { name: "Cancel bill" }).click();
   await a.page.getByLabel("Reason").fill("Customer did not take it");

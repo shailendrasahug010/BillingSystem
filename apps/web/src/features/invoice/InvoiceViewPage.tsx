@@ -1,5 +1,5 @@
 import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
-import { ArrowLeft, Ban, CloudOff, MessageCircle, Printer } from "lucide-react";
+import { ArrowLeft, Ban, CloudOff, Printer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -27,6 +27,7 @@ import { InvoiceReviewCard } from "./InvoiceReview";
 import { CancelInvoiceDialog, type CancellableBill } from "./CancelInvoiceDialog";
 import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
 import { invoiceReceipt } from "../../lib/thermal/receipts";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 /** Bills already sent to the printer from Save & print (going back to one does not print it again). */
 const printed = new Set<string>();
@@ -174,7 +175,7 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
             </>
           ) : (
             allowed("invoice.share") && (
-              <Button variant="primary" icon={<MessageCircle size={16} />} onClick={() => shareOnWhatsApp(shareText, mobile)}>
+              <Button variant="primary" icon={<WhatsAppIcon size={16} mono />} onClick={() => shareOnWhatsApp(shareText, mobile)}>
                 {t("common.whatsapp")}
               </Button>
             )

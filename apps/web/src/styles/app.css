@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "./fonts.css";
 
+/* A screen under 500 px tall: a laptop zoomed in a lot, a phone on its side. The phone's
+   bottom bar is left out there (the menu button opens everything), so the content keeps room. */
+@custom-variant short (@media (max-height: 500px));
+
 /*
  * DIGITAL BAHI DESIGN TOKENS
  * ---------------------

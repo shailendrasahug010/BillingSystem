@@ -167,16 +167,19 @@ function LineWarnings({ line }: { line: DraftLine }) {
 }
 
 /**
- * Scrolls an element into view clear of what stays on screen over the page
- * (the search bar above, the total bar below), given as its scroll margins.
- * Chrome's scrollIntoView({ block: "nearest" }) leaves an element alone while
- * any of it shows, even under those bars.
+ * Scrolls an element into view clear of what stays on screen over the page:
+ * the bars marked data-overlay (the top bar and the pinned search above, the
+ * total bar and a phone's tab bar below), measured where they are now, so at
+ * any zoom. Chrome's scrollIntoView({ block: "nearest" }) leaves an element
+ * alone while any of it shows, even under those bars.
  */
 function reveal(el: HTMLElement, behavior: ScrollBehavior = "auto") {
-  const style = getComputedStyle(el);
+  const bars = [...document.querySelectorAll<HTMLElement>("[data-overlay]")].map((b) => ({ side: b.dataset.overlay, box: b.getBoundingClientRect() })).filter((b) => b.box.height > 0);
+  const top = Math.max(0, ...bars.filter((b) => b.side === "top").map((b) => b.box.bottom)) + 8;
+  const bottom = Math.min(window.innerHeight, ...bars.filter((b) => b.side === "bottom").map((b) => b.box.top)) - 8;
   const box = el.getBoundingClientRect();
-  if (box.bottom + parseFloat(style.scrollMarginBottom) > window.innerHeight) el.scrollIntoView({ block: "end", behavior });
-  else if (box.top - parseFloat(style.scrollMarginTop) < 0) el.scrollIntoView({ block: "start", behavior });
+  if (box.bottom > bottom) window.scrollBy({ top: box.bottom - bottom, behavior });
+  else if (box.top < top) window.scrollBy({ top: box.top - top, behavior });
 }
 
 export function LineItems({

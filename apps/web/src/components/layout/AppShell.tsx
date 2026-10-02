@@ -391,7 +391,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
 
       <div className="flex min-w-0 flex-col">
         {/* Top bar */}
-        <header className="glass sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-14 items-center gap-2 border-b border-line/60 px-4 lg:h-16 lg:px-6">
+        <header data-overlay="top" className="glass sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-14 items-center gap-2 border-b border-line/60 px-4 lg:h-16 lg:px-6">
           <button
             type="button"
             className="press -ml-1 inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 lg:hidden"
@@ -449,12 +449,13 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-[1480px] flex-1 px-4 pt-5 pb-32 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12">{children}</main>
+        <main className="mx-auto w-full max-w-[1920px] flex-1 px-4 pt-5 pb-32 short:pb-8 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12">{children}</main>
       </div>
 
       {/* Phones: a floating tab bar with the Create button in the middle. */}
       <nav
-        className="glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] border border-line/70 shadow-pop lg:hidden"
+        data-overlay="bottom"
+        className="glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] border border-line/70 shadow-pop short:hidden lg:hidden"
         style={{ gridTemplateColumns: `repeat(${bottomItems.length}, minmax(0, 1fr))` }}
         aria-label="Primary"
       >

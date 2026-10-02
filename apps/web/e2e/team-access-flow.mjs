@@ -40,6 +40,19 @@ async function api(method, path, token, body) {
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const errors = [];
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 const watch = (page, state) => {
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(m.text()));
@@ -129,7 +142,7 @@ await staffPage.getByLabel("Qty Tata Tea Gold 250g").waitFor();
 if (await staffPage.getByRole("textbox", { name: "Rate Tata Tea Gold 250g" }).count()) errors.push("invoice: rate editable for sales");
 await staffPage.screenshot({ path: `${OUT}/team-4-staff-invoice.png` });
 await staffPage.keyboard.press("Control+Enter");
-await staffPage.getByText(/Invoice INV\/.* saved/).first().waitFor({ timeout: 15000 });
+await savedBill(staffPage);
 // A screen outside the role, opened from a link: a clear message, no failed calls.
 await staffPage.goto(`${WEB}/#settings`);
 await staffPage.getByText("Not part of your role").waitFor({ timeout: 15000 });

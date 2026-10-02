@@ -14,6 +14,7 @@ import { Field, Input } from "../ui/Field";
 import { Segmented } from "../ui/misc";
 import { ErrorNote } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { WhatsAppIcon } from "../brand/WhatsAppIcon";
 
 type Channel = "whatsapp" | "email";
 
@@ -183,7 +184,7 @@ export function SendDialog({
             inputMode={channel === "email" ? "email" : "tel"}
             placeholder={t("messages.toOnFile")}
             onChange={(e) => setTo(e.target.value)}
-            leading={channel === "email" ? <Mail size={15} /> : <MessageCircle size={15} />}
+            leading={channel === "email" ? <Mail size={15} /> : channel === "whatsapp" ? <WhatsAppIcon size={15} /> : <MessageCircle size={15} />}
           />
         </Field>
         <Segmented

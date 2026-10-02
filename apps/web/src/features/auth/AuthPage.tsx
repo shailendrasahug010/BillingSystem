@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { ApiError } from "../../lib/api";
 import { translateError } from "@digitalbahi/i18n";
+import { validateEmail, validateGstin, validateMobile } from "@digitalbahi/core";
 import { stateOptions } from "../../lib/states";
 import { ServerLine } from "./ServerSetup";
 
@@ -62,6 +63,12 @@ function fieldError(error: ApiError | null, field: string, message: (e: ApiError
   return error && (error.field === field || error.field === `business.${field}`) ? message(error) : null;
 }
 
+/** The sign-up fields on the first panel (the server names the business's under "business."). */
+const SIGNUP_FIELDS = ["name", "mobile", "email", "password", "legalName", "stateCode", "gstin"] as const;
+type SignupField = (typeof SIGNUP_FIELDS)[number];
+const SIGNUP_IDS: Record<SignupField, string> = { name: "su-name", mobile: "su-mobile", email: "su-email", password: "su-password", legalName: "su-business", stateCode: "su-state", gstin: "su-gstin" };
+const signupField = (path: string | undefined): SignupField | undefined => SIGNUP_FIELDS.find((f) => path === f || path === `business.${f}`);
+
 /**
  * Sign in (password or OTP), self-service sign-up that creates the business,
  * and password reset by OTP. Errors come back as codes and are shown in the
@@ -77,6 +84,8 @@ export function AuthPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
+  // Sign-up's first panel was sent once: its fields show what is missing from then on.
+  const [tried, setTried] = useState(false);
   const [form, setForm] = useState({
     identifier: "",
     password: "",
@@ -90,6 +99,27 @@ export function AuthPage() {
   });
   const set = (key: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const message = (e: ApiError) => translateError(i18n, e);
+
+  // Sign-up's own checks (the server's rules: name and business name 2+ characters, password 8+).
+  const required = (v: string, min: number) => (!v.trim() ? t("validation.required") : v.trim().length < min ? t("validation.tooShort", { min }) : undefined);
+  const mobileIssue = validateMobile(form.mobile)[0];
+  const gstinIssue = form.gstin.trim() ? validateGstin(form.gstin, { expectedStateCode: form.stateCode })[0] : undefined;
+  const signupIssues: Partial<Record<SignupField, string>> = {
+    name: required(form.name, 2),
+    mobile: mobileIssue ? (mobileIssue === "required" ? t("validation.required") : t("validation.mobile")) : undefined,
+    email: form.email.trim() && validateEmail(form.email).length ? t("validation.email") : undefined,
+    password: !form.password ? t("validation.required") : form.password.length < 8 ? t("validation.passwordShort") : undefined,
+    legalName: required(form.legalName, 2),
+    gstin: gstinIssue ? t(`validation.${gstinIssue}`) : undefined,
+  };
+  /** What to show at a sign-up field: its own check once tried, else what the server said about it. */
+  const signupError = (field: SignupField): string | null => {
+    if (tried && signupIssues[field]) return signupIssues[field]!;
+    const server = fieldError(error, field, message);
+    if (server) return server;
+    const detail = error?.details?.find((d) => signupField(d.field) === field);
+    return detail ? (field === "password" ? t("validation.passwordShort") : t("validation.invalid_format")) : null;
+  };
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -109,6 +139,7 @@ export function AuthPage() {
     setNotice(null);
     setOtpSent(false);
     setDevCode(null);
+    setTried(false);
     setForm((f) => ({ ...f, otp: "" }));
   };
 
@@ -131,21 +162,37 @@ export function AuthPage() {
         setNotice(t("auth.resetDone"));
       });
     }
-    if (!otpSent) return void sendOtp("signup");
-    return void run(() =>
-      session.signup({
-        name: form.name.trim(),
-        mobile: form.mobile,
-        ...(form.email.trim() ? { email: form.email.trim() } : {}),
-        password: form.password,
-        otp: form.otp,
-        preferredLocale: locale === "hi" ? "hi" : "en",
-        business: { legalName: form.legalName.trim(), stateCode: form.stateCode, ...(form.gstin.trim() ? { gstin: form.gstin.trim().toUpperCase() } : {}) },
-      }),
-    );
+    if (!otpSent) {
+      // Everything the sign-up needs is checked here, on this panel, before a code is sent.
+      setTried(true);
+      const first = SIGNUP_FIELDS.find((f) => signupIssues[f]);
+      if (first) return void document.getElementById(SIGNUP_IDS[first])?.focus();
+      return void sendOtp("signup");
+    }
+    return void run(async () => {
+      try {
+        await session.signup({
+          name: form.name.trim(),
+          mobile: form.mobile,
+          ...(form.email.trim() ? { email: form.email.trim() } : {}),
+          password: form.password,
+          otp: form.otp,
+          preferredLocale: locale === "hi" ? "hi" : "en",
+          business: { legalName: form.legalName.trim(), stateCode: form.stateCode, ...(form.gstin.trim() ? { gstin: form.gstin.trim().toUpperCase() } : {}) },
+        });
+      } catch (e) {
+        // Refused for a field of the first panel (a GSTIN already registered…): back there, the message at the field.
+        if (e instanceof ApiError && (signupField(e.field) || e.details?.some((d) => signupField(d.field)))) {
+          setOtpSent(false);
+          setDevCode(null);
+          setForm((f) => ({ ...f, otp: "" }));
+        }
+        throw e;
+      }
+    });
   };
 
-  const general = error && !error.field ? message(error) : null;
+  const general = error && !error.field && !error.details?.some((d) => signupField(d.field)) ? message(error) : null;
   const otpField = otpSent && (
     <Field label={t("auth.otp")} htmlFor="auth-otp" hint={devCode ? t("auth.devOtp", { code: devCode }) : t("auth.otpSentTo", { mobile: form.mobile })} error={fieldError(error, "otp", message)}>
       <Input id="auth-otp" inputSize="lg" inputMode="numeric" autoComplete="one-time-code" maxLength={6} leading={<KeyRound size={18} />} value={form.otp} onChange={set("otp")} autoFocus />
@@ -185,23 +232,23 @@ export function AuthPage() {
 
         {mode === "signup" && !otpSent && (
           <>
-            <Field label={t("auth.yourName")} htmlFor="su-name">
-              <Input id="su-name" autoComplete="name" leading={<UserRound size={17} />} value={form.name} onChange={set("name")} autoFocus />
+            <Field label={t("auth.yourName")} htmlFor="su-name" error={signupError("name")}>
+              <Input id="su-name" invalid={Boolean(signupError("name"))} autoComplete="name" leading={<UserRound size={17} />} value={form.name} onChange={set("name")} autoFocus />
             </Field>
-            <Field label={t("auth.mobile")} htmlFor="su-mobile" error={fieldError(error, "mobile", message)}>
-              <Input id="su-mobile" inputMode="tel" autoComplete="tel" leading={<Smartphone size={17} />} value={form.mobile} onChange={set("mobile")} />
+            <Field label={t("auth.mobile")} htmlFor="su-mobile" error={signupError("mobile")}>
+              <Input id="su-mobile" invalid={Boolean(signupError("mobile"))} inputMode="tel" autoComplete="tel" leading={<Smartphone size={17} />} value={form.mobile} onChange={set("mobile")} />
             </Field>
-            <Field label={`${t("auth.email")} (${t("common.optional")})`} htmlFor="su-email" error={fieldError(error, "email", message)}>
-              <Input id="su-email" type="email" autoComplete="email" value={form.email} onChange={set("email")} />
+            <Field label={`${t("auth.email")} (${t("common.optional")})`} htmlFor="su-email" error={signupError("email")}>
+              <Input id="su-email" invalid={Boolean(signupError("email"))} type="email" autoComplete="email" value={form.email} onChange={set("email")} />
             </Field>
-            <Field label={t("auth.newPassword")} htmlFor="su-password" hint={t("auth.passwordHint")}>
-              <Input id="su-password" type="password" autoComplete="new-password" leading={<LockKeyhole size={17} />} value={form.password} onChange={set("password")} />
+            <Field label={t("auth.newPassword")} htmlFor="su-password" hint={t("auth.passwordHint")} error={signupError("password")}>
+              <Input id="su-password" invalid={Boolean(signupError("password"))} type="password" autoComplete="new-password" leading={<LockKeyhole size={17} />} value={form.password} onChange={set("password")} />
             </Field>
             <p className="eyebrow pt-1">{t("auth.businessDetails")}</p>
-            <Field label={t("auth.businessName")} htmlFor="su-business">
-              <Input id="su-business" leading={<Building2 size={17} />} value={form.legalName} onChange={set("legalName")} />
+            <Field label={t("auth.businessName")} htmlFor="su-business" error={signupError("legalName")}>
+              <Input id="su-business" invalid={Boolean(signupError("legalName"))} leading={<Building2 size={17} />} value={form.legalName} onChange={set("legalName")} />
             </Field>
-            <Field label={t("auth.state")} htmlFor="su-state" error={fieldError(error, "stateCode", message)}>
+            <Field label={t("auth.state")} htmlFor="su-state" error={signupError("stateCode")}>
               <Select id="su-state" value={form.stateCode} onChange={set("stateCode")}>
                 {stateOptions(locale, { special: false }).map((s) => (
                   <option key={s.code} value={s.code}>
@@ -210,8 +257,8 @@ export function AuthPage() {
                 ))}
               </Select>
             </Field>
-            <Field label={t("auth.gstinOptional")} htmlFor="su-gstin" error={fieldError(error, "gstin", message)}>
-              <Input id="su-gstin" className="font-mono uppercase" maxLength={15} value={form.gstin} onChange={set("gstin")} />
+            <Field label={t("auth.gstinOptional")} htmlFor="su-gstin" error={signupError("gstin")}>
+              <Input id="su-gstin" invalid={Boolean(signupError("gstin"))} className="font-mono uppercase" maxLength={15} value={form.gstin} onChange={set("gstin")} />
             </Field>
           </>
         )}
@@ -228,9 +275,12 @@ export function AuthPage() {
             {general}
           </p>
         )}
-        {error?.details?.length ? (
+        {error?.details?.some((d) => !signupField(d.field)) ? (
           <p className="text-[12px] text-danger" role="alert">
-            {error.details.map((d) => d.field).join(", ")}
+            {error.details
+              .filter((d) => !signupField(d.field))
+              .map((d) => d.field)
+              .join(", ")}
           </p>
         ) : null}
 

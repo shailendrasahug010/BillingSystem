@@ -60,6 +60,19 @@ page.on("requestfailed", (r) => {
   if (!offline && r.url().includes("/api/") && !r.url().includes("/notifications/stream") && r.failure()?.errorText !== "net::ERR_ABORTED") errors.push(`failed ${r.method()} ${r.url()} ${r.failure()?.errorText ?? ""}`);
 });
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 const goOffline = async (value) => {
   offline = value;
   await context.setOffline(value);
@@ -137,7 +150,7 @@ try {
   await page.getByLabel(/^Qty /).first().fill("2");
   await page.keyboard.press("Tab");
   await page.getByRole("button", { name: "Save invoice" }).click();
-  await toast("Invoice A1/26-27/0001 saved");
+  if ((await savedBill(page)) !== "A1/26-27/0001") errors.push("the offline bill is not A1/26-27/0001");
   await openCustomer("Sharma Kirana");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.fill("#c-city", "Ujjain");
