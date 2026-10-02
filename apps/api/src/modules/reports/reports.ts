@@ -11,6 +11,7 @@ import { withTenant } from "../../lib/db.js";
 import { badRequest, forbidden } from "../../lib/errors.js";
 import { assertRange } from "../../lib/period.js";
 import { loadLetterhead } from "../../services/letterhead.js";
+import { productSalesRows, summariesThrough } from "../../services/sales-daily.js";
 import { pdfDate, renderReportPdf } from "../../services/pdf-report.js";
 import { renderReportXlsx } from "../../services/xlsx-report.js";
 import type { ApiModule } from "../types.js";
@@ -115,9 +116,23 @@ export const reportsModule: ApiModule = async (app, deps) => {
     const where = sql.join(filters, sql` and `);
 
     const rows = await tenant(ctx, async (tx) => {
+      // By product for every customer: past days from the daily summaries once they are complete, today from the bills.
+      const through = q.groupBy === "product" && !q.customerId ? await summariesThrough(tx, b, deps.clock.today(ctx.timeZone)) : null;
+      if (through) {
+        const only = [...(q.productId ? [sql`s.product_id = ${q.productId}`] : []), ...(q.brandId ? [sql`p.brand_id = ${q.brandId}`] : [])];
+        return (
+          await tx.execute<{ key: string; label: string; invoices: number; qty: string; taxable: string; tax: string; total: string }>(sql`
+            with s as (${productSalesRows(b, q.from, q.to, through)})
+            select s.product_id::text as key, max(p.name) as label, sum(s.invoices)::int as invoices, sum(s.qty)::text as qty,
+                   sum(s.taxable)::text as taxable, sum(s.tax)::text as tax, sum(s.taxable + s.tax)::text as total
+            from s join products p on p.id = s.product_id
+            ${only.length ? sql`where ${sql.join(only, sql` and `)}` : sql``}
+            group by 1 order by sum(s.taxable) desc`)
+        ).rows;
+      }
       if (itemLevel) {
         const key = {
-          product: { key: sql`ii.product_id::text`, label: sql`max(ii.product_name)` },
+          product: { key: sql`ii.product_id::text`, label: sql`max(p.name)` },
           brand: { key: sql`coalesce(p.brand_id::text, '-')`, label: sql`coalesce(max(br.name), 'No brand')` },
           category: { key: sql`coalesce(p.category_id::text, '-')`, label: sql`coalesce(max(pc.name), 'No category')` },
         }[q.groupBy as "product" | "brand" | "category"] ?? { key: sql`date_trunc(${TRUNC[q.groupBy] ?? TRUNC.day!}, i.invoice_date)::date::text`, label: sql`date_trunc(${TRUNC[q.groupBy] ?? TRUNC.day!}, i.invoice_date)::date::text` };

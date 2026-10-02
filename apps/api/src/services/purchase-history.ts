@@ -21,8 +21,9 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
  * indexed rows instead of a year of invoice lines.
  *
  * The figures for a customer are always worked out whole, from their posted
- * bills in the window, by the same @digitalbahi/core functions the app runs
- * offline. The outbox worker does it a few seconds after a bill, payment or
+ * bills in the window (net of what they returned: a line returned in full
+ * does not count as bought), by the same @digitalbahi/core functions the app
+ * runs offline. The outbox worker does it a few seconds after a bill, payment or
  * note of theirs; the nightly job does it for everyone (the window moves on
  * each day) after checking the stored figures against a fresh computation.
  */
@@ -92,12 +93,14 @@ const byRule = (a: AssociationRule, b: AssociationRule) => a.productId.localeCom
  * their bills in the window or still open (for payment behaviour), up to `until`.
  */
 export async function loadCustomerData(tx: Tx, businessId: string, customerId: string, since: string, until: string, options: { invoices?: boolean } = {}): Promise<CustomerData> {
+  // Returns (credit notes) lower what was bought; the rate stays the bill's.
   const lines = await tx.execute<{ invoice_id: string; invoice_date: string; product_id: string; qty: string; rate: string | null }>(sql`
-    select i.id as invoice_id, i.invoice_date::text as invoice_date, ii.product_id, ii.qty_base::text as qty,
+    select i.id as invoice_id, i.invoice_date::text as invoice_date, ii.product_id,
+           (case when ii.returned_qty = 0 then ii.qty_base else ((ii.qty - ii.returned_qty) * ii.conversion_factor)::numeric(15,3) end)::text as qty,
            (ii.taxable_value / nullif(ii.qty_base, 0))::numeric(15,4)::text as rate
     from invoices i join invoice_items ii on ii.invoice_id = i.id
     where i.business_id = ${businessId} and i.customer_id = ${customerId} and i.status = 'posted'
-      and i.invoice_date >= ${since} and i.invoice_date <= ${until}`);
+      and i.invoice_date >= ${since} and i.invoice_date <= ${until} and ii.qty > ii.returned_qty`);
   const purchaseLines: PurchaseLine[] = lines.rows.map((l) => ({ invoiceId: l.invoice_id, date: l.invoice_date, productId: l.product_id, qty: l.qty, ...(l.rate ? { rate: l.rate } : {}) }));
   if (options.invoices === false) return { lines: purchaseLines, invoices: [] };
   const invoices = await tx.execute<InvoiceRow>(sql`

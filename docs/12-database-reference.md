@@ -2739,7 +2739,7 @@ What the billing screen offered and what was taken, one row per bill being made 
 
 ### `sales_daily_product`
 
-Daily sales per product (and brand/category snapshot): product-wise, company-wise and category-wise reports read this instead of scanning invoice lines. One row per business x day x product x salesperson. Not filled yet: reports read the documents directly.
+Daily sales per product (and brand/category snapshot): product-wise, company-wise and category-wise reports read this instead of scanning invoice lines. One row per business x day x product x salesperson. Each day is worked out whole from its documents by the outbox worker (after a bill, return or purchase on that day) and every day again by the nightly job; the sales report by product and the home screen read it for past days.
 
 | Column | Type | Required | Default | Description |
 |---|---|:-:|---|---|
@@ -2748,7 +2748,7 @@ Daily sales per product (and brand/category snapshot): product-wise, company-wis
 | `product_id` | uuid | ✓ |  | → [`products`](#products).id. The product. |
 | `brand_id` | uuid |  |  | → [`brands`](#brands).id. The product's brand on that day. |
 | `category_id` | uuid |  |  | → [`product_categories`](#product_categories).id. The product's category on that day. |
-| `salesperson_id` | uuid |  |  | → [`employees`](#employees).id. Salesperson of the invoices. |
+| `salesperson_id` | uuid |  |  | → [`employees`](#employees).id. Salesperson of the invoices (returns: of the invoice returned against; purchases: none). |
 | `qty_sold` | numeric(15,3) | ✓ | `0` | Base units sold. |
 | `qty_returned` | numeric(15,3) | ✓ | `0` | Base units returned. |
 | `taxable_value` | numeric(15,2) | ✓ | `0` | Taxable value of the sales. |
@@ -2765,14 +2765,14 @@ Daily sales per product (and brand/category snapshot): product-wise, company-wis
 
 ### `sales_daily_customer`
 
-Daily sales / collection per customer (customer-wise and salesperson-wise reports, dashboard trends). Not filled yet: reports read the documents directly.
+Daily sales / collection per customer (customer-wise and salesperson-wise reports, dashboard trends). Kept like sales_daily_product: billed by the bills' salesperson, collected by whoever collected the money.
 
 | Column | Type | Required | Default | Description |
 |---|---|:-:|---|---|
 | `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
 | `day` | date | ✓ |  | The day. |
 | `customer_id` | uuid | ✓ |  | → [`customers`](#customers).id. The customer. |
-| `salesperson_id` | uuid |  |  | → [`employees`](#employees).id. Salesperson of the invoices. |
+| `salesperson_id` | uuid |  |  | → [`employees`](#employees).id. Salesperson of the invoices (for money collected: who collected it). |
 | `invoice_count` | integer | ✓ | `0` | Invoices that day. |
 | `taxable_value` | numeric(15,2) | ✓ | `0` | Taxable value billed. |
 | `grand_total` | numeric(15,2) | ✓ | `0` | Total billed. |

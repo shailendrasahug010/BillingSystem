@@ -606,6 +606,8 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           entityLabel: p.purchaseNumber ?? p.supplierInvoiceNumber,
           changes: { reason: request.body.reason, grandTotal: p.grandTotal, releasedToAdvance: released },
         });
+        // The daily summaries count what was bought in on its day.
+        await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "purchase.cancelled", aggregateType: "purchase", aggregateId: p.id, payload: {} });
         return { ...(await purchaseDetail(tx, ctx, p.id)), warnings };
       });
     },

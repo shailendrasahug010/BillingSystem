@@ -201,8 +201,10 @@ export const suggestionFeedback = pgTable(
 /**
  * Daily sales per product (and brand/category snapshot): product-wise,
  * company-wise and category-wise reports read this instead of scanning
- * invoice lines. One row per business x day x product x salesperson.
- * Not filled yet: reports read the documents directly.
+ * invoice lines. One row per business x day x product x salesperson. Each
+ * day is worked out whole from its documents by the outbox worker (after a
+ * bill, return or purchase on that day) and every day again by the nightly
+ * job; the sales report by product and the home screen read it for past days.
  */
 export const salesDailyProduct = pgTable(
   "sales_daily_product",
@@ -218,7 +220,7 @@ export const salesDailyProduct = pgTable(
     brandId: uuid().references(() => brands.id),
     /** The product's category on that day. */
     categoryId: uuid().references(() => productCategories.id),
-    /** Salesperson of the invoices. */
+    /** Salesperson of the invoices (returns: of the invoice returned against; purchases: none). */
     salespersonId: uuid().references(() => employees.id),
     /** Base units sold. */
     qtySold: qty().notNull().default("0"),
@@ -247,7 +249,7 @@ export const salesDailyProduct = pgTable(
 
 /**
  * Daily sales / collection per customer (customer-wise and salesperson-wise reports, dashboard trends).
- * Not filled yet: reports read the documents directly.
+ * Kept like sales_daily_product: billed by the bills' salesperson, collected by whoever collected the money.
  */
 export const salesDailyCustomer = pgTable(
   "sales_daily_customer",
@@ -259,7 +261,7 @@ export const salesDailyCustomer = pgTable(
     customerId: uuid()
       .notNull()
       .references(() => customers.id),
-    /** Salesperson of the invoices. */
+    /** Salesperson of the invoices (for money collected: who collected it). */
     salespersonId: uuid().references(() => employees.id),
     /** Invoices that day. */
     invoiceCount: integer().notNull().default(0),

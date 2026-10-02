@@ -6,6 +6,7 @@ import { withTenant } from "../lib/db.js";
 import { NOTIFICATION_EVENTS, notifyForEvent } from "./notification-events.js";
 import { planPushes, PUSH_EVENT, sendPushes, type PlannedPush } from "./push-delivery.js";
 import { refreshCustomer } from "./purchase-history.js";
+import { refreshSalesDays, summaryDaysOf } from "./sales-daily.js";
 import { getSettings } from "./settings.js";
 
 /**
@@ -17,9 +18,10 @@ import { getSettings } from "./settings.js";
  * The handlers keep the purchase history (customer_product_stats and
  * customer_stats) of the customer an event is about, raise the
  * notifications events call for (new orders, leave requests: see
- * notification-events.ts) and push new notifications to phones (planned in
- * the transaction, sent after it commits: push-delivery.ts). Events no
- * handler needs are marked processed as they are.
+ * notification-events.ts), push new notifications to phones (planned in
+ * the transaction, sent after it commits: push-delivery.ts) and work out
+ * again the daily sales summaries of the days their documents fall on
+ * (sales-daily.ts). Events no handler needs are marked processed as they are.
  *
  * Every business is handled in its own transaction under row-level security:
  * `outbox_pending_businesses` (a SECURITY DEFINER function) only says whose
@@ -134,6 +136,16 @@ export async function processBusinessOutbox(deps: AppDeps, businessId: string): 
         } catch (error) {
           failures.push({ job: "outbox worker (notification for an event)", details: { businessId, event: `${ev.eventType} ${ev.aggregateId}` }, error });
           errorOf.set(ev.id, error);
+        }
+      }
+      // The daily summaries of the days these documents fall on.
+      const dayOf = await summaryDaysOf(tx, events.filter((ev) => !errorOf.has(ev.id)));
+      if (dayOf.size) {
+        try {
+          await tx.transaction((sp) => refreshSalesDays(sp, businessId, [...new Set(dayOf.values())]));
+        } catch (error) {
+          failures.push({ job: "outbox worker (daily sales summaries)", details: { businessId, days: [...new Set(dayOf.values())].join(",") }, error });
+          for (const id of dayOf.keys()) errorOf.set(id, error);
         }
       }
       // New notifications to push to phones (sent once this transaction has committed; at most once).

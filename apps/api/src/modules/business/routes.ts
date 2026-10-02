@@ -162,6 +162,13 @@ export const businessModule: ApiModule = async (app, deps) => {
               set: { value: parsed.data, updatedBy: ctx.userId, updatedAt: deps.clock.now().toISOString() },
             });
         await audit(tx, ctx, { action: "setting.changed", entityType: "setting", entityLabel: key, changes: { [key]: [before?.value ?? null, parsed.data] } });
+        // Weights set by hand stay: the nightly tuning stops.
+        if (key === "suggestions.weights") {
+          await tx
+            .insert(schema.settings)
+            .values({ businessId: ctx.businessId, key: "suggestions.auto_tune", value: false, updatedBy: ctx.userId })
+            .onConflictDoUpdate({ target: [schema.settings.businessId, schema.settings.key], set: { value: false, updatedBy: ctx.userId, updatedAt: deps.clock.now().toISOString() } });
+        }
         return { key, value: parsed.data };
       });
     },

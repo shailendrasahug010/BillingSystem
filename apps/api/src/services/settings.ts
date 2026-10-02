@@ -18,6 +18,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "reports.aging_buckets": [30, 60, 90],
   "suggestions.weights": { reorder: 1, frequent: 0.6, together: 0.5, last_order: 0.3 },
   "suggestions.window_days": 365,
+  "suggestions.auto_tune": true,
   "backup.schedule": { frequency: "daily", time: "02:00", retainDays: 30 },
   "offline.wipe_after_days": 30,
   "gst.lut": null,

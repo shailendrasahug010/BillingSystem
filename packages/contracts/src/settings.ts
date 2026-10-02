@@ -57,6 +57,8 @@ export const SETTING_SCHEMAS = {
     last_order: z.number().min(0).max(5),
   }),
   "suggestions.window_days": z.number().int().min(30).max(1095),
+  /** The nightly job sets suggestions.weights from what the billing screen offered and what was taken (saving the weights by hand turns it off). */
+  "suggestions.auto_tune": z.boolean(),
   /**
    * Letter of undertaking for exports and supplies to SEZ without payment of IGST (form GST RFD-11):
    * its ARN and the last day it is valid (the end of the financial year); null when the business has none.

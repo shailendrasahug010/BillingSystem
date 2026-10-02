@@ -1,4 +1,4 @@
-import { addDays } from "@digitalbahi/core";
+import { addDays, tuneSuggestionWeights, type WeightTuning } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, isNotNull, lt, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
@@ -18,6 +18,7 @@ import {
   writeFigures,
   type PurchaseFigures,
 } from "./purchase-history.js";
+import { rebuildSalesSummaries, type SummaryRebuild } from "./sales-daily.js";
 import { getSettings } from "./settings.js";
 
 /**
@@ -34,7 +35,13 @@ import { getSettings } from "./settings.js";
  *  5. Checks the cached balances against their ledgers: customers.balance and
  *     suppliers.balance against party_ledger_entries, stock_balances against
  *     stock_ledger. Mismatches are reported, not changed.
- *  6. Deletes processed outbox events older than OUTBOX_KEEP_DAYS,
+ *  6. Works out every day's sales summaries again (sales_daily_product and
+ *     sales_daily_customer), counting rows that had drifted from the
+ *     documents, and marks them complete for the reports.
+ *  7. Tunes the suggestion weights from what the billing screen offered and
+ *     what was taken in the last TUNING_DAYS (unless suggestions.auto_tune is
+ *     off: weights set by hand stay).
+ *  8. Deletes processed outbox events older than OUTBOX_KEEP_DAYS,
  *     notifications older than NOTIFICATION_KEEP_DAYS, the pull feed's
  *     changes older than SYNC_KEEP_DAYS and the push tokens of phones whose
  *     sign-in has ended.
@@ -42,6 +49,37 @@ import { getSettings } from "./settings.js";
  * What it found is kept in analytics_runs.details; drift and mismatches are
  * also written to the error log, where operators look.
  */
+
+/** Days of billing-screen feedback the suggestion weights are tuned from. */
+export const TUNING_DAYS = 90;
+
+/** Works out the suggestion weights from the offers and takes of the last TUNING_DAYS and saves them unless tuning is off. */
+async function tuneWeights(tx: Tx, businessId: string, now: Date): Promise<NightlyDetails["suggestionWeights"]> {
+  const auto = (await getSettings(tx, businessId, ["suggestions.auto_tune"] as const))["suggestions.auto_tune"];
+  const since = new Date(now.getTime() - TUNING_DAYS * 86_400_000).toISOString();
+  const counts = (
+    await tx.execute<{ grp: string; rank: number; shown: number; added: number }>(sql`
+      with f as (select shown, added from suggestion_feedback where business_id = ${businessId} and created_at >= ${since}::timestamptz),
+      items as (
+        select true as offered, x from f, jsonb_array_elements(f.shown) x
+        union all
+        select false, x from f, jsonb_array_elements(f.added) x
+      )
+      select x->>'group' as grp, (x->>'rank')::int as rank,
+             count(*) filter (where offered)::int as shown, count(*) filter (where not offered)::int as added
+      from items where jsonb_typeof(x->'rank') = 'number'
+      group by 1, 2`)
+  ).rows;
+  const tuning = tuneSuggestionWeights(counts.map((c) => ({ group: c.grp, rank: c.rank, shown: c.shown, added: c.added })));
+  const applied = auto && tuning.tuned;
+  if (applied) {
+    await tx
+      .insert(schema.settings)
+      .values({ businessId, key: "suggestions.weights", value: tuning.weights })
+      .onConflictDoUpdate({ target: [schema.settings.businessId, schema.settings.key], set: { value: tuning.weights, updatedBy: null, updatedAt: now.toISOString() } });
+  }
+  return { ...tuning, applied };
+}
 
 /** Customers per transaction while rebuilding (keeps transactions short). */
 const CHUNK = 50;
@@ -78,6 +116,10 @@ export interface NightlyDetails {
   syncChangesDeleted: number;
   /** Push tokens of phones whose sign-in ended (signed out, removed, moved to another business), deleted. */
   pushTokensDeleted: number;
+  /** The daily sales summaries, worked out again: rows, and rows that had drifted. */
+  salesSummaries: SummaryRebuild;
+  /** The weights the feedback supports, and whether they were saved (suggestions.auto_tune on and enough offers). */
+  suggestionWeights: WeightTuning & { applied: boolean };
   customers: number;
   statsRows: number;
   drift: DriftReport;
@@ -180,9 +222,12 @@ export async function nightlyForBusiness(deps: AppDeps, businessId: string, toda
     });
   }
 
+  // In a transaction of its own: it holds the summaries' lock while it works every day out.
+  const salesSummaries = await withTenant(deps.db, scope, (tx) => rebuildSalesSummaries(tx, businessId, today));
   return withTenant(deps.db, scope, async (tx) => {
     const associations = await mineStoreAssociations(tx, businessId, today);
     const balances = await checkBalances(tx, businessId);
+    const suggestionWeights = await tuneWeights(tx, businessId, deps.clock.now());
     const cutoff = new Date(deps.clock.now().getTime() - OUTBOX_KEEP_DAYS * 86_400_000).toISOString();
     const deleted = await tx
       .delete(schema.outboxEvents)
@@ -206,6 +251,8 @@ export async function nightlyForBusiness(deps: AppDeps, businessId: string, toda
       notificationsDeleted: oldNotifications.length,
       syncChangesDeleted: oldChanges.length,
       pushTokensDeleted: deadPhones.length,
+      salesSummaries,
+      suggestionWeights,
       customers: customers.length,
       statsRows,
       drift,
@@ -220,6 +267,7 @@ export async function nightlyForBusiness(deps: AppDeps, businessId: string, toda
 function findings(d: NightlyDetails): string[] {
   const out: string[] = [];
   if (d.drift.customers) out.push(`purchase history of ${d.drift.customers} customer(s) had drifted from their bills (${d.drift.rows} product rows); rebuilt`);
+  if (d.salesSummaries.drifted) out.push(`${d.salesSummaries.drifted} daily sales summary row(s) had drifted from the documents (days ${d.salesSummaries.driftedDays.join(", ")}); rebuilt`);
   for (const [kind, b] of Object.entries(d.balances)) {
     if (b.mismatched) out.push(`${b.mismatched} cached ${kind} balance(s) differ from the ledger`);
   }

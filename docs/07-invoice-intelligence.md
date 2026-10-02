@@ -171,7 +171,8 @@ Reasons are stored and transmitted as `{ code, params }` and rendered with trans
 | Setting | Default |
 |---|---|
 | `suggestions.window_days` | 365 |
-| `suggestions.weights` | reorder 1 · frequent 0.6 · together 0.5 · last_order 0.3 |
+| `suggestions.weights` | reorder 1 · frequent 0.6 · together 0.5 · last_order 0.3 (tuned nightly while `suggestions.auto_tune` is on; saving them by hand turns it off) |
+| `suggestions.auto_tune` | on |
 | Frequent threshold | order share ≥ 0.25 and ≥ 2 orders |
 | Association thresholds | pair count ≥ 5, confidence ≥ 0.25, lift ≥ 1.3 (a customer's own: ≥ 3, ≥ 0.6, ≥ 1.05) |
 | Out-of-stock factor | 0.5 |
@@ -180,7 +181,7 @@ Reasons are stored and transmitted as `{ code, params }` and rendered with trans
 
 ## 12. Measuring whether it helps
 
-`POST /suggestions/feedback` records impressions and adds (product, reason, rank). *Built (5.1):* the billing screen keeps, per bill, the suggestions that were on screen (first appearance of each, with its position in the whole list and its reason codes) and the ones added from them, and sends both once the bill is saved online (none for a bill saved offline or not saved; a taken suggestion later removed from the bill does not count). One `suggestion_feedback` row per bill; `GET /suggestions/feedback/summary?from=&to=` gives offered, taken and acceptance by reason and by position (1–3, 4–6, 7–12, 13+) and the share of bill lines that came from suggestions. Planned: time to complete an invoice and — the real goal — lines per invoice and reactivation of lapsed habits, and weights tuned per business from these numbers (today they are the `suggestions.weights` setting); a learned model (e.g. gradient-boosted ranking on the same features) can replace the weighted sum later behind the same provider interface, as long as it still produces reasons.
+`POST /suggestions/feedback` records impressions and adds (product, reason, rank). *Built (5.1):* the billing screen keeps, per bill, the suggestions that were on screen (first appearance of each, with its position in the whole list and its reason codes) and the ones added from them, and sends both once the bill is saved online (none for a bill saved offline or not saved; a taken suggestion later removed from the bill does not count). One `suggestion_feedback` row per bill; `GET /suggestions/feedback/summary?from=&to=` gives offered, taken and acceptance by reason and by position (1–3, 4–6, 7–12, 13+) and the share of bill lines that came from suggestions. *Built (5.1, then):* the nightly job tunes `suggestions.weights` per business from the last 90 days of this feedback. Items higher in the list are taken more whatever their group, so each group is judged against its positions: the take rate of each position bucket over all groups gives the takes a group should have had where its items were shown; the group's weight is its default times (taken + 10) / (expected + 10), kept between half and double, and a group shown fewer than 50 times keeps its default (`tuneSuggestionWeights` in `@digitalbahi/core`; what it found is kept in the night's run). Purchase history counts what was bought net of returns: a line returned in part counts what was kept, one returned in full is not bought. Planned: time to complete an invoice and — the real goal — lines per invoice and reactivation of lapsed habits; a learned model (e.g. gradient-boosted ranking on the same features) can replace the weighted sum later behind the same provider interface, as long as it still produces reasons.
 
 ## 13. Cold start and edge cases
 

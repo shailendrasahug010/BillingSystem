@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { processOutbox, retryDelayMs } from "../src/services/outbox-worker.js";
-import { runNightlyAnalytics } from "../src/services/nightly-analytics.js";
+import { nightlyForBusiness, runNightlyAnalytics } from "../src/services/nightly-analytics.js";
 import { call, createTestApp, hasDatabase, signup, TEST_TODAY, type Session, type TestApp } from "./helpers.js";
 
 /**
@@ -54,6 +55,9 @@ describe.skipIf(!hasDatabase)("purchase history", () => {
     ids.tea = await product("Tea 250g", "120");
     ids.sugar = await product("Sugar 1kg", "45");
     ids.salt = await product("Salt 1kg", "22");
+    // Only for returns (kept out of the bought-together rules the other tests check).
+    ids.ghee = await product("Ghee 1L", "550");
+    ids.atta = await product("Atta 5kg", "260");
     const customer = async (name: string) => (await post("/customers", { name, stateCode: "23", creditDays: 7 })).body.id as string;
     ids.regular = await customer("ABC General Store");
     for (let i = 1; i <= 6; i++) ids[`shop${i}`] = await customer(`Shop ${i}`);
@@ -107,6 +111,23 @@ describe.skipIf(!hasDatabase)("purchase history", () => {
       await processOutbox(deps());
       const after = (await q<{ overdue_amount: string }>(`select overdue_amount::text from customer_stats where customer_id = $1`, [ids.regular]))[0]!.overdue_amount;
       expect(Number(after)).toBeCloseTo(Number(before) - 500, 2);
+    });
+
+    it("counts what was bought net of returns: a line returned in full is not bought", async () => {
+      const shop = (await post("/customers", { name: "Return Kirana", stateCode: "23", creditDays: 7 })).body.id as string;
+      const first = (await post("/invoices", { customerId: shop, invoiceDate: "2026-09-01", lines: [{ productId: ids.ghee, qty: "10" }, { productId: ids.atta, qty: "4" }] })).body;
+      await bill(shop, "2026-09-15", [[ids.ghee!, "6"]]);
+      await processOutbox(deps());
+      const qtys = async () => Object.fromEntries((await statsOf(shop)).map((r) => [r.product_id, [r.order_count, r.total_qty, r.recent_qtys]]));
+      expect(await qtys()).toEqual({ [ids.ghee!]: [2, "16.000", ["6.000", "10.000"]], [ids.atta!]: [1, "4.000", ["4.000"]] });
+      // Back: 4 of the first bill's ghee and all its atta.
+      const line = (productId: string) => first.items.find((i: { productId: string }) => i.productId === productId).id as string;
+      expect((await post(`/invoices/${first.id}/returns`, { lines: [{ lineId: line(ids.ghee!), qty: "4" }, { lineId: line(ids.atta!), qty: "4" }] })).status).toBe(201);
+      await processOutbox(deps());
+      expect(await qtys()).toEqual({ [ids.ghee!]: [2, "12.000", ["6.000", "6.000"]] });
+      // Worked out live, the same.
+      const { rest } = await insight(shop);
+      expect(rest.stats.map((p: { productId: string; totalQty: string }) => [p.productId, p.totalQty])).toEqual([[ids.ghee, "12"]]);
     });
 
     it("sets a failing customer's events aside and tries them again later, without holding up the rest", async () => {
@@ -180,7 +201,8 @@ describe.skipIf(!hasDatabase)("purchase history", () => {
       expect(run).toMatchObject({ status: "completed", as_of: TEST_TODAY });
       expect(run!.details.drift).toMatchObject({ customers: 0, rows: 0 });
       expect(run!.details.drift.checked).toBeGreaterThanOrEqual(2);
-      expect(run!.details.customers).toBe(7);
+      // ABC General Store, the six shops and Return Kirana.
+      expect(run!.details.customers).toBe(8);
       expect(run!.details.balances).toEqual({
         customers: { mismatched: 0, examples: [] },
         suppliers: { mismatched: 0, examples: [] },
@@ -253,6 +275,41 @@ describe.skipIf(!hasDatabase)("purchase history", () => {
       const bad = await post("/suggestions/feedback", { id: "0199a0b2-7c3d-7e4f-8a5b-6c7d8e9f0a1c", customerId: owner.userId, shown: [], added: [] });
       expect(bad.status).toBe(400);
       expect(bad.body.error).toMatchObject({ code: "REFERENCE_NOT_FOUND", field: "customerId" });
+    });
+  });
+
+  describe("tuning the suggestion weights", () => {
+    it("sets them at night from what was offered and taken, and leaves weights set by hand alone", async () => {
+      // 60 bills: due items (reorder) at the top taken 54 times, frequent ones next to them 6 times, bought-together 30 times.
+      for (let n = 0; n < 60; n++) {
+        const shown = [
+          { productId: ids.milk, group: "reorder", rank: 1, reasons: ["due"] },
+          { productId: ids.bread, group: "frequent", rank: 2, reasons: ["frequent"] },
+          { productId: ids.tea, group: "together", rank: 3, reasons: ["together"] },
+        ];
+        const added = [...(n < 54 ? [shown[0]] : []), ...(n < 6 ? [shown[1]] : []), ...(n < 30 ? [shown[2]] : [])];
+        expect((await post("/suggestions/feedback", { id: randomUUID(), customerId: ids.regular, shown, added })).status).toBe(204);
+      }
+      const weights = async () => (await q<{ value: Record<string, number> }>(`select value from settings where business_id = $1 and key = 'suggestions.weights'`, [owner.businessId]))[0]?.value;
+      const night = await nightlyForBusiness(deps(), owner.businessId, "2026-09-25");
+      expect(night.suggestionWeights.applied).toBe(true);
+      expect(night.suggestionWeights.groups.reorder).toMatchObject({ shown: 62, tuned: true });
+      // Taken more than their place in the list predicts: up; less: down (to half at most); as predicted: about the same.
+      const w = (await weights())!;
+      expect(w.reorder).toBeGreaterThan(1.4);
+      expect(w.frequent).toBe(0.3);
+      expect(w.together).toBeGreaterThan(0.45);
+      expect(w.together).toBeLessThan(0.55);
+      expect(w.last_order).toBe(0.3);
+      // The billing screen uses them.
+      expect((await get("/me")).body.settings["suggestions.weights"]).toEqual(w);
+
+      // Set by hand: the nightly tuning stops.
+      const mine = { reorder: 1, frequent: 1, together: 1, last_order: 1 };
+      expect((await call(t.app, "PUT", "/settings/suggestions.weights", { token: owner.token, body: { value: mine } })).status).toBe(200);
+      const next = await nightlyForBusiness(deps(), owner.businessId, "2026-09-26");
+      expect(next.suggestionWeights).toMatchObject({ tuned: true, applied: false });
+      expect(await weights()).toEqual(mine);
     });
   });
 

@@ -222,6 +222,7 @@ export function applyMe(me: MeResponse): void {
     lut: (me.settings["gst.lut"] as typeof WORKSPACE.lut | undefined) ?? null,
     einvoice: me.settings["einvoice.enabled"] === true,
     ewayThreshold: typeof me.settings["ewaybill.threshold"] === "number" ? me.settings["ewaybill.threshold"] : 50000,
+    suggestionWeights: (me.settings["suggestions.weights"] as typeof WORKSPACE.suggestionWeights | undefined) ?? null,
     role: b.role,
     ...(roundOff ? { roundOff } : {}),
     ...(creditPolicy ? { creditPolicy } : {}),

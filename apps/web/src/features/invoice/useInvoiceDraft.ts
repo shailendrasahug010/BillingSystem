@@ -287,7 +287,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
         cartProductIds: draft.lines.map((l) => l.productId),
         products: suggestionProducts,
       },
-      { limit: 24 },
+      { limit: 24, ...(WORKSPACE.suggestionWeights ? { weights: WORKSPACE.suggestionWeights } : {}) },
     );
   }, [insight, draft.lines, suggestionProducts]);
 
