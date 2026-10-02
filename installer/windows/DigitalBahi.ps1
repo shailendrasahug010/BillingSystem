@@ -9,6 +9,11 @@
 #
 # Written for Windows PowerShell 5.1 (Windows 10 and 11), run by DigitalBahi.cmd:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File launcher\DigitalBahi.ps1 start
+#
+# Run from the source checkout (installer\windows\DigitalBahi.cmd) it first
+# builds Digital Bahi for this computer into the data folder (app\), and again
+# with "install" after the checkout changed (git pull), as
+# installer/unix/digitalbahi.sh does on macOS and Linux.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$LauncherArgs)
 
 $ErrorActionPreference = 'Stop'
@@ -54,7 +59,7 @@ function Get-Node {
   if (Test-Path $local) { return $local }
   $installed = Get-Command node.exe -ErrorAction SilentlyContinue
   if ($installed -and (Test-Node $installed.Source)) { return $installed.Source }
-  if ($Command -ne 'start' -and $Command -ne 'restart') { return $null }
+  if ($Command -ne 'start' -and $Command -ne 'restart' -and $Command -ne 'install') { return $null }
 
   if ([Environment]::Is64BitOperatingSystem -eq $false) { throw 'Digital Bahi needs 64-bit Windows.' }
   Write-Step "Downloading Node.js $NodeVersion (about 30 MB, only this once)..."
@@ -116,7 +121,7 @@ try {
     Write-Host 'Digital Bahi has not been set up on this computer yet.'
     exit 0
   }
-  if (($Command -eq 'start' -or $Command -eq 'restart') -and -not (Test-VCRuntime)) { Install-VCRuntime }
+  if (($Command -eq 'start' -or $Command -eq 'restart' -or $Command -eq 'install') -and -not (Test-VCRuntime)) { Install-VCRuntime }
 } catch {
   Write-Host ''
   Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
@@ -130,5 +135,73 @@ try {
   if ($LASTEXITCODE -eq 0) { $nodeFlags = @('--use-system-ca') }
 } catch { }
 
-& $node @nodeFlags (Join-Path $PSScriptRoot 'launcher.mjs') @LauncherArgs
+# Inside a built Digital Bahi (this script in launcher\, next to launcher.mjs): run it.
+$launcher = Join-Path $PSScriptRoot 'launcher.mjs'
+if (Test-Path $launcher) {
+  & $node @nodeFlags $launcher @LauncherArgs
+  exit $LASTEXITCODE
+}
+
+# Inside the source checkout (installer\windows): build it for this computer into the data folder first.
+$Repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+if (-not (Test-Path (Join-Path $Repo 'installer\build-bundle.mjs'))) {
+  Write-Host ''
+  Write-Host '  Run this from the Digital Bahi folder (installer\windows\DigitalBahi.cmd) or from an installed copy.' -ForegroundColor Red
+  exit 1
+}
+$App = Join-Path $DataHome 'app'
+$AppLauncher = Join-Path $App 'launcher\launcher.mjs'
+
+function Invoke-Step($What, $Exe, [string[]]$Arguments) {
+  & $Exe @Arguments
+  if ($LASTEXITCODE -ne 0) { throw "$What failed (code $LASTEXITCODE): the messages above say why." }
+}
+
+function Build-App {
+  Write-Step 'Building Digital Bahi for this computer (a few minutes)...'
+  # pnpm and the build call "node": the one found above.
+  $env:Path = "$(Split-Path $node -Parent);$env:Path"
+  # corepack and pnpm download too: the same certificates as above.
+  if ($nodeFlags.Count -gt 0) { $env:NODE_OPTIONS = ("$env:NODE_OPTIONS " + ($nodeFlags -join ' ')).Trim() }
+  # build-bundle.mjs calls "pnpm": without one on this computer, a stand-in that runs Node.js's corepack (or npx).
+  $shim = Join-Path $DataHome 'build-bin'
+  if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+    $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+    if (Get-Command corepack -ErrorAction SilentlyContinue) { $pnpm = 'corepack pnpm' } else { $pnpm = 'npx --yes pnpm@10.33.0' }
+    New-Item -ItemType Directory -Force -Path $shim | Out-Null
+    Set-Content -Path (Join-Path $shim 'pnpm.cmd') -Value "@echo off`r`n$pnpm %*" -Encoding Ascii
+    $env:Path = "$shim;$env:Path"
+  }
+  $out = Join-Path $DataHome 'build'
+  Push-Location $Repo
+  try {
+    Invoke-Step 'Getting what the build needs (pnpm install)' 'pnpm' @('install', '--frozen-lockfile')
+    Invoke-Step 'The build' $node @('installer\build-bundle.mjs', '--out', $out)
+  } finally {
+    Pop-Location
+  }
+  if (Test-Path $AppLauncher) { & $node @nodeFlags $AppLauncher stop }
+  if (Test-Path $App) { Remove-Item $App -Recurse -Force }
+  Move-Item (Join-Path $out 'DigitalBahi') $App
+  Remove-Item $out, $shim -Recurse -Force -ErrorAction SilentlyContinue
+  Write-Step "Built into $App. From now on this file starts it, or $App\DigitalBahi.cmd; after git pull, run: installer\windows\DigitalBahi.cmd install"
+}
+
+try {
+  if ($Command -eq 'install') {
+    Build-App
+    $LauncherArgs = @('start') + @($LauncherArgs | Select-Object -Skip 1)
+  } elseif (-not (Test-Path $AppLauncher)) {
+    if ($Command -ne 'start' -and $Command -ne 'restart') {
+      Write-Host 'Digital Bahi has not been set up on this computer yet.'
+      exit 0
+    }
+    Build-App
+  }
+} catch {
+  Write-Host ''
+  Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
+  exit 1
+}
+& $node @nodeFlags $AppLauncher @LauncherArgs
 exit $LASTEXITCODE

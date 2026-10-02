@@ -111,6 +111,29 @@ jobs:
           path: dist-installer/DigitalBahi-Setup-*.exe
           if-no-files-found: error
 
+      # Double-clicked in a git checkout (installer\windows\DigitalBahi.cmd): it builds Digital Bahi
+      # into the data folder, then starts it (on the database the installed copy left).
+      - name: Start from the source checkout, use and stop it
+        shell: powershell
+        env:
+          DIGITALBAHI_NO_PAUSE: "1"
+          DIGITALBAHI_PG_DOWNLOAD: "1"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $data = Join-Path $env:LOCALAPPDATA 'DigitalBahi'
+          function Show-Logs { Get-ChildItem "$data\logs" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 } }
+          & installer\windows\DigitalBahi.cmd start --no-browser
+          if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'start from the source checkout failed' }
+          if (-not (Test-Path "$data\app\launcher\launcher.mjs")) { throw 'not built into the data folder' }
+          node installer/smoke-test.mjs
+          if ($LASTEXITCODE -ne 0) { Show-Logs; throw 'smoke test failed' }
+          & installer\windows\DigitalBahi.cmd status
+          if ($LASTEXITCODE -ne 0) { throw 'not running' }
+          & installer\windows\DigitalBahi.cmd stop
+          & installer\windows\DigitalBahi.cmd status
+          if ($LASTEXITCODE -ne 3) { throw 'still running after stop' }
+          exit 0
+
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

@@ -40,6 +40,10 @@ It works on Windows 10/11, macOS and Linux. The installer below does everything 
    * it creates Digital Bahi's own database and opens the app in your browser, at **http://localhost:8710**.
 4. From then on, the **Digital Bahi** icon on the desktop or in the Start menu starts it and opens the app (a few seconds), and **Stop Digital Bahi** in the Start menu stops it. Turning the computer off is fine too. Then go on with [First use](#first-use), and install the app with its own window as in [section 3](#3-install-the-desktop-app).
 
+**Windows, from the source folder**
+
+In the `BillingSystem` folder (`git clone` it first, as in the steps below), double-click `installer\windows\DigitalBahi.cmd`, or run it in PowerShell. The first time it builds Digital Bahi for this computer into the data folder (a few minutes; Node.js is downloaded first if the computer has none), then does what the installer does and opens the app. Start it again the same way. After `git pull`, run `installer\windows\DigitalBahi.cmd install` to bring it up to date; `stop`, `restart` and `status` work too.
+
 **macOS and Linux**
 
 In a terminal, in the `BillingSystem` folder (`git clone` it first, as in the steps below):
@@ -436,6 +440,7 @@ Installing from the browser (sections 3 and 4) needs no store. If you also want 
 | The phone cannot open the computer's address | Same Wi-Fi on both, start the app with `pnpm dev:web --host`, and allow Node.js in the computer's firewall. |
 | The API stops at start with "the database is behind this version of the API" or "this version's database step has not run"; or, from an API started before this check, `Failed query: select … from outbox_pending_businesses(…)` warnings, `function … does not exist` / `relation … does not exist` errors and "Something went wrong on the server" | The code was updated but the database was not. Stop the API, run the `pnpm db:deploy` command from **Steps** above, and start the API again. |
 | Start again with an empty database (your own computer only) | `dropdb -U postgres digitalbahi_dev`, then repeat the `createdb` and `pnpm db:deploy` steps. |
+| `The argument '…\installer\windows\launcher\DigitalBahi.ps1' to the -File parameter does not exist` | An older `DigitalBahi.cmd`, run from the source folder: it only worked in an installed copy. `git pull`, then double-click `installer\windows\DigitalBahi.cmd` again (it now builds Digital Bahi the first time), or use the installer. |
 | Installer: **Windows protected your PC** | The installer is not signed yet: click **More info → Run anyway**. |
 | Installer: the first start stops while downloading | Check the internet connection and start Digital Bahi again; it carries on from where it stopped. |
 | Installer: "Port 8710 (or 54320) is used by another program" | Close that program, or change `apiPort` (or `pgPort`) in `config.json` in the data folder and start again. A new `apiPort` gives the app a new address: install it again from there. |
