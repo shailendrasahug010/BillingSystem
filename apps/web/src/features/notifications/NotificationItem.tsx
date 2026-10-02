@@ -1,4 +1,4 @@
-import { BadgeIndianRupee, Bell, Boxes, CalendarDays, ClipboardList, CloudOff, Hourglass, Package, Smartphone, Truck, UserPen, Wallet, type LucideIcon } from "lucide-react";
+import { BadgeIndianRupee, Bell, BellOff, Boxes, CalendarDays, ClipboardList, CloudOff, Hourglass, Package, Send, Smartphone, Timer, Truck, UserPen, Wallet, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { cn } from "../../lib/cn";
@@ -24,6 +24,9 @@ const ICONS: Record<string, LucideIcon> = {
   offline_reviewed: CloudOff,
   customer_edit_replaced: UserPen,
   devices_unsynced: Smartphone,
+  orders_waiting: Timer,
+  customer_reminders: Send,
+  reminders_stopped: BellOff,
 };
 
 const TINTS: Record<Severity, string> = {

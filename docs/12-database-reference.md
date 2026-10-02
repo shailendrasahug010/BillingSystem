@@ -7,16 +7,16 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | | Count |
 |---|---|
 | Tables | 96 |
-| Columns | 1587 |
+| Columns | 1601 |
 | Foreign keys | 254 |
 | Unique constraints | 46 |
 | Check constraints | 57 |
-| Indexes (besides primary keys and unique constraints) | 121 |
+| Indexes (besides primary keys and unique constraints) | 122 |
 | Triggers | 73 |
 | Tables with row-level security | 90 |
 | Enums | 39 |
 | Functions | 14 |
-| Migrations | 26 (last: `0025_offline_sync`) |
+| Migrations | 27 (last: `0026_reminders_messaging`) |
 
 ## How the database is set up
 
@@ -660,6 +660,10 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 | `deleted_at` | timestamptz |  |  | Soft delete: when the row was removed from lists. Posted documents are never deleted. |
 | `deleted_by` | uuid |  |  | Soft delete: the user who removed the row. |
 | `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+| `message_locale` | varchar(5) |  |  | Language of the messages sent to the customer (en or hi); null: the business's language for documents. |
+| `reminders_opt_out` | boolean | ✓ | `false` | No automatic or bulk payment reminders to this customer (asked for, or replied STOP). |
+| `reminders_opt_out_at` | timestamptz |  |  | When the customer stopped payment reminders. |
+| `reminders_opt_out_by` | varchar(10) |  |  | How: staff (on the customer's page) or reply (they wrote STOP on WhatsApp). |
 
 * Check `customers_b2b_gstin_chk`: `(customer_type = 'b2c'::customer_type OR gstin IS NOT NULL)`
 * Check `customers_credit_days_chk`: `(credit_days >= 0)`
@@ -2460,13 +2464,14 @@ Which reminders run and how, one row per business and type (the types and their 
 |---|---|:-:|---|---|
 | `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
 | `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
-| `type` | varchar(40) | ✓ |  | customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due, devices_unsynced |
+| `type` | varchar(40) | ✓ |  | customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due, devices_unsynced, orders_waiting, customer_reminders |
 | `config` | jsonb | ✓ | `'{}'` | The rule's settings as JSON (days before due, thresholds, time of day ...). |
 | `channels` | varchar(20)[] | ✓ | `'{in_app}'` | Where the reminders go: in_app, push, whatsapp, sms, email. |
 | `is_active` | boolean | ✓ | `true` | Switched off: no daily check and no event notifications of this type. |
 | `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
 | `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
 | `last_run_on` | date |  |  | The business day its daily check last ran (claimed): once a day, even with several API servers. |
+| `last_run_at` | timestamptz |  |  | When an hourly rule's check last ran (claimed): once an hour; what changed since is what it looks at. |
 
 * Index `reminder_rules_type_uq`: unique, btree `(business_id, type)`
 * Trigger `reminder_rules_set_updated_at`: before update, each row → `set_updated_at()`
@@ -2789,6 +2794,13 @@ How a business sends WhatsApp and email: its own WhatsApp Business number (Meta 
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
 | `whatsapp_status_key` | varchar(40) |  |  | **Unique.** Delivery ticks: the random key in the address Meta (or the provider) calls back with "delivered" / "read", also Meta's verify token. |
 | `whatsapp_app_secret` | text |  |  | Meta app secret that signs those callbacks (encrypted). |
+| `whatsapp_template_language_hi` | varchar(10) |  |  | Language code of the same templates approved in Hindi (hi), for customers who get messages in Hindi; null: they get the default language's. |
+| `sms_provider` | varchar(20) | ✓ | `'none'` | none \| webhook: the business's SMS gateway, which receives signed JSON {to, text, senderId, templateId}. |
+| `sms_webhook_url` | text |  |  | The gateway's address. |
+| `sms_secret` | text |  |  | The secret the requests are signed with (encrypted). |
+| `sms_sender_id` | varchar(10) |  |  | DLT sender id (header) the SMS come from, e.g. DGBAHI. |
+| `sms_reminder_template` | varchar(40) |  |  | DLT template id registered for the payment reminder in English. |
+| `sms_reminder_template_hi` | varchar(40) |  |  | DLT template id registered for the payment reminder in Hindi. |
 
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
@@ -2800,14 +2812,14 @@ Every WhatsApp and email sent (or tried) to a customer or supplier.
 |---|---|:-:|---|---|
 | `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
 | `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
-| `channel` | [message_channel](#enum-message_channel) | ✓ |  | whatsapp or email. |
+| `channel` | [message_channel](#enum-message_channel) | ✓ |  | whatsapp, email or sms. |
 | `kind` | varchar(20) | ✓ |  | invoice \| note \| receipt \| reminder \| backup \| test |
 | `document_id` | uuid |  |  | The invoice, note or receipt sent. |
 | `document_number` | varchar(40) |  |  | Its number, for the log. |
 | `party_type` | [party_type](#enum-party_type) |  |  | customer or supplier. |
 | `party_id` | uuid |  |  | The customer or supplier. |
 | `party_name` | text |  |  | Their name at the time. |
-| `recipient` | text | ✓ |  | WhatsApp number (international digits) or email address it went to. |
+| `recipient` | text | ✓ |  | WhatsApp or SMS number (international digits) or email address it went to. |
 | `subject` | text |  |  | Email subject. |
 | `body` | text | ✓ |  | The text sent. |
 | `attachment_name` | text |  |  | File name of the PDF attached. |
@@ -2825,7 +2837,10 @@ Every WhatsApp and email sent (or tried) to a customer or supplier.
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
 | `delivered_at` | timestamptz |  |  | WhatsApp ticks, from the provider's status callbacks. |
 | `read_at` | timestamptz |  |  | When WhatsApp reported it read. |
+| `automatic` | boolean | ✓ | `false` | Sent by a rule (automatic payment reminders), not by a person. |
+| `reminder_on` | date |  |  | The business day an automatic reminder went for: the rule's schedule counts these (one per customer and day). |
 
+* Index `messages_auto_reminder_uq`: unique, btree `(business_id, party_id, reminder_on) WHERE automatic`
 * Index `messages_business_created_idx`: btree `(business_id, created_at)`
 * Index `messages_document_idx`: btree `(business_id, document_id)`
 * Index `messages_queued_idx`: btree `(business_id, status)`
@@ -2945,7 +2960,7 @@ Used by: [`leave_requests`](#leave_requests).status
 
 ### Enum `message_channel`
 
-Values: `whatsapp`, `email`
+Values: `whatsapp`, `email`, `sms`
 
 Used by: [`messages`](#messages).channel
 
@@ -3084,7 +3099,7 @@ Written in the migrations; triggers use them to keep the rules no application bu
 | `invoices_period_lock_guard()` | trigger | plpgsql | Trigger on [`invoices`](#invoices). |
 | `nightly_analytics_due(p_now timestamp with time zone, p_hour integer, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses due for the nightly analytics run: active ones where it is past p_hour in their own time zone and no run is claimed for their current date yet. Without a session, row-level security hides businesses and runs; this answers only "whose turn is it" (the run is claimed and done inside that business). |
 | `outbox_pending_businesses(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid) | sql | The businesses with outbox events waiting, for the API's outbox worker. It runs without a session, and row-level security hides every business's events until one is chosen; this answers only "whose events are waiting" (the events are then taken and handled inside that business). |
-| `reminder_rules_due(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses with a daily reminder check due: an active rule not yet run on the business's current date, whose hour (config.hour, else the type's default) has come in its time zone. Without a session, row-level security hides businesses and rules; this answers only "whose turn is it" (the rules are then claimed and checked inside that business). |
+| `reminder_rules_due(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses with a reminder check due: an active rule whose hour (config.hour, else 10 for leave_request, salary_due and customer_reminders, 9 for the rest) has come in the business's time zone and that has not run since: hourly rules (orders_waiting, REMINDERS[...].hourly in @digitalbahi/core) an hour after their last run (last_run_at), the others once per business day (last_run_on). Without a session, row-level security hides businesses and rules; this answers only "whose turn is it" (the rules are then claimed and checked inside that business). |
 | `set_updated_at()` | trigger | plpgsql | updated_at is maintained automatically on every table that has it. Trigger on 55 tables. |
 | `track_sync_change()` | trigger | plpgsql | Records that a product, customer or supplier changed in this transaction (once per record per transaction). TG_ARGV[0] is the entity, TG_ARGV[1] the column holding its id. SECURITY DEFINER: a change made in any context (a restore, a job) is recorded, whatever the session's business. Trigger on [`customers`](#customers), [`suppliers`](#suppliers), [`products`](#products), [`product_units`](#product_units), [`product_barcodes`](#product_barcodes), [`product_prices`](#product_prices), [`stock_balances`](#stock_balances). |
 | `user_in_other_business(p_user uuid, p_business uuid)` | boolean | sql | Whether a member's account is also in another business. A business may set the user ID and password only of accounts it alone uses (its staff), never of someone who also works elsewhere. Row-level security hides other businesses' memberships from the API, so this answers the one question with the owner's rights and nothing more. |
@@ -3094,4 +3109,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging`

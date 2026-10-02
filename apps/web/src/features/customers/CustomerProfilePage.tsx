@@ -24,6 +24,9 @@ import { translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 import { customerKind, kindLabel } from "./customerKind";
 
+/** The day (YYYY-MM-DD, this device's time zone) of an instant. */
+const localDay = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
+
 /** What each tab shows, and the permission it needs. */
 const TAB_PERMISSION = { overview: "customer.view", invoices: "invoice.view", payments: "payment.view", ledger: "customer.view_ledger", products: "customer.view" } as const;
 
@@ -124,6 +127,14 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               <h1 className="text-[24px] leading-tight font-semibold text-ink">{customer.businessName}</h1>
               <Badge tone={customer.type === "b2b" || customerKind(customer) === "export" ? "accent" : "neutral"}>{t(kindLabel(customer))}</Badge>
               <Badge>{customer.category}</Badge>
+              {customer.remindersOptOut && (
+                <>
+                  <Badge tone="warn">{t("customer.remindersStopped")}</Badge>
+                  {customer.remindersOptOutAt && (
+                    <span className="text-[12.5px] text-ink-3">{t(customer.remindersOptOutBy === "reply" ? "customer.remindersStoppedBy.reply" : "customer.remindersStoppedBy.staff", { date: localDay(customer.remindersOptOutAt) })}</span>
+                  )}
+                </>
+              )}
             </div>
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-ink-3">
               <span>{customer.name}</span>

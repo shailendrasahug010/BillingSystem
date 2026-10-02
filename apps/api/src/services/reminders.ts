@@ -1,9 +1,11 @@
 import { addDays, isReminderType, REMINDERS, reminderConfig, type ReminderConfig, type ReminderType } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
+import { queueCustomerReminders } from "./customer-reminders.js";
+import { pumpMessages } from "./messaging/queue.js";
 import { notify, type NewNotification } from "./notifications.js";
 import { getSettings } from "./settings.js";
 
@@ -18,6 +20,8 @@ import { getSettings } from "./settings.js";
 
 /** Businesses per scheduler run. */
 const BUSINESSES = 50;
+/** An hourly rule runs again this long after its last run (a little under an hour: the scheduler looks every few minutes). */
+const HOURLY_GAP_MS = 55 * 60_000;
 
 /** The hour (0–23) of an instant in a time zone. */
 export function localHour(at: Date, timeZone: string): number {
@@ -31,6 +35,18 @@ interface CheckContext {
   /** The moment of the check (the API's clock). */
   at: Date;
   config: ReminderConfig;
+  /** Hourly rules: when the check last ran (what changed since is new); null the first time or by hand. */
+  lastRunAt: Date | null;
+  /** For checks that do more than notify (the automatic payment reminders send messages). */
+  deps?: AppDeps;
+  /** Work to do once the check's transaction has committed (sending what it queued). */
+  afterCommit(fn: () => Promise<void> | void): void;
+}
+
+export interface CheckOptions {
+  lastRunAt?: Date | null;
+  deps?: AppDeps;
+  afterCommit?: (fn: () => Promise<void> | void) => void;
 }
 
 type Check = (c: CheckContext) => Promise<NewNotification | null>;
@@ -136,6 +152,18 @@ const CHECKS: Record<ReminderType, Check> = {
     return devicesUnsynced(c);
   },
 
+  async orders_waiting(c) {
+    return ordersWaiting(c);
+  },
+
+  async customer_reminders(c) {
+    if (!c.deps) throw new Error("customer_reminders needs the API's dependencies");
+    const deps = c.deps;
+    const { queued, notification } = await queueCustomerReminders(deps, c.tx, c.businessId, c.today, c.config);
+    if (queued) c.afterCommit(() => pumpMessages(deps, { businessId: c.businessId, userId: "" }));
+    return notification;
+  },
+
   async salary_due(c) {
     if (Number(c.today.slice(8, 10)) < (c.config.dayOfMonth ?? 1)) return null;
     const month = `${addDays(`${c.today.slice(0, 7)}-01`, -1).slice(0, 7)}`;
@@ -195,6 +223,44 @@ async function devicesUnsynced(c: CheckContext): Promise<NewNotification | null>
   };
 }
 
+/** Open orders, the step each waits at and since when (its last move there, or when it was made). */
+const WAITING_STEPS = { pending: "confirm", confirmed: "pack", packing: "pack", packed: "dispatch" } as const;
+
+/**
+ * Orders that have waited `afterHours` at one step (to be confirmed, packed
+ * or dispatched): each is told once, by the hourly run in which it crosses
+ * the limit (those that crossed it since the last run); the first run and a
+ * check by hand look back a week.
+ */
+async function ordersWaiting(c: CheckContext): Promise<NewNotification | null> {
+  const hours = c.config.afterHours ?? 4;
+  const limit = new Date(c.at.getTime() - hours * 3_600_000);
+  const from = new Date((c.lastRunAt ?? new Date(c.at.getTime() - 7 * 86_400_000)).getTime() - hours * 3_600_000);
+  const rows = (
+    await c.tx.execute<{ number: string | null; customer: string; status: keyof typeof WAITING_STEPS; since: string }>(sql`
+      select o.number, o.customer, o.status, o.since::text from (
+        select so.order_number as number, coalesce(cu.business_name, cu.name) as customer, so.status::text as status,
+               coalesce((select max(h.created_at) from status_history h where h.entity_type = 'sales_order' and h.entity_id = so.id and h.to_status = so.status::text), so.created_at) as since
+        from sales_orders so join customers cu on cu.id = so.customer_id
+        where so.business_id = ${c.businessId} and so.status in ('pending', 'confirmed', 'packing', 'packed')
+      ) o
+      where o.since <= ${limit.toISOString()}::timestamptz and o.since > ${from.toISOString()}::timestamptz
+      order by o.since`)
+  ).rows;
+  if (!rows.length) return null;
+  const first = rows[0]!;
+  return {
+    type: "orders_waiting",
+    permission: REMINDERS.orders_waiting.permission,
+    // One per hourly run: a check by hand in the same hour is that run's.
+    dedupeKey: `orders_waiting:${c.at.toISOString().slice(0, 13)}`,
+    severity: "warning",
+    titleKey: "notifications.orders_waiting.title",
+    bodyKey: `notifications.orders_waiting.${WAITING_STEPS[first.status]}`,
+    params: { count: rows.length, hours, order: first.number, customer: first.customer, waited: Math.floor((c.at.getTime() - Date.parse(first.since)) / 3_600_000) },
+  };
+}
+
 async function orderCount(c: CheckContext, type: "pending_orders" | "to_pack" | "to_dispatch", where: ReturnType<typeof sql>, step: "requireConfirmation" | "usePacking" | "useDispatch"): Promise<NewNotification | null> {
   const workflow = (await getSettings(c.tx, c.businessId, ["orders.workflow"] as const))["orders.workflow"];
   if (workflow[step] === false) return null;
@@ -207,8 +273,25 @@ async function orderCount(c: CheckContext, type: "pending_orders" | "to_pack" | 
 }
 
 /** What a rule's check would raise today (for the checks themselves and their tests). */
-export async function checkReminder(tx: Tx, businessId: string, type: ReminderType, today: string, config: ReminderConfig = reminderConfig(type, {}), at = new Date()): Promise<NewNotification | null> {
-  return CHECKS[type]({ tx, businessId, today, at, config });
+export async function checkReminder(
+  tx: Tx,
+  businessId: string,
+  type: ReminderType,
+  today: string,
+  config: ReminderConfig = reminderConfig(type, {}),
+  at = new Date(),
+  options: CheckOptions = {},
+): Promise<NewNotification | null> {
+  return CHECKS[type]({
+    tx,
+    businessId,
+    today,
+    at,
+    config,
+    lastRunAt: options.lastRunAt ?? null,
+    ...(options.deps ? { deps: options.deps } : {}),
+    afterCommit: options.afterCommit ?? (() => {}),
+  });
 }
 
 export interface ReminderRunResult {
@@ -234,24 +317,35 @@ export async function runDueReminders(deps: AppDeps): Promise<ReminderRunResult>
     const today = deps.clock.today(timeZone);
     const hour = localHour(now, timeZone);
     const failures: Array<{ type: string; error: unknown }> = [];
+    const afterCommit: Array<() => Promise<void> | void> = [];
     await withTenant(deps.db, { businessId, userId: "" }, async (tx) => {
       const r = schema.reminderRules;
       const rules = await tx
         .select()
         .from(r)
-        .where(and(eq(r.businessId, businessId), eq(r.isActive, true), or(isNull(r.lastRunOn), lt(r.lastRunOn, today))))
+        .where(and(eq(r.businessId, businessId), eq(r.isActive, true)))
         .for("update", { skipLocked: true });
       result.businesses++;
       for (const rule of rules) {
         if (!isReminderType(rule.type)) continue;
         const config = reminderConfig(rule.type, rule.config);
         if (hour < config.hour) continue;
-        await tx.update(r).set({ lastRunOn: today, updatedAt: now.toISOString() }).where(eq(r.id, rule.id));
+        const hourly = REMINDERS[rule.type].hourly === true;
+        // Hourly rules run an hour after their last run; the others once a business day.
+        if (hourly ? rule.lastRunAt !== null && now.getTime() - Date.parse(rule.lastRunAt) < HOURLY_GAP_MS : rule.lastRunOn !== null && rule.lastRunOn >= today) continue;
+        await tx
+          .update(r)
+          .set({ lastRunOn: today, ...(hourly ? { lastRunAt: now.toISOString() } : {}), updatedAt: now.toISOString() })
+          .where(eq(r.id, rule.id));
         result.checked++;
         try {
           // A savepoint: a failing check does not undo the others (or the claim).
           const created = await tx.transaction(async (sp) => {
-            const n = await checkReminder(sp, businessId, rule.type as ReminderType, today, config, now);
+            const n = await checkReminder(sp, businessId, rule.type as ReminderType, today, config, now, {
+              lastRunAt: hourly && rule.lastRunAt ? new Date(rule.lastRunAt) : null,
+              deps,
+              afterCommit: (fn) => afterCommit.push(fn),
+            });
             return n ? notify(sp, businessId, n, now.toISOString()) : null;
           });
           if (created) result.notifications++;
@@ -261,6 +355,7 @@ export async function runDueReminders(deps: AppDeps): Promise<ReminderRunResult>
         }
       }
     });
+    for (const fn of afterCommit) await fn();
     for (const f of failures) {
       deps.errors.record(f.error, { reference: uuidv7(), source: "job", job: `daily reminder check (${f.type})`, details: { businessId, today } });
     }

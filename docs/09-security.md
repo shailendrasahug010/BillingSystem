@@ -76,7 +76,7 @@ Implemented in PostgreSQL (token buckets) at small scale; Redis when volume dema
 | Logs | Structured, with ids but no personal data or secrets in messages; secrets redacted by the logger; retention 30–90 days |
 | Retention | GST records must be kept for at least **72 months** after the annual return due date; financial documents are therefore retained 8 years, then archived or purged per business policy; personal data of former employees minimised after statutory periods |
 
-**Privacy (Digital Personal Data Protection Act, 2023):** personal data of customers' contact persons and employees is processed for stated purposes (billing, collection, payroll); WhatsApp/SMS reminders respect per-customer opt-out; businesses can export or delete a person's data where law allows; data is hosted in India by default; a breach-response procedure notifies affected businesses.
+**Privacy (Digital Personal Data Protection Act, 2023):** personal data of customers' contact persons and employees is processed for stated purposes (billing, collection, payroll); WhatsApp/SMS reminders respect per-customer opt-out (automatic ones are off until the business turns them on; a customer is never sent another once staff tick *No payment reminders* or the customer replies STOP, acted on only from a signed callback, Meta's or the provider's; each automatic reminder by WhatsApp says how to stop them); businesses can export or delete a person's data where law allows; data is hosted in India by default; a breach-response procedure notifies affected businesses.
 
 ## 6. Secrets and credentials
 

@@ -16,7 +16,7 @@ import { nextBackupAt } from "../../services/backup-schedule.js";
 import { verifyPassword } from "../../lib/security.js";
 import { MAX_OWNED_BUSINESSES } from "../identity/businesses.js";
 import { listBusinesses, sessionResponse, setSessionBusiness } from "../identity/sessions.js";
-import { channelsFor, ready } from "../messaging/routes.js";
+import { channelsFor, ready } from "../../services/messaging/queue.js";
 import type { ApiModule } from "../types.js";
 
 const Passphrase = z.string().min(8).max(200);

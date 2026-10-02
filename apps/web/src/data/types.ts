@@ -87,6 +87,12 @@ export interface Customer {
   gstRegistration?: string;
   balance?: number;
   overdue?: number;
+  /** Messages in this language (null: the business's). */
+  messageLocale?: "en" | "hi" | null;
+  /** No payment reminders: since when, and how (staff on this page, or a STOP reply on WhatsApp). */
+  remindersOptOut?: boolean;
+  remindersOptOutAt?: string | null;
+  remindersOptOutBy?: "staff" | "reply" | null;
   version?: number;
 }
 

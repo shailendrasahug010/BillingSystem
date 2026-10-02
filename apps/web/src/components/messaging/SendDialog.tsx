@@ -19,7 +19,8 @@ type Channel = "whatsapp" | "email";
 
 export interface MessageRow {
   id: string;
-  channel: Channel;
+  /** Documents go by WhatsApp or email; payment reminders and tests by SMS too. */
+  channel: Channel | "sms";
   kind: "invoice" | "note" | "receipt" | "reminder" | "test";
   documentId: string | null;
   documentNumber: string | null;
@@ -36,12 +37,15 @@ export interface MessageRow {
   readAt?: string | null;
   createdAt: string;
   sentBy: string | null;
+  /** Sent by a rule (the automatic payment reminders), not by a person. */
+  automatic?: boolean;
 }
 
 interface Channels {
   driver: "live" | "log";
   whatsapp: { ready: boolean; number: string | null };
   email: { ready: boolean };
+  sms: { ready: boolean };
 }
 
 export function useChannels(enabled = true) {

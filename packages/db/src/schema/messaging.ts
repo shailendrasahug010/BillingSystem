@@ -1,9 +1,10 @@
-import { boolean, index, integer, jsonb, pgEnum, pgTable, text, uuid, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, date, index, integer, jsonb, pgEnum, pgTable, text, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import { auditColumns, pk, tstz } from "./columns.js";
 import { partyType } from "./enums.js";
 import { businessId } from "./platform.js";
 
-export const messageChannel = pgEnum("message_channel", ["whatsapp", "email"]);
+export const messageChannel = pgEnum("message_channel", ["whatsapp", "email", "sms"]);
 export const messageStatus = pgEnum("message_status", ["queued", "sent", "delivered", "read", "failed"]);
 
 /**
@@ -31,6 +32,8 @@ export const messagingSettings = pgTable("messaging_settings", {
   whatsappReminderTemplate: varchar({ length: 100 }),
   /** Language code of the templates (en, hi ...). */
   whatsappTemplateLanguage: varchar({ length: 10 }).notNull().default("en"),
+  /** Language code of the same templates approved in Hindi (hi), for customers who get messages in Hindi; null: they get the default language's. */
+  whatsappTemplateLanguageHi: varchar({ length: 10 }),
   /**
    * Delivery ticks: the random key in the address Meta (or the provider)
    * calls back with "delivered" / "read", also Meta's verify token.
@@ -56,6 +59,18 @@ export const messagingSettings = pgTable("messaging_settings", {
   emailFromAddress: text(),
   /** Address replies go to (the firm's email by default). */
   emailReplyTo: text(),
+  /** none | webhook: the business's SMS gateway, which receives signed JSON {to, text, senderId, templateId}. */
+  smsProvider: varchar({ length: 20 }).notNull().default("none"),
+  /** The gateway's address. */
+  smsWebhookUrl: text(),
+  /** The secret the requests are signed with (encrypted). */
+  smsSecret: text(),
+  /** DLT sender id (header) the SMS come from, e.g. DGBAHI. */
+  smsSenderId: varchar({ length: 10 }),
+  /** DLT template id registered for the payment reminder in English. */
+  smsReminderTemplate: varchar({ length: 40 }),
+  /** DLT template id registered for the payment reminder in Hindi. */
+  smsReminderTemplateHi: varchar({ length: 40 }),
   ...auditColumns,
 });
 
@@ -65,7 +80,7 @@ export const messages = pgTable(
   {
     id: pk(),
     businessId: businessId(),
-    /** whatsapp or email. */
+    /** whatsapp, email or sms. */
     channel: messageChannel().notNull(),
     /** invoice | note | receipt | reminder | backup | test */
     kind: varchar({ length: 20 }).notNull(),
@@ -79,7 +94,7 @@ export const messages = pgTable(
     partyId: uuid(),
     /** Their name at the time. */
     partyName: text(),
-    /** WhatsApp number (international digits) or email address it went to. */
+    /** WhatsApp or SMS number (international digits) or email address it went to. */
     recipient: text().notNull(),
     /** Email subject. */
     subject: text(),
@@ -107,7 +122,16 @@ export const messages = pgTable(
     deliveredAt: tstz(),
     /** When WhatsApp reported it read. */
     readAt: tstz(),
+    /** Sent by a rule (automatic payment reminders), not by a person. */
+    automatic: boolean().notNull().default(false),
+    /** The business day an automatic reminder went for: the rule's schedule counts these (one per customer and day). */
+    reminderOn: date({ mode: "string" }),
     ...auditColumns,
   },
-  (t) => [index("messages_business_created_idx").on(t.businessId, t.createdAt), index("messages_document_idx").on(t.businessId, t.documentId), index("messages_queued_idx").on(t.businessId, t.status)],
+  (t) => [
+    index("messages_business_created_idx").on(t.businessId, t.createdAt),
+    index("messages_document_idx").on(t.businessId, t.documentId),
+    index("messages_queued_idx").on(t.businessId, t.status),
+    uniqueIndex("messages_auto_reminder_uq").on(t.businessId, t.partyId, t.reminderOn).where(sql`${t.automatic}`),
+  ],
 );

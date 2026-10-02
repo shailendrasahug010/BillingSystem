@@ -1,4 +1,4 @@
-import { isReminderType, REMINDER_TYPES, REMINDERS, reminderConfig } from "@digitalbahi/core";
+import { isReminderType, REMINDER_CHANNELS, REMINDER_TYPES, REMINDERS, reminderConfig } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -12,6 +12,7 @@ import { conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { NotificationHub } from "../../services/notification-hub.js";
 import { heldPermissions, isFor, notify, visibleTo } from "../../services/notifications.js";
+import { dueCustomers } from "../../services/customer-reminders.js";
 import { checkReminder } from "../../services/reminders.js";
 import type { ApiModule } from "../types.js";
 
@@ -31,6 +32,11 @@ const RulePatch = z.strictObject({
       daysBefore: z.number().int().min(0).max(30).optional(),
       dayOfMonth: z.number().int().min(1).max(28).optional(),
       afterHours: z.number().int().min(1).max(168).optional(),
+      firstAfterDays: z.number().int().min(0).max(90).optional(),
+      repeatDays: z.number().int().min(1).max(60).optional(),
+      maxCount: z.number().int().min(1).max(10).optional(),
+      minAmount: z.number().int().min(0).max(10_000_000).optional(),
+      channel: z.enum(REMINDER_CHANNELS).optional(),
     })
     .optional(),
 });
@@ -91,14 +97,16 @@ async function setReceipt(tx: Tx, ctx: RequestCtx, id: string, at: string, dismi
     });
 }
 
-const ruleJson = (type: (typeof REMINDER_TYPES)[number], row: { isActive: boolean; config: unknown; lastRunOn: string | null } | undefined) => ({
+const ruleJson = (type: (typeof REMINDER_TYPES)[number], row: { isActive: boolean; config: unknown; lastRunOn: string | null; lastRunAt?: string | null } | undefined) => ({
   type,
   permission: REMINDERS[type].permission,
   events: REMINDERS[type].events,
-  isActive: row?.isActive ?? true,
+  hourly: REMINDERS[type].hourly ?? false,
+  isActive: row?.isActive ?? !REMINDERS[type].offByDefault,
   config: reminderConfig(type, row?.config),
   defaults: REMINDERS[type].defaults,
   lastRunOn: row?.lastRunOn ?? null,
+  lastRunAt: row?.lastRunAt ?? null,
 });
 
 export const notificationsModule: ApiModule = async (app, deps) => {
@@ -224,7 +232,7 @@ export const notificationsModule: ApiModule = async (app, deps) => {
     return tenant(ctx, async (tx) => {
       const t = schema.reminderRules;
       const [before] = await tx.select().from(t).where(and(eq(t.businessId, ctx.businessId), eq(t.type, type)));
-      const isActive = request.body.isActive ?? before?.isActive ?? true;
+      const isActive = request.body.isActive ?? before?.isActive ?? !REMINDERS[type].offByDefault;
       const config = reminderConfig(type, { ...reminderConfig(type, before?.config), ...request.body.config });
       const now = deps.clock.now().toISOString();
       const [row] = await tx
@@ -252,14 +260,34 @@ export const notificationsModule: ApiModule = async (app, deps) => {
     const ctx: RequestCtx = request.ctx;
     const { type } = request.params;
     if (!isReminderType(type)) throw notFound("reminder_rule");
-    return tenant(ctx, async (tx) => {
+    const after: Array<() => Promise<void> | void> = [];
+    const out = await tenant(ctx, async (tx) => {
       const t = schema.reminderRules;
       const [rule] = await tx.select().from(t).where(and(eq(t.businessId, ctx.businessId), eq(t.type, type)));
-      if (rule && !rule.isActive) throw conflict("REMINDER_RULE_OFF");
-      const n = await checkReminder(tx, ctx.businessId, type, deps.clock.today(ctx.timeZone), reminderConfig(type, rule?.config), deps.clock.now());
-      if (!n) return { result: "nothing" as const, notificationId: null };
-      const id = await notify(tx, ctx.businessId, n, deps.clock.now().toISOString());
-      return { result: id ? ("raised" as const) : ("already" as const), notificationId: id };
+      if (rule ? !rule.isActive : REMINDERS[type].offByDefault) throw conflict("REMINDER_RULE_OFF");
+      const now = deps.clock.now();
+      const today = deps.clock.today(ctx.timeZone);
+      // Payment reminders sent by hand are the day's run, as the notification is (the scheduled run sends nothing more today).
+      if (type === "customer_reminders") await tx.update(t).set({ lastRunOn: today, updatedAt: now.toISOString() }).where(and(eq(t.businessId, ctx.businessId), eq(t.type, type)));
+      const n = await checkReminder(tx, ctx.businessId, type, today, reminderConfig(type, rule?.config), now, { deps, afterCommit: (fn) => after.push(fn) });
+      // Payment reminders: how many went now (the day's notification may be an earlier one's), and how many are due but cannot be reached.
+      const sent = type === "customer_reminders" ? { sent: { count: Number(n?.params?.count ?? 0), amount: String(n?.params?.amount ?? "0.00"), unreachable: Number(n?.params?.unreachable ?? 0) } } : {};
+      if (!n) return { result: "nothing" as const, notificationId: null, ...sent };
+      const id = await notify(tx, ctx.businessId, n, now.toISOString());
+      return { result: id ? ("raised" as const) : ("already" as const), notificationId: id, ...sent };
+    });
+    for (const fn of after) void fn();
+    return out;
+  });
+
+  /** Who the payment-reminder rule would write to today, and who it cannot reach (shown with the rule). */
+  r.get("/reminder-rules/customer_reminders/due", { preHandler: guard(deps, "notification.configure"), schema: { tags: ["notifications"] } }, async (request) => {
+    const ctx: RequestCtx = request.ctx;
+    return tenant(ctx, async (tx) => {
+      const t = schema.reminderRules;
+      const [rule] = await tx.select().from(t).where(and(eq(t.businessId, ctx.businessId), eq(t.type, "customer_reminders")));
+      const due = await dueCustomers(deps, tx, ctx.businessId, deps.clock.today(ctx.timeZone), reminderConfig("customer_reminders", rule?.config));
+      return { data: due.map(({ to: _to, ...d }) => d) };
     });
   });
 };

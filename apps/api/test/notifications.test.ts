@@ -49,7 +49,7 @@ describe.skipIf(!hasDatabase)("notifications", () => {
     it("are listed with their settings; the owner changes them, others may not", async () => {
       const list = await get("/reminder-rules");
       expect(list.status).toBe(200);
-      expect(list.body.data).toHaveLength(10);
+      expect(list.body.data).toHaveLength(12);
       expect(list.body.data.find((r: { type: string }) => r.type === "customer_payment_due")).toMatchObject({ isActive: true, permission: "customer.view_ledger", config: { hour: 9, daysBefore: 3 }, lastRunOn: null });
 
       const changed = await patch("/reminder-rules/customer_payment_due", { config: { daysBefore: 5 } });
@@ -78,7 +78,8 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       ids.employee = (await post("/employees", { name: "HR Person", mobile: mobiles.hr, joiningDate: "2025-04-01" })).body.id;
 
       const first = await runDueReminders(deps());
-      expect(first).toMatchObject({ businesses: 1, checked: 10, failed: 0 });
+      // Every rule but the automatic payment reminders (off until the business turns them on).
+      expect(first).toMatchObject({ businesses: 1, checked: 11, failed: 0 });
       const rows = await q<{ type: string; permission: string; dedupe_key: string; severity: string; title_key: string; params: Record<string, unknown> }>(
         `select type, permission, dedupe_key, severity::text, title_key, params from notifications order by type`,
       );
@@ -97,6 +98,7 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       // Once a day: the rules are claimed for today, and the keys would stop a repeat anyway.
       expect(await runDueReminders(deps())).toMatchObject({ checked: 0, notifications: 0 });
       await q(`update reminder_rules set last_run_on = null`);
+      // (The hourly one, orders waiting, goes by the hour of its last run.)
       expect(await runDueReminders(deps())).toMatchObject({ checked: 10, notifications: 0 });
 
       // The next day: today's again, salary only once a month, nothing for a rule switched off.

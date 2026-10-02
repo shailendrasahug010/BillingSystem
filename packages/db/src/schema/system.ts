@@ -125,7 +125,7 @@ export const reminderRules = pgTable(
   {
     id: pk(),
     businessId: businessId(),
-    /** customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due, devices_unsynced */
+    /** customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due, devices_unsynced, orders_waiting, customer_reminders */
     type: varchar({ length: 40 }).notNull(),
     /** The rule's settings as JSON (days before due, thresholds, time of day ...). */
     config: jsonb().notNull().default({}),
@@ -135,6 +135,8 @@ export const reminderRules = pgTable(
     isActive: boolean().notNull().default(true),
     /** The business day its daily check last ran (claimed): once a day, even with several API servers. */
     lastRunOn: date({ mode: "string" }),
+    /** When an hourly rule's check last ran (claimed): once an hour; what changed since is what it looks at. */
+    lastRunAt: tstz(),
     ...timestamps,
   },
   (t) => [uniqueIndex("reminder_rules_type_uq").on(t.businessId, t.type)],

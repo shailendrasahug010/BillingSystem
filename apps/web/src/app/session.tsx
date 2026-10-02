@@ -2,7 +2,7 @@ import type { BusinessSummary, MeResponse, SessionResponse } from "@digitalbahi/
 import { todayIn } from "@digitalbahi/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { applyMe, applyWorkspace, loadWorkspace, pullWorkspace, resetWorkspace, type KeptWorkspace } from "../data/live";
+import { applyMe, applyWorkspace, loadWorkspace, onPullRequest, pullWorkspace, resetWorkspace, type KeptWorkspace } from "../data/live";
 import { LIVE } from "../data/source";
 import { api, ApiError, onSessionChange, refreshSession, setSession } from "../lib/api";
 import { ensureDevice, removedDevices } from "../offline/device";
@@ -339,7 +339,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // While online: what others changed (prices, stock, balances, new customers) comes every few minutes and when the app is shown again.
+  // While online: what others changed (prices, stock, balances, new customers) comes every few minutes, when the app is shown again and when a notification arrives.
   useEffect(() => {
     if (!LIVE) return;
     let running = false;
@@ -369,9 +369,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState === "visible") void pull();
     };
     document.addEventListener("visibilitychange", shown);
+    const asked = onPullRequest(() => void pull());
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", shown);
+      asked();
     };
   }, []);
 

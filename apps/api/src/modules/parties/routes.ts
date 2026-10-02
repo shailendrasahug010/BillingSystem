@@ -211,6 +211,10 @@ type CustomerRowDb = {
   created_at: string;
   overdue: string;
   gst_registration: string;
+  message_locale: string | null;
+  reminders_opt_out: boolean;
+  reminders_opt_out_at: string | null;
+  reminders_opt_out_by: string | null;
 };
 
 /**
@@ -223,7 +227,8 @@ export async function customerRows(tx: Tx, today: string, rest: SQL) {
     await tx.execute<CustomerRowDb>(sql`
       select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
              c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
-             c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue
+             c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue,
+             c.message_locale, c.reminders_opt_out, c.reminders_opt_out_at, c.reminders_opt_out_by
       from customers c
       left join lateral (
         select sum(i.balance_due) as amount from invoices i
@@ -253,6 +258,11 @@ export async function customerRows(tx: Tx, today: string, rest: SQL) {
     priceLevelId: c.price_level_id,
     categoryId: c.category_id,
     isActive: c.is_active,
+    /** The language messages to them go in (null: the business's), and whether they stopped payment reminders (when, and how: staff or a STOP reply). */
+    messageLocale: c.message_locale,
+    remindersOptOut: c.reminders_opt_out,
+    remindersOptOutAt: c.reminders_opt_out_at ? new Date(c.reminders_opt_out_at).toISOString() : null,
+    remindersOptOutBy: c.reminders_opt_out_by,
     /** For If-Match on edits (an edit made offline is checked against it). */
     version: c.version,
     createdAt: new Date(c.created_at).toISOString(),
@@ -406,6 +416,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
           businessId: ctx.businessId,
           openingBalanceDate: today,
           balance: "0",
+          ...(body.remindersOptOut ? { remindersOptOutAt: deps.clock.now().toISOString(), remindersOptOutBy: "staff" } : {}),
           createdBy: ctx.userId,
           updatedBy: ctx.userId,
         })
@@ -459,9 +470,14 @@ export const partiesModule: ApiModule = async (app, deps) => {
       const merge = stale && offline ? await mergeOfflineEdit(tx, ctx, c, normalised, offline) : null;
       const body = merge ? (merge.patch as typeof normalised) : normalised;
       const changes = diff(c, body);
+      // Payment reminders stopped (or started again) by staff: when, and by whom (the audit says who).
+      const optOut =
+        body.remindersOptOut !== undefined && body.remindersOptOut !== c.remindersOptOut
+          ? { remindersOptOutAt: body.remindersOptOut ? deps.clock.now().toISOString() : null, remindersOptOutBy: body.remindersOptOut ? "staff" : null }
+          : {};
       await tx
         .update(schema.customers)
-        .set({ ...body, updatedBy: ctx.userId, version: c.version + 1 })
+        .set({ ...body, ...optOut, updatedBy: ctx.userId, version: c.version + 1 })
         .where(eq(schema.customers.id, c.id));
       if (Object.keys(changes).length || merge?.kept.length) {
         await audit(tx, ctx, {

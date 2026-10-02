@@ -90,6 +90,11 @@ export interface CustomerRow {
   priceLevelId: string | null;
   categoryId: string | null;
   isActive: boolean;
+  /** Messages in this language (null: the business's); payment reminders stopped (when, by staff or a STOP reply). */
+  messageLocale?: "en" | "hi" | null;
+  remindersOptOut?: boolean;
+  remindersOptOutAt?: string | null;
+  remindersOptOutBy?: "staff" | "reply" | null;
   /** Edits are checked against it (If-Match), so one made offline cannot silently undo a later one. */
   version?: number;
 }
@@ -125,6 +130,10 @@ function mapCustomer(c: CustomerRow, routeName: Map<string, string>): Customer {
     gstRegistration: c.gstRegistration ?? (c.gstin ? "regular" : "consumer"),
     balance: Number(c.balance),
     overdue: Number(c.overdue),
+    messageLocale: c.messageLocale ?? null,
+    remindersOptOut: c.remindersOptOut ?? false,
+    remindersOptOutAt: c.remindersOptOutAt ?? null,
+    remindersOptOutBy: c.remindersOptOutBy ?? null,
     ...(c.version !== undefined ? { version: c.version } : {}),
   };
 }
@@ -384,6 +393,15 @@ export async function loadWorkspace(me: MeResponse, kept?: KeptWorkspace): Promi
   const data = await fetchWorkspace();
   applyWorkspace(data);
   return { data, ...(start ? { feed: { cursor: start.cursor, ...(start.listsHash ? { listsHash: start.listsHash } : {}), access } } : {}) };
+}
+
+const PULL_NOW = "digitalbahi:pull";
+/** Asks for what others changed now rather than at the next round (a notification about such a change came in). */
+export const requestPull = () => window.dispatchEvent(new Event(PULL_NOW));
+/** Runs `fn` when a pull is asked for; returns a function that stops listening. */
+export function onPullRequest(fn: () => void): () => void {
+  window.addEventListener(PULL_NOW, fn);
+  return () => window.removeEventListener(PULL_NOW, fn);
 }
 
 /**

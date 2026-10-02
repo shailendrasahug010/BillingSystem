@@ -131,6 +131,10 @@ export const CustomerBody = z.strictObject({
   openingBalanceSide: z.enum(["debit", "credit"]).default("debit"),
   notes: z.string().trim().max(1000).optional(),
   isActive: z.boolean().default(true),
+  /** Language of the messages sent to the customer; null: the business's language for documents. */
+  messageLocale: z.enum(["en", "hi"]).nullable().optional(),
+  /** No automatic or bulk payment reminders. */
+  remindersOptOut: z.boolean().optional(),
 });
 
 /**

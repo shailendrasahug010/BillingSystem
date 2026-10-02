@@ -183,6 +183,13 @@
       "when": 1790869456354,
       "tag": "0025_offline_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790888339487,
+      "tag": "0026_reminders_messaging",
+      "breakpoints": true
     }
   ]
 }

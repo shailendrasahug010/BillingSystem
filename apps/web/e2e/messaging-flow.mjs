@@ -77,14 +77,14 @@ log("customer with an overdue bill:", inv.invoiceNumber, inv.grandTotal);
 // 2. Settings: the firm's WhatsApp Business number.
 await page.reload();
 await nav("Settings");
-await page.getByRole("heading", { name: "WhatsApp & email" }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: "WhatsApp, SMS & email" }).waitFor({ timeout: 15000 });
 await page.getByLabel("WhatsApp provider").selectOption("meta");
 await page.getByLabel("Your WhatsApp Business number").fill("+91 98260 00000");
 await page.getByLabel("Phone number ID (from Meta)").fill("109876543210");
 await page.getByLabel("Access token").fill("EAAG-e2e-secret-token");
 await page.getByLabel("Template for bills (with a document header)").fill("bill_with_pdf");
 await page.getByLabel("Template for payment reminders").fill("payment_reminder");
-const card = page.getByRole("heading", { name: "WhatsApp & email" }).locator("xpath=ancestor::*[contains(@class,'rounded')][1]");
+const card = page.getByRole("heading", { name: "WhatsApp, SMS & email" }).locator("xpath=ancestor::*[contains(@class,'rounded')][1]");
 await card.getByRole("button", { name: "Save" }).click();
 await toast("Settings saved");
 await page.getByText("Saved. Leave empty to keep it.").waitFor();
@@ -127,7 +127,7 @@ for (const status of ["delivered", "read"]) {
 
 // 4. Messages: the send is listed.
 await nav("Messages");
-await page.getByRole("heading", { name: "WhatsApp & email" }).first().waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: "WhatsApp, SMS & email" }).first().waitFor({ timeout: 15000 });
 const row = page.getByRole("button", { name: new RegExp(`Sharma Kirana · Invoice ${inv.invoiceNumber.replace(/\//g, "\\/")}`) });
 await row.click();
 await page.getByText(`📎 ${inv.invoiceNumber.replace(/\//g, "-")}.pdf`).waitFor();

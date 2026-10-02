@@ -3,13 +3,13 @@ import { createTransport } from "nodemailer";
 
 /** One message on its way out. */
 export interface Outgoing {
-  channel: "whatsapp" | "email";
-  /** WhatsApp: international digits (91XXXXXXXXXX). Email: the address. */
+  channel: "whatsapp" | "email" | "sms";
+  /** WhatsApp and SMS: international digits (91XXXXXXXXXX). Email: the address. */
   to: string;
   subject: string | null;
   text: string;
   attachment: { filename: string; content: Buffer; contentType: string } | null;
-  /** WhatsApp template (needed outside the 24-hour window after the customer last wrote). */
+  /** WhatsApp template (needed outside the 24-hour window after the customer last wrote); for SMS, `name` is the DLT template id. */
   template: { name: string; language: string; params: string[] } | null;
 }
 
@@ -23,6 +23,8 @@ export interface Channels {
     | { mode: "none" }
     | { mode: "smtp"; host: string; port: number; secure: boolean; user: string | null; password: string | null; from: string; replyTo: string | null }
     | { mode: "platform"; smtpUrl: string; from: string; replyTo: string | null };
+  /** The business's SMS gateway: signed JSON posted to its address. */
+  sms: { provider: "none" } | { provider: "webhook"; url: string; secret: string; senderId: string | null };
 }
 
 export interface Delivery {
@@ -91,7 +93,32 @@ export class LiveMessenger implements Messenger {
       if (w.provider === "webhook") return this.webhook(w, message);
       throw new DeliveryError("WhatsApp is not set up");
     }
+    if (message.channel === "sms") {
+      if (channels.sms.provider === "webhook") return this.sms(channels.sms, message);
+      throw new DeliveryError("SMS is not set up");
+    }
     return this.email(channels.email, message);
+  }
+
+  /**
+   * SMS through the business's gateway (an adapter for its SMS provider):
+   * JSON {channel, to, text, senderId, templateId} signed like the WhatsApp
+   * webhook. In India the text must match the DLT template registered under
+   * templateId; the gateway answers {id} or {error}.
+   */
+  private async sms(s: { url: string; secret: string; senderId: string | null }, m: Outgoing): Promise<Delivery> {
+    const raw = JSON.stringify({ channel: "sms", to: `+${m.to}`, text: m.text, senderId: s.senderId, templateId: m.template?.name ?? null });
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = createHmac("sha256", s.secret).update(`${timestamp}.${raw}`).digest("hex");
+    const res = await fetch(s.url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-digitalbahi-timestamp": timestamp, "x-digitalbahi-signature": `sha256=${signature}` },
+      body: raw,
+      signal: AbortSignal.timeout(20_000),
+    });
+    const body = (await res.json().catch(() => null)) as { id?: string; error?: string } | null;
+    if (!res.ok) throw new DeliveryError(body?.error ?? `SMS gateway responded ${res.status}`);
+    return { provider: "sms_webhook", providerMessageId: body?.id ?? null };
   }
 
   private async meta(w: { phoneNumberId: string; token: string }, m: Outgoing): Promise<Delivery> {

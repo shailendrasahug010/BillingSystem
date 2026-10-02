@@ -13,7 +13,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { auditColumns, money, pk, softDelete, versioned } from "./columns.js";
+import { auditColumns, money, pk, softDelete, tstz, versioned } from "./columns.js";
 import { balanceSide, customerType, partyGstRegistration } from "./enums.js";
 import { employees } from "./hr.js";
 import { businessId, states } from "./platform.js";
@@ -120,6 +120,14 @@ export const customers = pgTable(
      */
     balance: money().notNull().default("0"),
     notes: text(),
+    /** Language of the messages sent to the customer (en or hi); null: the business's language for documents. */
+    messageLocale: varchar({ length: 5 }),
+    /** No automatic or bulk payment reminders to this customer (asked for, or replied STOP). */
+    remindersOptOut: boolean().notNull().default(false),
+    /** When the customer stopped payment reminders. */
+    remindersOptOutAt: tstz(),
+    /** How: staff (on the customer's page) or reply (they wrote STOP on WhatsApp). */
+    remindersOptOutBy: varchar({ length: 10 }),
     isActive: boolean().notNull().default(true),
     ...auditColumns,
     ...softDelete,

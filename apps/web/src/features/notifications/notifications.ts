@@ -3,6 +3,7 @@ import type { LocaleCode, TranslationKey } from "@digitalbahi/i18n";
 import { useCallback, useEffect } from "react";
 import { useI18n } from "../../app/i18n";
 import type { Route } from "../../app/router";
+import { requestPull } from "../../data/live";
 import { api, ApiError, readEventStream } from "../../lib/api";
 import { workingOffline } from "../../offline/sync";
 
@@ -28,14 +29,48 @@ export interface NotificationRow {
   readAt: string | null;
 }
 
+/** How the automatic payment reminders go: WhatsApp (SMS for those without it), or one channel. */
+export type ReminderChannel = "whatsapp_or_sms" | "whatsapp" | "sms" | "email";
+
+export interface ReminderConfig {
+  hour: number;
+  daysBefore?: number;
+  dayOfMonth?: number;
+  afterHours?: number;
+  /** Payment reminders to customers: the schedule, the least overdue amount, the channel. */
+  firstAfterDays?: number;
+  repeatDays?: number;
+  maxCount?: number;
+  minAmount?: number;
+  channel?: ReminderChannel;
+}
+
 export interface ReminderRule {
   type: string;
   permission: string;
   events: boolean;
+  /** Looked at every hour from its hour (orders waiting), not once a day. */
+  hourly: boolean;
   isActive: boolean;
-  config: { hour: number; daysBefore?: number; dayOfMonth?: number; afterHours?: number };
-  defaults: { hour: number; daysBefore?: number; dayOfMonth?: number; afterHours?: number };
+  config: ReminderConfig;
+  defaults: ReminderConfig;
   lastRunOn: string | null;
+  lastRunAt: string | null;
+}
+
+/** A customer the automatic payment reminders write to today (or would, but cannot reach). */
+export interface DueCustomer {
+  customerId: string;
+  name: string;
+  balance: string;
+  overdue: string;
+  oldestDue: string;
+  daysOverdue: number;
+  sentSinceDue: number;
+  lastSentOn: string | null;
+  channel: "whatsapp" | "sms" | "email" | null;
+  skip: "no_contact" | null;
+  locale: LocaleCode;
 }
 
 /** Every notification query starts with this key, so one invalidation refreshes them all. */
@@ -106,6 +141,8 @@ const FIELD_LABELS: Record<string, TranslationKey> = {
   priceLevelId: "customer.priceLevel",
   categoryId: "customer.category",
   salesRepId: "customer.salesRep",
+  messageLocale: "customer.messageLocale",
+  remindersOptOut: "customer.remindersOptOut",
 };
 
 /** "mobile,city" as "Mobile, City" in the app's language. */
@@ -176,6 +213,10 @@ export function targetRoute(n: Pick<NotificationRow, "type" | "entityType" | "en
       return { name: "planned", module: "payroll" };
     case "devices_unsynced":
       return { name: "settings" };
+    case "orders_waiting":
+      return { name: "planned", module: "orders" };
+    case "customer_reminders":
+      return { name: "planned", module: "messages" };
     case "leave_request":
     case "leave_requested":
     case "leave_approved":
@@ -206,10 +247,17 @@ export function useNotificationStream(businessId: string | null | undefined): vo
     if (!businessId) return;
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let pull = false;
     // Several notifications at once (the morning checks) refresh once.
-    const refresh = () => {
+    const refresh = (changed = false) => {
+      pull ||= changed;
       clearTimeout(timer);
-      timer = setTimeout(() => void client.invalidateQueries({ queryKey: [NOTIFICATIONS] }), 300);
+      timer = setTimeout(() => {
+        void client.invalidateQueries({ queryKey: [NOTIFICATIONS] });
+        // A new one is often about a change (an order, a customer who stopped reminders): the device's copy catches up now.
+        if (pull) requestPull();
+        pull = false;
+      }, 300);
     };
     void (async () => {
       let wait = 0;
@@ -225,7 +273,7 @@ export function useNotificationStream(businessId: string | null | undefined): vo
             "/notifications/stream",
             (event) => {
               // "ready" also covers anything that arrived while the stream was closed.
-              if (event === "ready" || event === "notification") refresh();
+              if (event === "ready" || event === "notification") refresh(event === "notification");
               else if (event === "unavailable") failed = true;
             },
             abort.signal,

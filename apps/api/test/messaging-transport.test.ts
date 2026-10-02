@@ -23,6 +23,7 @@ const bill: Outgoing = {
   template: { name: "bill_with_pdf", language: "en", params: ["Sharma Kirana", "INV/26-27/00001", "₹1,180.00", "Laxmi Traders"] },
 };
 const noEmail: Channels["email"] = { mode: "none" };
+const noSms: Channels["sms"] = { provider: "none" };
 
 describe("sending through Meta, a provider webhook and SMTP", () => {
   let server: Server;
@@ -46,6 +47,7 @@ describe("sending through Meta, a provider webhook and SMTP", () => {
           return res.end(JSON.stringify({ messages: [{ id: "wamid.HBgM" }] }));
         }
         if (req.url === "/hook") return res.end(JSON.stringify({ id: "prov-77" }));
+        if (req.url === "/sms") return res.end(JSON.stringify({ id: "sms-9001" }));
         res.statusCode = 404;
         res.end("{}");
       });
@@ -58,7 +60,7 @@ describe("sending through Meta, a provider webhook and SMTP", () => {
   it("uploads the PDF to Meta, then sends the template with it as the header", async () => {
     seen.length = 0;
     const m = new LiveMessenger(`${base}/v21.0`);
-    const d = await m.deliver({ whatsapp: { provider: "meta", phoneNumberId: "109876543210", token: "EAAG-token" }, email: noEmail }, bill);
+    const d = await m.deliver({ whatsapp: { provider: "meta", phoneNumberId: "109876543210", token: "EAAG-token" }, email: noEmail, sms: noSms }, bill);
     expect(d).toEqual({ provider: "meta", providerMessageId: "wamid.HBgM" });
     const [upload, send] = seen;
     expect(upload!.url).toBe("/v21.0/109876543210/media");
@@ -87,7 +89,7 @@ describe("sending through Meta, a provider webhook and SMTP", () => {
   it("sends a document with a caption when there is no template, and reports Meta's error", async () => {
     seen.length = 0;
     const m = new LiveMessenger(`${base}/v21.0`);
-    const channels: Channels = { whatsapp: { provider: "meta", phoneNumberId: "1098", token: "t" }, email: noEmail };
+    const channels: Channels = { whatsapp: { provider: "meta", phoneNumberId: "1098", token: "t" }, email: noEmail, sms: noSms };
     await m.deliver(channels, { ...bill, template: null });
     expect(JSON.parse(seen[1]!.body.toString())).toMatchObject({ type: "document", document: { id: "media-4471", filename: "INV-26-27-00001.pdf", caption: bill.text } });
     failMessages = true;
@@ -98,7 +100,7 @@ describe("sending through Meta, a provider webhook and SMTP", () => {
   it("signs the JSON it posts to a provider's webhook", async () => {
     seen.length = 0;
     const m = new LiveMessenger(`${base}/v21.0`);
-    const d = await m.deliver({ whatsapp: { provider: "webhook", url: `${base}/hook`, secret: "shared-secret-123" }, email: noEmail }, bill);
+    const d = await m.deliver({ whatsapp: { provider: "webhook", url: `${base}/hook`, secret: "shared-secret-123" }, email: noEmail, sms: noSms }, bill);
     expect(d).toEqual({ provider: "webhook", providerMessageId: "prov-77" });
     const req = seen[0]!;
     const raw = req.body.toString();
@@ -107,6 +109,19 @@ describe("sending through Meta, a provider webhook and SMTP", () => {
     const body = JSON.parse(raw);
     expect(body).toMatchObject({ channel: "whatsapp", to: "+919826011111", text: bill.text, template: bill.template, document: { filename: "INV-26-27-00001.pdf", contentType: "application/pdf" } });
     expect(Buffer.from(body.document.base64, "base64").equals(pdf)).toBe(true);
+  });
+
+  it("sends an SMS through the business's gateway: signed JSON with the DLT sender and template", async () => {
+    seen.length = 0;
+    const m = new LiveMessenger(`${base}/v21.0`);
+    const reminder: Outgoing = { channel: "sms", to: "919826011111", subject: null, text: "Dear Sharma Kirana, Rs 1,180 is due to Laxmi Traders.", attachment: null, template: { name: "1207161234567890123", language: "en", params: [] } };
+    const d = await m.deliver({ whatsapp: { provider: "none" }, email: noEmail, sms: { provider: "webhook", url: `${base}/sms`, secret: "sms-secret-1", senderId: "LAXMIT" } }, reminder);
+    expect(d).toEqual({ provider: "sms_webhook", providerMessageId: "sms-9001" });
+    const req = seen[0]!;
+    const raw = req.body.toString();
+    expect(req.headers["x-digitalbahi-signature"]).toBe(`sha256=${createHmac("sha256", "sms-secret-1").update(`${req.headers["x-digitalbahi-timestamp"]}.${raw}`).digest("hex")}`);
+    expect(JSON.parse(raw)).toEqual({ channel: "sms", to: "+919826011111", text: reminder.text, senderId: "LAXMIT", templateId: "1207161234567890123" });
+    await expect(m.deliver({ whatsapp: { provider: "none" }, email: noEmail, sms: noSms }, reminder)).rejects.toThrow("SMS is not set up");
   });
 
   it("emails the PDF from the business's own server, replies going to the firm", async () => {
@@ -128,6 +143,7 @@ describe("sending through Meta, a provider webhook and SMTP", () => {
       {
         whatsapp: { provider: "none" },
         email: { mode: "smtp", host: "smtp.example.in", port: 587, secure: false, user: "bills@laxmitraders.in", password: "pw", from: '"Laxmi Traders" <bills@laxmitraders.in>', replyTo: "accounts@laxmitraders.in" },
+        sms: noSms,
       },
       { ...bill, channel: "email", to: "sharma@example.in", subject: "Invoice INV/26-27/00001 from Laxmi Traders", template: null },
     );
@@ -139,6 +155,6 @@ describe("sending through Meta, a provider webhook and SMTP", () => {
     expect(mail).toContain("Subject: Invoice INV/26-27/00001 from Laxmi Traders");
     expect(mail).toMatch(/Content-Type: application\/pdf; name=INV-26-27-00001\.pdf/);
     expect(mail).toContain("Content-Disposition: attachment; filename=INV-26-27-00001.pdf");
-    await expect(m.deliver({ whatsapp: { provider: "none" }, email: noEmail }, { ...bill, channel: "email" })).rejects.toThrow("Email is not set up");
+    await expect(m.deliver({ whatsapp: { provider: "none" }, email: noEmail, sms: noSms }, { ...bill, channel: "email" })).rejects.toThrow("Email is not set up");
   });
 });

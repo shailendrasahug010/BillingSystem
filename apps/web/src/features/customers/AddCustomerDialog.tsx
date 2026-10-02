@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
-import { Field, Input, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { translateError } from "@digitalbahi/i18n";
@@ -52,8 +52,10 @@ export function AddCustomerDialog({
   const abroad = kind === "export";
   const offline = useOffline();
   const workingOffline = offline.offlineMode || !offline.online;
-  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "", address: "", city: "" });
+  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "", address: "", city: "", messageLocale: "" });
   const [form, setForm] = useState(blank);
+  /** No payment reminders to this customer (editing). */
+  const [optOut, setOptOut] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
   /** The customer's details as the form shows them (edit mode). */
@@ -68,6 +70,7 @@ export function AddCustomerDialog({
     priceLevelId: c.priceLevelId ?? WORKSPACE.defaultPriceLevelId ?? "",
     address: c.address,
     city: c.city,
+    messageLocale: c.messageLocale ?? "",
   });
 
   // Editing: start from the customer as they are.
@@ -75,6 +78,7 @@ export function AddCustomerDialog({
     if (!open || !customer) return;
     setKind(kindOf(customer));
     setForm(fromCustomer(customer));
+    setOptOut(Boolean(customer.remindersOptOut));
     setTouched({});
     setServerError(null);
   }, [open, customer]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -126,6 +130,7 @@ export function AddCustomerDialog({
     ...(form.priceLevelId ? { priceLevelId: form.priceLevelId } : {}),
     ...(form.address.trim() ? { addressLine1: form.address.trim() } : {}),
     ...(form.city.trim() ? { city: form.city.trim() } : {}),
+    ...(form.messageLocale === "en" || form.messageLocale === "hi" ? { messageLocale: form.messageLocale } : {}),
   });
   /** Only what changed (edit mode); a cleared credit limit means no limit. */
   const changes = (c: Customer): Partial<CustomerInput> => {
@@ -144,6 +149,8 @@ export function AddCustomerDialog({
     if (form.priceLevelId !== was.priceLevelId && form.priceLevelId) patch.priceLevelId = form.priceLevelId;
     if (form.address.trim() !== was.address.trim()) patch.addressLine1 = form.address.trim();
     if (form.city.trim() !== was.city.trim()) patch.city = form.city.trim();
+    if (form.messageLocale !== was.messageLocale) patch.messageLocale = form.messageLocale === "en" || form.messageLocale === "hi" ? form.messageLocale : null;
+    if (optOut !== Boolean(c.remindersOptOut)) patch.remindersOptOut = optOut;
     return patch;
   };
 
@@ -296,6 +303,21 @@ export function AddCustomerDialog({
               ))}
             </Select>
           </Field>
+        )}
+        {LIVE && (
+          <Field label={t("customer.messageLocale")} htmlFor="c-message-locale">
+            <Select id="c-message-locale" value={form.messageLocale} onChange={(e) => set("messageLocale", e.target.value)}>
+              <option value="">{t("customer.messageLocaleDefault")}</option>
+              <option value="en">English</option>
+              <option value="hi">हिन्दी</option>
+            </Select>
+          </Field>
+        )}
+        {LIVE && customer && (
+          <div className="flex flex-col justify-end gap-1 pb-1">
+            <Checkbox label={t("customer.remindersOptOut")} checked={optOut} onChange={setOptOut} />
+            <p className="text-[12px] text-ink-3">{t("customer.remindersOptOutHint")}</p>
+          </div>
         )}
       </form>
     </Dialog>

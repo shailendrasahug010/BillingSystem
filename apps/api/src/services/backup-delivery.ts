@@ -5,7 +5,7 @@ import { audit, type AuditActor } from "../lib/audit.js";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
 import { ApiError, badRequest, conflict } from "../lib/errors.js";
-import { channelsFor, ready } from "../modules/messaging/routes.js";
+import { channelsFor, ready } from "./messaging/queue.js";
 import { makeBackup } from "./backup.js";
 
 /** Who a backup is made for: a person on the Backup screen, or the scheduler on their behalf. */

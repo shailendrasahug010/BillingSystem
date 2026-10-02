@@ -643,6 +643,17 @@ interface MessagingView {
     documentTemplate: string | null;
     reminderTemplate: string | null;
     templateLanguage: string;
+    /** The same templates' language code in Hindi, for customers who get messages in Hindi. */
+    templateLanguageHi: string | null;
+    ready: boolean;
+  };
+  sms: {
+    provider: "none" | "webhook";
+    webhookUrl: string | null;
+    hasSecret: boolean;
+    senderId: string | null;
+    reminderTemplate: string | null;
+    reminderTemplateHi: string | null;
     ready: boolean;
   };
   email: {
@@ -672,6 +683,13 @@ function formOf(v: MessagingView): MessagingForm {
     whatsappDocumentTemplate: v.whatsapp.documentTemplate ?? "",
     whatsappReminderTemplate: v.whatsapp.reminderTemplate ?? "",
     whatsappTemplateLanguage: v.whatsapp.templateLanguage,
+    whatsappTemplateLanguageHi: v.whatsapp.templateLanguageHi ?? "",
+    smsProvider: v.sms.provider,
+    smsWebhookUrl: v.sms.webhookUrl ?? "",
+    smsSecret: "",
+    smsSenderId: v.sms.senderId ?? "",
+    smsReminderTemplate: v.sms.reminderTemplate ?? "",
+    smsReminderTemplateHi: v.sms.reminderTemplateHi ?? "",
     emailMode: v.email.mode,
     smtpHost: v.email.smtpHost ?? "",
     smtpPort: v.email.smtpPort ? String(v.email.smtpPort) : "",
@@ -686,8 +704,9 @@ function formOf(v: MessagingView): MessagingForm {
 
 /**
  * The business's own WhatsApp Business number (Meta Cloud API or a
- * provider's webhook) and email (the platform's mail server or its own SMTP).
- * Tokens and passwords are write-only: the server keeps them encrypted.
+ * provider's webhook), its SMS gateway (for payment reminders) and email
+ * (the platform's mail server or its own SMTP). Tokens and passwords are
+ * write-only: the server keeps them encrypted.
  */
 function MessagingCard() {
   const { t } = useI18n();
@@ -698,7 +717,7 @@ function MessagingCard() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [testTo, setTestTo] = useState("");
-  const [testChannel, setTestChannel] = useState<"whatsapp" | "email">("whatsapp");
+  const [testChannel, setTestChannel] = useState<"whatsapp" | "sms" | "email">("whatsapp");
   useEffect(() => {
     if (q.data) setForm(formOf(q.data));
   }, [q.data]);
@@ -710,7 +729,7 @@ function MessagingCard() {
       <Input id={`msg-${k}`} type={opts.type ?? "text"} disabled={!canEdit} placeholder={opts.placeholder} className={opts.mono ? "[&_input]:font-mono" : undefined} value={String(form[k] ?? "")} onChange={(e) => set(k, e.target.value)} />
     </Field>
   );
-  const secret = (k: "whatsappSecret" | "whatsappAppSecret" | "smtpPassword", label: string, has: boolean) =>
+  const secret = (k: "whatsappSecret" | "whatsappAppSecret" | "smsSecret" | "smtpPassword", label: string, has: boolean) =>
     text(k, label, { type: "password", ...(has ? { placeholder: "••••••••", hint: t("messages.settings.secretSet") } : {}) });
 
   const save = async () => {
@@ -726,6 +745,12 @@ function MessagingCard() {
       whatsappDocumentTemplate: orNull("whatsappDocumentTemplate"),
       whatsappReminderTemplate: orNull("whatsappReminderTemplate"),
       whatsappTemplateLanguage: String(f.whatsappTemplateLanguage).trim() || "en",
+      whatsappTemplateLanguageHi: orNull("whatsappTemplateLanguageHi"),
+      smsProvider: f.smsProvider,
+      smsWebhookUrl: orNull("smsWebhookUrl"),
+      smsSenderId: orNull("smsSenderId")?.toUpperCase() ?? null,
+      smsReminderTemplate: orNull("smsReminderTemplate"),
+      smsReminderTemplateHi: orNull("smsReminderTemplateHi"),
       emailMode: f.emailMode,
       smtpHost: orNull("smtpHost"),
       smtpPort: String(f.smtpPort).trim() ? Number(f.smtpPort) : null,
@@ -737,6 +762,7 @@ function MessagingCard() {
       // Secrets only when typed: an empty box keeps the saved one.
       ...(String(f.whatsappSecret) ? { whatsappSecret: String(f.whatsappSecret) } : {}),
       ...(String(f.whatsappAppSecret) ? { whatsappAppSecret: String(f.whatsappAppSecret) } : {}),
+      ...(String(f.smsSecret) ? { smsSecret: String(f.smsSecret) } : {}),
       ...(String(f.smtpPassword) ? { smtpPassword: String(f.smtpPassword) } : {}),
     };
     try {
@@ -799,6 +825,7 @@ function MessagingCard() {
               {text("whatsappDocumentTemplate", t("messages.settings.documentTemplate"), { mono: true, placeholder: "bill_with_pdf" })}
               {text("whatsappReminderTemplate", t("messages.settings.reminderTemplate"), { mono: true, placeholder: "payment_reminder" })}
               {text("whatsappTemplateLanguage", t("messages.settings.templateLanguage"), { mono: true, placeholder: "en" })}
+              {text("whatsappTemplateLanguageHi", t("messages.settings.templateLanguageHi"), { mono: true, placeholder: "hi", hint: t("messages.settings.templateLanguageHiHint") })}
               <p className="text-[12.5px] text-ink-3 sm:col-span-2">{t("messages.settings.templateHelp")}</p>
             </div>
           )}
@@ -822,6 +849,31 @@ function MessagingCard() {
                   </>
                 )}
               </div>
+            </div>
+          )}
+        </section>
+        <section className="flex flex-col gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[14px] font-semibold text-ink">{t("messages.settings.smsTitle")}</h3>
+            <Badge tone={v.sms.ready ? "good" : "neutral"} dot>
+              {v.sms.ready ? t("messages.settings.ready") : t("messages.settings.off")}
+            </Badge>
+          </div>
+          <p className="text-[12.5px] text-ink-3">{t("messages.settings.smsHint")}</p>
+          <Field label={t("messages.settings.smsProvider")} htmlFor="msg-sms-provider">
+            <Select id="msg-sms-provider" disabled={!canEdit} value={String(form.smsProvider)} onChange={(e) => set("smsProvider", e.target.value)}>
+              <option value="none">{t("messages.settings.smsProviders.none")}</option>
+              <option value="webhook">{t("messages.settings.smsProviders.webhook")}</option>
+            </Select>
+          </Field>
+          {form.smsProvider === "webhook" && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {text("smsWebhookUrl", t("messages.settings.smsUrl"), { placeholder: "https://", mono: true })}
+              {secret("smsSecret", t("messages.settings.smsSecret"), v.sms.hasSecret)}
+              {text("smsSenderId", t("messages.settings.smsSenderId"), { mono: true, placeholder: "DGBAHI" })}
+              <span className="hidden sm:block" aria-hidden />
+              {text("smsReminderTemplate", t("messages.settings.smsTemplate"), { mono: true, placeholder: "1207161234567890123" })}
+              {text("smsReminderTemplateHi", t("messages.settings.smsTemplateHi"), { mono: true, placeholder: "1207161234567890124" })}
             </div>
           )}
         </section>
@@ -866,6 +918,7 @@ function MessagingCard() {
                 onChange={setTestChannel}
                 options={[
                   { value: "whatsapp", label: "WhatsApp" },
+                  { value: "sms", label: t("messages.sms") },
                   { value: "email", label: t("messages.email") },
                 ]}
               />
