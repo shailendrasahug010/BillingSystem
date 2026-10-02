@@ -98,26 +98,30 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const kind = kindOf(entry);
   const bill = kind === "invoice" ? (entry as OutboxEntry) : null;
   const name =
-    entry.kind === "payment" || entry.kind === "return"
+    entry.kind === "payment" || entry.kind === "return" || entry.kind === "price-note"
       ? entry.partyName
       : entry.kind === "purchase"
         ? `${entry.supplierName} · ${entry.billNumber}`
         : entry.kind === "expense"
           ? [entry.categoryName, entry.paidTo].filter(Boolean).join(" · ")
-          : (entry as { customerName: string }).customerName;
+          : entry.kind === "invoice-cancel"
+            ? `${entry.customerName} · ${entry.documentNumber}`
+            : (entry as { customerName: string }).customerName;
   const amount =
     entry.kind === "payment"
       ? entry.amount
-      : entry.kind === "order" || entry.kind === "return"
+      : entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note"
         ? entry.estimate
         : entry.kind === "collection-note"
           ? entry.amount
           : entry.kind === "purchase" || entry.kind === "expense"
             ? entry.total
+            : entry.kind === "invoice-cancel"
+              ? entry.amount
             : bill
               ? bill.total
               : null;
-  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" ? entry.date : bill ? bill.date : null;
+  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" || entry.kind === "price-note" ? entry.date : bill ? bill.date : null;
   const conflict = kind === "customer-edit" && entry.error?.code === "VERSION_CONFLICT";
   const removeText =
     kind === "invoice" ? t("offline.removeConfirm", { number: bill!.number }) : kind === "customer" ? t("offline.removeCustomerConfirm", { name }) : t("offline.removeEntryConfirm", { what: label(entry).toLowerCase(), name });
@@ -136,7 +140,7 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
         </Badge>
         {amount !== null && amount > 0 && (
           <span className="num ml-auto text-[13.5px] font-medium text-ink">
-            {entry.kind === "order" || entry.kind === "return" ? "≈ " : ""}
+            {entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note" ? "≈ " : ""}
             {money(amount)}
           </span>
         )}

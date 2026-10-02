@@ -171,6 +171,10 @@ export interface ApiInvoice extends Omit<ReviewFields, "id"> {
     hsnCode: string | null;
     unitId: string;
     qty: string;
+    /** Base units, free units and the line unit's size (the stock a cancellation puts back). */
+    qtyBase?: string;
+    freeQty?: string;
+    conversionFactor?: string;
     rate: string;
     discountPercent: string;
     taxableValue: string;

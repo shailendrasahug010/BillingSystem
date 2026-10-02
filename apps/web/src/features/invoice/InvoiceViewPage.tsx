@@ -1,5 +1,5 @@
 import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
-import { ArrowLeft, CloudOff, MessageCircle, Printer } from "lucide-react";
+import { ArrowLeft, Ban, CloudOff, MessageCircle, Printer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -18,12 +18,13 @@ import { api } from "../../lib/api";
 import { shareOnWhatsApp } from "../../lib/share";
 import { printableFromApi, printableFromDemo, type ApiInvoice, type PrintableInvoice } from "./printable";
 import { EMBEDDED } from "../../lib/embedded";
-import { findOfflineBill, useOffline } from "../../offline/sync";
+import { findOfflineBill, kindOf, useOffline, type CancelEntry } from "../../offline/sync";
 import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { InvoiceDocument } from "./InvoiceDocument";
 import { EInvoiceCard } from "./EInvoiceCard";
 import { ShippingBillCard } from "./ShippingBillCard";
 import { InvoiceReviewCard } from "./InvoiceReview";
+import { CancelInvoiceDialog, type CancellableBill } from "./CancelInvoiceDialog";
 
 export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const { t, locale, money } = useI18n();
@@ -32,7 +33,8 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const [printLocale, setPrintLocale] = useState<LocaleCode>(LIVE ? (WORKSPACE.printLocale as LocaleCode) || locale : locale);
   // A bill made offline ("offline:<key>") prints from the copy on this device until the server has it.
   const offlineKey = invoiceId.startsWith("offline:") ? invoiceId.slice("offline:".length) : null;
-  useOffline();
+  const offline = useOffline();
+  const [cancelling, setCancelling] = useState(false);
   const kept = offlineKey ? findOfflineBill(offlineKey) : {};
   const syncedId = kept.synced?.serverId;
   useEffect(() => {
@@ -63,6 +65,23 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
     business: BUSINESS.name,
   });
   const mobile = customerById.get(invoice.customerId)?.mobile;
+  // Cancelled on this device and not sent yet.
+  const cancelWaiting = offline.entries.some((e) => kindOf(e) === "invoice-cancel" && (e as CancelEntry).documentId === (offlineKey ?? invoice.id));
+  const cancellable: CancellableBill | null = !LIVE || status === "cancelled" || cancelWaiting || !allowed("invoice.cancel")
+    ? null
+    : offlineKey && kept.entry
+      ? { id: offlineKey, number: kept.entry.number, customerId: kept.entry.customerId, customerName: kept.entry.customerName, grandTotal: kept.entry.total, stock: kept.entry.stock, notSent: true }
+      : live.data
+        ? {
+            id: live.data.id,
+            number: live.data.invoiceNumber,
+            customerId: live.data.customerId,
+            customerName: live.data.partyName,
+            grandTotal: Number(live.data.grandTotal),
+            stock: live.data.items.map((i) => ({ productId: i.productId, qty: Number(i.qtyBase ?? i.qty) + Number(i.freeQty ?? 0) * Number(i.conversionFactor ?? 1) })),
+            notSent: false,
+          }
+        : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -91,6 +110,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
               {t("offline.deviceCopy")}
             </Badge>
           )}
+          {cancelWaiting && (
+            <Badge tone="warn" icon={<CloudOff size={13} />}>
+              {t("offline.cancelWaiting")}
+            </Badge>
+          )}
           {live.data?.reviewStatus === "needs_review" && (
             <Badge tone="warn" icon={<CloudOff size={13} />}>
               {t("invoice.review.badge")}
@@ -108,6 +132,11 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
               { value: "hi", label: "हिन्दी" },
             ]}
           />
+          {cancellable && (
+            <Button variant="ghost" icon={<Ban size={16} />} onClick={() => setCancelling(true)}>
+              {t("invoice.cancel.button")}
+            </Button>
+          )}
           {/* Embedded previews cannot print or download; the installed app and the web app can. */}
           {!EMBEDDED && allowed("invoice.print") && (
             <Button icon={<Printer size={16} />} title={t("share.pdfHint")} onClick={() => window.print()}>
@@ -149,9 +178,19 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
       </div>
       {LIVE && live.data && (
         <div className="no-print">
-          <ReturnsCard kind="sale" documentId={invoice.id} documentNumber={invoice.number} returns={live.data.returns ?? []} canReturn={status !== "cancelled"} deviceCopy={Boolean(deviceCopyAt)} />
+          <ReturnsCard
+            kind="sale"
+            documentId={invoice.id}
+            documentNumber={invoice.number}
+            returns={live.data.returns ?? []}
+            canReturn={status !== "cancelled" && !cancelWaiting}
+            deviceCopy={Boolean(deviceCopyAt)}
+            party={{ id: live.data.customerId, name: live.data.partyName }}
+            totals={{ grandTotal: Number(live.data.grandTotal), taxable: Number(live.data.taxableTotal) }}
+          />
         </div>
       )}
+      {cancellable && <CancelInvoiceDialog bill={cancellable} open={cancelling} onOpenChange={setCancelling} />}
       <PrintPortal>
         <InvoiceDocument invoice={invoice} locale={printLocale} />
       </PrintPortal>
