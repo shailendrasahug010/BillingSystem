@@ -78,7 +78,7 @@ function Screen({ route }: { route: Route }) {
       // key: a fresh draft whenever the entry customer changes
       return <CreateInvoicePage key={route.customerId ?? "new"} {...(route.customerId ? { customerId: route.customerId } : {})} />;
     case "invoice-view":
-      return <InvoiceViewPage invoiceId={route.invoiceId} />;
+      return <InvoiceViewPage invoiceId={route.invoiceId} print={route.print ?? false} />;
     case "customers":
       return <CustomersPage />;
     case "customer":
@@ -164,6 +164,7 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v
     [INVOICE_SHORTCUTS.focusProduct, t("shortcuts.focusProduct")],
     ["alt+1", t("shortcuts.addSuggestion")],
     [INVOICE_SHORTCUTS.save, t("shortcuts.saveInvoice")],
+    [INVOICE_SHORTCUTS.saveAndPrint, t("shortcuts.saveAndPrint")],
     ["escape", t("shortcuts.closeDialog")],
     ["?", t("shortcuts.help")],
   ];

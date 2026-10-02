@@ -10,7 +10,8 @@ export type Route =
   | { name: "login" }
   | { name: "dashboard" }
   | { name: "invoice-new"; customerId?: string }
-  | { name: "invoice-view"; invoiceId: string }
+  /** print: open the print dialog once the bill is shown (Save & print). */
+  | { name: "invoice-view"; invoiceId: string; print?: boolean }
   | { name: "customers" }
   | { name: "customer"; customerId: string }
   /** Money to collect, by city and route (collectors). */

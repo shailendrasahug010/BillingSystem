@@ -335,7 +335,8 @@
       "avgOrder": "Avg. order",
       "paymentBehaviour": "Payments",
       "never": "No purchases yet",
-      "viewProfile": "View profile"
+      "viewProfile": "View profile",
+      "ofLimit": "{{amount}} of {{limit}}"
     },
     "steps": {
       "customer": "Customer",
@@ -450,7 +451,9 @@
         "lapsed": "Lapsed",
         "irregular": "Occasional"
       }
-    }
+    },
+    "showAll": "All {{count}}",
+    "showLess": "Show less"
   },
   "customer": {
     "title": "Customers",
@@ -696,7 +699,8 @@
     "saveInvoice": "Save invoice",
     "addSuggestion": "Add suggestion 1–9",
     "closeDialog": "Close dialog",
-    "help": "Show shortcuts"
+    "help": "Show shortcuts",
+    "saveAndPrint": "Save and print"
   },
   "search": {
     "placeholder": "Search customers, products, invoices, GSTIN, mobile…",

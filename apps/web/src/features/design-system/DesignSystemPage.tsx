@@ -179,6 +179,7 @@ export function DesignSystemPage() {
               [INVOICE_SHORTCUTS.focusProduct, t("shortcuts.focusProduct")],
               ["alt+1", t("shortcuts.addSuggestion")],
               [INVOICE_SHORTCUTS.save, t("shortcuts.saveInvoice")],
+              [INVOICE_SHORTCUTS.saveAndPrint, t("shortcuts.saveAndPrint")],
               ["escape", t("shortcuts.closeDialog")],
             ] as const
           ).map(([k, label]) => (

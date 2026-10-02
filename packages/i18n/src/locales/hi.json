@@ -335,7 +335,8 @@
       "avgOrder": "औसत ऑर्डर",
       "paymentBehaviour": "भुगतान",
       "never": "अभी तक कोई खरीद नहीं",
-      "viewProfile": "प्रोफ़ाइल देखें"
+      "viewProfile": "प्रोफ़ाइल देखें",
+      "ofLimit": "{{limit}} में से {{amount}}"
     },
     "steps": {
       "customer": "ग्राहक",
@@ -450,7 +451,9 @@
         "lapsed": "बंद सा",
         "irregular": "कभी-कभी"
       }
-    }
+    },
+    "showAll": "सभी {{count}}",
+    "showLess": "कम दिखाएँ"
   },
   "customer": {
     "title": "ग्राहक",
@@ -696,7 +699,8 @@
     "saveInvoice": "इनवॉइस सेव करें",
     "addSuggestion": "सुझाव 1–9 जोड़ें",
     "closeDialog": "डायलॉग बंद करें",
-    "help": "शॉर्टकट दिखाएँ"
+    "help": "शॉर्टकट दिखाएँ",
+    "saveAndPrint": "सेव करके प्रिंट करें"
   },
   "search": {
     "placeholder": "ग्राहक, प्रोडक्ट, इनवॉइस, GSTIN, मोबाइल खोजें…",

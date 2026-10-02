@@ -28,7 +28,10 @@ import { CancelInvoiceDialog, type CancellableBill } from "./CancelInvoiceDialog
 import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
 import { invoiceReceipt } from "../../lib/thermal/receipts";
 
-export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
+/** Bills already sent to the printer from Save & print (going back to one does not print it again). */
+const printed = new Set<string>();
+
+export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: string; print?: boolean }) {
   const { t, locale, money } = useI18n();
   const { navigate } = useRouter();
   useStoreVersion();
@@ -52,6 +55,22 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const deviceCopyAt = live.data?.deviceCopyAt;
   const demo = LIVE ? undefined : INVOICES.find((i) => i.id === invoiceId);
   const invoice: PrintableInvoice | undefined = offlineKey ? kept.entry?.printable : LIVE ? live.data && printableFromApi(live.data) : demo && printableFromDemo(demo);
+  // Save & print: the print dialog once the bill is on screen, with its fonts.
+  const shown = Boolean(invoice);
+  useEffect(() => {
+    if (!print || !shown || printed.has(invoiceId) || EMBEDDED || !allowed("invoice.print")) return;
+    let active = true;
+    void document.fonts.ready.then(() =>
+      setTimeout(() => {
+        if (!active || printed.has(invoiceId)) return;
+        printed.add(invoiceId);
+        window.print();
+      }, 150),
+    );
+    return () => {
+      active = false;
+    };
+  }, [print, shown, invoiceId]);
   if (LIVE && !offlineKey && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
   if (!invoice) return <EmptyState title={t("empty.generic")} />;
   const status = invoice.status;
