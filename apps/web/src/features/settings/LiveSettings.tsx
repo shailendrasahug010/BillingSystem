@@ -21,7 +21,7 @@ import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
 import { stateOptions } from "../../lib/states";
 import { PrinterPanel } from "../../components/thermal/ThermalPrint";
 import { serverOrigin } from "../../platform/server";
-import { DEFAULT_QUICK_UNITS } from "../invoice/quickUnits";
+import { DEFAULT_START_SYMBOL } from "../invoice/units";
 
 interface BusinessRow {
   legalName: string;
@@ -54,10 +54,10 @@ interface Settings {
   "einvoice.enabled"?: boolean;
   "ewaybill.threshold"?: number;
   "invoice.payment_details"?: PaymentDetails;
-  "invoice.quick_units"?: QuickUnitSlots | null;
+  "invoice.unit_letters"?: Record<string, string> | null;
+  "invoice.default_unit"?: string | null;
 }
 type PaymentDetails = { bankName: string; accountNumber: string; ifsc: string; upiId: string };
-type QuickUnitSlots = Array<{ unitId: string; alias: string } | null>;
 
 /** The last day of the financial year a date falls in (an LUT is filed for one year). */
 function yearEnd(day: string): string {
@@ -182,96 +182,99 @@ function PaymentDetailsRow({ value, canEdit, onSave }: { value: PaymentDetails |
 }
 
 /**
- * The three unit buttons on each line of a bill: which unit each is and its
- * letter (BOX, CTN and STRIP as B, C and S until the business sets them).
+ * Units on a bill's lines: the unit new lines start in (strips, for products
+ * sold by the strip, until set) and the letter each unit is picked with (its
+ * symbol's first until set).
  */
-function QuickUnitsRow({ value, canEdit, onSave }: { value: QuickUnitSlots | null | undefined; canEdit: boolean; onSave(v: QuickUnitSlots | null): Promise<void> }) {
+function BillUnitsRow({
+  letters,
+  startIn,
+  canEdit,
+  onSaveLetters,
+  onSaveStart,
+}: {
+  letters: Record<string, string> | null | undefined;
+  startIn: string | null | undefined;
+  canEdit: boolean;
+  onSaveLetters(v: Record<string, string> | null): Promise<void>;
+  onSaveStart(v: string): Promise<void>;
+}) {
   const { t } = useI18n();
   useStoreVersion();
   const units = WORKSPACE.unitList;
-  const idOf = (symbol: string) => units.find((u) => u.symbol === symbol)?.id ?? "";
-  // The app's own: what the bill shows while nothing is saved.
-  const defaults = DEFAULT_QUICK_UNITS.map(([symbol, alias]) => ({ unitId: idOf(symbol), alias }));
-  const saved = (value ?? defaults).map((q) => q ?? { unitId: "", alias: "" });
-  // What is saved (it follows the units arriving with the catalogue) until the user changes something.
-  const [edited, setEdited] = useState<typeof saved | null>(null);
-  const slots = edited ?? saved;
+  const first = (symbol: string) => (Array.from(symbol)[0] ?? "").toUpperCase();
+  const saved = letters ?? {};
+  // The letters as typed, by unit id, over what is saved ("": the unit's first letter).
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const shown = (id: string) => edited[id] ?? saved[id] ?? "";
   const [busy, setBusy] = useState(false);
-  const set = (i: number, patch: Partial<{ unitId: string; alias: string }>) => setEdited((all) => (all ?? saved).map((q, j) => (j === i ? { ...q, ...patch } : q)));
-  const used = slots.filter((q) => q.unitId);
-  const bad = used.some((q) => !/^\p{L}$/u.test(q.alias)) || new Set(used.map((q) => q.unitId)).size !== used.length || new Set(used.map((q) => q.alias)).size !== used.length;
-  const clean: QuickUnitSlots = slots.map((q) => (q.unitId ? { unitId: q.unitId, alias: q.alias.toUpperCase() } : null));
-  const changed = JSON.stringify(clean) !== JSON.stringify(saved.map((q) => (q.unitId ? q : null)));
-  const save = (v: QuickUnitSlots | null) => {
+  const bad = units.some((u) => shown(u.id) !== "" && !/^\p{L}$/u.test(shown(u.id)));
+  // Only letters other than the unit's first are kept.
+  const clean = Object.fromEntries(units.flatMap((u) => (shown(u.id) && shown(u.id) !== first(u.symbol) ? [[u.id, shown(u.id)]] : [])));
+  const sorted = (r: Record<string, string>) => JSON.stringify(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
+  const changed = sorted(clean) !== sorted(saved);
+  const startValue = startIn ?? units.find((u) => u.symbol === DEFAULT_START_SYMBOL)?.id ?? "own";
+  const run = (job: Promise<void>, after?: () => void) => {
     setBusy(true);
-    void onSave(v).finally(() => {
+    void job.finally(() => {
       setBusy(false);
-      setEdited(null);
+      after?.();
     });
   };
   return (
-    <div className="flex flex-col gap-2 border-b border-line py-3" role="group" aria-labelledby="quick-units-h">
+    <div className="flex flex-col gap-3 border-b border-line py-3" role="group" aria-labelledby="bill-units-h">
       <div>
-        <p id="quick-units-h" className="text-[14px] font-medium text-ink">
-          {t("settings.quickUnits")}
+        <p id="bill-units-h" className="text-[14px] font-medium text-ink">
+          {t("settings.billUnits")}
         </p>
-        <p className="text-[12.5px] text-ink-3">{t("settings.quickUnitsHint")}</p>
+        <p className="text-[12.5px] text-ink-3">{t("settings.billUnitsHint")}</p>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {slots.map((q, i) => (
-          <div key={i} className="flex items-end gap-2 rounded-xl border border-line p-2">
-            <div className="min-w-0 flex-1">
-              <Field label={t("settings.quickUnitButton", { n: i + 1 })} htmlFor={`quick-unit-${i}`}>
-                <Select id={`quick-unit-${i}`} disabled={!canEdit} value={q.unitId} onChange={(e) => set(i, { unitId: e.target.value, alias: q.alias || (units.find((u) => u.id === e.target.value)?.symbol[0] ?? "") })}>
-                  <option value="">{t("settings.quickUnitNone")}</option>
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.symbol} — {u.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <div className="w-16 shrink-0">
-              <Field label={t("settings.quickUnitLetter")} htmlFor={`quick-letter-${i}`}>
-                <Input
-                  id={`quick-letter-${i}`}
-                  disabled={!canEdit || !q.unitId}
-                  maxLength={1}
-                  className="[&_input]:text-center [&_input]:font-semibold [&_input]:uppercase"
-                  value={q.alias}
-                  onChange={(e) => set(i, { alias: e.target.value.trim().toUpperCase() })}
-                />
-              </Field>
-            </div>
-          </div>
-        ))}
+      <div className="max-w-sm">
+        <Field label={t("settings.startUnit")} hint={t("settings.startUnitHint")} htmlFor="start-unit">
+          <Select id="start-unit" disabled={!canEdit || busy} value={startValue} onChange={(e) => e.target.value !== startValue && run(onSaveStart(e.target.value))}>
+            <option value="own">{t("settings.startUnitOwn")}</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.symbol} — {u.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
       </div>
-      {bad && <p className="text-[12.5px] text-danger">{t("settings.quickUnitsInvalid")}</p>}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* How a line of the bill will show them. */}
-        <span className="mr-1 inline-flex items-center gap-0.5" aria-hidden>
-          {clean.map((c, i) =>
-            c ? (
-              <span key={i} className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-line-strong bg-surface px-0.5 text-[10.5px] leading-none font-semibold text-ink-2">
-                {c.alias}
+      <div>
+        <p className="text-[13px] font-medium text-ink-2">{t("settings.unitLetters")}</p>
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+          {units.map((u) => (
+            <label key={u.id} className="flex items-center gap-2 rounded-lg border border-line py-1 pr-1 pl-2.5">
+              <span className="min-w-0 flex-1 truncate text-[13px]">
+                <span className="font-medium text-ink">{u.symbol}</span> <span className="text-ink-3">{u.name}</span>
               </span>
-            ) : null,
-          )}
-        </span>
-        {canEdit && (
-          <>
-            <Button size="sm" variant="primary" disabled={busy || bad || !changed} onClick={() => save(clean)}>
-              {t("common.save")}
-            </Button>
-            {value && (
-              <Button size="sm" disabled={busy} onClick={() => save(null)}>
-                {t("settings.quickUnitsDefault")}
-              </Button>
-            )}
-          </>
-        )}
+              <input
+                aria-label={t("settings.unitLetterFor", { unit: u.symbol })}
+                disabled={!canEdit}
+                maxLength={1}
+                placeholder={first(u.symbol)}
+                value={shown(u.id)}
+                onChange={(e) => setEdited((all) => ({ ...all, [u.id]: e.target.value.trim().toUpperCase() }))}
+                className="h-8 w-9 shrink-0 rounded-md border border-line bg-surface text-center text-[14px] font-semibold text-ink uppercase placeholder:font-normal placeholder:text-ink-3 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:bg-surface-2"
+              />
+            </label>
+          ))}
+        </div>
       </div>
+      {bad && <p className="text-[12.5px] text-danger">{t("settings.unitLettersInvalid")}</p>}
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="primary" disabled={busy || bad || !changed} onClick={() => run(onSaveLetters(Object.keys(clean).length ? clean : null), () => setEdited({}))}>
+            {t("common.save")}
+          </Button>
+          {Object.keys(saved).length > 0 && (
+            <Button size="sm" disabled={busy} onClick={() => run(onSaveLetters(null), () => setEdited({}))}>
+              {t("settings.unitLettersDefault")}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -662,7 +665,13 @@ function RulesCard() {
           />
         </div>
         <PaymentDetailsRow value={s["invoice.payment_details"]} canEdit={canEdit} onSave={(v) => put("invoice.payment_details", v)} />
-        <QuickUnitsRow value={s["invoice.quick_units"]} canEdit={canEdit} onSave={(v) => put("invoice.quick_units", v)} />
+        <BillUnitsRow
+          letters={s["invoice.unit_letters"]}
+          startIn={s["invoice.default_unit"]}
+          canEdit={canEdit}
+          onSaveLetters={(v) => put("invoice.unit_letters", v)}
+          onSaveStart={(v) => put("invoice.default_unit", v)}
+        />
         {WORKSPACE.chargeTax && <LutRow value={s["gst.lut"] ?? null} canEdit={canEdit} onSave={(v) => put("gst.lut", v)} />}
         {WORKSPACE.chargeTax &&
           row(

@@ -76,7 +76,7 @@ Clients send line inputs **and** the totals they displayed. The server recalcula
 
 | Method & path | Purpose |
 |---|---|
-| `GET /settings` ★ · `PUT /settings/:key` ★ [settings.update] | Typed business rules (negative stock, round-off, credit policy, workflow, reminders, `gst.lut` = the letter of undertaking's ARN and last valid day, `invoice.payment_details` = the bank account and UPI ID printed on invoices, `invoice.quick_units` = the three unit buttons on a bill's lines, a unit of the business and a letter each (null: BOX, CTN and STRIP as B, C and S)…); a value set to null goes back to the default |
+| `GET /settings` ★ · `PUT /settings/:key` ★ [settings.update] | Typed business rules (negative stock, round-off, credit policy, workflow, reminders, `gst.lut` = the letter of undertaking's ARN and last valid day, `invoice.payment_details` = the bank account and UPI ID printed on invoices, `invoice.unit_letters` = the letters units are picked with on a bill's line, by unit id (null, or a unit not in it: its symbol's first letter), `invoice.default_unit` = the unit new lines start in when the product is sold in it, a unit id or `"own"` (null: STRIP); the unit ids must be the business's…); a value set to null goes back to the default |
 | `GET/POST/PATCH /document-series` ★ | Number series per document type / FY / device; pattern validated against GST limits |
 | `GET /members` · `POST /members/invite` · `PATCH /members/:id` [user.*] | Staff logins and their roles |
 | `GET/POST/PATCH /roles` · `PUT /roles/:id/permissions` [user.manage_roles] | Configurable roles; every change is audit-logged |

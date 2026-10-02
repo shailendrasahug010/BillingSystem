@@ -55,8 +55,10 @@ export const WORKSPACE = {
   ewayThreshold: 50000,
   /** How much each kind of suggestion counts on the billing screen (tuned nightly from what was taken; null = the defaults). */
   suggestionWeights: null as Record<"reorder" | "frequent" | "together" | "last_order", number> | null,
-  /** The unit buttons on a bill's lines as the business set them (null: BOX, CTN and STRIP as B, C and S). */
-  quickUnits: null as Array<{ unitId: string; alias: string } | null> | null,
+  /** Letters the business set for units on a bill's lines, by unit id (null, or a unit not in it: its symbol's first letter). */
+  unitLetters: null as Record<string, string> | null,
+  /** The unit new lines start in when the product is sold in it: a unit id, "own" (each product's), or null (STRIP). */
+  defaultUnit: null as string | null,
   /** Letter of undertaking for exports and supplies to SEZ without IGST (null = none). */
   lut: null as { arn: string; validUntil: string } | null,
   /** Terms printed on invoices ("" = none). */

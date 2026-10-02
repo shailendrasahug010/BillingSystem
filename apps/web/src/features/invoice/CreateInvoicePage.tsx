@@ -9,7 +9,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Field";
 import { Kbd } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
-import { allowed, BUSINESS, CUSTOMERS, PRODUCTS } from "../../data/db";
+import { allowed, BUSINESS, CUSTOMERS, PRODUCTS, productById } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { customerInsight, getSyncState, peekNextInvoiceNumber, saveInvoice, useStoreVersion } from "../../data/store";
 import { ApiError, newIdempotencyKey } from "../../lib/api";
@@ -25,7 +25,7 @@ import { LineItems } from "./LineItems";
 import { ProductSearch } from "./ProductSearch";
 import { SuggestionsPanel } from "./SuggestionsPanel";
 import { SummaryPanel } from "./SummaryPanel";
-import { quickUnits } from "./quickUnits";
+import { saleUnits } from "./units";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
 import { BarcodeCamera } from "../../components/scan/BarcodeCamera";
@@ -306,10 +306,17 @@ function DesktopInvoice({ view }: { view: DraftView }) {
   const canSave = Boolean(totals && customer) && !blocked;
   const strip = suggestionsOpen === null ? draft.lines.length > 0 : !suggestionsOpen;
   useStoreVersion();
-  // The unit buttons' letters, typed after a quantity.
-  const unitLetters = quickUnits()
-    .flatMap((q) => (q ? [q.alias] : []))
-    .join(" ");
+  // The letters of the units this bill's products come in ("B BOX, S STRIP"), typed after a quantity.
+  const unitLetters = [
+    ...new Set(
+      draft.lines.flatMap((l) => {
+        const units = saleUnits(productById.get(l.productId)!);
+        return units.length > 1 ? units.map((u) => `${u.letter} ${u.symbol}`) : [];
+      }),
+    ),
+  ]
+    .slice(0, 4)
+    .join(", ");
 
   useShortcuts([
     { id: "focus-product", keys: INVOICE_SHORTCUTS.focusProduct, allowInInputs: true, handler: () => productRef.current?.focus() },
@@ -396,7 +403,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
                 {t("invoice.items")} <span className="num ml-1 text-[13px] font-normal text-ink-3">{draft.lines.length}</span>
               </h2>
               {draft.lines.length > 0 && (
-                <p className="hidden truncate text-[12px] text-ink-3 md:block">
+                <p className="hidden truncate text-[12px] text-ink-3 md:block" title={unitLetters ? t("invoice.unitKeys", { letters: unitLetters }) : undefined}>
                   {t("invoice.keysHint")}
                   {unitLetters && ` · ${t("invoice.unitKeys", { letters: unitLetters })}`}
                 </p>

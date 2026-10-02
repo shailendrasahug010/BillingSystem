@@ -17,15 +17,12 @@ export const PtRuleSchema = z.strictObject({
   femaleSlabs: z.array(PtSlab).max(12).optional(),
 });
 
-/** One of the unit buttons on a bill's lines: the unit, and its letter ("B" for BOX). */
-const QuickUnit = z.strictObject({
-  unitId: Id,
-  alias: z
-    .string()
-    .trim()
-    .regex(/^\p{L}$/u)
-    .transform((s) => s.toUpperCase()),
-});
+/** The letter a unit is picked with on a bill's line ("B" for BOX): one letter, any script, kept in capitals. */
+const UnitLetter = z
+  .string()
+  .trim()
+  .regex(/^\p{L}$/u)
+  .transform((s) => s.toUpperCase());
 
 /**
  * Every configurable business rule, with its value schema. The API rejects
@@ -55,22 +52,20 @@ export const SETTING_SCHEMAS = {
     upiId: z.string().trim().regex(/^([a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{2,63})?$/),
   }),
   /**
-   * The three unit buttons on each line of a bill: a product sold in one of these units changes to it with
-   * one click on its letter, or with the letter typed after the quantity ("2" then "B": 2 boxes). A button
-   * may be left out (null). Null as a whole until the business sets it: the app then shows BOX, CTN and
-   * STRIP as B, C and S. Each unit and each letter once.
+   * The letters units are picked with on a bill's line, by unit id: typed after the quantity ("2" then "B":
+   * 2 boxes) or on the line's unit list. A unit not listed has its symbol's first letter (BOX: B, STRIP: S);
+   * a letter two of a product's units share picks the first, and pressed again the next. Null until the
+   * business sets one.
    */
-  "invoice.quick_units": z
-    .array(QuickUnit.nullable())
-    .length(3)
-    .refine(
-      (slots) => {
-        const used = slots.filter((s) => s !== null);
-        return new Set(used.map((s) => s.unitId)).size === used.length && new Set(used.map((s) => s.alias)).size === used.length;
-      },
-      { message: "Each unit and each letter once" },
-    )
+  "invoice.unit_letters": z
+    .record(Id, UnitLetter)
+    .refine((letters) => Object.keys(letters).length <= 500, { message: "At most 500 units" })
     .nullable(),
+  /**
+   * The unit a new line of a bill starts in when the product is sold in it (a strip of 10): a unit id, or
+   * "own" for each product's own unit. Null until the business sets it: STRIP.
+   */
+  "invoice.default_unit": z.union([Id, z.literal("own")]).nullable(),
   "credit.policy": z.strictObject({
     onLimitExceeded: policy,
     onOverdue: policy,

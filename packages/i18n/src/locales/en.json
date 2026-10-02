@@ -411,8 +411,8 @@
       "done": "Bill {{number}} cancelled",
       "reasonHint": "At least 3 letters; kept with the bill"
     },
-    "unitNotSold": "Not sold by {{unit}}",
-    "unitKeys": "{{letters}} after the qty: the unit"
+    "unitKeys": "a letter after the qty picks the unit: {{letters}}",
+    "unitOnly": "Sold by {{unit}} only. To bill it in boxes or strips, add them to the product."
   },
   "suggestions": {
     "title": "Smart suggestions",
@@ -851,13 +851,15 @@
     "accountNumber": "Account number",
     "upiId": "UPI ID",
     "paymentInvalid": "Check this",
-    "quickUnits": "Unit buttons on the bill",
-    "quickUnitsHint": "Three small buttons on each line of a bill. A product sold in one of these units changes to it with one click on the letter, or by typing the letter after the quantity (2 then B: 2 boxes).",
-    "quickUnitButton": "Button {{n}}",
-    "quickUnitLetter": "Letter",
-    "quickUnitNone": "Not used",
-    "quickUnitsDefault": "Back to B, C, S",
-    "quickUnitsInvalid": "One letter a button, and each unit and each letter once."
+    "billUnits": "Units on the bill",
+    "billUnitsHint": "Each line of a bill has a list of the units the product is sold in (pieces, strips, boxes). Typing a unit's letter after the quantity picks it: 2 then B is 2 boxes. A letter two units share picks one, then the other.",
+    "startUnit": "New lines start in",
+    "startUnitHint": "When the product is sold in this unit; otherwise in its own.",
+    "startUnitOwn": "Each product's own unit",
+    "unitLetters": "Letters (empty: the unit's first letter)",
+    "unitLetterFor": "Letter for {{unit}}",
+    "unitLettersDefault": "Back to first letters",
+    "unitLettersInvalid": "One letter a unit (A–Z or a Hindi letter)."
   },
   "gst": {
     "b2b": "B2B",

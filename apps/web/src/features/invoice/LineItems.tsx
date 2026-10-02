@@ -6,7 +6,7 @@ import { EmptyState } from "../../components/ui/misc";
 import { allowed, productById } from "../../data/db";
 import { cn } from "../../lib/cn";
 import type { Product } from "../../data/types";
-import { quickByLetter, quickTarget, quickUnits, type QuickUnit } from "./quickUnits";
+import { saleUnits, unitByLetter, type SaleUnit } from "./units";
 import { factorOf, unitSymbolOf, type DraftLine } from "./useInvoiceDraft";
 
 /** Numeric input that keeps the typed text (e.g. "12.") and commits valid numbers. */
@@ -30,7 +30,7 @@ function NumberCell({
   onEnter?(): void;
   /** Tab (without Shift) from the line's last field: back to product search. */
   onTab?(): void;
-  /** A letter typed in it (a unit button's letter after the quantity); true when it was taken. */
+  /** A letter typed in it (a unit's letter after the quantity); true when it was taken. */
   onLetter?(letter: string): boolean;
   decimals?: number;
 }) {
@@ -79,12 +79,15 @@ function NumberCell({
 }
 
 /**
- * The unit a line is sold in: the stock unit or one of the product's packs
- * (box of 24, strip of 10). Changing it re-prices the line for that unit.
+ * The unit a line is sold in: the product's own or one of its packs (box of
+ * 24, strip of 10), each shown with its letter. Changing it re-prices the line
+ * for that unit; the letter, typed on the list or after the quantity, picks it.
+ * A product sold in one unit only shows it.
  */
 function UnitSelect({
   product,
   line,
+  units,
   onUnit,
   onEnter,
   onTab,
@@ -93,6 +96,7 @@ function UnitSelect({
 }: {
   product: Product;
   line: DraftLine;
+  units: SaleUnit[];
   onUnit(unitId: string | null): void;
   onEnter?(): void;
   /** Tab (without Shift): the next field of the line (it comes after the quantity, wherever it is drawn). */
@@ -101,8 +105,13 @@ function UnitSelect({
   className?: string;
 }) {
   const { t } = useI18n();
-  const packs = product.packUnits ?? [];
-  if (packs.length === 0) return <span className={cn("text-[11px] text-ink-3", className)}>{product.unit}</span>;
+  if (units.length < 2) {
+    return (
+      <span className="shrink-0 font-medium text-ink-2" title={t("invoice.unitOnly", { unit: product.unit })}>
+        {product.unit}
+      </span>
+    );
+  }
   return (
     <select
       ref={selectRef}
@@ -116,59 +125,21 @@ function UnitSelect({
         } else if (e.key === "Tab" && !e.shiftKey && onTab) {
           e.preventDefault();
           onTab();
+        } else if (e.key.length === 1 && /\p{L}/u.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          // The unit's letter, the business's own ones included (the list's type-to-find goes by the text).
+          e.preventDefault();
+          const u = unitByLetter(units, line.unitId, e.key);
+          if (u && u.unitId !== line.unitId) onUnit(u.unitId);
         }
       }}
-      className={cn("rounded-md border border-line bg-surface px-1.5 text-ink-2 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none", className)}
+      className={cn("shrink-0 rounded-md border border-line bg-surface px-1 font-medium text-ink-2 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none", className)}
     >
-      <option value="">{product.unit}</option>
-      {[...packs]
-        .sort((a, b) => a.factor - b.factor)
-        .map((u) => (
-          <option key={u.unitId} value={u.unitId}>
-            {u.symbol} ({u.factor} {product.unit})
-          </option>
-        ))}
+      {units.map((u) => (
+        <option key={u.unitId ?? ""} value={u.unitId ?? ""}>
+          {u.letter} · {u.factor === 1 ? u.symbol : `${u.symbol} (${u.factor} ${product.unit})`}
+        </option>
+      ))}
     </select>
-  );
-}
-
-/**
- * The business's unit buttons on a line (B for BOX, C for CTN, S for STRIP
- * unless set otherwise): one click changes the line to that unit, a second
- * takes it back to the product's own; a unit the product is not sold in is
- * faded. Typing the letter after the quantity does the same.
- */
-function UnitBoxes({ product, line, slots, onUnit, size = "sm" }: { product: Product; line: DraftLine; slots: Array<QuickUnit | null>; onUnit(unitId: string | null): void; size?: "sm" | "md" }) {
-  const { t } = useI18n();
-  if (!slots.some(Boolean)) return null;
-  return (
-    <span className="inline-flex shrink-0 items-center gap-0.5">
-      {slots.map((q, i) => {
-        if (!q) return null;
-        const target = quickTarget(product, q);
-        const on = target !== undefined && target.unitId === (line.unitId ?? null);
-        return (
-          <button
-            key={i}
-            type="button"
-            // Keyboard billing types the letter in the quantity instead.
-            tabIndex={-1}
-            aria-pressed={on}
-            aria-disabled={target ? undefined : true}
-            aria-label={`${t("invoice.unit")} ${q.symbol}: ${product.name}`}
-            title={target ? (target.factor === 1 ? q.symbol : `${q.symbol} = ${target.factor} ${product.unit}`) : t("invoice.unitNotSold", { unit: q.symbol })}
-            onClick={() => target && onUnit(on && target.unitId !== null ? null : target.unitId)}
-            className={cn(
-              "inline-flex items-center justify-center rounded border leading-none font-semibold transition-colors",
-              size === "md" ? "size-8 text-[13px]" : "h-[18px] min-w-[18px] px-0.5 text-[10.5px]",
-              on ? "border-accent bg-accent text-white" : target ? "border-line-strong bg-surface text-ink-2 hover:border-accent hover:text-accent" : "cursor-not-allowed border-dashed border-line text-ink-3/50",
-            )}
-          >
-            {q.alias}
-          </button>
-        );
-      })}
-    </span>
   );
 }
 
@@ -245,17 +216,13 @@ export function LineItems({
     if (el) el.focus();
     else onBackToSearch();
   };
-  // The unit buttons; a product also sold in a pack none of them is keeps the list of its units.
-  const slots = quickUnits();
-  const listsUnits = (p: Product) => (p.packUnits ?? []).some((u) => !slots.some((q) => q !== null && quickTarget(p, q)?.unitId === u.unitId));
-  const byLetter = (p: Product, line: DraftLine, letter: string) => {
-    const q = quickByLetter(slots, letter);
-    const target = q && quickTarget(p, q);
-    if (!target) return false;
-    onUnit(line.key, target.unitId !== null && target.unitId === line.unitId ? null : target.unitId);
+  // A unit's letter typed after the quantity (2 then B: 2 boxes) picks it, as on the unit list.
+  const byLetter = (units: SaleUnit[], line: DraftLine, letter: string) => {
+    const u = unitByLetter(units, line.unitId, letter);
+    if (!u) return false;
+    if (u.unitId !== line.unitId) onUnit(line.key, u.unitId);
     return true;
   };
-  const unitText = (p: Product, line: DraftLine) => (line.unitId ? `${unitSymbolOf(p, line.unitId)} ×${factorOf(p, line.unitId)}` : p.unit);
   // Tab keeps the old order, qty → unit → rate → Disc %, though the unit is drawn under the name.
   const afterUnit = (key: string) => (canChangeRate ? rateRefs.current.get(key) : discountRefs.current.get(key))?.focus();
   const keep = <E,>(refs: { current: Map<string, E> }, key: string) => (el: E | null) => {
@@ -299,6 +266,7 @@ export function LineItems({
           const p = productById.get(line.productId)!;
           const r = resultFor(line.key);
           const name = locale === "hi" ? p.nameHi : p.name;
+          const units = saleUnits(p);
           return (
             <li
               key={line.key}
@@ -320,7 +288,7 @@ export function LineItems({
                     decimals={3}
                     onCommit={(v) => onUpdate(line.key, { qty: v })}
                     onEnter={onBackToSearch}
-                    onLetter={(letter) => byLetter(p, line, letter)}
+                    onLetter={(letter) => byLetter(units, line, letter)}
                     className="h-10 px-1 text-center text-[16px] font-semibold"
                   />
                   <button type="button" className="flex size-10 shrink-0 items-center justify-center text-ink-2" aria-label={`+1 ${p.name}`} onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
@@ -332,8 +300,7 @@ export function LineItems({
                 <p className="num min-w-0 flex-1 truncate text-[12.5px] text-ink-3">
                   {money(line.rate)} × {line.qty} {unitSymbolOf(p, line.unitId)} · GST {p.gstRate}%
                 </p>
-                {listsUnits(p) && <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} className="h-8 text-[13px]" />}
-                <UnitBoxes product={p} line={line} slots={slots} onUnit={(u) => onUnit(line.key, u)} size="md" />
+                {units.length > 1 && <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} className="h-8 text-[13px]" />}
                 <span className="num text-[15px] font-semibold text-ink">{r ? money(r.total.toNumber()) : "—"}</span>
                 <button type="button" onClick={() => onRemove(line.key)} className="-mr-1.5 flex size-8 items-center justify-center rounded-lg text-ink-3 hover:text-danger" aria-label={`${t("invoice.remove")}: ${p.name}`}>
                   <Trash size={16} />
@@ -381,6 +348,7 @@ export function LineItems({
           const p = productById.get(line.productId)!;
           const r = resultFor(line.key);
           const name = locale === "hi" ? p.nameHi : p.name;
+          const units = saleUnits(p);
           return (
             // The search bar stays at the top while lines scroll: a focused field keeps clear of it.
             <tr key={line.key} className="border-b border-line last:border-b-0 hover:bg-surface-2/60 focus-within:bg-accent-soft/40 [&_input]:scroll-mt-48 [&_input]:scroll-mb-28 [&_select]:scroll-mt-48">
@@ -394,12 +362,7 @@ export function LineItems({
                     <span className="font-mono">{p.code}</span> · GST {r ? r.gstRate.toNumber() : p.gstRate}%{p.batch ? ` · ${t("invoice.batch")} ${p.batch.number}` : ""}
                   </span>
                   <span aria-hidden>·</span>
-                  {listsUnits(p) ? (
-                    <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} onEnter={() => toRate(line.key)} onTab={() => afterUnit(line.key)} selectRef={keep(unitRefs, line.key)} className="h-5 shrink-0 text-[11px]" />
-                  ) : (
-                    <span className="shrink-0 font-medium text-ink-2">{unitText(p, line)}</span>
-                  )}
-                  <UnitBoxes product={p} line={line} slots={slots} onUnit={(u) => onUnit(line.key, u)} />
+                  <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} onEnter={() => toRate(line.key)} onTab={() => afterUnit(line.key)} selectRef={keep(unitRefs, line.key)} className="h-5 text-[11px]" />
                 </div>
                 <LineWarnings line={line} />
               </td>
@@ -418,8 +381,8 @@ export function LineItems({
                     }}
                     onCommit={(v) => onUpdate(line.key, { qty: v })}
                     onEnter={() => toRate(line.key)}
-                    onLetter={(letter) => byLetter(p, line, letter)}
-                    {...(listsUnits(p) ? { onTab: () => unitRefs.current.get(line.key)?.focus() } : {})}
+                    onLetter={(letter) => byLetter(units, line, letter)}
+                    {...(units.length > 1 ? { onTab: () => unitRefs.current.get(line.key)?.focus() } : {})}
                     className="h-8 px-1 text-center font-semibold"
                   />
                   <button type="button" tabIndex={-1} className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label={`+1 ${p.name}`} onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>

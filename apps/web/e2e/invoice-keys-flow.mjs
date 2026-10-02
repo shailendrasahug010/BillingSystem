@@ -104,11 +104,11 @@ await page.keyboard.type("fortune");
 await page.getByRole("option", { name: /Fortune Oil 1L/ }).waitFor();
 await page.keyboard.press("Enter");
 await expectFocus("Qty", "after adding the product");
-// Sold by the box, keyboard only: "2" then "b" (the B button's letter) is 2 boxes at the box's rate (12 x 150).
+// Sold by the box, keyboard only: "2" then "b" (BOX's letter) is 2 boxes at the box's rate (12 x 150).
 await page.keyboard.type("2b");
 for (let i = 0; i < 30 && (await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800"; i++) await page.waitForTimeout(100);
 if ((await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800") errors.push(`box rate ${await page.getByLabel("Rate Fortune Oil 1L").inputValue()}`);
-if ((await page.getByRole("button", { name: "Unit BOX: Fortune Oil 1L" }).getAttribute("aria-pressed")) !== "true") errors.push('"2b": the B button is not on');
+if ((await page.getByRole("combobox", { name: "Unit Fortune Oil 1L" }).inputValue()) !== units.BOX) errors.push('"2b": the line is not in boxes');
 // Then Enter -> rate, Enter -> back to product search.
 await page.keyboard.press("Enter");
 await expectFocus("Rate Fortune Oil 1L", "Enter from qty");

@@ -13,8 +13,10 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "invoice.offline_mode": "device_series",
   "invoice.terms": "",
   "invoice.payment_details": { bankName: "", accountNumber: "", ifsc: "", upiId: "" },
-  // Not set: the app shows BOX, CTN and STRIP as B, C and S.
-  "invoice.quick_units": null,
+  // Not set: each unit's symbol's first letter (B for BOX, S for STRIP).
+  "invoice.unit_letters": null,
+  // Not set: new lines start in strips for products sold by the strip.
+  "invoice.default_unit": null,
   "credit.policy": { onLimitExceeded: "warn", onOverdue: "warn", overdueGraceDays: 0 },
   "orders.workflow": { requireConfirmation: true, usePacking: true, useDispatch: true },
   "payments.allocation": "oldest_first",

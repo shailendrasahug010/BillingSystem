@@ -5,12 +5,14 @@
  * suggestions fold into one row, and a chip adds another -> ten lines: the
  * table fits its card (the amounts are on screen, no sideways scrolling),
  * the search stays at the top and Save stays in view -> Ctrl+S saves ->
- * another bill: the line of Rin (also sold by the box) has the unit buttons
- * B, C and S, only B for it; "2b" typed in the quantity makes it 2 boxes at
- * the box price, "b" pieces again, a click on B boxes again; Tab goes qty ->
- * rate -> Disc % -> back to the search; Ctrl+P saves it (in boxes) and the
- * bill opens with the print dialog -> Settings makes the third button the
- * dozen, D: the next bill shows B, C and D, then back to B, C and S ->
+ * another bill: the line of Rin (also sold by the box) has a unit list,
+ * "P · PCS" and "B · BOX (24 PCS)", and starts in pieces; "2b" typed in the
+ * quantity makes it 2 boxes at the box price, "p" pieces again, the list and
+ * its letters change it too; Tab goes qty -> unit -> rate -> Disc % -> back
+ * to the search; Ctrl+P saves it (in boxes) and the bill opens with the print
+ * dialog -> Crocin, sold by the strip of 10 and the box of 100, starts in
+ * strips -> Settings: STRIP's letter T and new lines in each product's own
+ * unit: Crocin starts in tablets, "3t" is 3 strips; then back ->
  * on a phone, each line keeps its name on one line, a suggestion card adds by
  * a tap on its text and the rest fold into a row -> on a 1024 px tablet the
  * total and Save stay at the foot of the screen.
@@ -77,6 +79,8 @@ const catalogue = [
 const products = [];
 // Rin is also sold by the box of 24.
 for (const [name, tax, price] of catalogue) products.push(await api("POST", "/products", token, { name, taxCategoryId: taxes[tax], baseUnitId: units.PCS, sellingPrice: String(price), openingStock: "900", ...(name.startsWith("Rin") ? { units: [{ unitId: units.BOX, conversionFactor: "24" }] } : {}) }));
+// Tablets: sold by the strip of 10 and the box of 100.
+await api("POST", "/products", token, { name: "Crocin 500 Tablet", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "2", openingStock: "5000", units: [{ unitId: units.STRIP, conversionFactor: "10" }, { unitId: units.BOX, conversionFactor: "100" }] });
 const shop = await api("POST", "/customers", token, { name: "Sharma Kirana Store", stateCode: "23", city: "Indore", mobile: `9826${run}1`, creditDays: 15 });
 const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
 const daysAgo = (n) => new Date(Date.parse(today) - n * 86400_000).toISOString().slice(0, 10);
@@ -176,42 +180,49 @@ else {
   log(`Ctrl+S saved ${bill.invoiceNumber} with ${bill.items.length} lines`);
 }
 
-// The next bill: Rin's line has the unit buttons (only B for it: it is sold by the box of 24, not by the carton or strip).
+// The next bill: Rin's line has a unit list, its pieces and its box of 24, each with its letter; it starts in pieces (no strip).
 await newBill(page);
 await addBySearch(page, "Rin Bar 250g");
-const rinRow = page.locator("section[aria-labelledby='items-h'] tbody tr").first();
-const buttonsOf = (row) => row.getByRole("button", { name: /^Unit [A-Z]+: / }).evaluateAll((bs) => bs.map((b) => `${b.textContent}${b.getAttribute("aria-disabled") ? " (not sold)" : ""}`));
-if (JSON.stringify(await buttonsOf(rinRow)) !== JSON.stringify(["B", "C (not sold)", "S (not sold)"])) errors.push(`unit buttons: ${await buttonsOf(rinRow)}`);
-const boxOn = async () => (await page.getByRole("button", { name: "Unit BOX: Rin Bar 250g" }).getAttribute("aria-pressed")) === "true";
-const rinRate = () => page.getByLabel("Rate Rin Bar 250g").inputValue();
-const rinQty = () => page.getByLabel("Qty Rin Bar 250g").inputValue();
-/** Waits up to 3 s for the line to show it (a key or click re-renders the line). */
-async function rinShows(box, rate, qty, what) {
+const unitList = (name) => page.getByRole("combobox", { name: `Unit ${name}` });
+const optionsOf = (name) => unitList(name).locator("option").allTextContents();
+if (JSON.stringify(await optionsOf("Rin Bar 250g")) !== JSON.stringify(["P · PCS", "B · BOX (24 PCS)"])) errors.push(`Rin's units: ${await optionsOf("Rin Bar 250g")}`);
+/** Waits up to 3 s for the line to show it (a key or a choice re-renders the line). */
+async function lineShows(name, unitId, rate, qty, what) {
+  const now = async () => [await unitList(name).inputValue(), await page.getByLabel(`Rate ${name}`).inputValue(), await page.getByLabel(`Qty ${name}`).inputValue()];
   for (let i = 0; i < 30; i++) {
-    if ((await boxOn()) === box && (await rinRate()) === rate && (await rinQty()) === qty) return;
+    if (JSON.stringify(await now()) === JSON.stringify([unitId ?? "", rate, qty])) return;
     await page.waitForTimeout(100);
   }
-  errors.push(`${what}: box ${await boxOn()}, rate ${await rinRate()}, qty ${await rinQty()}`);
+  errors.push(`${what}: unit, rate, qty ${await now()}`);
 }
+const rinShows = (unitId, rate, qty, what) => lineShows("Rin Bar 250g", unitId, rate, qty, what);
+await rinShows(null, "25", "1", "a new line of Rin");
 // The quantity has the cursor (once the new line has it): "2" then "b" is 2 boxes, at the box price (24 × ₹25).
 await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Qty Rin Bar 250g");
 await page.keyboard.type("2b");
-await rinShows(true, "600", "2", '"2b"');
+await rinShows(units.BOX, "600", "2", '"2b"');
+await page.keyboard.press("p");
+await rinShows(null, "25", "2", '"p"');
+// On the list: a choice, and the letters.
+await unitList("Rin Bar 250g").selectOption({ label: "B · BOX (24 PCS)" });
+await rinShows(units.BOX, "600", "2", "BOX chosen on the list");
+await unitList("Rin Bar 250g").focus();
+await page.keyboard.press("p");
+await rinShows(null, "25", "2", '"p" on the list');
 await page.keyboard.press("b");
-await rinShows(false, "25", "2", '"b" again');
-await page.getByRole("button", { name: "Unit BOX: Rin Bar 250g" }).click();
-await rinShows(true, "600", "2", "a click on B");
-await page.screenshot({ path: `${OUT}/invoice-screen-3a-unit-buttons.png` });
-log('Rin: buttons B, C, S (only B for it); "2b" made it 2 boxes at ₹600, "b" pieces again, a click on B boxes');
-// Tab goes round the line (no list of units: its only pack has a button).
+await rinShows(units.BOX, "600", "2", '"b" on the list');
+await page.getByText("a letter after the qty picks the unit: P PCS, B BOX").waitFor();
+await page.screenshot({ path: `${OUT}/invoice-screen-3a-unit-list.png` });
+log('Rin: units "P · PCS", "B · BOX (24 PCS)", in pieces at first; "2b" made it 2 boxes at ₹600, "p" pieces, the list and its letters boxes again');
+// Tab goes round the line: the unit list comes after the quantity, though it is drawn under the name.
 await page.getByLabel("Qty Rin Bar 250g").focus();
 const focused = () => page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
 const order = [await focused()];
-for (let i = 0; i < 3; i++) {
+for (let i = 0; i < 4; i++) {
   await page.keyboard.press("Tab");
   order.push(await focused());
 }
-const expectedOrder = ["Qty Rin Bar 250g", "Rate Rin Bar 250g", "Disc % Rin Bar 250g", "Search product, code or scan barcode"];
+const expectedOrder = ["Qty Rin Bar 250g", "Unit Rin Bar 250g", "Rate Rin Bar 250g", "Disc % Rin Bar 250g", "Search product, code or scan barcode"];
 if (JSON.stringify(order) !== JSON.stringify(expectedOrder)) errors.push(`Tab order: ${order.join(" → ")}`);
 log("Tab:", order.join(" → "));
 // Ctrl+P: saved and opened with the print dialog.
@@ -227,29 +238,48 @@ else {
 await page.screenshot({ path: `${OUT}/invoice-screen-3-printed.png` });
 log("Ctrl+P saved the next bill (2 boxes of Rin) and opened it with the print dialog");
 
-// The buttons are the business's: in Settings the third becomes the dozen, D.
+// Tablets start in strips (the app's own choice): Crocin at 10 × ₹2.
+await newBill(page);
+await addBySearch(page, "Crocin 500 Tablet");
+if (JSON.stringify(await optionsOf("Crocin 500 Tablet")) !== JSON.stringify(["P · PCS", "S · STRIP (10 PCS)", "B · BOX (100 PCS)"])) errors.push(`Crocin's units: ${await optionsOf("Crocin 500 Tablet")}`);
+await lineShows("Crocin 500 Tablet", units.STRIP, "20", "1", "a new line of Crocin (in strips)");
+log("Crocin, sold by the strip of 10 and the box of 100: the new line is 1 strip at ₹20");
+
+// The letters and the first unit are the business's: STRIP's letter T, and new lines in each product's own unit.
 await page.goto(`${WEB}/#settings`);
-const unitsRow = page.getByRole("group", { name: "Unit buttons on the bill" });
+const unitsRow = page.getByRole("group", { name: "Units on the bill" });
 await unitsRow.waitFor({ timeout: 15000 });
-await page.selectOption("#quick-unit-2", { label: "DOZ — Dozen" });
-await page.fill("#quick-letter-2", "d");
+const settingIs = async (key, value) => {
+  for (let i = 0; i < 50; i++) {
+    if (JSON.stringify((await api("GET", "/settings", token))[key]) === JSON.stringify(value)) return true;
+    await page.waitForTimeout(200);
+  }
+  errors.push(`${key}: ${JSON.stringify((await api("GET", "/settings", token))[key])}, not ${JSON.stringify(value)}`);
+  return false;
+};
+await page.selectOption("#start-unit", { label: "Each product's own unit" });
+await settingIs("invoice.default_unit", "own");
+await unitsRow.getByLabel("Letter for STRIP").fill("t");
 await page.screenshot({ path: `${OUT}/invoice-screen-3b-settings.png` });
 await unitsRow.getByRole("button", { name: "Save", exact: true }).click();
-// Saved: the row offers to go back to the app's own (a "Settings saved" toast may still be an older one).
-await unitsRow.getByRole("button", { name: "Back to B, C, S" }).waitFor({ timeout: 15000 });
-const stored = (await api("GET", "/settings", token))["invoice.quick_units"];
-if (JSON.stringify(stored) !== JSON.stringify([{ unitId: units.BOX, alias: "B" }, { unitId: units.CTN, alias: "C" }, { unitId: units.DOZ, alias: "D" }])) errors.push(`saved buttons: ${JSON.stringify(stored)}`);
+await settingIs("invoice.unit_letters", { [units.STRIP]: "T" });
+await unitsRow.getByRole("button", { name: "Back to first letters" }).waitFor({ timeout: 15000 });
 await newBill(page);
-await addBySearch(page, "Rin Bar 250g");
-if (JSON.stringify(await buttonsOf(rinRow)) !== JSON.stringify(["B", "C (not sold)", "D (not sold)"])) errors.push(`buttons after Settings: ${await buttonsOf(rinRow)}`);
-await page.getByText("B C D after the qty: the unit").waitFor();
-log("Settings: the third button made the dozen, D; the next bill shows B, C, D");
+await addBySearch(page, "Crocin 500 Tablet");
+await lineShows("Crocin 500 Tablet", null, "2", "1", "Crocin in its own unit");
+if (JSON.stringify(await optionsOf("Crocin 500 Tablet")) !== JSON.stringify(["P · PCS", "T · STRIP (10 PCS)", "B · BOX (100 PCS)"])) errors.push(`Crocin's units after Settings: ${await optionsOf("Crocin 500 Tablet")}`);
+await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Qty Crocin 500 Tablet");
+await page.keyboard.type("3t");
+await lineShows("Crocin 500 Tablet", units.STRIP, "20", "3", '"3t"');
+await page.getByText("a letter after the qty picks the unit: P PCS, T STRIP, B BOX").waitFor();
+log('Settings: STRIP is T, lines start in the product\'s own unit: Crocin 1 tablet, "3t" 3 strips');
 // Back to the app's own.
 await page.goto(`${WEB}/#settings`);
-await unitsRow.getByRole("button", { name: "Back to B, C, S" }).click();
-// Back to the app's own: the button goes once the setting is cleared.
-await unitsRow.getByRole("button", { name: "Back to B, C, S" }).waitFor({ state: "detached", timeout: 15000 });
-if ((await api("GET", "/settings", token))["invoice.quick_units"] !== null) errors.push("Back to B, C, S did not clear the setting");
+await unitsRow.getByRole("button", { name: "Back to first letters" }).click();
+await unitsRow.getByRole("button", { name: "Back to first letters" }).waitFor({ state: "detached", timeout: 15000 });
+await settingIs("invoice.unit_letters", null);
+await page.selectOption("#start-unit", { label: "STRIP — Strip" });
+await settingIs("invoice.default_unit", units.STRIP);
 
 // 3. A phone: one line a name, a suggestion card tapped on its text, then a row of chips.
 const phoneCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });

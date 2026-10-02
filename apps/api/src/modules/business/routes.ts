@@ -147,9 +147,10 @@ export const businessModule: ApiModule = async (app, deps) => {
       const parsed = SETTING_SCHEMAS[key].safeParse(request.body.value);
       if (!parsed.success) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
       return tenant(ctx, async (tx) => {
-        // The bill's unit buttons name units of this business.
-        if (key === "invoice.quick_units" && parsed.data) {
-          const ids = (parsed.data as Array<{ unitId: string } | null>).flatMap((s) => (s ? [s.unitId] : []));
+        // The bill's unit letters and the unit new lines start in name units of this business.
+        const unitIds = key === "invoice.unit_letters" && parsed.data ? Object.keys(parsed.data) : key === "invoice.default_unit" && parsed.data && parsed.data !== "own" ? [parsed.data as string] : null;
+        if (unitIds) {
+          const ids = unitIds;
           const found = ids.length ? await tx.select({ id: schema.units.id }).from(schema.units).where(and(eq(schema.units.businessId, ctx.businessId), inArray(schema.units.id, ids))) : [];
           if (found.length !== ids.length) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
         }
