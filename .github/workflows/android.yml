@@ -61,6 +61,14 @@ jobs:
           name: digitalbahi-android-debug
           path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
 
+      # The runner's disk is nearly full after the build, and an emulator needs room for its data
+      # partition: tool chains this job does not use go first.
+      - name: Make room for the emulator
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /usr/local/lib/android/sdk/ndk /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Let the emulator use the processor's virtualisation
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -73,6 +81,8 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          # A 2 GB data partition is plenty for the app (the image's default wants over 7 GB free).
+          disk-size: 2048M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash apps/mobile/scripts/emulator-smoke.sh apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk

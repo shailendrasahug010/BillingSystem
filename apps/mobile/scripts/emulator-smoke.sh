@@ -24,8 +24,14 @@ if [ -z "$ready" ]; then
   echo "::error::The app did not start: no 'digitalbahi: app ready' in the log"
   exit 1
 fi
-if grep -E "FATAL EXCEPTION|Uncaught (Type|Reference|Syntax)Error" logcat.txt; then
-  echo "::error::The app crashed or a script failed at start"
+# Only this app's crashes and script errors count (the emulator's own apps log too).
+if grep -A3 "FATAL EXCEPTION" logcat.txt | grep -q "Process: in.digitalbahi.app"; then
+  grep -A30 "FATAL EXCEPTION" logcat.txt
+  echo "::error::The app crashed at start"
+  exit 1
+fi
+if grep "Capacitor/Console" logcat.txt | grep -E "Uncaught (Type|Reference|Syntax)Error"; then
+  echo "::error::A script failed at start"
   exit 1
 fi
 if [ -f ui.xml ] && grep -q "Connect to your Digital Bahi" ui.xml; then
