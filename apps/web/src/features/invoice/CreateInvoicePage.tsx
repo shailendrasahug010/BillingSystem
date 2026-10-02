@@ -1,6 +1,6 @@
 import { translateError } from "@digitalbahi/i18n";
-import { ArrowLeft, ArrowRight, Check, Copy, ScanBarcode, TriangleAlert } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Camera, Check, Copy, ScanBarcode, TriangleAlert } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { INVOICE_SHORTCUTS, useShortcuts } from "../../app/shortcuts";
@@ -27,44 +27,89 @@ import { SuggestionsPanel } from "./SuggestionsPanel";
 import { SummaryPanel } from "./SummaryPanel";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
+import { BarcodeCamera } from "../../components/scan/BarcodeCamera";
+import { nativeScanner, scanWithPhone } from "../../components/scan/barcode";
 
+/**
+ * Adds products by barcode: the camera reads packs one after another (on
+ * phones and tablets it starts by itself; in the Android app the phone's own
+ * scanner), and a USB or Bluetooth scanner types the code and presses Enter.
+ */
 function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChange(v: boolean): void; onFound(productId: string): void }) {
   const { t } = useI18n();
   const [code, setCode] = useState("");
-  const [miss, setMiss] = useState(false);
+  const [miss, setMiss] = useState<string | null>(null);
+  const [added, setAdded] = useState<string[]>([]);
+  const [camera, setCamera] = useState(false);
+  const phoneScanner = nativeScanner() !== null;
   const sample = PRODUCTS.slice(0, 3);
-  const submit = () => {
-    const p = PRODUCTS.find((x) => x.barcode === code.trim() || x.barcodes?.includes(code.trim()));
-    if (p) {
-      onFound(p.id);
-      setCode("");
-      setMiss(false);
-      onOpenChange(false);
-    } else setMiss(true);
+  useEffect(() => {
+    if (!open) return;
+    setCode("");
+    setMiss(null);
+    setAdded([]);
+    // A phone or tablet scans with its camera; a desk has a scanner (or turns the camera on).
+    setCamera(!phoneScanner && window.matchMedia?.("(pointer: coarse)").matches);
+  }, [open, phoneScanner]);
+  const take = (raw: string, keepOpen: boolean) => {
+    const wanted = raw.trim();
+    const p = PRODUCTS.find((x) => x.barcode === wanted || x.barcodes?.includes(wanted));
+    if (!p) {
+      setMiss(wanted);
+      return false;
+    }
+    onFound(p.id);
+    setMiss(null);
+    setAdded((a) => [p.name, ...a].slice(0, 4));
+    if (!keepOpen) onOpenChange(false);
+    return true;
+  };
+  const withPhone = async () => {
+    const scanned = await scanWithPhone().catch(() => null);
+    if (scanned) take(scanned, true);
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={t("invoice.scan")} description="USB / Bluetooth scanners type the barcode and press Enter. On Android the camera scanner (ML Kit) fills this field." size="sm" closeLabel={t("common.close")}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <Input id="scan-code" autoFocus inputMode="numeric" placeholder="890…" value={code} onChange={(e) => setCode(e.target.value)} leading={<ScanBarcode size={16} />} invalid={miss} />
-        {miss && <p className="text-[12.5px] text-danger">{t("search.noResults", { query: code })}</p>}
-        <div className={cn("flex flex-wrap gap-1.5 text-[12px] text-ink-3", LIVE && "hidden")}>
-          {t("common.sampleData")}:
-          {sample.map((p) => (
-            <button key={p.id} type="button" className="font-mono text-accent hover:underline" onClick={() => setCode(p.barcode)}>
-              {p.barcode}
-            </button>
-          ))}
-        </div>
-        <Button type="submit" variant="primary">
-          {t("common.add")}
-        </Button>
-      </form>
+    <Dialog open={open} onOpenChange={onOpenChange} title={t("invoice.scan")} description={t("scan.dialogHint")} size="sm" closeLabel={t("common.close")}>
+      <div className="flex flex-col gap-3">
+        {camera ? (
+          <BarcodeCamera onCode={(c) => take(c, true)} />
+        ) : (
+          <Button icon={<Camera size={16} />} onClick={() => (phoneScanner ? void withPhone() : setCamera(true))}>
+            {t("scan.useCamera")}
+          </Button>
+        )}
+        {added.length > 0 && (
+          <ul className="flex flex-col gap-1" role="status" aria-label={t("scan.addedList")}>
+            {added.map((name, i) => (
+              <li key={`${name}-${i}`} className={cn("flex items-center gap-2 text-[13px]", i === 0 ? "font-medium text-good" : "text-ink-3")}>
+                <Check size={14} />
+                {t("scan.added", { name })}
+              </li>
+            ))}
+          </ul>
+        )}
+        {miss && <p className="text-[12.5px] text-danger">{t("scan.unknown", { code: miss })}</p>}
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (take(code, false)) setCode("");
+          }}
+        >
+          <Input id="scan-code" autoFocus={!camera} inputMode="numeric" placeholder="890…" aria-label={t("scan.typeCode")} value={code} onChange={(e) => setCode(e.target.value)} leading={<ScanBarcode size={16} />} invalid={Boolean(miss)} />
+          <div className={cn("flex flex-wrap gap-1.5 text-[12px] text-ink-3", LIVE && "hidden")}>
+            {t("common.sampleData")}:
+            {sample.map((p) => (
+              <button key={p.id} type="button" className="font-mono text-accent hover:underline" onClick={() => setCode(p.barcode)}>
+                {p.barcode}
+              </button>
+            ))}
+          </div>
+          <Button type="submit" variant="primary" disabled={!code.trim()}>
+            {t("common.add")}
+          </Button>
+        </form>
+      </div>
     </Dialog>
   );
 }

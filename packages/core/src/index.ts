@@ -9,11 +9,13 @@ export * from "./gst/line.js";
 export * from "./gst/returns.js";
 export * from "./gst/einvoice.js";
 export * from "./qr.js";
+export * from "./escpos.js";
 
 export * from "./invoice/calculate.js";
 export * from "./numbering/series.js";
 export * from "./inventory/stock.js";
 export * from "./payments/receivables.js";
+export * from "./payments/upi.js";
 export * from "./orders/workflow.js";
 export * from "./payroll/salary.js";
 export * from "./payroll/statutory.js";

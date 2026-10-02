@@ -211,6 +211,9 @@ export function applyMe(me: MeResponse): void {
     email: b.email ?? "",
     logoFileId: b.logoFileId,
   });
+  // Where customers pay, printed on invoices and receipts.
+  const pay = me.settings["invoice.payment_details"] as { bankName: string; accountNumber: string; ifsc: string; upiId: string } | undefined;
+  BUSINESS.bank = { name: pay?.bankName ?? "", account: pay?.accountNumber ?? "", ifsc: pay?.ifsc ?? "", upi: pay?.upiId ?? "" };
   const roundOff = me.settings["invoice.round_off"] as typeof WORKSPACE.roundOff | undefined;
   const creditPolicy = me.settings["credit.policy"] as typeof WORKSPACE.creditPolicy | undefined;
   Object.assign(WORKSPACE, {

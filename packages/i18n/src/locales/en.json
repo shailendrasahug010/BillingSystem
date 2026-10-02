@@ -838,7 +838,13 @@
       "on": "We e-invoice"
     },
     "ewayThreshold": "E-way bill above",
-    "ewayThresholdHint": "₹50,000 in most states; some states set more for movement within the state"
+    "ewayThresholdHint": "₹50,000 in most states; some states set more for movement within the state",
+    "paymentDetails": "Where customers pay",
+    "paymentDetailsHint": "Printed on invoices: the bank account and UPI ID. Bills that still owe money also get a UPI code to scan, on the PDF and on receipts.",
+    "bankName": "Bank",
+    "accountNumber": "Account number",
+    "upiId": "UPI ID",
+    "paymentInvalid": "Check this"
   },
   "gst": {
     "b2b": "B2B",
@@ -3202,5 +3208,52 @@
     "calledCol": "Called",
     "offPlan": "Off plan",
     "whyNoOrder": "Why no order"
+  },
+  "thermal": {
+    "title": "Receipt printer",
+    "hint": "A Bluetooth thermal printer (58 or 80 mm) for bills and receipts on the go. It is set for this device only.",
+    "print": "Thermal print",
+    "printing": "Printing…",
+    "printed": "Sent to the printer",
+    "failed": "Could not print",
+    "errors": {
+      "unsupported": "This browser cannot reach Bluetooth printers. Use Chrome on a secure (https) address, or the Android app.",
+      "cancelled": "No printer was chosen.",
+      "not_found": "The printer is not in reach. Turn it on and choose it again.",
+      "no_writer": "That device does not take print data. Choose the printer itself.",
+      "write_failed": "The printer stopped taking data. Check that it is on, has paper and is near, then print again."
+    },
+    "paper": "Paper width",
+    "none": "No printer chosen yet",
+    "find": "Find a Bluetooth printer",
+    "paired": "Printers paired with this phone",
+    "pairHint": "Pair the printer in the phone's Bluetooth settings first (the PIN is often 0000 or 1234).",
+    "noPaired": "No printer is paired with this phone yet.",
+    "test": "Print a test page",
+    "forget": "Forget",
+    "chooseTitle": "Choose the receipt printer",
+    "unsupported": "Bluetooth printing works in Chrome (Android, Windows, Mac) on a secure (https) address, and in the Android app.",
+    "thanks": "Thank you! Visit again.",
+    "scanToPay": "Scan to pay {{amount}} by UPI",
+    "testTitle": "Printer test",
+    "testLine": "If you can read this, bills and receipts will print."
+  },
+  "scan": {
+    "dialogHint": "Point the camera at a pack's barcode, or use a barcode scanner: it types the code and presses Enter.",
+    "useCamera": "Scan with the camera",
+    "camera": "Camera",
+    "hint": "Hold the barcode inside the box",
+    "starting": "Starting the camera…",
+    "torch": "Torch",
+    "added": "Added: {{name}}",
+    "addedList": "Added from the camera",
+    "unknown": "No product has the barcode {{code}}.",
+    "typeCode": "Barcode",
+    "problems": {
+      "insecure": "The camera works on a secure (https) address, or in the app.",
+      "no_camera": "No camera was found on this device.",
+      "denied": "The camera was not allowed. Allow it for this site in the browser's settings, then try again.",
+      "failed": "The camera could not start."
+    }
   }
 }

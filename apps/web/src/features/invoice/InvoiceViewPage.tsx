@@ -25,6 +25,8 @@ import { EInvoiceCard } from "./EInvoiceCard";
 import { ShippingBillCard } from "./ShippingBillCard";
 import { InvoiceReviewCard } from "./InvoiceReview";
 import { CancelInvoiceDialog, type CancellableBill } from "./CancelInvoiceDialog";
+import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
+import { invoiceReceipt } from "../../lib/thermal/receipts";
 
 export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
   const { t, locale, money } = useI18n();
@@ -143,6 +145,8 @@ export function InvoiceViewPage({ invoiceId }: { invoiceId: string }) {
               {t("share.printPdf")}
             </Button>
           )}
+          {/* A small Bluetooth receipt printer (shown where the device can reach one). */}
+          {!EMBEDDED && allowed("invoice.print") && <ThermalPrintButton receipt={() => invoiceReceipt(invoice, printLocale)} />}
           {/* The PDF is made on the server; a bill still waiting on this device shares as text. */}
           {LIVE && !offlineKey && !deviceCopyAt ? (
             <>

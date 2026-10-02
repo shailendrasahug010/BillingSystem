@@ -34,6 +34,16 @@ export const SETTING_SCHEMAS = {
   "invoice.offline_mode": z.enum(["device_series", "server_only"]),
   /** Printed at the foot of every invoice (return policy, interest, jurisdiction). */
   "invoice.terms": z.string().trim().max(1000),
+  /**
+   * Where customers pay the business, printed on invoices: the bank account and the UPI ID (also as a
+   * QR code for what a bill still owes, on the PDF and on thermal receipts). Empty strings when not set.
+   */
+  "invoice.payment_details": z.strictObject({
+    bankName: z.string().trim().max(100),
+    accountNumber: z.string().trim().regex(/^\d{0,20}$/),
+    ifsc: z.string().trim().toUpperCase().regex(/^([A-Z]{4}0[A-Z0-9]{6})?$/),
+    upiId: z.string().trim().regex(/^([a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{2,63})?$/),
+  }),
   "credit.policy": z.strictObject({
     onLimitExceeded: policy,
     onOverdue: policy,

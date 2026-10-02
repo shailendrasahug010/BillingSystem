@@ -24,6 +24,8 @@ import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
 import { ReceiptDocument, type PrintablePayment } from "./ReceiptDocument";
+import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
+import { paymentReceipt } from "../../lib/thermal/receipts";
 
 interface PaymentRow {
   id: string;
@@ -355,6 +357,7 @@ export function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string 
             <Button size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
               {p.direction === "in" ? t("receipt.print") : t("receipt.printVoucher")}
             </Button>
+            {printable && <ThermalPrintButton size="sm" receipt={() => paymentReceipt(printable, printLocale)} />}
             <PdfActions size="sm" path={`/payments/${p.id}/pdf`} locale={printLocale} number={p.paymentNumber ?? ""} shareText={message.text} mobile={message.mobile} />
             <SendButton size="sm" documentType="receipt" documentId={p.id} number={p.paymentNumber ?? ""} party={{ name: printable?.partyName ?? "", mobile: message.mobile}} locale={printLocale} />
           </div>

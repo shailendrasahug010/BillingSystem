@@ -12,6 +12,7 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "invoice.default_print_locale": "en",
   "invoice.offline_mode": "device_series",
   "invoice.terms": "",
+  "invoice.payment_details": { bankName: "", accountNumber: "", ifsc: "", upiId: "" },
   "credit.policy": { onLimitExceeded: "warn", onOverdue: "warn", overdueGraceDays: 0 },
   "orders.workflow": { requireConfirmation: true, usePacking: true, useDispatch: true },
   "payments.allocation": "oldest_first",

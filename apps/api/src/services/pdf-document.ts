@@ -1,4 +1,4 @@
-import { amountInWords, findState, qrMatrix } from "@digitalbahi/core";
+import { amountInWords, findState, qrMatrix, upiPayLink } from "@digitalbahi/core";
 import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@digitalbahi/i18n";
 import { BLUE, drawFirm, drawFooters, HEAD_BG, INK, INK_2, LINE, newPdf, RED, type Letterhead, type Pdf } from "./pdf-kit.js";
 
@@ -49,6 +49,8 @@ export interface DocumentPdfInput {
   balance: string | null;
   reason: string | null;
   terms: string | null;
+  /** Where to pay (invoices): the bank account and UPI ID; a UPI QR code for the balance. */
+  payment?: { bankName: string; accountNumber: string; ifsc: string; upiId: string } | null;
   /** Export / supply to SEZ: the declaration the law asks for, the LUT and the shipping bill. */
   zeroRated?: { declaration: string; lut: string | null; shippingBill: string | null } | null;
   /** The IRN, acknowledgement and signed QR code from the e-invoice portal. */
@@ -354,6 +356,25 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
   y += 8;
   const termsW = width - 200;
   doc.fillColor(INK_2);
+  const pay = !isNote && input.payment && (input.payment.accountNumber || input.payment.upiId) ? input.payment : null;
+  if (pay) {
+    // Where to pay, and (for what the bill still owes) a UPI code any payment app scans.
+    const qr = pay.upiId && !input.cancelled && num(input.balance ?? "0") >= 1 ? upiPayLink({ upiId: pay.upiId, name: lh.name, amount: input.balance, note: input.number }) : null;
+    const textW = qr ? termsW - 84 : termsW;
+    doc.font("b").fontSize(8).fillColor(INK).text(t("invoice.print.bankDetails"), left, y, { width: textW });
+    const bank = [pay.bankName, pay.accountNumber && `A/c ${pay.accountNumber}`, pay.ifsc && `IFSC ${pay.ifsc}`].filter(Boolean).join(" · ");
+    if (bank) doc.font("r").fontSize(8).fillColor(INK_2).text(bank, { width: textW });
+    if (pay.upiId) doc.font("r").fontSize(8).fillColor(INK_2).text(`UPI: ${pay.upiId}`, { width: textW });
+    let below = doc.y;
+    if (qr) {
+      drawQr(doc, qr, left + termsW - 72, y, 72);
+      doc.font("r").fontSize(6.5).fillColor(INK_2).text(t("thermal.scanToPay", { amount: m(input.balance!) }), left + termsW - 84, y + 75, { width: 96, align: "center" });
+      below = Math.max(below, doc.y + 2);
+    }
+    doc.y = below;
+    doc.moveDown(0.4);
+    y = doc.y;
+  }
   if (input.terms && !isNote) {
     doc.font("b").fontSize(8).fillColor(INK).text(t("invoice.print.terms"), left, y, { width: termsW });
     doc.font("r").fontSize(7.5).fillColor(INK_2).text(input.terms, { width: termsW });

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MeResponse } from "@digitalbahi/contracts";
-import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validatePincode } from "@digitalbahi/core";
+import { GST_STATES, normalizeGstin, stateCodeFromGstin, UPI_ID, validateGstin, validatePincode } from "@digitalbahi/core";
 import { ImageUp, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
@@ -19,6 +19,7 @@ import { api, ApiError } from "../../lib/api";
 import { prepareLogo } from "./firmLogo";
 import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
 import { stateOptions } from "../../lib/states";
+import { PrinterPanel } from "../../components/thermal/ThermalPrint";
 
 interface BusinessRow {
   legalName: string;
@@ -50,7 +51,9 @@ interface Settings {
   "gst.lut"?: { arn: string; validUntil: string } | null;
   "einvoice.enabled"?: boolean;
   "ewaybill.threshold"?: number;
+  "invoice.payment_details"?: PaymentDetails;
 }
+type PaymentDetails = { bankName: string; accountNumber: string; ifsc: string; upiId: string };
 
 /** The last day of the financial year a date falls in (an LUT is filed for one year). */
 function yearEnd(day: string): string {
@@ -112,6 +115,68 @@ function LutRow({ value, canEdit, onSave }: { value: Settings["gst.lut"]; canEdi
   );
 }
 
+/**
+ * Where customers pay: the bank account and UPI ID printed on invoices, with
+ * a UPI code for what a bill still owes on the PDF and on thermal receipts.
+ */
+function PaymentDetailsRow({ value, canEdit, onSave }: { value: PaymentDetails | undefined; canEdit: boolean; onSave(v: PaymentDetails): Promise<void> }) {
+  const { t } = useI18n();
+  const empty: PaymentDetails = { bankName: "", accountNumber: "", ifsc: "", upiId: "" };
+  const [form, setForm] = useState<PaymentDetails>(value ?? empty);
+  const [busy, setBusy] = useState(false);
+  const clean: PaymentDetails = { bankName: form.bankName.trim(), accountNumber: form.accountNumber.trim(), ifsc: form.ifsc.trim().toUpperCase(), upiId: form.upiId.trim() };
+  const bad = {
+    accountNumber: !/^\d{0,20}$/.test(clean.accountNumber),
+    ifsc: !/^([A-Z]{4}0[A-Z0-9]{6})?$/.test(clean.ifsc),
+    upiId: Boolean(clean.upiId) && !UPI_ID.test(clean.upiId),
+  };
+  const changed = JSON.stringify(clean) !== JSON.stringify(value ?? empty);
+  const field = (key: keyof PaymentDetails, label: string, extra: { placeholder?: string; mono?: boolean; inputMode?: "numeric" } = {}) => (
+    <Field label={label} htmlFor={`pay-${key}`} error={bad[key as keyof typeof bad] ? t("settings.paymentInvalid") : undefined}>
+      <Input
+        id={`pay-${key}`}
+        inputSize="sm"
+        disabled={!canEdit}
+        maxLength={key === "upiId" ? 100 : key === "accountNumber" ? 20 : key === "ifsc" ? 11 : 100}
+        className={extra.mono ? "[&_input]:font-mono" : undefined}
+        placeholder={extra.placeholder}
+        inputMode={extra.inputMode}
+        value={form[key]}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: key === "ifsc" ? e.target.value.toUpperCase() : e.target.value }))}
+      />
+    </Field>
+  );
+  return (
+    <div className="flex flex-col gap-2 border-b border-line py-3">
+      <div>
+        <p className="text-[14px] font-medium text-ink">{t("settings.paymentDetails")}</p>
+        <p className="text-[12.5px] text-ink-3">{t("settings.paymentDetailsHint")}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {field("bankName", t("settings.bankName"), { placeholder: "State Bank of India" })}
+        {field("accountNumber", t("settings.accountNumber"), { mono: true, inputMode: "numeric" })}
+        {field("ifsc", "IFSC", { mono: true, placeholder: "SBIN0001234" })}
+        {field("upiId", t("settings.upiId"), { mono: true, placeholder: "yourshop@okhdfcbank" })}
+      </div>
+      {canEdit && (
+        <div>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={busy || !changed || Object.values(bad).some(Boolean)}
+            onClick={() => {
+              setBusy(true);
+              void onSave(clean).finally(() => setBusy(false));
+            }}
+          >
+            {t("common.save")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Business header, rules and permissions in the running app follow the saved values at once. */
 async function reloadMe() {
   applyMe(await api.get<MeResponse>("/me"));
@@ -129,7 +194,21 @@ export function LiveSettings() {
       <SeriesCard />
       <MessagingCard />
       <DevicesCard />
+      <PrinterCard />
     </>
+  );
+}
+
+/** The Bluetooth receipt printer of this device (kept on the device, not the server). */
+function PrinterCard() {
+  const { t } = useI18n();
+  return (
+    <Card>
+      <CardHeader title={t("thermal.title")} subtitle={t("thermal.hint")} />
+      <div className="p-4 sm:p-5">
+        <PrinterPanel />
+      </div>
+    </Card>
   );
 }
 
@@ -483,6 +562,7 @@ function RulesCard() {
             className="w-full rounded-[var(--radius-control)] border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:bg-surface-2"
           />
         </div>
+        <PaymentDetailsRow value={s["invoice.payment_details"]} canEdit={canEdit} onSave={(v) => put("invoice.payment_details", v)} />
         {WORKSPACE.chargeTax && <LutRow value={s["gst.lut"] ?? null} canEdit={canEdit} onSave={(v) => put("gst.lut", v)} />}
         {WORKSPACE.chargeTax &&
           row(
