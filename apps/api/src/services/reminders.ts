@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
+import { rootMessage } from "../lib/errors.js";
 import { queueCustomerReminders } from "./customer-reminders.js";
 import { pumpMessages } from "./messaging/queue.js";
 import { notify, type NewNotification } from "./notifications.js";
@@ -374,7 +375,7 @@ export function startReminderScheduler(deps: AppDeps, seconds: number, log: { wa
       const done = await runDueReminders(deps);
       if (done.notifications || done.failed) log.info(done, "daily reminders");
     } catch (e) {
-      log.warn({ err: (e as Error).message }, "daily reminders could not run");
+      log.warn({ err: rootMessage(e) }, "daily reminders could not run");
       deps.errors.record(e, { reference: uuidv7(), source: "job", job: "daily reminders (looking for due checks)" });
     } finally {
       running = false;

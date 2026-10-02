@@ -4,10 +4,11 @@ import { and, eq, isNotNull, lt, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
+import { rootMessage } from "../lib/errors.js";
 import { NOTIFICATION_KEEP_DAYS } from "./notifications.js";
 import { liveSession } from "./push-delivery.js";
 import { SYNC_KEEP_DAYS } from "./sync-changes.js";
-import { processBusinessOutbox, rootMessage } from "./outbox-worker.js";
+import { processBusinessOutbox } from "./outbox-worker.js";
 import {
   customerFigures,
   loadCustomerData,
@@ -341,7 +342,7 @@ export function startNightlyScheduler(deps: AppDeps, seconds: number, log: { war
       const done = await runNightlyAnalytics(deps);
       if (done.runs) log.info(done, "nightly analytics");
     } catch (e) {
-      log.warn({ err: (e as Error).message }, "nightly analytics could not run");
+      log.warn({ err: rootMessage(e) }, "nightly analytics could not run");
       deps.errors.record(e, { reference: uuidv7(), source: "job", job: "nightly analytics (looking for due businesses)" });
     } finally {
       running = false;

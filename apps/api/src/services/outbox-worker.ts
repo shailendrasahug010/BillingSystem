@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
+import { rootMessage } from "../lib/errors.js";
 import { NOTIFICATION_EVENTS, notifyForEvent } from "./notification-events.js";
 import { planPushes, PUSH_EVENT, sendPushes, type PlannedPush } from "./push-delivery.js";
 import { refreshCustomer } from "./purchase-history.js";
@@ -37,16 +38,6 @@ const MAX_ROUNDS = 5;
 const BUSINESSES = 50;
 /** After this many failures an event is set aside (processed, with its error kept). */
 export const MAX_ATTEMPTS = 8;
-
-/**
- * The innermost error's message: the database's own words ("permission denied
- * for table …"), not the wrapper's, which repeats the query with its values.
- */
-export function rootMessage(error: unknown): string {
-  let e = error;
-  while (e instanceof Error && e.cause instanceof Error) e = e.cause;
-  return (e instanceof Error ? e.message : String(e)).slice(0, 1000);
-}
 
 /** Waits 1, 2, 4 … minutes between attempts, at most an hour. */
 export const retryDelayMs = (attempts: number) => Math.min(60, 2 ** Math.max(0, attempts - 1)) * 60_000;
@@ -216,7 +207,7 @@ export function startOutboxWorker(deps: AppDeps, seconds: number, log: { warn(ob
       const done = await processOutbox(deps);
       if (done.failed) log.warn(done, "outbox events failed (they will be tried again)");
     } catch (e) {
-      log.warn({ err: (e as Error).message }, "outbox worker could not run");
+      log.warn({ err: rootMessage(e) }, "outbox worker could not run");
       deps.errors.record(e, { reference: uuidv7(), source: "job", job: "outbox worker (looking for waiting events)" });
     } finally {
       running = false;

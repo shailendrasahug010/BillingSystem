@@ -36,7 +36,7 @@ packages/
   core/           Pure TypeScript business logic shared by server and clients (139 tests)
   contracts/      Zod request schemas and response types shared by API and clients
   i18n/           English + Hindi catalogues, Indian number/date/currency formatting (14 tests)
-  db/             PostgreSQL schema (Drizzle), SQL migrations, roles, seeds, database reference generator (10 tests)
+  db/             PostgreSQL schema (Drizzle), SQL migrations, roles, seeds, database reference generator (14 tests)
 deploy/           Caddy configuration (TLS, same-origin /api)
 installer/        One computer without setup: the Windows installer (NSIS .exe), the macOS / Linux script and the launcher they share
 docs/             Architecture and design (A–K) and the database reference (L)

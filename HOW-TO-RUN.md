@@ -111,6 +111,8 @@ $env:MIGRATION_DATABASE_URL="postgres://postgres:postgres@localhost:5432/digital
 
 You should see `Migrations applied`, `Application role ready` and `Reference data seeded`.
 
+Run this command again **every time you update the code** (`git pull`), before starting the API: new versions add tables and database functions. The API checks this when it starts and stops with "the database is behind this version of the API" until it is done. (The installed app does it by itself at every start.)
+
 Start the server (leave this terminal open):
 
 macOS / Linux:
@@ -432,6 +434,7 @@ Installing from the browser (sections 3 and 4) needs no store. If you also want 
 | No OTP arrives (on a server) | Check `docker compose logs api` and the OTP adapter's logs; on your own computer the code is shown on screen instead. |
 | No **Install** option | Use Chrome or Edge (Safari on iPhone); open the `https://` address (or `localhost` on the computer itself); it is not offered if the app is already installed. |
 | The phone cannot open the computer's address | Same Wi-Fi on both, start the app with `pnpm dev:web --host`, and allow Node.js in the computer's firewall. |
+| The API stops at start with "the database is behind this version of the API" or "this version's database step has not run"; or, from an API started before this check, `Failed query: select … from outbox_pending_businesses(…)` warnings, `function … does not exist` / `relation … does not exist` errors and "Something went wrong on the server" | The code was updated but the database was not. Stop the API, run the `pnpm db:deploy` command from **Steps** above, and start the API again. |
 | Start again with an empty database (your own computer only) | `dropdb -U postgres digitalbahi_dev`, then repeat the `createdb` and `pnpm db:deploy` steps. |
 | Installer: **Windows protected your PC** | The installer is not signed yet: click **More info → Run anyway**. |
 | Installer: the first start stops while downloading | Check the internet connection and start Digital Bahi again; it carries on from where it stopped. |

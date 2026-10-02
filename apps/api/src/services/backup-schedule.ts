@@ -6,7 +6,7 @@ import { loadAccess } from "../lib/access.js";
 import { audit } from "../lib/audit.js";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
-import { ApiError } from "../lib/errors.js";
+import { ApiError, rootMessage } from "../lib/errors.js";
 import { emailBackup, type BackupActor } from "./backup-delivery.js";
 
 export type BackupFrequency = "off" | "daily" | "weekly";
@@ -120,7 +120,7 @@ export function startBackupScheduler(deps: AppDeps, seconds: number, log: { warn
       const done = await runDueBackups(deps);
       if (done.sent || done.failed) log.info(done, "automatic backups");
     } catch (e) {
-      log.warn({ err: (e as Error).message }, "automatic backups could not run");
+      log.warn({ err: rootMessage(e) }, "automatic backups could not run");
       deps.errors.record(e, { reference: uuidv7(), source: "job", job: "automatic backups (looking for due backups)" });
     } finally {
       running = false;

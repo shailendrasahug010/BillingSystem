@@ -1,9 +1,10 @@
 import { todayIn } from "@digitalbahi/core";
-import { createDb } from "@digitalbahi/db";
+import { checkSchema, createDb } from "@digitalbahi/db";
 import { buildApp } from "./app.js";
 import { uuidv7 } from "uuidv7";
 import { createFieldCipher } from "./lib/crypto.js";
 import { ErrorLog } from "./lib/errorLog.js";
+import { rootMessage } from "./lib/errors.js";
 import { loadConfig } from "./config.js";
 import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
@@ -53,6 +54,26 @@ const app = await buildApp({
   errors,
 });
 if (config.errorLog.dir) app.log.info({ dir: config.errorLog.dir, webSourceMaps: config.errorLog.webSourceMapsDir }, "error log");
+
+// Code started on a database it is ahead of fails on whatever it added ("function … does not exist",
+// "relation … does not exist") on every request and job: say so once, with the fix, and stop.
+const DEPLOY_HINT = 'run "pnpm db:deploy" (HOW-TO-RUN.md, "Steps"; the installed app does it at every start) and start the API again';
+const schemaState = await checkSchema(pool).catch((e: unknown) => {
+  app.log.warn({ err: rootMessage(e) }, "could not check that the database has this version's migrations");
+  return null;
+});
+if (schemaState?.status === "behind" || schemaState?.status === "not_granted") {
+  if (schemaState.status === "behind") {
+    app.log.error({ missing: schemaState.missing }, `the database is behind this version of the API: ${schemaState.missing.length} migration(s) not applied; ${DEPLOY_HINT}`);
+  } else {
+    app.log.error(`this version's database step has not run (the API's database role may not read which migrations are applied); ${DEPLOY_HINT}`);
+  }
+  await app.close();
+  await errors.flush();
+  await pool.end();
+  process.exit(1);
+}
+if (schemaState?.status === "ahead") app.log.warn("the database has migrations this version of the API does not know: an older version started on a newer database");
 
 log = (msg, err) => app.log.warn({ err: err.message }, msg);
 // Automatic backups (emailed on each firm's schedule).

@@ -29,6 +29,9 @@ export async function setupAppRole(ownerConnectionString: string, role = "digita
       revoke delete on gst_transactions from ${role};
       revoke insert, update, delete on states, permissions from ${role};
     `);
+    // Which migrations are applied (read-only): the API checks at start-up that the database is not behind it.
+    const migrations = await client.query("select to_regclass('drizzle.__drizzle_migrations') is not null as present");
+    if (migrations.rows[0]?.present) await client.query(`grant usage on schema drizzle to ${role}; grant select on drizzle.__drizzle_migrations to ${role};`);
   } finally {
     await client.end();
   }

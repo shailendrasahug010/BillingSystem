@@ -6,6 +6,16 @@ import { hasZodFastifySchemaValidationErrors } from "fastify-type-provider-zod";
 type Params = Record<string, string | number>;
 
 /**
+ * The innermost error's message: the database's own words ("permission denied
+ * for table …"), not the wrapper's, which repeats the query with its values.
+ */
+export function rootMessage(error: unknown): string {
+  let e = error;
+  while (e instanceof Error && e.cause instanceof Error) e = e.cause;
+  return (e instanceof Error ? e.message : String(e)).slice(0, 1000);
+}
+
+/**
  * Every failure leaves the API as { error: { code, params, field?, details?, requestId } }.
  * Codes are stable and translated by the clients (see errors.* in @digitalbahi/i18n);
  * the API never relies on English sentences.
