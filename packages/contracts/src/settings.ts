@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Gstin, Pan, Pincode, StateCode } from "./common.js";
+import { Gstin, Id, Pan, Pincode, StateCode } from "./common.js";
 
 const policy = z.enum(["allow", "warn", "block"]);
 
@@ -15,6 +15,16 @@ export const PtRuleSchema = z.strictObject({
   basis: z.enum(["monthly", "annual"]),
   slabs: z.array(PtSlab).max(12),
   femaleSlabs: z.array(PtSlab).max(12).optional(),
+});
+
+/** One of the unit buttons on a bill's lines: the unit, and its letter ("B" for BOX). */
+const QuickUnit = z.strictObject({
+  unitId: Id,
+  alias: z
+    .string()
+    .trim()
+    .regex(/^\p{L}$/u)
+    .transform((s) => s.toUpperCase()),
 });
 
 /**
@@ -44,6 +54,23 @@ export const SETTING_SCHEMAS = {
     ifsc: z.string().trim().toUpperCase().regex(/^([A-Z]{4}0[A-Z0-9]{6})?$/),
     upiId: z.string().trim().regex(/^([a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{2,63})?$/),
   }),
+  /**
+   * The three unit buttons on each line of a bill: a product sold in one of these units changes to it with
+   * one click on its letter, or with the letter typed after the quantity ("2" then "B": 2 boxes). A button
+   * may be left out (null). Null as a whole until the business sets it: the app then shows BOX, CTN and
+   * STRIP as B, C and S. Each unit and each letter once.
+   */
+  "invoice.quick_units": z
+    .array(QuickUnit.nullable())
+    .length(3)
+    .refine(
+      (slots) => {
+        const used = slots.filter((s) => s !== null);
+        return new Set(used.map((s) => s.unitId)).size === used.length && new Set(used.map((s) => s.alias)).size === used.length;
+      },
+      { message: "Each unit and each letter once" },
+    )
+    .nullable(),
   "credit.policy": z.strictObject({
     onLimitExceeded: policy,
     onOverdue: policy,

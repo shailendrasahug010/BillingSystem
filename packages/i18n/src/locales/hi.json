@@ -410,7 +410,9 @@
       "confirm": "बिल रद्द करें",
       "done": "बिल {{number}} रद्द किया",
       "reasonHint": "कम से कम 3 अक्षर; बिल के साथ रखा जाता है"
-    }
+    },
+    "unitNotSold": "{{unit}} में नहीं बिकता",
+    "unitKeys": "मात्रा के बाद {{letters}}: यूनिट"
   },
   "suggestions": {
     "title": "स्मार्ट सुझाव",
@@ -848,7 +850,14 @@
     "bankName": "बैंक",
     "accountNumber": "खाता संख्या",
     "upiId": "UPI ID",
-    "paymentInvalid": "इसे जाँचें"
+    "paymentInvalid": "इसे जाँचें",
+    "quickUnits": "बिल पर यूनिट के बटन",
+    "quickUnitsHint": "बिल की हर लाइन पर तीन छोटे बटन। इनमें से किसी यूनिट में बिकने वाला प्रोडक्ट अक्षर पर एक क्लिक से, या मात्रा के बाद अक्षर टाइप करने से उस यूनिट में बदल जाता है (2 फिर B: 2 बॉक्स)।",
+    "quickUnitButton": "बटन {{n}}",
+    "quickUnitLetter": "अक्षर",
+    "quickUnitNone": "उपयोग नहीं",
+    "quickUnitsDefault": "फिर से B, C, S",
+    "quickUnitsInvalid": "हर बटन का एक अक्षर, और हर यूनिट व हर अक्षर एक ही बार।"
   },
   "gst": {
     "b2b": "B2B",

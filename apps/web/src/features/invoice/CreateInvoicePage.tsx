@@ -25,6 +25,7 @@ import { LineItems } from "./LineItems";
 import { ProductSearch } from "./ProductSearch";
 import { SuggestionsPanel } from "./SuggestionsPanel";
 import { SummaryPanel } from "./SummaryPanel";
+import { quickUnits } from "./quickUnits";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
 import { BarcodeCamera } from "../../components/scan/BarcodeCamera";
@@ -305,6 +306,10 @@ function DesktopInvoice({ view }: { view: DraftView }) {
   const canSave = Boolean(totals && customer) && !blocked;
   const strip = suggestionsOpen === null ? draft.lines.length > 0 : !suggestionsOpen;
   useStoreVersion();
+  // The unit buttons' letters, typed after a quantity.
+  const unitLetters = quickUnits()
+    .flatMap((q) => (q ? [q.alias] : []))
+    .join(" ");
 
   useShortcuts([
     { id: "focus-product", keys: INVOICE_SHORTCUTS.focusProduct, allowInInputs: true, handler: () => productRef.current?.focus() },
@@ -390,7 +395,12 @@ function DesktopInvoice({ view }: { view: DraftView }) {
               <h2 id="items-h" className="text-[15px] font-semibold text-ink">
                 {t("invoice.items")} <span className="num ml-1 text-[13px] font-normal text-ink-3">{draft.lines.length}</span>
               </h2>
-              {draft.lines.length > 0 && <p className="hidden truncate text-[12px] text-ink-3 md:block">{t("invoice.keysHint")}</p>}
+              {draft.lines.length > 0 && (
+                <p className="hidden truncate text-[12px] text-ink-3 md:block">
+                  {t("invoice.keysHint")}
+                  {unitLetters && ` · ${t("invoice.unitKeys", { letters: unitLetters })}`}
+                </p>
+              )}
             </div>
             {error && (
               <p className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger" role="alert">

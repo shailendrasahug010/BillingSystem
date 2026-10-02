@@ -2,7 +2,7 @@ import { BusinessLogoBody, BusinessProfilePatch, patchOf, SeriesPatch, SETTING_S
 import { stateCodeFromGstin, validateGstin, validatePan, validateSeriesPattern } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
@@ -147,6 +147,12 @@ export const businessModule: ApiModule = async (app, deps) => {
       const parsed = SETTING_SCHEMAS[key].safeParse(request.body.value);
       if (!parsed.success) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
       return tenant(ctx, async (tx) => {
+        // The bill's unit buttons name units of this business.
+        if (key === "invoice.quick_units" && parsed.data) {
+          const ids = (parsed.data as Array<{ unitId: string } | null>).flatMap((s) => (s ? [s.unitId] : []));
+          const found = ids.length ? await tx.select({ id: schema.units.id }).from(schema.units).where(and(eq(schema.units.businessId, ctx.businessId), inArray(schema.units.id, ids))) : [];
+          if (found.length !== ids.length) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
+        }
         const [before] = await tx
           .select({ value: schema.settings.value })
           .from(schema.settings)

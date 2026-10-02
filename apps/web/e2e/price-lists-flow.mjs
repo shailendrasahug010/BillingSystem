@@ -134,8 +134,9 @@ const bill = async (expectedRate, list, number, boxRate) => {
   await page.getByRole("option", { name: /Parle-G 100g/ }).click();
   const rate = await page.getByLabel("Rate Parle-G 100g").inputValue();
   if (rate !== expectedRate) errors.push(`${list}: rate ${rate}, expected ${expectedRate}`);
-  // By the box: the list's own box rate, or its piece price x 24.
-  await page.getByLabel("Unit Parle-G 100g").selectOption({ label: "BOX (24 PCS)" });
+  // By the box (its B button): the list's own box rate, or its piece price x 24.
+  await page.getByRole("button", { name: "Unit BOX: Parle-G 100g" }).click();
+  for (let i = 0; i < 30 && (await page.getByLabel("Rate Parle-G 100g").inputValue()) === rate; i++) await page.waitForTimeout(100);
   const box = await page.getByLabel("Rate Parle-G 100g").inputValue();
   if (box !== boxRate) errors.push(`${list}: box rate ${box}, expected ${boxRate}`);
   await page.getByLabel("Qty Parle-G 100g").fill("2");

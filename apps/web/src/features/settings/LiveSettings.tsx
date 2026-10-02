@@ -21,6 +21,7 @@ import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
 import { stateOptions } from "../../lib/states";
 import { PrinterPanel } from "../../components/thermal/ThermalPrint";
 import { serverOrigin } from "../../platform/server";
+import { DEFAULT_QUICK_UNITS } from "../invoice/quickUnits";
 
 interface BusinessRow {
   legalName: string;
@@ -53,8 +54,10 @@ interface Settings {
   "einvoice.enabled"?: boolean;
   "ewaybill.threshold"?: number;
   "invoice.payment_details"?: PaymentDetails;
+  "invoice.quick_units"?: QuickUnitSlots | null;
 }
 type PaymentDetails = { bankName: string; accountNumber: string; ifsc: string; upiId: string };
+type QuickUnitSlots = Array<{ unitId: string; alias: string } | null>;
 
 /** The last day of the financial year a date falls in (an LUT is filed for one year). */
 function yearEnd(day: string): string {
@@ -174,6 +177,101 @@ function PaymentDetailsRow({ value, canEdit, onSave }: { value: PaymentDetails |
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The three unit buttons on each line of a bill: which unit each is and its
+ * letter (BOX, CTN and STRIP as B, C and S until the business sets them).
+ */
+function QuickUnitsRow({ value, canEdit, onSave }: { value: QuickUnitSlots | null | undefined; canEdit: boolean; onSave(v: QuickUnitSlots | null): Promise<void> }) {
+  const { t } = useI18n();
+  useStoreVersion();
+  const units = WORKSPACE.unitList;
+  const idOf = (symbol: string) => units.find((u) => u.symbol === symbol)?.id ?? "";
+  // The app's own: what the bill shows while nothing is saved.
+  const defaults = DEFAULT_QUICK_UNITS.map(([symbol, alias]) => ({ unitId: idOf(symbol), alias }));
+  const saved = (value ?? defaults).map((q) => q ?? { unitId: "", alias: "" });
+  // What is saved (it follows the units arriving with the catalogue) until the user changes something.
+  const [edited, setEdited] = useState<typeof saved | null>(null);
+  const slots = edited ?? saved;
+  const [busy, setBusy] = useState(false);
+  const set = (i: number, patch: Partial<{ unitId: string; alias: string }>) => setEdited((all) => (all ?? saved).map((q, j) => (j === i ? { ...q, ...patch } : q)));
+  const used = slots.filter((q) => q.unitId);
+  const bad = used.some((q) => !/^\p{L}$/u.test(q.alias)) || new Set(used.map((q) => q.unitId)).size !== used.length || new Set(used.map((q) => q.alias)).size !== used.length;
+  const clean: QuickUnitSlots = slots.map((q) => (q.unitId ? { unitId: q.unitId, alias: q.alias.toUpperCase() } : null));
+  const changed = JSON.stringify(clean) !== JSON.stringify(saved.map((q) => (q.unitId ? q : null)));
+  const save = (v: QuickUnitSlots | null) => {
+    setBusy(true);
+    void onSave(v).finally(() => {
+      setBusy(false);
+      setEdited(null);
+    });
+  };
+  return (
+    <div className="flex flex-col gap-2 border-b border-line py-3" role="group" aria-labelledby="quick-units-h">
+      <div>
+        <p id="quick-units-h" className="text-[14px] font-medium text-ink">
+          {t("settings.quickUnits")}
+        </p>
+        <p className="text-[12.5px] text-ink-3">{t("settings.quickUnitsHint")}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {slots.map((q, i) => (
+          <div key={i} className="flex items-end gap-2 rounded-xl border border-line p-2">
+            <div className="min-w-0 flex-1">
+              <Field label={t("settings.quickUnitButton", { n: i + 1 })} htmlFor={`quick-unit-${i}`}>
+                <Select id={`quick-unit-${i}`} disabled={!canEdit} value={q.unitId} onChange={(e) => set(i, { unitId: e.target.value, alias: q.alias || (units.find((u) => u.id === e.target.value)?.symbol[0] ?? "") })}>
+                  <option value="">{t("settings.quickUnitNone")}</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.symbol} — {u.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <div className="w-16 shrink-0">
+              <Field label={t("settings.quickUnitLetter")} htmlFor={`quick-letter-${i}`}>
+                <Input
+                  id={`quick-letter-${i}`}
+                  disabled={!canEdit || !q.unitId}
+                  maxLength={1}
+                  className="[&_input]:text-center [&_input]:font-semibold [&_input]:uppercase"
+                  value={q.alias}
+                  onChange={(e) => set(i, { alias: e.target.value.trim().toUpperCase() })}
+                />
+              </Field>
+            </div>
+          </div>
+        ))}
+      </div>
+      {bad && <p className="text-[12.5px] text-danger">{t("settings.quickUnitsInvalid")}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* How a line of the bill will show them. */}
+        <span className="mr-1 inline-flex items-center gap-0.5" aria-hidden>
+          {clean.map((c, i) =>
+            c ? (
+              <span key={i} className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-line-strong bg-surface px-0.5 text-[10.5px] leading-none font-semibold text-ink-2">
+                {c.alias}
+              </span>
+            ) : null,
+          )}
+        </span>
+        {canEdit && (
+          <>
+            <Button size="sm" variant="primary" disabled={busy || bad || !changed} onClick={() => save(clean)}>
+              {t("common.save")}
+            </Button>
+            {value && (
+              <Button size="sm" disabled={busy} onClick={() => save(null)}>
+                {t("settings.quickUnitsDefault")}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -564,6 +662,7 @@ function RulesCard() {
           />
         </div>
         <PaymentDetailsRow value={s["invoice.payment_details"]} canEdit={canEdit} onSave={(v) => put("invoice.payment_details", v)} />
+        <QuickUnitsRow value={s["invoice.quick_units"]} canEdit={canEdit} onSave={(v) => put("invoice.quick_units", v)} />
         {WORKSPACE.chargeTax && <LutRow value={s["gst.lut"] ?? null} canEdit={canEdit} onSave={(v) => put("gst.lut", v)} />}
         {WORKSPACE.chargeTax &&
           row(

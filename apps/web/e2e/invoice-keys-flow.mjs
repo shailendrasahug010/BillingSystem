@@ -3,9 +3,9 @@
  * while billing: Ctrl+I opens a new invoice -> a shop that is not a customer
  * yet is typed in the customer search -> arrow down to "Add … as a new
  * customer", Enter -> the form opens with the name filled in -> saved, the
- * bill has the new customer -> product search, Enter, the line switched to
- * boxes (re-priced for the box), qty -> Enter -> rate -> Enter -> back to the
- * product search, a second product with Tab through qty, rate and Disc %
+ * bill has the new customer -> product search, Enter, "2b" typed in the
+ * quantity (2, then the B button's letter: 2 boxes, re-priced for the box)
+ * -> Enter -> rate -> Enter -> back to the product search, a second product with Tab through qty, rate and Disc %
  * back to the search, F2, Ctrl+Enter saves. Then at tablet width (900 px): the full invoice screen
  * with the same keys (F3, F2, Ctrl+Enter). Then on a phone: "Add customer"
  * from the search by tap.
@@ -104,12 +104,12 @@ await page.keyboard.type("fortune");
 await page.getByRole("option", { name: /Fortune Oil 1L/ }).waitFor();
 await page.keyboard.press("Enter");
 await expectFocus("Qty", "after adding the product");
-// Sold by the box: the rate becomes the box's (12 x 150) and the qty stays 1.
-await page.getByLabel("Unit Fortune Oil 1L").selectOption({ label: "BOX (12 PCS)" });
+// Sold by the box, keyboard only: "2" then "b" (the B button's letter) is 2 boxes at the box's rate (12 x 150).
+await page.keyboard.type("2b");
+for (let i = 0; i < 30 && (await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800"; i++) await page.waitForTimeout(100);
 if ((await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800") errors.push(`box rate ${await page.getByLabel("Rate Fortune Oil 1L").inputValue()}`);
-// Keyboard only from here: qty, Enter -> rate, Enter -> back to product search.
-await page.getByLabel("Qty Fortune Oil 1L").focus();
-await page.keyboard.type("2");
+if ((await page.getByRole("button", { name: "Unit BOX: Fortune Oil 1L" }).getAttribute("aria-pressed")) !== "true") errors.push('"2b": the B button is not on');
+// Then Enter -> rate, Enter -> back to product search.
 await page.keyboard.press("Enter");
 await expectFocus("Rate Fortune Oil 1L", "Enter from qty");
 await page.keyboard.press("Enter");

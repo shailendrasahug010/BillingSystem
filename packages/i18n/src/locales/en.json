@@ -410,7 +410,9 @@
       "confirm": "Cancel the bill",
       "done": "Bill {{number}} cancelled",
       "reasonHint": "At least 3 letters; kept with the bill"
-    }
+    },
+    "unitNotSold": "Not sold by {{unit}}",
+    "unitKeys": "{{letters}} after the qty: the unit"
   },
   "suggestions": {
     "title": "Smart suggestions",
@@ -848,7 +850,14 @@
     "bankName": "Bank",
     "accountNumber": "Account number",
     "upiId": "UPI ID",
-    "paymentInvalid": "Check this"
+    "paymentInvalid": "Check this",
+    "quickUnits": "Unit buttons on the bill",
+    "quickUnitsHint": "Three small buttons on each line of a bill. A product sold in one of these units changes to it with one click on the letter, or by typing the letter after the quantity (2 then B: 2 boxes).",
+    "quickUnitButton": "Button {{n}}",
+    "quickUnitLetter": "Letter",
+    "quickUnitNone": "Not used",
+    "quickUnitsDefault": "Back to B, C, S",
+    "quickUnitsInvalid": "One letter a button, and each unit and each letter once."
   },
   "gst": {
     "b2b": "B2B",
