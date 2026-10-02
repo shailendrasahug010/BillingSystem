@@ -46,6 +46,7 @@ services:
       OTP_WEBHOOK_TOKEN: ${OTP_WEBHOOK_TOKEN:-}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
       COOKIE_SECURE: "true"
       CORS_ORIGINS: https://${DOMAIN:-localhost}
       LOG_LEVEL: info

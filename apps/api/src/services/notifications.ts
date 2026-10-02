@@ -2,13 +2,15 @@ import { hasPermission, NOTIFICATION_PERMISSIONS, reminderConfig, type Permissio
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
+import { PUSH_EVENT } from "./push-delivery.js";
 
 /**
  * In-app notifications (Phase 5.2). A notification is stored once, as a
  * translation key and parameters (each person reads it in their own
  * language), addressed either to one person (`userId`) or to everyone whose
  * role has a permission. Each person's read / dismissed state is a row in
- * notification_receipts.
+ * notification_receipts. Phones with the app also get it as a push message
+ * (push-delivery.ts).
  */
 
 /** PostgreSQL channel the API servers listen on to push new notifications to open apps. */
@@ -73,6 +75,11 @@ export async function notify(tx: Tx, businessId: string, n: NewNotification, at:
   if (!row) return null;
   const payload: NotifyPayload = { b: businessId, id: row.id, u: n.userId ?? null, p: n.permission };
   await tx.execute(sql`select pg_notify(${NOTIFY_CHANNEL}, ${JSON.stringify(payload)})`);
+  // Phones with the app get it as a push too: sent by the outbox worker once this commits (push-delivery.ts).
+  await tx.execute(sql`
+    insert into outbox_events (business_id, event_type, aggregate_type, aggregate_id, payload)
+    select ${businessId}, ${PUSH_EVENT}, 'notification', ${row.id}, '{}'::jsonb
+    where exists (select 1 from push_tokens where business_id = ${businessId})`);
   return row.id;
 }
 

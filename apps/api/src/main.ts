@@ -12,6 +12,7 @@ import { startNightlyScheduler } from "./services/nightly-analytics.js";
 import { startOutboxWorker } from "./services/outbox-worker.js";
 import { startReminderScheduler } from "./services/reminders.js";
 import { LiveMessenger, LogMessenger } from "./services/messaging/transport.js";
+import { pushSender } from "./services/push.js";
 
 const config = loadConfig();
 const errors = new ErrorLog(config.errorLog);
@@ -47,6 +48,8 @@ const app = await buildApp({
   cipher: createFieldCipher(config.dataEncryptionKey, config.env),
   // "log" (development) records messages instead of sending them.
   messenger: config.messaging.driver === "live" ? new LiveMessenger(config.messaging.whatsappApiBase) : new LogMessenger((msg) => app.log.info(`message (not sent): ${msg}`)),
+  // FCM with a service account; "log" (development) records pushes; "off" sends none.
+  push: pushSender(config.push, (msg) => app.log.info(`${msg} (not sent)`)),
   errors,
 });
 if (config.errorLog.dir) app.log.info({ dir: config.errorLog.dir, webSourceMaps: config.errorLog.webSourceMapsDir }, "error log");

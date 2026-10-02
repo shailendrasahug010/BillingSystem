@@ -280,6 +280,7 @@ console.log(`DATA_ENCRYPTION_KEY="${c.randomBytes(32).toString("base64")}"`);'
 | `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `DATA_ENCRYPTION_KEY` | the three printed lines |
 | `OTP_WEBHOOK_URL`, `OTP_WEBHOOK_TOKEN` | your OTP gateway adapter (below) |
 | `SMTP_URL`, `MAIL_FROM` (optional) | a mail server for firms that do not use their own, e.g. `smtps://bills%40yourdomain.in:password@smtp.yourmail.in:465` and `bills@yourdomain.in` (below) |
+| `FCM_SERVICE_ACCOUNT` (optional) | the Firebase service account key for push messages to the Android app, as one line of base64 (below) |
 
 **Keep a copy of `.env` somewhere safe** (not on the same server). Without `DATA_ENCRYPTION_KEY`, the encrypted bank account numbers cannot be read back.
 
@@ -314,6 +315,14 @@ Without approved templates WhatsApp only delivers to customers who wrote to you 
 **SMS** (payment reminders only; bills need WhatsApp or email for the PDF): choose *Through our SMS provider (webhook)* and fill in the provider's address, a signing secret, the DLT **sender id** and the DLT **template ids** of the reminder in English and in Hindi. In India the sender id and the reminder text must be registered on the DLT portal first (through your SMS provider). The server posts `{"channel": "sms", "to": "+9198…", "text", "senderId", "templateId"}` to the address, signed like the WhatsApp webhook above; a small adapter for your provider (MSG91, Gupshup, Twilio …) sends it on.
 
 **Email**: either the server's mail server (`SMTP_URL`, `MAIL_FROM`; mail goes out as "Your Firm via Digital Bahi" with replies to the firm's email), or the firm's own SMTP (for Gmail use `smtp.gmail.com`, port 465 with SSL, and an app password).
+
+**Push messages to the Android app.** Notifications (payment reminders due, orders waiting, low stock …) also arrive on the phones of the people they are for, as push messages, once the server has a Firebase project:
+
+1. In the [Firebase console](https://console.firebase.google.com) create a project and add an Android app with the app's package name (the app build needs that project's `google-services.json`; see the Android app's own instructions).
+2. In Project settings → Service accounts click *Generate new private key*. Keep the downloaded JSON file safe: it lets anyone send pushes in your project.
+3. Put it in `.env` as one line: `FCM_SERVICE_ACCOUNT=` followed by the output of `base64 -w0 your-key.json`, and run `docker compose up -d`.
+
+The app registers each phone when someone signs in and stops pushes when they sign out; a phone also stops getting them when its sign-in ends (removed in Settings → Devices, the member removed, *sign out everywhere*). A push says what the notification says, in the phone's language, and opening it goes to the order, customer or screen it is about. Without the key nothing is pushed and everything else works the same (`PUSH_DRIVER=log` on a development computer writes them to the server log instead).
 
 **Automatic payment reminders** are off until the owner turns them on under **Notifications → Reminder rules → Payment reminders to customers**: when to send the first (days after the oldest unpaid bill fell due), how often to repeat, the most to send while the same bills stay unpaid, the least overdue amount worth a reminder, and the channel (*WhatsApp, else SMS* by default). The card lists who is due one today (and who cannot be reached); **Send now** sends today's at once. Each customer gets at most one a day, in their language, and those who asked not to get them (*No payment reminders* on their page, or a STOP reply) never do. Every reminder sent this way is listed under **Messages**, marked *Automatic*, and the staff who send messages get one notification a day saying how many went.
 

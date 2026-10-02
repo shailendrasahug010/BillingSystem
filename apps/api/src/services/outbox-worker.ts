@@ -4,6 +4,7 @@ import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
 import { NOTIFICATION_EVENTS, notifyForEvent } from "./notification-events.js";
+import { planPushes, PUSH_EVENT, sendPushes, type PlannedPush } from "./push-delivery.js";
 import { refreshCustomer } from "./purchase-history.js";
 import { getSettings } from "./settings.js";
 
@@ -14,10 +15,11 @@ import { getSettings } from "./settings.js";
  * lost while it is stopped: the events wait.
  *
  * The handlers keep the purchase history (customer_product_stats and
- * customer_stats) of the customer an event is about, and raise the
+ * customer_stats) of the customer an event is about, raise the
  * notifications events call for (new orders, leave requests: see
- * notification-events.ts). Events no handler needs are marked processed as
- * they are.
+ * notification-events.ts) and push new notifications to phones (planned in
+ * the transaction, sent after it commits: push-delivery.ts). Events no
+ * handler needs are marked processed as they are.
  *
  * Every business is handled in its own transaction under row-level security:
  * `outbox_pending_businesses` (a SECURITY DEFINER function) only says whose
@@ -97,6 +99,7 @@ export async function processBusinessOutbox(deps: AppDeps, businessId: string): 
   const total: OutboxResult = { processed: 0, failed: 0 };
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const failures: Array<{ job: string; details: Record<string, string>; error: unknown }> = [];
+    const pushes: PlannedPush[] = [];
     const result = await withTenant(deps.db, { businessId, userId: "" }, async (tx) => {
       const now = deps.clock.now();
       const e = schema.outboxEvents;
@@ -133,6 +136,16 @@ export async function processBusinessOutbox(deps: AppDeps, businessId: string): 
           errorOf.set(ev.id, error);
         }
       }
+      // New notifications to push to phones (sent once this transaction has committed; at most once).
+      const toPush = events.filter((ev) => ev.eventType === PUSH_EVENT);
+      if (toPush.length && deps.push.driver !== "off") {
+        try {
+          pushes.push(...(await tx.transaction((sp) => planPushes(sp, businessId, toPush.map((ev) => ev.aggregateId)))));
+        } catch (error) {
+          failures.push({ job: "outbox worker (push messages for notifications)", details: { businessId }, error });
+          for (const ev of toPush) errorOf.set(ev.id, error);
+        }
+      }
 
       const done = events.filter((ev) => !errorOf.has(ev.id)).map((ev) => ev.id);
       if (done.length) await tx.update(e).set({ processedAt: now.toISOString() }).where(inArray(e.id, done));
@@ -150,9 +163,14 @@ export async function processBusinessOutbox(deps: AppDeps, businessId: string): 
           })
           .where(eq(e.id, ev.id));
       }
-      return { processed: done.length, failed: errorOf.size, more: events.length === BATCH };
+      // Notifications raised this round wrote push events of their own: another round takes them now rather than at the next run.
+      const raised = events.some((ev) => NOTIFICATION_EVENTS.has(ev.eventType) && !errorOf.has(ev.id));
+      return { processed: done.length, failed: errorOf.size, more: events.length === BATCH || raised };
     });
     for (const f of failures) deps.errors.record(f.error, { reference: uuidv7(), source: "job", job: f.job, details: f.details });
+    if (pushes.length) {
+      await sendPushes(deps, businessId, pushes).catch((error: unknown) => deps.errors.record(error, { reference: uuidv7(), source: "job", job: "push messages to phones (recording how they went)", details: { businessId } }));
+    }
     if (!result) break;
     total.processed += result.processed;
     total.failed += result.failed;

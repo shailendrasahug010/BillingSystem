@@ -79,7 +79,7 @@ export const notifications = pgTable(
      * (e.g. "low_stock:2026-09-24", "order:<id>:packed") is never created twice.
      */
     dedupeKey: varchar({ length: 120 }),
-    /** Channels it went out on: in_app today; push, whatsapp, sms and email later. */
+    /** Channels it went out on: in_app, and push once FCM accepted it for at least one phone. */
     deliveredChannels: varchar({ length: 20 }).array(),
     createdAt: tstz().notNull().defaultNow(),
   },
@@ -113,6 +113,41 @@ export const notificationReceipts = pgTable(
     dismissedAt: tstz(),
   },
   (t) => [primaryKey({ columns: [t.notificationId, t.userId] }), index("notification_receipts_user_idx").on(t.userId, t.businessId)],
+);
+
+/**
+ * Phones that get notifications as push messages through Firebase Cloud
+ * Messaging (the Android app): one row per business and app install, for the
+ * person signed in on it, who gets what they may see in the inbox. The app
+ * registers its token at each start and removes it when signing out; a token
+ * FCM says is no longer valid is deleted.
+ */
+export const pushTokens = pgTable(
+  "push_tokens",
+  {
+    id: pk(),
+    businessId: businessId(),
+    /** The person signed in on the phone. */
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The phone's registered device (offline work), when it has one. */
+    deviceId: uuid().references(() => devices.id, { onDelete: "set null" }),
+    /** The sign-in it was registered in (refresh_tokens.family_id): pushes stop when it ends or moves to another business. */
+    sessionId: uuid().notNull(),
+    /** The registration token the app got from Firebase (secret to the phone: whoever has it can send to it through the project). */
+    token: text().notNull(),
+    /** android (ios later). */
+    platform: varchar({ length: 10 }).notNull(),
+    /** The app's language when it registered: pushes are written in it. */
+    locale: varchar({ length: 5 }).notNull().default("en"),
+    /** When the app last registered it (it does at each start). */
+    lastSeenAt: tstz().notNull().defaultNow(),
+    /** When FCM last accepted a push for it. */
+    lastPushAt: tstz(),
+    createdAt: tstz().notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("push_tokens_uq").on(t.businessId, t.token), index("push_tokens_user_idx").on(t.businessId, t.userId)],
 );
 
 /**

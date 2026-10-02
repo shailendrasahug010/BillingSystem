@@ -1070,7 +1070,8 @@
     "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice.",
     "REMINDER_RULE_OFF": "Switch the reminder rule on first.",
     "NOT_HELD_FOR_REVIEW": "This bill is not held for review.",
-    "SECTION_REQUIRED": "Choose which table to download."
+    "SECTION_REQUIRED": "Choose which table to download.",
+    "DEVICE_NOT_FOUND": "This device is not registered in this business."
   },
   "validation": {
     "required": "This field is required",
@@ -3059,6 +3060,10 @@
       "title_other": "Payment reminders sent to {{count}} customers ({{amount, currency}} overdue)",
       "noneSent": "No payment reminders could go out today",
       "unreachable": "Due but not reached: {{unreachable}} (no WhatsApp, SMS or email for them)."
+    },
+    "push": {
+      "testTitle": "Test notification from Digital Bahi",
+      "testBody": "Notifications from {{business}} will show on this phone."
     }
   }
 }

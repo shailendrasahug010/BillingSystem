@@ -10,6 +10,7 @@ import { ErrorLog } from "../src/lib/errorLog.js";
 import type { ApiModule } from "../src/modules/types.js";
 import { createTokenService } from "../src/lib/security.js";
 import { LogMessenger } from "../src/services/messaging/transport.js";
+import { LogPush } from "../src/services/push.js";
 
 export const ADMIN_URL = process.env.DATABASE_URL;
 export const hasDatabase = Boolean(ADMIN_URL);
@@ -50,6 +51,8 @@ export interface TestApp {
   setToday(date: string | null): void;
   /** Messages "sent" (recorded, not delivered). */
   messenger: LogMessenger;
+  /** Push messages "sent" to phones (recorded, not delivered). */
+  push: LogPush;
   /** Superuser/owner access to the test database, for assertions that bypass RLS. */
   owner: pg.Pool;
   close(): Promise<void>;
@@ -87,6 +90,7 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
   const { db, pool } = createDb(config.databaseUrl, { max: 8 });
   const otp = new MemoryOtpSender();
   const messenger = new LogMessenger();
+  const push = new LogPush();
   let offsetMs = 0;
   let today: string | null = null;
   const app = await buildApp({
@@ -97,6 +101,7 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
     clock: { now: () => new Date(Date.now() + offsetMs), today: () => today ?? TEST_TODAY },
     cipher: createFieldCipher(undefined, "test"),
     messenger,
+    push,
     errors: new ErrorLog({ ...config.errorLog, dir: options.logDir ?? null, webSourceMapsDir: options.webSourceMapsDir ?? null }),
   }, { extraModules: options.extraModules ?? [] });
   await app.ready();
@@ -106,6 +111,7 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
     app,
     otp,
     messenger,
+    push,
     owner,
     advance(ms) {
       offsetMs += ms;

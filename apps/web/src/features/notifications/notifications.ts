@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocaleCode, TranslationKey } from "@digitalbahi/i18n";
+import { createTranslator, fieldLabels, notificationParams, notificationText, type LocaleCode } from "@digitalbahi/i18n";
 import { useCallback, useEffect } from "react";
 import { useI18n } from "../../app/i18n";
 import type { Route } from "../../app/router";
@@ -105,71 +105,21 @@ export function useRefreshNotifications(): () => void {
   return useCallback(() => void client.invalidateQueries({ queryKey: [NOTIFICATIONS] }), [client]);
 }
 
-/** A "YYYY-MM" month as the app's language writes it ("September 2026"). */
-function monthName(month: string, locale: LocaleCode): string {
-  return new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`));
-}
-
-/** The parameters as the texts use them: months spelled out, a dash for a missing value. */
+/** The parameters as the texts use them: months spelled out, field names as labels, a dash for a missing value. */
 export function displayParams(params: Record<string, unknown>, locale: LocaleCode): Record<string, string | number> {
-  const out: Record<string, string | number> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (typeof v === "number") out[k] = v;
-    else if (typeof v === "string") out[k] = k === "month" && /^\d{4}-\d{2}$/.test(v) ? monthName(v, locale) : v;
-    else if (v === null || v === undefined) out[k] = "—";
-  }
-  return out;
+  return notificationParams(params, createTranslator(locale));
 }
-
-/** Customer fields by the labels the forms use (a customer change made offline names them). */
-const FIELD_LABELS: Record<string, TranslationKey> = {
-  name: "customer.name",
-  businessName: "customer.businessName",
-  mobile: "customer.mobile",
-  altMobile: "customer.altMobile",
-  email: "customer.email",
-  addressLine1: "customer.address",
-  addressLine2: "customer.address",
-  city: "common.city",
-  pincode: "customer.pincode",
-  stateCode: "common.state",
-  gstin: "customer.gstin",
-  pan: "customer.pan",
-  creditLimit: "customer.creditLimit",
-  creditDays: "customer.creditDays",
-  routeId: "customer.route",
-  priceLevelId: "customer.priceLevel",
-  categoryId: "customer.category",
-  salesRepId: "customer.salesRep",
-  messageLocale: "customer.messageLocale",
-  remindersOptOut: "customer.remindersOptOut",
-};
 
 /** "mobile,city" as "Mobile, City" in the app's language. */
 export function useFieldLabels(): (fields: string[] | string) => string {
   const { t } = useI18n();
-  return useCallback(
-    (fields) =>
-      [...new Set((typeof fields === "string" ? fields.split(",") : fields).map((f) => (FIELD_LABELS[f] ? t(FIELD_LABELS[f]) : f)))].join(", "),
-    [t],
-  );
+  return useCallback((fields) => fieldLabels(fields, { t }), [t]);
 }
 
-/** The title and body of a notification in the app's language. */
+/** The title and body of a notification in the app's language (as the push messages to phones read). */
 export function useNotificationText(): (n: NotificationRow) => { title: string; body: string | null } {
   const { t, has, locale } = useI18n();
-  const labels = useFieldLabels();
-  return useCallback(
-    (n) => {
-      const params = displayParams(n.params, locale);
-      if (typeof params.fields === "string" && params.fields !== "—") params.fields = labels(params.fields);
-      // A notification from a newer server whose text this app does not have yet.
-      const title = has(n.titleKey) ? t(n.titleKey as TranslationKey, params) : t("notifications.generic");
-      const body = n.bodyKey && has(n.bodyKey) ? t(n.bodyKey as TranslationKey, params) : null;
-      return { title, body };
-    },
-    [t, has, locale, labels],
-  );
+  return useCallback((n) => notificationText(n, { t, has, locale }), [t, has, locale]);
 }
 
 /** "now", "5 minutes ago", "yesterday"; older ones as a date. */

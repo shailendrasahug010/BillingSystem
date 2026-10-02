@@ -80,6 +80,7 @@ Implemented in PostgreSQL (token buckets) at small scale; Redis when volume dema
 
 ## 6. Secrets and credentials
 
+* **Push messages** go only to phones whose sign-in is still on and working in that business (signing out, a removed device or member, *sign out everywhere* stop them at once) and only with what the person may see in the inbox; the FCM service account key is a server secret (`FCM_SERVICE_ACCOUNT`), and the phones' tokens are kept per business and never shown. A push's title and text can appear on the phone's lock screen, so the app creates its channels with private lock-screen visibility.
 * No secret ever ships in frontend code or mobile/desktop bundles: database credentials, JWT private keys, GSP/IRP credentials, WhatsApp/SMS API keys, storage keys all live in the server's secret manager (or environment injected at runtime), never in the repository (`.env*` is git-ignored; secret scanning in CI).
 * Integrations run in the worker process only; credentials are encrypted at rest and decrypted just-in-time.
 * The database is reachable only from the API/worker network; operators use a bastion with MFA; migrations run with a separate owner role; the app role cannot alter schema or rewrite ledgers.

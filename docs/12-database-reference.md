@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 96 |
-| Columns | 1601 |
-| Foreign keys | 254 |
+| Tables | 97 |
+| Columns | 1612 |
+| Foreign keys | 257 |
 | Unique constraints | 46 |
 | Check constraints | 57 |
-| Indexes (besides primary keys and unique constraints) | 122 |
+| Indexes (besides primary keys and unique constraints) | 124 |
 | Triggers | 73 |
-| Tables with row-level security | 90 |
+| Tables with row-level security | 91 |
 | Enums | 39 |
 | Functions | 14 |
-| Migrations | 27 (last: `0026_reminders_messaging`) |
+| Migrations | 28 (last: `0027_push_tokens`) |
 
 ## How the database is set up
 
@@ -43,7 +43,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Payroll:** [`salary_components`](#salary_components), [`employee_salary_structures`](#employee_salary_structures), [`employee_salary_structure_components`](#employee_salary_structure_components), [`employee_advances`](#employee_advances), [`payroll_runs`](#payroll_runs), [`salary_slips`](#salary_slips), [`salary_slip_lines`](#salary_slip_lines)
 * **Expenses:** [`expense_categories`](#expense_categories), [`expenses`](#expenses)
 * **GST returns and configuration:** [`gst_transactions`](#gst_transactions), [`gst_return_periods`](#gst_return_periods), [`gst_exports`](#gst_exports), [`gst_config`](#gst_config)
-* **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`notification_receipts`](#notification_receipts), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`sync_changes`](#sync_changes), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
+* **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`notification_receipts`](#notification_receipts), [`push_tokens`](#push_tokens), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`sync_changes`](#sync_changes), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
 * **Analytics (derived, rebuildable):** [`customer_product_stats`](#customer_product_stats), [`product_associations`](#product_associations), [`customer_stats`](#customer_stats), [`analytics_runs`](#analytics_runs), [`suggestion_feedback`](#suggestion_feedback), [`sales_daily_product`](#sales_daily_product), [`sales_daily_customer`](#sales_daily_customer)
 * **WhatsApp and email:** [`messaging_settings`](#messaging_settings), [`messages`](#messages)
 * [Enums](#enums) · [Functions](#functions) · [Migrations](#migrations)
@@ -94,7 +94,7 @@ A login identity. One user can belong to several businesses with different roles
 * Index `users_mobile_uq`: unique, btree `(mobile)`
 * Index `users_username_uq`: unique, btree `(username)`
 * Trigger `users_set_updated_at`: before update, each row → `set_updated_at()`
-* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`notifications`](#notifications).user_id, [`notification_receipts`](#notification_receipts).user_id, [`report_views`](#report_views).user_id, [`suggestion_feedback`](#suggestion_feedback).user_id
+* Referenced by: [`devices`](#devices).user_id, [`business_members`](#business_members).user_id, [`refresh_tokens`](#refresh_tokens).user_id, [`employees`](#employees).user_id, [`notifications`](#notifications).user_id, [`notification_receipts`](#notification_receipts).user_id, [`push_tokens`](#push_tokens).user_id, [`report_views`](#report_views).user_id, [`suggestion_feedback`](#suggestion_feedback).user_id
 
 ### `businesses`
 
@@ -135,7 +135,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 87 tables by `business_id`
+* Referenced by: 88 tables by `business_id`
 
 ### `settings`
 
@@ -237,7 +237,7 @@ Registered devices (phones, desktops). Needed for offline work: each device gets
 * Unique `devices_series_code_uq`: `(business_id, series_code)`
 * Trigger `devices_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`document_series`](#document_series).device_id, [`refresh_tokens`](#refresh_tokens).device_id, [`purchases`](#purchases).device_id, [`sales_orders`](#sales_orders).device_id, [`invoices`](#invoices).device_id, [`credit_debit_notes`](#credit_debit_notes).device_id, [`payments`](#payments).device_id, [`sync_mutations`](#sync_mutations).device_id
+* Referenced by: [`document_series`](#document_series).device_id, [`refresh_tokens`](#refresh_tokens).device_id, [`purchases`](#purchases).device_id, [`sales_orders`](#sales_orders).device_id, [`invoices`](#invoices).device_id, [`credit_debit_notes`](#credit_debit_notes).device_id, [`payments`](#payments).device_id, [`push_tokens`](#push_tokens).device_id, [`sync_mutations`](#sync_mutations).device_id
 
 ### `document_series`
 
@@ -2431,7 +2431,7 @@ In-app notifications. Stored as a translation key + params (never rendered text)
 | `entity_type` | varchar(40) |  |  | Kind of record it is about, to open it. |
 | `entity_id` | uuid |  |  | Id of that record. |
 | `dedupe_key` | varchar(120) |  |  | Makes "once per condition" a database rule: a reminder for the same thing (e.g. "low_stock:2026-09-24", "order:&lt;id>:packed") is never created twice. |
-| `delivered_channels` | varchar(20)[] |  |  | Channels it went out on: in_app today; push, whatsapp, sms and email later. |
+| `delivered_channels` | varchar(20)[] |  |  | Channels it went out on: in_app, and push once FCM accepted it for at least one phone. |
 | `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
 
 * Index `notifications_business_created_idx`: btree `(business_id, created_at)`
@@ -2454,6 +2454,28 @@ Each person's state of a notification: read, or dismissed (hidden from their lis
 
 * Primary key `notification_id, user_id`
 * Index `notification_receipts_user_idx`: btree `(user_id, business_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+
+### `push_tokens`
+
+Phones that get notifications as push messages through Firebase Cloud Messaging (the Android app): one row per business and app install, for the person signed in on it, who gets what they may see in the inbox. The app registers its token at each start and removes it when signing out; a token FCM says is no longer valid is deleted.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `user_id` | uuid | ✓ |  | → [`users`](#users).id (on delete cascade). The person signed in on the phone. |
+| `device_id` | uuid |  |  | → [`devices`](#devices).id (on delete set null). The phone's registered device (offline work), when it has one. |
+| `session_id` | uuid | ✓ |  | The sign-in it was registered in (refresh_tokens.family_id): pushes stop when it ends or moves to another business. |
+| `token` | text | ✓ |  | The registration token the app got from Firebase (secret to the phone: whoever has it can send to it through the project). |
+| `platform` | varchar(10) | ✓ |  | android (ios later). |
+| `locale` | varchar(5) | ✓ | `'en'` | The app's language when it registered: pushes are written in it. |
+| `last_seen_at` | timestamptz | ✓ | `now()` | When the app last registered it (it does at each start). |
+| `last_push_at` | timestamptz |  |  | When FCM last accepted a push for it. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+
+* Index `push_tokens_uq`: unique, btree `(business_id, token)`
+* Index `push_tokens_user_idx`: btree `(business_id, user_id)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `reminder_rules`
@@ -3109,4 +3131,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens`

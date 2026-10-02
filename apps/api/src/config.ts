@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { defaultWebSourceMapsDir } from "./lib/errorLog.js";
@@ -39,6 +40,19 @@ const Env = z.object({
   /** Sender address for the platform's mail server, e.g. bills@digitalbahi.in. */
   MAIL_FROM: z.string().optional(),
   WHATSAPP_API_BASE: z.url().default("https://graph.facebook.com/v21.0"),
+  /**
+   * Notifications as push messages to the Android app (Firebase Cloud
+   * Messaging): "fcm" sends them with the service account below; "log"
+   * records them without sending (development, tests); "off" sends none.
+   * Default: fcm when a service account is set, else log outside production
+   * and off in production.
+   */
+  PUSH_DRIVER: z.enum(["fcm", "log", "off"]).optional(),
+  /** The Firebase project's service account key: the JSON file's content, or base64 of it. */
+  FCM_SERVICE_ACCOUNT: z.string().optional(),
+  /** Or the path of that JSON file. */
+  FCM_SERVICE_ACCOUNT_FILE: z.string().optional(),
+  FCM_API_BASE: z.url().default("https://fcm.googleapis.com"),
   /** Days a new SaaS business stays in trial. */
   TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
   /** How often the API looks for automatic backups that are due (0 = never, e.g. on extra instances). */
@@ -82,6 +96,7 @@ export interface Config {
   dataEncryptionKey?: string;
   otpWebhook?: { url: string; token?: string };
   messaging: { driver: "live" | "log"; smtpUrl?: string; mailFrom?: string; whatsappApiBase: string };
+  push: { driver: "fcm" | "log" | "off"; serviceAccount?: ServiceAccount; apiBase: string };
   trialDays: number;
   backupSchedulerSeconds: number;
   outboxWorkerSeconds: number;
@@ -93,6 +108,34 @@ export interface Config {
   errorLog: { dir: string | null; retentionDays: number; timeZone: string; webSourceMapsDir: string | null };
   docsEnabled: boolean;
   webDir: string | null;
+}
+
+/** The parts of a Google service account key that sending through FCM needs. */
+export interface ServiceAccount {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+  tokenUri: string;
+}
+
+/** The service account from FCM_SERVICE_ACCOUNT (JSON or base64 JSON) or FCM_SERVICE_ACCOUNT_FILE; undefined when neither is set. */
+function serviceAccount(e: { FCM_SERVICE_ACCOUNT?: string | undefined; FCM_SERVICE_ACCOUNT_FILE?: string | undefined }): ServiceAccount | undefined {
+  let raw = e.FCM_SERVICE_ACCOUNT?.trim();
+  if (!raw && e.FCM_SERVICE_ACCOUNT_FILE) raw = readFileSync(path.resolve(e.FCM_SERVICE_ACCOUNT_FILE), "utf8");
+  if (!raw) return undefined;
+  const json = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
+  let key: Record<string, unknown>;
+  try {
+    key = JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    throw new Error("FCM_SERVICE_ACCOUNT is not a service account key (JSON, or base64 of it)");
+  }
+  const text = (k: string) => (typeof key[k] === "string" && key[k] ? (key[k] as string) : null);
+  const projectId = text("project_id");
+  const clientEmail = text("client_email");
+  const privateKey = text("private_key");
+  if (!projectId || !clientEmail || !privateKey) throw new Error("FCM_SERVICE_ACCOUNT lacks project_id, client_email or private_key");
+  return { projectId, clientEmail, privateKey: privateKey.replace(/\\n/g, "\n"), tokenUri: text("token_uri") ?? "https://oauth2.googleapis.com/token" };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -107,6 +150,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     if (e.OTP_DEV_ECHO) throw new Error("OTP_DEV_ECHO must not be enabled in production");
     if (!e.OTP_WEBHOOK_URL) throw new Error("OTP_WEBHOOK_URL is required in production (OTPs are never logged there)");
   }
+  const account = serviceAccount(e);
+  const pushDriver = e.PUSH_DRIVER ?? (account ? "fcm" : e.NODE_ENV === "production" ? "off" : "log");
+  if (pushDriver === "fcm" && !account) throw new Error("PUSH_DRIVER=fcm needs FCM_SERVICE_ACCOUNT or FCM_SERVICE_ACCOUNT_FILE");
   return {
     env: e.NODE_ENV,
     host: e.HOST,
@@ -131,6 +177,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ...(e.MAIL_FROM ? { mailFrom: e.MAIL_FROM } : {}),
       whatsappApiBase: e.WHATSAPP_API_BASE.replace(/\/+$/, ""),
     },
+    push: { driver: pushDriver, ...(account ? { serviceAccount: account } : {}), apiBase: e.FCM_API_BASE.replace(/\/+$/, "") },
     trialDays: e.TRIAL_DAYS,
     backupSchedulerSeconds: e.BACKUP_SCHEDULER_SECONDS,
     outboxWorkerSeconds: e.OUTBOX_WORKER_SECONDS,

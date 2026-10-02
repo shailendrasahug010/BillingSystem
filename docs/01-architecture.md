@@ -237,7 +237,7 @@ flowchart LR
   N --> RCPT[("notification_receipts<br/>read / dismissed per person")]
   N -- "NOTIFY on commit (ids only)" --> HUB["LISTEN, one connection<br/>per API server"]
   HUB --> INAPP["SSE stream → bell + inbox"]
-  N -.-> PUSH["FCM push (Android) — later"]
+  N -- "outbox event, after commit" --> PUSH["FCM push to phones<br/>(push_tokens, each phone's language)"]
   RULES --> WA["Payment reminders to customers<br/>(WhatsApp / SMS / email, message queue)"]
   WA -. STOP reply on WhatsApp .-> OPT[("customers.reminders_opt_out")]
 ```
@@ -253,7 +253,7 @@ Built in Phase 5.2 (`apps/api/src/services/notifications.ts`, `reminders.ts`, `n
 * **Orders waiting too long** is the one hourly rule: from its hour it runs every hour (claimed by `last_run_at`, 55 minutes apart) and tells those who confirm orders about each order that crossed the set hours at one step (to be confirmed, packed or dispatched) since the last run, once per order; a check by hand in the same hour shares that run's notification.
 * **Payment reminders to customers** write to the customers themselves: at the rule's hour, each customer whose oldest unpaid bill fell due at least `firstAfterDays` ago, who owes at least `minAmount` overdue, has had fewer than `maxCount` reminders since that bill fell due and none in the last `repeatDays`, gets one message (WhatsApp, else SMS by default; or one channel) in their language (`customers.message_locale`, else the business's document language), with the approved template in that language (WhatsApp) or the DLT template (SMS). They go through the same message queue as reminders sent by hand, marked `automatic` with the business day (`reminder_on`); a unique index keeps it to one per customer and day even when two runs meet. Customers who asked not to get them (`reminders_opt_out`, ticked on their page or set by a STOP reply on WhatsApp) never do; the staff who send messages get one notification a day with how many went and how many could not be reached.
 * **SMS** goes through the business's own gateway: signed JSON (`{channel, to, text, senderId, templateId}`, HMAC like the WhatsApp provider webhook) to its address; the sender id and template ids are the ones registered on DLT.
-* **Later:** FCM push to the Android app.
+* **Push to phones.** The Android app registers its Firebase Cloud Messaging token (`push_tokens`: business, person, the sign-in it came with, the app's language). Creating a notification in a business with registered phones writes an outbox event; the outbox worker works out, inside its transaction, the phones of the people the notification is for (as the inbox decides: the person, or a role with the permission, and `notification.view`; only active members whose sign-in is still on and working in that business), writes the text in each phone's language with the same code as the app (`notificationText` in `@digitalbahi/i18n`), and sends after the commit through FCM's HTTP v1 API (an OAuth token from the project's service account, `FCM_SERVICE_ACCOUNT`). A push goes at most once; tokens FCM says are gone are deleted, and the nightly job deletes those whose sign-in has ended. Warnings are high priority on the app's *alerts* channel, the rest normal on *updates*; a push replaces the earlier one about the same thing (tag `<type>[:<record>]`), and its data carries the notification, business and record to open.
 
 ## 10. Localisation architecture
 

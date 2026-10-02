@@ -5,6 +5,7 @@ import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
 import { NOTIFICATION_KEEP_DAYS } from "./notifications.js";
+import { liveSession } from "./push-delivery.js";
 import { SYNC_KEEP_DAYS } from "./sync-changes.js";
 import { processBusinessOutbox, rootMessage } from "./outbox-worker.js";
 import {
@@ -34,8 +35,9 @@ import { getSettings } from "./settings.js";
  *     suppliers.balance against party_ledger_entries, stock_balances against
  *     stock_ledger. Mismatches are reported, not changed.
  *  6. Deletes processed outbox events older than OUTBOX_KEEP_DAYS,
- *     notifications older than NOTIFICATION_KEEP_DAYS and the pull feed's
- *     changes older than SYNC_KEEP_DAYS.
+ *     notifications older than NOTIFICATION_KEEP_DAYS, the pull feed's
+ *     changes older than SYNC_KEEP_DAYS and the push tokens of phones whose
+ *     sign-in has ended.
  *
  * What it found is kept in analytics_runs.details; drift and mismatches are
  * also written to the error log, where operators look.
@@ -74,6 +76,8 @@ export interface NightlyDetails {
   notificationsDeleted: number;
   /** Pull-feed changes older than SYNC_KEEP_DAYS deleted. */
   syncChangesDeleted: number;
+  /** Push tokens of phones whose sign-in ended (signed out, removed, moved to another business), deleted. */
+  pushTokensDeleted: number;
   customers: number;
   statsRows: number;
   drift: DriftReport;
@@ -192,11 +196,16 @@ export async function nightlyForBusiness(deps: AppDeps, businessId: string, toda
       .delete(schema.syncChanges)
       .where(and(eq(schema.syncChanges.businessId, businessId), lt(schema.syncChanges.createdAt, new Date(deps.clock.now().getTime() - SYNC_KEEP_DAYS * 86_400_000).toISOString())))
       .returning({ id: schema.syncChanges.entityId });
+    const deadPhones = await tx
+      .delete(schema.pushTokens)
+      .where(and(eq(schema.pushTokens.businessId, businessId), sql`not ${liveSession("push_tokens")}`))
+      .returning({ id: schema.pushTokens.id });
     return {
       asOf: today,
       outbox: { ...outbox, deleted: deleted.length },
       notificationsDeleted: oldNotifications.length,
       syncChangesDeleted: oldChanges.length,
+      pushTokensDeleted: deadPhones.length,
       customers: customers.length,
       statsRows,
       drift,
