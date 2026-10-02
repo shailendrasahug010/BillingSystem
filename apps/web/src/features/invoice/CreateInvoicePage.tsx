@@ -65,8 +65,16 @@ function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChan
     return true;
   };
   const withPhone = async () => {
-    const scanned = await scanWithPhone().catch(() => null);
-    if (scanned) take(scanned, true);
+    try {
+      const scanned = await scanWithPhone();
+      if (scanned) take(scanned, true);
+    } catch {
+      // The phone's scanner is not ready (Google's module downloads once): the camera in the page meanwhile.
+      void nativeScanner()
+        ?.installGoogleBarcodeScannerModule?.()
+        .catch(() => undefined);
+      setCamera(true);
+    }
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={t("invoice.scan")} description={t("scan.dialogHint")} size="sm" closeLabel={t("common.close")}>

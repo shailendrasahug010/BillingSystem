@@ -11,6 +11,7 @@ import { wipeBusinessCopy } from "../offline/wipe";
 import { clearSnapshots, copyExpired, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
 import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
+import { stopPush } from "../platform/push";
 
 /** "locked": no server, and the copy on this device waits for the person's password. */
 export type SessionStatus = "loading" | "signed-out" | "no-business" | "ready" | "error" | "locked";
@@ -426,6 +427,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       logout: async () => {
         // Signing out needs the server (it ends the session there too); the caller checks for a connection.
         try {
+          // In the Android app: this phone stops getting the person's notifications.
+          await stopPush();
           await api.post("/auth/logout");
         } finally {
           setSession(null);

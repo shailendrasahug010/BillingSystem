@@ -51,7 +51,7 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
   });
 
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false, credentials: true });
+  await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] });
   await app.register(cookie);
   await app.register(rateLimit, {
     max: config.rateLimit.max,

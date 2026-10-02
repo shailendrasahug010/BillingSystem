@@ -1,5 +1,7 @@
 import { ApiError, currentAccessToken } from "./api";
 import { uuid } from "./uuid";
+import { isNative } from "../platform/native";
+import { serverOrigin } from "../platform/server";
 
 /**
  * Errors the app meets in the browser — a screen that crashed, a promise that
@@ -49,9 +51,9 @@ async function send(e: Error, kind: "error" | "unhandledrejection" | "render", r
     }
   }
   const token = currentAccessToken();
-  await fetch("/api/v1/client-errors", {
+  await fetch(`${serverOrigin()}/api/v1/client-errors`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: { "content-type": "application/json", ...(isNative() ? { "x-client": "native" } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({
       kind,
       name: e.name.slice(0, 100),

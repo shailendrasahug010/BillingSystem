@@ -3255,5 +3255,27 @@
       "denied": "The camera was not allowed. Allow it for this site in the browser's settings, then try again.",
       "failed": "The camera could not start."
     }
+  },
+  "server": {
+    "title": "Connect to your Digital Bahi",
+    "hint": "Type the address your business opens Digital Bahi at (ask the owner if you do not know it). It is kept on this phone.",
+    "address": "Server address",
+    "connect": "Connect",
+    "checking": "Checking…",
+    "change": "Change server",
+    "problems": {
+      "invalid": "That is not a web address.",
+      "insecure": "The address must start with https:// (a secure server).",
+      "unreachable": "No server answered at that address. Check it, and the internet.",
+      "not_digitalbahi": "That address is not a Digital Bahi server."
+    }
+  },
+  "push": {
+    "channels": {
+      "alerts": "Needs action",
+      "alertsHint": "Payments due, orders waiting, stock running out",
+      "updates": "Updates",
+      "updatesHint": "Orders moving on, leave decided and other news"
+    }
   }
 }

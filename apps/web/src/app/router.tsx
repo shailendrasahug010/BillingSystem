@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { PurchaseDraft } from "../features/purchases/billImport";
 
 /**
@@ -79,10 +79,18 @@ function hashFor(route: Route): string | null {
   return entry ? entry[0] : null;
 }
 
+/** Back to the screen before (the Android app's back button); false when there is none. */
+let backFn: (() => boolean) | null = null;
+export const goBack = (): boolean => backFn?.() ?? false;
+
 export function RouterProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState<Route>(() => routeFromHash() ?? { name: "dashboard" });
+  const current = useRef(route);
+  // The screens left, newest last.
+  const left = useRef<Route[]>([]);
 
-  const navigate = useCallback((next: Route) => {
+  const show = useCallback((next: Route) => {
+    current.current = next;
     setRoute(next);
     const token = hashFor(next);
     try {
@@ -93,10 +101,34 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     window.scrollTo({ top: 0 });
   }, []);
 
+  const navigate = useCallback(
+    (next: Route) => {
+      left.current = [...left.current, current.current].slice(-30);
+      show(next);
+    },
+    [show],
+  );
+
   useEffect(() => {
+    backFn = () => {
+      const previous = left.current.pop();
+      if (!previous) return false;
+      show(previous);
+      return true;
+    };
+    return () => {
+      backFn = null;
+    };
+  }, [show]);
+
+  useEffect(() => {
+    // A link to a screen (#customers) is a step like any other: back returns from it.
     const onHash = () => {
       const r = routeFromHash();
-      if (r) setRoute(r);
+      if (!r) return;
+      left.current = [...left.current, current.current].slice(-30);
+      current.current = r;
+      setRoute(r);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);

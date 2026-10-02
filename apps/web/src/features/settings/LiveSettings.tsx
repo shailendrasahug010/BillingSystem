@@ -20,6 +20,7 @@ import { prepareLogo } from "./firmLogo";
 import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
 import { stateOptions } from "../../lib/states";
 import { PrinterPanel } from "../../components/thermal/ThermalPrint";
+import { serverOrigin } from "../../platform/server";
 
 interface BusinessRow {
   legalName: string;
@@ -918,7 +919,7 @@ function MessagingCard() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label={t("messages.settings.callbackUrl")} htmlFor="msg-callback">
-                  <Input id="msg-callback" readOnly className="[&_input]:font-mono" value={`${window.location.origin}/api/v1/webhooks/whatsapp/${v.whatsapp.statusKey}`} onFocus={(e) => e.currentTarget.select()} />
+                  <Input id="msg-callback" readOnly className="[&_input]:font-mono" value={`${serverOrigin() || window.location.origin}/api/v1/webhooks/whatsapp/${v.whatsapp.statusKey}`} onFocus={(e) => e.currentTarget.select()} />
                 </Field>
                 {v.whatsapp.provider === "meta" && (
                   <>

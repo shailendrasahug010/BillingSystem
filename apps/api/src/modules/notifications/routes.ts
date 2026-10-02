@@ -185,7 +185,9 @@ export const notificationsModule: ApiModule = async (app, deps) => {
     const held = new Set(heldPermissions(ctx.grants));
     reply.hijack();
     const res = reply.raw;
-    res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
+    // The headers set so far go too (security headers, and CORS for the Android app's pages).
+    const already = Object.fromEntries(Object.entries(reply.getHeaders()).filter((h): h is [string, string | number | string[]] => h[1] !== undefined));
+    res.writeHead(200, { ...already, "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no" });
     res.write("retry: 5000\n\nevent: ready\ndata: {}\n\n");
     let unsubscribe: () => void = () => undefined;
     let ended = false;

@@ -6,6 +6,8 @@ import { Dialog } from "../components/ui/Dialog";
 import { Kbd, Skeleton } from "../components/ui/misc";
 import { ToastProvider } from "../components/ui/Toast";
 import { AuthLayout, AuthPage } from "../features/auth/AuthPage";
+import { ServerSetup, useNeedsServer } from "../features/auth/ServerSetup";
+import { NativePush } from "../components/NativePush";
 import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
 import { UnlockPage } from "../features/auth/UnlockPage";
@@ -272,20 +274,27 @@ function Root() {
       </div>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      {LIVE && <NativePush />}
     </AppShell>
   );
 }
 
 export function App() {
+  // The Android app first needs its server's address; nothing reaches the API before.
+  const needsServer = useNeedsServer();
   return (
     <I18nProvider>
-      <SessionProvider>
-        <RouterProvider>
-          <ToastProvider>
-            <SessionGate />
-          </ToastProvider>
-        </RouterProvider>
-      </SessionProvider>
+      {needsServer ? (
+        <ServerSetup />
+      ) : (
+        <SessionProvider>
+          <RouterProvider>
+            <ToastProvider>
+              <SessionGate />
+            </ToastProvider>
+          </RouterProvider>
+        </SessionProvider>
+      )}
     </I18nProvider>
   );
 }

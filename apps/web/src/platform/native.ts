@@ -1,21 +1,18 @@
+import { Capacitor, registerPlugin } from "@capacitor/core";
+
 /**
- * Running inside the Android app (Capacitor): the app puts its bridge on
- * `window.Capacitor`, with the native plugins (Bluetooth printing, the
- * barcode camera, sharing files, push). In a browser there is none and
- * every caller falls back to what the browser can do.
+ * Running inside the Android app (Capacitor): the app's bridge reaches its
+ * native plugins (Bluetooth printing, the barcode scanner, the share sheet,
+ * printing, secure storage, push). In a browser there is none and every
+ * caller falls back to what the browser can do.
  */
-interface CapacitorBridge {
-  isNativePlatform?(): boolean;
-  getPlatform?(): string;
-  Plugins?: Record<string, unknown>;
-}
+export const isNative = () => Capacitor.isNativePlatform();
 
-const bridge = () => (globalThis as { Capacitor?: CapacitorBridge }).Capacitor;
+const plugins = new Map<string, unknown>();
 
-export const isNative = () => Boolean(bridge()?.isNativePlatform?.());
-
-/** A native plugin by name, in the app; null in a browser or when the app lacks it. */
+/** A native plugin by name, in the app; null in a browser, or when this build of the app lacks it. */
 export function nativePlugin<T>(name: string): T | null {
-  if (!isNative()) return null;
-  return (bridge()?.Plugins?.[name] as T | undefined) ?? null;
+  if (!isNative() || !Capacitor.isPluginAvailable(name)) return null;
+  if (!plugins.has(name)) plugins.set(name, registerPlugin(name));
+  return plugins.get(name) as T;
 }

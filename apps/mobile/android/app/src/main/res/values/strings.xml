@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Digital Bahi</string>
+    <string name="title_activity_main">Digital Bahi</string>
+    <string name="package_name">in.digitalbahi.app</string>
+    <string name="custom_url_scheme">in.digitalbahi.app</string>
+</resources>

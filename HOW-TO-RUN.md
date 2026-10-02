@@ -222,6 +222,16 @@ Digital Bahi now opens in its own window, without the browser's tabs and address
 
 The phone needs the **https** address of your server (section 5).
 
+### Android: the Digital Bahi app
+
+The Android app is the same app with the phone's own Bluetooth printing (classic Bluetooth, which most small receipt printers use), Google's barcode scanner, the share sheet, printing to any Android printer, and push notifications.
+
+1. Get the APK: every change builds one (GitHub → **Actions** → **Android app** → the run → **digitalbahi-android-debug**), or build it yourself with Android Studio's SDK installed: `pnpm install`, then `pnpm --filter @digitalbahi/mobile apk` (it is in `apps/mobile/android/app/build/outputs/apk/debug/`).
+2. Install it on the phone (allow installing from this source when Android asks).
+3. On first start it asks for your **server address** (for example `billing.yourshop.in`; https only). Then sign in as on the website. The sign-in is kept in the phone's secure storage.
+4. **Receipt printer:** pair the printer in the phone's **Settings → Bluetooth** first (PIN often 0000 or 1234), then in the app **Settings → Receipt printer** pick it from *Printers paired with this phone*.
+5. **Push notifications** need your own Firebase project: put its `google-services.json` in `apps/mobile/android/app/` before building the APK, and its service account key in the server's `.env` as `FCM_SERVICE_ACCOUNT` (section 5). Without them the bell and the inbox still work.
+
 ### Android (Chrome)
 
 1. Open `https://your-domain` in **Chrome**.

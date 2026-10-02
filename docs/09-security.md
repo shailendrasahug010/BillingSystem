@@ -19,6 +19,8 @@ The system holds a business's customers, prices, margins, receivables, employees
 | MFA | TOTP (authenticator app) available for everyone, **enforceable for Admin and Accountant roles** |
 | Key rotation | JWT signing keys rotate with a `kid` header and a two-key overlap window |
 
+**The Android app** (Capacitor, `apps/mobile`): its pages come from the app itself (https://localhost) and call the business's server, which lets that origin in (`APP_ORIGINS`; CORS with every method the API takes, and on the notification stream). It signs in as a native client (`X-Client: native`): no cookies; the refresh token comes in the response body and is kept in the phone's keystore-backed storage (AES-GCM with a key that never leaves the Android keystore; a value that no longer opens reads as signed out), sent back only to `/auth/refresh`. The server address must be https and must answer as a Digital Bahi server. The app has no cloud backup (`allowBackup=false`). Signing out removes the phone's push token and the stored sign-in.
+
 ## 2. Authorisation
 
 Three layers, all of which must allow an action.

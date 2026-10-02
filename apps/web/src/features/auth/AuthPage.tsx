@@ -10,6 +10,7 @@ import { Field, Input, Select } from "../../components/ui/Field";
 import { ApiError } from "../../lib/api";
 import { translateError } from "@digitalbahi/i18n";
 import { stateOptions } from "../../lib/states";
+import { ServerLine } from "./ServerSetup";
 
 type Mode = "password" | "otp" | "signup" | "reset";
 
@@ -273,6 +274,7 @@ export function AuthPage() {
             {mode === "signup" ? t("auth.signIn") : t("auth.signUp")}
           </button>
         </p>
+        <ServerLine />
       </div>
     </AuthLayout>
   );

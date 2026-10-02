@@ -23,6 +23,12 @@ const Env = z.object({
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   CORS_ORIGINS: z.string().default(""),
+  /**
+   * Where the Android app's pages come from (Capacitor serves them at https://localhost): allowed
+   * to call the API. The app signs in with tokens, not cookies (the refresh cookie is SameSite=Strict
+   * and never goes to another site). Empty: no app.
+   */
+  APP_ORIGINS: z.string().default("https://localhost"),
   COOKIE_SECURE: bool.optional(),
   /** Development only: include OTP codes in API responses instead of sending an SMS. */
   OTP_DEV_ECHO: bool.default(false),
@@ -166,7 +172,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       accessTtlSeconds: e.ACCESS_TOKEN_TTL_SECONDS,
       refreshTtlDays: e.REFRESH_TOKEN_TTL_DAYS,
     },
-    corsOrigins: e.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
+    corsOrigins: [...new Set([...e.CORS_ORIGINS.split(","), ...e.APP_ORIGINS.split(",")].map((s) => s.trim()).filter(Boolean))],
     cookieSecure: e.COOKIE_SECURE ?? e.NODE_ENV === "production",
     otpDevEcho: e.OTP_DEV_ECHO,
     ...(e.DATA_ENCRYPTION_KEY ? { dataEncryptionKey: e.DATA_ENCRYPTION_KEY } : {}),

@@ -47,6 +47,8 @@ export function barcodeDetector(): Promise<Detector> {
 interface NativeScanner {
   scan(o?: { formats?: string[] }): Promise<{ barcodes: Array<{ rawValue: string; format?: string }> }>;
   isSupported?(): Promise<{ supported: boolean }>;
+  /** Google's scanner module comes from Play services, once. */
+  installGoogleBarcodeScannerModule?(): Promise<void>;
 }
 
 /** The phone's own scanner in the Android app (ML Kit), if there is one. */

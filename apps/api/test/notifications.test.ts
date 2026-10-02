@@ -213,9 +213,11 @@ describe.skipIf(!hasDatabase)("notifications", () => {
       const address = await t.app.listen({ port: 0, host: "127.0.0.1" });
       const open = async (token: string) => {
         const controller = new AbortController();
-        const res = await fetch(`${address}/api/v1/notifications/stream`, { headers: { authorization: `Bearer ${token}` }, signal: controller.signal });
+        // As the Android app opens it, from its own pages' origin.
+        const res = await fetch(`${address}/api/v1/notifications/stream`, { headers: { authorization: `Bearer ${token}`, origin: "https://localhost" }, signal: controller.signal });
         expect(res.status).toBe(200);
         expect(res.headers.get("content-type")).toContain("text/event-stream");
+        expect(res.headers.get("access-control-allow-origin")).toBe("https://localhost");
         const reader = res.body!.getReader();
         let text = "";
         const decoder = new TextDecoder();
