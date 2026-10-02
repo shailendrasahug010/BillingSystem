@@ -172,18 +172,22 @@ function Build-App {
     Set-Content -Path (Join-Path $shim 'pnpm.cmd') -Value "@echo off`r`n$pnpm %*" -Encoding Ascii
     $env:Path = "$shim;$env:Path"
   }
-  $out = Join-Path $DataHome 'build'
+  # Built in the checkout's dist-installer (as in CI: on the drive of pnpm's store, which the data folder
+  # may not be), then copied into the data folder.
+  $built = Join-Path $Repo 'dist-installer\DigitalBahi'
   Push-Location $Repo
   try {
     Invoke-Step 'Getting what the build needs (pnpm install)' 'pnpm' @('install', '--frozen-lockfile')
-    Invoke-Step 'The build' $node @('installer\build-bundle.mjs', '--out', $out)
+    Invoke-Step 'The build' $node @('installer\build-bundle.mjs')
   } finally {
     Pop-Location
   }
   if (Test-Path $AppLauncher) { & $node @nodeFlags $AppLauncher stop }
   if (Test-Path $App) { Remove-Item $App -Recurse -Force }
-  Move-Item (Join-Path $out 'DigitalBahi') $App
-  Remove-Item $out, $shim -Recurse -Force -ErrorAction SilentlyContinue
+  # robocopy (in Windows): many small files, from one drive to another; 8 and above are its failures.
+  & (Join-Path $env:SystemRoot 'System32\robocopy.exe') $built $App /E /NFL /NDL /NJH /NJS /NP | Out-Null
+  if ($LASTEXITCODE -ge 8) { throw "Could not copy the build from $built to $App (robocopy code $LASTEXITCODE)." }
+  Remove-Item $built, $shim, (Join-Path $DataHome 'build') -Recurse -Force -ErrorAction SilentlyContinue
   Write-Step "Built into $App. From now on this file starts it, or $App\DigitalBahi.cmd; after git pull, run: installer\windows\DigitalBahi.cmd install"
 }
 

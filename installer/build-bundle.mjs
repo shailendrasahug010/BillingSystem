@@ -39,7 +39,15 @@ if (!["win32", "linux", "darwin"].includes(targetOs) || !["x64", "arm64"].includ
 
 const step = (msg) => console.log(`\n== ${msg}`);
 // pnpm is a .cmd on Windows, which only runs through the shell (so arguments with spaces are quoted).
-const sh = (cmd, cmdArgs, opts = {}) => execFileSync(cmd, SHELL ? cmdArgs.map((a) => (/\s/.test(a) ? `"${a}"` : a)) : cmdArgs, { cwd: REPO, stdio: "inherit", shell: SHELL, ...opts });
+// A step that fails has said why above: no stack trace of this script under it.
+const sh = (cmd, cmdArgs, opts = {}) => {
+  try {
+    execFileSync(cmd, SHELL ? cmdArgs.map((a) => (/\s/.test(a) ? `"${a}"` : a)) : cmdArgs, { cwd: REPO, stdio: "inherit", shell: SHELL, ...opts });
+  } catch (e) {
+    console.error(`\n  "${[cmd, ...cmdArgs].join(" ")}" failed${e.status ? ` (code ${e.status})` : ""}: the lines above it say why.`);
+    process.exit(1);
+  }
+};
 const commit = (() => {
   try {
     return execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd: REPO }).toString().trim();
