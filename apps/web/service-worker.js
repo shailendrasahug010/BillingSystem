@@ -11,8 +11,8 @@
  *    invoice is never lost to an update.
  */
 /* global VERSION, PRECACHE */
-const CACHE = `vyapaar-${VERSION}`;
-const FONTS = "vyapaar-fonts";
+const CACHE = `digitalbahi-${VERSION}`;
+const FONTS = "digitalbahi-fonts";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));

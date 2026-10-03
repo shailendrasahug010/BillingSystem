@@ -40,7 +40,7 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
       expect(res.body.business).toMatchObject({ legalName: "Shree Traders", status: "trial", role: "admin", isOwner: true });
       expect(res.body.businesses).toHaveLength(1);
       expect(res.body.refreshToken).toBeUndefined();
-      const cookie = res.cookies.find((c) => c.name === "vy_rt")!;
+      const cookie = res.cookies.find((c) => c.name === "db_rt")!;
       expect(cookie).toMatchObject({ httpOnly: true, sameSite: "Strict", path: "/api/v1/auth" });
 
       const biz = res.body.business.id as string;
@@ -165,24 +165,33 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
   describe("sessions", () => {
     it("rotates refresh tokens and revokes the family when an old one is replayed", async () => {
       const s = await signup(t);
-      const first = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } });
+      const first = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } });
       expect(first.status).toBe(200);
       expect(first.body.business.id).toBe(s.businessId);
-      const rotated = first.cookies.find((c) => c.name === "vy_rt")!.value;
+      const rotated = first.cookies.find((c) => c.name === "db_rt")!.value;
       expect(rotated).not.toBe(s.refreshCookie);
 
       // A parallel tab using the old cookie within the grace window just retries.
-      const race = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } });
+      const race = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } });
       expect(race.status).toBe(401);
       expect(race.body.error.code).toBe("REFRESH_ROTATED");
 
       // Later, the same old token means it was stolen: the whole session dies.
       t.advance(60_000);
-      const replay = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } });
+      const replay = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } });
       expect(replay.body.error.code).toBe("SESSION_REVOKED");
-      const afterTheft = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: rotated } });
+      const afterTheft = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: rotated } });
       expect(afterTheft.status).toBe(401);
       expect(afterTheft.body.error.code).toBe("SESSION_REVOKED");
+    });
+
+    it("still accepts the cookie under its former name, and replaces it", async () => {
+      const s = await signup(t);
+      const res = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } });
+      expect(res.status).toBe(200);
+      expect(res.cookies.find((c) => c.name === "db_rt")!.value).not.toBe(s.refreshCookie);
+      const legacy = res.cookies.find((c) => c.name === "vy_rt")!;
+      expect(legacy).toMatchObject({ value: "", path: "/api/v1/auth" });
     });
 
     it("gives native apps the refresh token in the body instead of a cookie", async () => {
@@ -192,7 +201,7 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
         body: { identifier: s.mobile, password: s.password },
       });
       expect(login.body.refreshToken).toBeTruthy();
-      expect(login.cookies.find((c) => c.name === "vy_rt")).toBeUndefined();
+      expect(login.cookies.find((c) => c.name === "db_rt")).toBeUndefined();
       const refreshed = await call(t.app, "POST", "/auth/refresh", {
         headers: { "x-client": "native" },
         body: { refreshToken: login.body.refreshToken },
@@ -204,15 +213,15 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
     it("expires refresh tokens", async () => {
       const s = await signup(t);
       t.advance(31 * 86_400_000);
-      const res = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } });
+      const res = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } });
       expect(res.body.error.code).toBe("REFRESH_EXPIRED");
     });
 
     it("logs out the current session", async () => {
       const s = await signup(t);
-      const out = await call(t.app, "POST", "/auth/logout", { token: s.token, cookies: { vy_rt: s.refreshCookie } });
+      const out = await call(t.app, "POST", "/auth/logout", { token: s.token, cookies: { db_rt: s.refreshCookie } });
       expect(out.status).toBe(204);
-      const res = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } });
+      const res = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } });
       expect(res.body.error.code).toBe("SESSION_REVOKED");
     });
 
@@ -257,7 +266,7 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
         body: { mobile: s.mobile, otp: t.otp.last(s.mobile), password: "N3w-password!" },
       });
       expect(res.status).toBe(204);
-      expect((await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } })).body.error.code).toBe("SESSION_REVOKED");
+      expect((await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } })).body.error.code).toBe("SESSION_REVOKED");
       expect((await call(t.app, "POST", "/auth/login", { body: { identifier: s.mobile, password: s.password } })).status).toBe(401);
       expect((await call(t.app, "POST", "/auth/login", { body: { identifier: s.mobile, password: "N3w-password!" } })).status).toBe(200);
     });
@@ -265,7 +274,7 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
     it("changes the password, keeping only the current device signed in", async () => {
       const s = await signup(t);
       const other = await call(t.app, "POST", "/auth/login", { body: { identifier: s.mobile, password: s.password } });
-      const otherCookie = other.cookies.find((c) => c.name === "vy_rt")!.value;
+      const otherCookie = other.cookies.find((c) => c.name === "db_rt")!.value;
       const bad = await call(t.app, "POST", "/auth/password/change", { token: s.token, body: { currentPassword: "wrong", newPassword: "An0ther-pass!" } });
       expect(bad.status).toBe(400);
       const ok = await call(t.app, "POST", "/auth/password/change", {
@@ -273,8 +282,8 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
         body: { currentPassword: s.password, newPassword: "An0ther-pass!" },
       });
       expect(ok.status).toBe(204);
-      expect((await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: otherCookie } })).body.error.code).toBe("SESSION_REVOKED");
-      expect((await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } })).status).toBe(200);
+      expect((await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: otherCookie } })).body.error.code).toBe("SESSION_REVOKED");
+      expect((await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } })).status).toBe(200);
     });
   });
 
@@ -294,7 +303,7 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
       expect(me.body.business.id).toBe(second);
 
       // The session remembers the business across refreshes.
-      const refreshed = await call(t.app, "POST", "/auth/refresh", { cookies: { vy_rt: s.refreshCookie } });
+      const refreshed = await call(t.app, "POST", "/auth/refresh", { cookies: { db_rt: s.refreshCookie } });
       expect(refreshed.body.business.id).toBe(second);
 
       const back = await call(t.app, "POST", "/auth/switch-business", { token: created.body.accessToken, body: { businessId: s.businessId } });

@@ -22,12 +22,14 @@ import {
   type ZeroRatedType,
   zeroRatedKindFor,
   zeroRatedTypeOf,
-} from "@vyapaar/core";
+} from "@digitalbahi/core";
 import { useMemo, useReducer, type Dispatch } from "react";
 import { BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
 import { useCustomerInsight } from "../../data/hooks";
 import { storeAssociations, useStoreVersion, type CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
+import { useSuggestionFeedback, type SuggestionFeedback } from "./suggestionFeedback";
+import { startUnit } from "./units";
 
 export interface DraftLine {
   key: string;
@@ -120,9 +122,15 @@ function reducer(state: Draft, action: Action): Draft {
       return { ...state, customerId: action.customerId, lines };
     }
     case "add": {
-      // Another scan or suggestion of the same product adds to its line in the stock unit.
-      const existing = state.lines.find((l) => l.productId === action.productId && l.unitId === null);
-      const qty = action.qty ?? 1;
+      const product = productById.get(action.productId)!;
+      // In the unit new lines start in (strips of a product sold by the strip); a suggested quantity, counted
+      // in the product's own unit, only when it is whole packs of it (20 tablets: 2 strips of 10).
+      const start = startUnit(product);
+      const inStart = start !== null && (action.qty === undefined || action.qty % start.factor === 0);
+      const unitId = inStart ? start.unitId : null;
+      const qty = inStart && action.qty !== undefined ? action.qty / start.factor : (action.qty ?? 1);
+      // Another scan or suggestion of the same product adds to its line in that unit.
+      const existing = state.lines.find((l) => l.productId === action.productId && l.unitId === unitId);
       if (existing) {
         return {
           ...state,
@@ -130,13 +138,12 @@ function reducer(state: Draft, action: Action): Draft {
           focusKey: existing.key,
         };
       }
-      const product = productById.get(action.productId)!;
       const customer = state.customerId ? customerById.get(state.customerId) ?? null : null;
       lineSeq += 1;
       const key = `l${lineSeq}`;
       return {
         ...state,
-        lines: [...state.lines, { key, productId: product.id, unitId: null, qty, rate: rateFor(product, customer), discountPercent: discountFor(product, customer) }],
+        lines: [...state.lines, { key, productId: product.id, unitId, qty, rate: rateFor(product, customer, unitId), discountPercent: discountFor(product, customer, unitId) }],
         focusKey: key,
       };
     }
@@ -210,6 +217,8 @@ export interface DraftView {
   dueDate: string;
   /** An export or supply to SEZ (zero-rated), and whether IGST is paid on it; null for other sales. */
   zeroRated: { kind: ZeroRatedKind; withPayment: boolean; type: ZeroRatedType } | null;
+  /** What the suggestions offered and what was taken, sent with the saved bill. */
+  feedback: SuggestionFeedback;
 }
 
 export function useInvoiceDraft(initialCustomerId: string | null = null): DraftView {
@@ -217,6 +226,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
   const version = useStoreVersion();
   const customer = draft.customerId ? customerById.get(draft.customerId) ?? null : null;
   const insight = useCustomerInsight(customer?.id ?? null);
+  const feedback = useSuggestionFeedback(customer?.id ?? null);
   // Only a regular registrant makes zero-rated supplies; an export's place of supply is abroad (96).
   const zeroRatedKind = WORKSPACE.chargeTax ? zeroRatedKindFor(customer?.gstRegistration) : null;
   const withPayment = draft.zeroRated.withPayment ?? !lutValidOn(draft.date);
@@ -283,7 +293,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
         cartProductIds: draft.lines.map((l) => l.productId),
         products: suggestionProducts,
       },
-      { limit: 24 },
+      { limit: 24, ...(WORKSPACE.suggestionWeights ? { weights: WORKSPACE.suggestionWeights } : {}) },
     );
   }, [insight, draft.lines, suggestionProducts]);
 
@@ -315,5 +325,6 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
     credit,
     dueDate: addDays(draft.date, customer?.creditDays ?? 0),
     zeroRated,
+    feedback,
   };
 }

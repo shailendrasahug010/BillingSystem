@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PT_RULES, type PtRule, type PtSlab } from "@vyapaar/core";
+import { PT_RULES, type PtRule, type PtSlab } from "@digitalbahi/core";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";

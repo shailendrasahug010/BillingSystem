@@ -2,7 +2,7 @@
 
 The schema is real and runnable: `packages/db/src/schema/*.ts` (Drizzle) generates `packages/db/migrations/0001_schema.sql`; hand-written migrations add extensions (`0000`) and integrity rules (`0002`). `packages/db/test/integrity.test.ts` applies all migrations to a fresh PostgreSQL database and proves the rules below hold.
 
-**86 tables · 36 enum types · 233 foreign keys · 102 indexes · 50 check constraints · append-only triggers · row-level security.**
+**Append-only ledgers · triggers that protect history · row-level security for every business.** How many tables, columns, keys and indexes there are, and every column, is in the generated [database reference](12-database-reference.md).
 
 ## 1. Conventions
 
@@ -16,8 +16,9 @@ The schema is real and runnable: `packages/db/src/schema/*.ts` (Drizzle) generat
 | Soft delete | Master data only (`deleted_at`, `deleted_by`): customers, suppliers, products, brands, categories, warehouses, employees, expenses. Unique codes are enforced only among non-deleted rows (partial unique indexes). |
 | Financial documents | Never deleted once posted: status moves to `cancelled` with reversing ledger entries (DB trigger enforces). |
 | Optimistic locking | `version` integer on editable documents and masters; used for concurrent edits and offline-sync conflict detection. |
-| Idempotency | Documents created by clients carry `client_id`; a unique partial index makes retries (e.g. offline sync replays) harmless. |
-| Enums | PostgreSQL enums for fixed state machines (values shared with `@vyapaar/core`); business-editable lists (leave types, expense categories, customer categories…) are tables. |
+| Idempotency | Documents created by clients carry `client_id`; a unique partial index makes retries (e.g. offline sync replays) harmless, and a transaction advisory lock on the key serialises two requests with the same key, so the second returns the first's result. |
+| Change feed | Triggers on products (and prices, units, barcodes, stock balances), customers and suppliers add a row to `sync_changes` per record and transaction (the transaction id, `xid8`); `GET /sync/pull` reads them past the snapshot the device last read at (Phase 5.3). |
+| Enums | PostgreSQL enums for fixed state machines (values shared with `@digitalbahi/core`); business-editable lists (leave types, expense categories, customer categories…) are tables. |
 | Naming | `snake_case`, plural table names, `<table>_<purpose>_{idx,uq,chk}` for indexes and constraints. |
 
 ## 2. Entity-relationship diagrams
@@ -415,23 +416,7 @@ erDiagram
 
 ## 3. Table catalogue
 
-| Module | Tables |
-|---|---|
-| Platform | `states`, `users`, `businesses`, `settings`, `warehouses`, `files`, `devices`, `document_series` |
-| Access | `permissions`, `roles`, `role_permissions`, `business_members`, `refresh_tokens`, `otp_challenges` |
-| HR | `departments`, `employees`, `attendance`, `leave_types`, `leave_balances`, `leave_requests` |
-| Parties | `price_levels`, `customer_categories`, `sales_routes`, `customers`, `customer_addresses`, `suppliers` |
-| Catalogue | `brands`, `product_categories`, `units`, `tax_categories`, `tax_rates`, `products`, `product_units`, `product_barcodes`, `product_prices`, `product_images`, `batches` |
-| Inventory | `stock_ledger`, `stock_balances`, `stock_adjustments`, `stock_adjustment_items`, `stock_transfers`, `stock_transfer_items` |
-| Purchases | `purchases`, `purchase_items` |
-| Sales & fulfilment | `sales_orders`, `sales_order_items`, `invoices`, `invoice_items`, `invoice_revisions`, `status_history`, `packings`, `packing_items`, `dispatches`, `dispatch_orders`, `price_overrides` |
-| Notes | `credit_debit_notes`, `credit_debit_note_items` |
-| Payments | `payment_accounts`, `payments`, `payment_allocations`, `party_ledger_entries` |
-| Payroll | `salary_components`, `employee_salary_structures`, `employee_salary_structure_components`, `employee_advances`, `payroll_runs`, `salary_slips`, `salary_slip_lines` |
-| Expenses | `expense_categories`, `expenses` |
-| GST | `gst_transactions`, `gst_return_periods`, `gst_exports`, `gst_config` |
-| System | `audit_logs`, `notifications`, `reminder_rules`, `outbox_events`, `sync_mutations`, `backups`, `backup_schedules` |
-| Analytics (derived, rebuildable) | `customer_product_stats`, `product_associations`, `customer_stats`, `sales_daily_product`, `sales_daily_customer` |
+Every table, with all its columns (type, required, default, meaning), keys, foreign keys, checks, indexes, triggers, row-level security and what the API's role may do, is listed in **[12-database-reference.md](12-database-reference.md)**. That reference is generated from a database migrated from scratch and from the comments next to each table and column in `packages/db/src/schema/*.ts` (`pnpm db:docs`), and CI fails when it is out of date, so it is always the current truth; this document explains the design.
 
 How the requested entities map: *Stock* → `stock_balances`; *StockLedger* → `stock_ledger`; *Salaries* → `salary_slips`; *SalaryComponents* → `salary_components` + `salary_slip_lines`; *Leaves* → `leave_requests` (+ types, balances); *Companies/Brands* → `brands`; *ProductCategories* → `product_categories` (self-referencing for subcategories); *TaxRates* → `tax_categories` + `tax_rates`; *GSTTransactions* → `gst_transactions`.
 
@@ -461,7 +446,7 @@ Negative stock is **not** a database constraint on purpose: some distributors bi
 ## 5. Indexing strategy for large data
 
 * Every list screen's main query has a composite index starting with `business_id`: `invoices (business_id, customer_id, invoice_date)`, `invoices (business_id, invoice_date)`, `payments (business_id, customer_id, payment_date)`, `stock_ledger (business_id, product_id, warehouse_id, id)`, `audit_logs (business_id, entity_type, entity_id, created_at)`.
-* **Partial indexes** for hot subsets: open invoices (`status = 'posted' and balance_due > 0`) for outstanding and aging; unread notifications; pending outbox events; pending leave requests.
+* **Partial indexes** for hot subsets: open invoices (`status = 'posted' and balance_due > 0`) for outstanding and aging; notifications per business by date; pending outbox events; pending leave requests.
 * **Trigram (GIN) indexes** on customer, supplier and product names for fuzzy search on the server.
 * **Keyset (cursor) pagination** everywhere; no `OFFSET` on large tables.
 * **Summary tables** for reports (§7 of the architecture doc) and cached balances for lists.
@@ -477,12 +462,15 @@ Negative stock is **not** a database constraint on purpose: some distributors bi
 
 ```bash
 # apply migrations and reference data
-DATABASE_URL=postgres://user:pass@host:5432/vyapaar pnpm --filter @vyapaar/db migrate
-DATABASE_URL=... SEED_DEMO_BUSINESS=1 pnpm --filter @vyapaar/db seed
+DATABASE_URL=postgres://user:pass@host:5432/digitalbahi pnpm --filter @digitalbahi/db migrate
+DATABASE_URL=... SEED_DEMO_BUSINESS=1 pnpm --filter @digitalbahi/db seed
 
 # create the least-privileged application role (operator, once per environment)
 psql "$DATABASE_URL" -v app_password='…' -f packages/db/sql/app-role.sql
 
+# regenerate docs/12-database-reference.md after changing the schema or its comments (same kind of server)
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm db:docs
+
 # integration test on a throw-away database (needs a server you can CREATE DATABASE on)
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @vyapaar/db test
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @digitalbahi/db test
 ```

@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "./fonts.css";
 
+/* A screen under 500 px tall: a laptop zoomed in a lot, a phone on its side. The phone's
+   bottom bar is left out there (the menu button opens everything), so the content keeps room. */
+@custom-variant short (@media (max-height: 500px));
+
 /*
  * DIGITAL BAHI DESIGN TOKENS
  * ---------------------
@@ -483,7 +487,12 @@ h3 {
   animation: pop-in 180ms var(--ease-out);
 }
 
-/* Pages and sections arrive with a short rise; lists of cards one after another. */
+/*
+ * Pages and sections arrive with a short rise; lists of cards one after another.
+ * Fill "backwards", not "both": an animation still holding its last transform
+ * makes the element the frame of every position: fixed inside it, so the
+ * phone's bill total bar would scroll with the page over the last line.
+ */
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -496,11 +505,11 @@ h3 {
 }
 
 .animate-page {
-  animation: rise-in 360ms var(--ease-out) both;
+  animation: rise-in 360ms var(--ease-out) backwards;
 }
 
 .stagger > * {
-  animation: rise-in 480ms var(--ease-out) both;
+  animation: rise-in 480ms var(--ease-out) backwards;
 }
 .stagger > :nth-child(2) { animation-delay: 40ms; }
 .stagger > :nth-child(3) { animation-delay: 80ms; }

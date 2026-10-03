@@ -9,6 +9,7 @@ import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { TODAY } from "../../data/db";
 import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { invalidateMoney } from "../payments/PaymentDialog";
 
 const AMOUNT = /^\d{1,13}(\.\d{1,2})?$/;
@@ -17,9 +18,27 @@ const AMOUNT = /^\d{1,13}(\.\d{1,2})?$/;
  * A discount or rate difference after the bill (credit note to the customer),
  * or the supplier's credit note for the same on a purchase. Only the value
  * changes: no goods move. The server spreads the amount over the bill's lines
- * and applies each line's GST.
+ * and applies each line's GST. Without a connection (given the party and the
+ * bill's totals) it is kept on this device and sent later; the balance moves
+ * here at once by an estimate.
  */
-export function PriceNoteDialog({ kind, documentId, documentNumber, open, onOpenChange }: { kind: "sale" | "purchase"; documentId: string; documentNumber: string; open: boolean; onOpenChange(v: boolean): void }) {
+export function PriceNoteDialog({
+  kind,
+  documentId,
+  documentNumber,
+  open,
+  onOpenChange,
+  party,
+  totals,
+}: {
+  kind: "sale" | "purchase";
+  documentId: string;
+  documentNumber: string;
+  open: boolean;
+  onOpenChange(v: boolean): void;
+  party?: { id: string; name: string };
+  totals?: { grandTotal: number; taxable: number };
+}) {
   const { t, money } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
@@ -45,26 +64,55 @@ export function PriceNoteDialog({ kind, documentId, documentNumber, open, onOpen
     setKey(newIdempotencyKey());
   }, [open]);
   const valid = AMOUNT.test(value) && Number(value) > 0 && (mode === "amount" || Number(value) <= 100);
+  const body = {
+    noteDate: date,
+    reason,
+    [mode]: value,
+    ...(partyNote.trim() ? { partyNoteNumber: partyNote.trim() } : {}),
+    ...(notes.trim() ? { notes: notes.trim() } : {}),
+  };
+  /** Kept on this device with the same key; the estimate (GST included) moves the balance here until the server's note comes. */
+  const keep = async () => {
+    const scope = offlineScope();
+    if (!scope || !party || !totals) throw new ApiError(0, "network");
+    const n = Number(value);
+    const estimate = Math.round((mode === "percent" ? (totals.grandTotal * n) / 100 : totals.taxable > 0 ? (n * totals.grandTotal) / totals.taxable : n) * 100) / 100;
+    const kept = await queueEntry({
+      kind: "price-note",
+      id: key,
+      userId: scope.userId,
+      businessId: scope.businessId,
+      savedAt: new Date().toISOString(),
+      status: "pending",
+      error: null,
+      side: kind,
+      documentId,
+      documentNumber,
+      partyId: party.id,
+      partyName: party.name,
+      date,
+      estimate,
+      body,
+    });
+    if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+    toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("notes.priceSaved")} · ≈ ${money(estimate)} · ${t("offline.sendsLater")}` });
+    onOpenChange(false);
+  };
   const save = async () => {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.post<{ noteNumber: string; grandTotal: string }>(
-        `/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/price-notes`,
-        {
-          noteDate: date,
-          reason,
-          [mode]: value,
-          ...(partyNote.trim() ? { partyNoteNumber: partyNote.trim() } : {}),
-          ...(notes.trim() ? { notes: notes.trim() } : {}),
-        },
-        { idempotencyKey: key },
-      );
+      if (workingOffline()) return await keep();
+      const res = await api.post<{ noteNumber: string; grandTotal: string }>(`/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/price-notes`, body, { idempotencyKey: key });
       invalidateMoney(qc);
       for (const k of ["invoice", "invoice-raw", "purchase", "notes", "reports", "gst"]) void qc.invalidateQueries({ queryKey: [k] });
       toast({ tone: "success", title: t("notes.priceSaved"), body: `${res.noteNumber} · ${money(res.grandTotal)}` });
       onOpenChange(false);
     } catch (e) {
+      if (unreachable(e) && party && totals) {
+        await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));
+        return;
+      }
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
       setBusy(false);

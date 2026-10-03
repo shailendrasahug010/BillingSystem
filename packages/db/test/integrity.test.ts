@@ -4,7 +4,7 @@
  * integrity rules hold at the database level. Skipped when DATABASE_URL is not
  * set (e.g. a laptop without Postgres); always runs in CI.
  *
- *   DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @vyapaar/db test
+ *   DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @digitalbahi/db test
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -14,7 +14,7 @@ import {
   formatDocumentNumber,
   taxAt,
   TAX_ENGINE_VERSION,
-} from "@vyapaar/core";
+} from "@digitalbahi/core";
 import { and, eq, sql } from "drizzle-orm";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -22,7 +22,7 @@ import { createDb, runMigrations, seedBusinessDefaults, seedReferenceData } from
 import * as s from "../src/schema/index.js";
 
 const adminUrl = process.env.DATABASE_URL;
-const dbName = `vyapaar_it_${Date.now()}`;
+const dbName = `digitalbahi_it_${Date.now()}`;
 const today = "2026-09-24";
 
 function urlFor(database: string): string {
@@ -407,10 +407,10 @@ describe.skipIf(!adminUrl)("database integrity (PostgreSQL)", () => {
   it("isolates businesses with row-level security for the application role", async () => {
     const client = await handle.pool.connect();
     try {
-      await client.query(`CREATE ROLE vyapaar_it_app NOLOGIN`);
-      await client.query(`GRANT SELECT, INSERT ON customers TO vyapaar_it_app`);
+      await client.query(`CREATE ROLE digitalbahi_it_app NOLOGIN`);
+      await client.query(`GRANT SELECT, INSERT ON customers TO digitalbahi_it_app`);
       await client.query("BEGIN");
-      await client.query("SET LOCAL ROLE vyapaar_it_app");
+      await client.query("SET LOCAL ROLE digitalbahi_it_app");
       const none = await client.query("select count(*)::int as n from customers");
       expect(none.rows[0].n).toBe(0);
       await client.query(`SELECT set_config('app.business_id', $1, true)`, [ids.bizA]);
@@ -424,7 +424,7 @@ describe.skipIf(!adminUrl)("database integrity (PostgreSQL)", () => {
       expect(crossTenant?.message).toMatch(/row-level security/);
       await client.query("ROLLBACK");
     } finally {
-      await client.query("DROP OWNED BY vyapaar_it_app; DROP ROLE vyapaar_it_app").catch(() => undefined);
+      await client.query("DROP OWNED BY digitalbahi_it_app; DROP ROLE digitalbahi_it_app").catch(() => undefined);
       client.release();
     }
   });

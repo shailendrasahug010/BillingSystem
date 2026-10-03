@@ -51,7 +51,7 @@ export interface TokenService {
   accessTtlSeconds: number;
 }
 
-const AUDIENCE = "vyapaar-api";
+const AUDIENCE = "digitalbahi-api";
 
 export async function createTokenService(config: Config): Promise<TokenService> {
   let privateKey: CryptoKey;

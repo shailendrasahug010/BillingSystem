@@ -136,7 +136,8 @@
     "create": "Create",
     "auditLog": "Audit Log",
     "messages": "Messages",
-    "outstanding": "Outstanding"
+    "outstanding": "Outstanding",
+    "beat": "Beat"
   },
   "auth": {
     "welcome": "Welcome back",
@@ -324,7 +325,8 @@
     "belowCost": "Below purchase cost",
     "stockShort": "Only {{qty}} in stock",
     "alreadyAdded": "Added",
-    "lineCount": "{{count}} lines · {{qty}} qty",
+    "lineCount_one": "{{count}} line · {{qty}} qty",
+    "lineCount_other": "{{count}} lines · {{qty}} qty",
     "customerCard": {
       "outstanding": "Outstanding",
       "creditLimit": "Credit limit",
@@ -333,7 +335,8 @@
       "avgOrder": "Avg. order",
       "paymentBehaviour": "Payments",
       "never": "No purchases yet",
-      "viewProfile": "View profile"
+      "viewProfile": "View profile",
+      "ofLimit": "{{amount}} of {{limit}}"
     },
     "steps": {
       "customer": "Customer",
@@ -389,7 +392,36 @@
       "editShippingBill": "Change shipping bill",
       "shippingBillSaved": "Shipping bill saved",
       "shippingBillMissing": "Shipping bill not added yet"
-    }
+    },
+    "review": {
+      "title": "Made offline, held for review",
+      "reviewedTitle": "Made offline, reviewed",
+      "hint": "It reached the server after something had changed. It is posted (stock and the customer's balance have moved). Check it, then mark it reviewed; if it should not stand, cancel it or issue a credit note.",
+      "note": "What was done (optional)",
+      "markReviewed": "Mark reviewed",
+      "done": "Marked reviewed",
+      "reviewedBy": "Reviewed by {{name}}, {{when}}",
+      "badge": "Held for review"
+    },
+    "cancel": {
+      "button": "Cancel bill",
+      "title": "Cancel bill {{number}}",
+      "hint": "The goods go back into stock and the customer no longer owes this bill; money already paid against it stays with them as an advance. The bill keeps its number, marked cancelled. A bill with returns against it cannot be cancelled.",
+      "confirm": "Cancel the bill",
+      "done": "Bill {{number}} cancelled",
+      "reasonHint": "At least 3 letters; kept with the bill"
+    },
+    "unitKeys": "a letter after the qty picks the unit: {{letters}}",
+    "unitOnly": "Sold by {{unit}} only. To bill it in boxes or strips, add them to the product.",
+    "added": "Invoice added successfully",
+    "viewBill": "View invoice",
+    "nextBill": "New invoice",
+    "receivedAmount": "Received {{amount}}",
+    "balanceAmount": "Balance {{amount}}",
+    "paidInFull": "Paid in full",
+    "sendOnWhatsApp": "Send on WhatsApp",
+    "copyMessage": "Copy message",
+    "copied": "Copied"
   },
   "suggestions": {
     "title": "Smart suggestions",
@@ -430,7 +462,9 @@
         "lapsed": "Lapsed",
         "irregular": "Occasional"
       }
-    }
+    },
+    "showAll": "All {{count}}",
+    "showLess": "Show less"
   },
   "customer": {
     "title": "Customers",
@@ -491,7 +525,16 @@
     "sez": "SEZ",
     "export": "Export",
     "exportHint": "A buyer outside India: bills are exports (place of supply 96, other country).",
-    "sezHint": "A unit or developer in a Special Economic Zone: bills are zero-rated supplies to SEZ."
+    "sezHint": "A unit or developer in a Special Economic Zone: bills are zero-rated supplies to SEZ.",
+    "messageLocale": "Messages in",
+    "messageLocaleDefault": "As the business's documents",
+    "remindersOptOut": "No payment reminders",
+    "remindersOptOutHint": "No automatic or bulk payment reminders go to this customer.",
+    "remindersStopped": "Payment reminders stopped",
+    "remindersStoppedBy": {
+      "staff": "Stopped on {{date, date}}",
+      "reply": "They replied STOP on WhatsApp on {{date, date}}"
+    }
   },
   "supplier": {
     "title": "Suppliers",
@@ -667,7 +710,8 @@
     "saveInvoice": "Save invoice",
     "addSuggestion": "Add suggestion 1–9",
     "closeDialog": "Close dialog",
-    "help": "Show shortcuts"
+    "help": "Show shortcuts",
+    "saveAndPrint": "Save and print"
   },
   "search": {
     "placeholder": "Search customers, products, invoices, GSTIN, mobile…",
@@ -809,7 +853,22 @@
       "on": "We e-invoice"
     },
     "ewayThreshold": "E-way bill above",
-    "ewayThresholdHint": "₹50,000 in most states; some states set more for movement within the state"
+    "ewayThresholdHint": "₹50,000 in most states; some states set more for movement within the state",
+    "paymentDetails": "Where customers pay",
+    "paymentDetailsHint": "Printed on invoices: the bank account and UPI ID. Bills that still owe money also get a UPI code to scan, on the PDF and on receipts.",
+    "bankName": "Bank",
+    "accountNumber": "Account number",
+    "upiId": "UPI ID",
+    "paymentInvalid": "Check this",
+    "billUnits": "Units on the bill",
+    "billUnitsHint": "Each line of a bill has a list of the units the product is sold in (pieces, strips, boxes). Typing a unit's letter after the quantity picks it: 2 then B is 2 boxes. A letter two units share picks one, then the other.",
+    "startUnit": "New lines start in",
+    "startUnitHint": "When the product is sold in this unit; otherwise in its own.",
+    "startUnitOwn": "Each product's own unit",
+    "unitLetters": "Letters (empty: the unit's first letter)",
+    "unitLetterFor": "Letter for {{unit}}",
+    "unitLettersDefault": "Back to first letters",
+    "unitLettersInvalid": "One letter a unit (A–Z or a Hindi letter)."
   },
   "gst": {
     "b2b": "B2B",
@@ -1006,7 +1065,7 @@
     "DEVICE_LIMIT_REACHED": "This business has used every device code. Remove old devices in Settings.",
     "DEVICE_REVOKED": "This device was removed from the business, so its offline bills can't be saved. Ask the owner.",
     "OFFLINE_NUMBER_INVALID": "Bill number {{number}} does not belong to this device's series.",
-    "MESSAGING_NOT_CONFIGURED": "This channel is not set up yet. The owner can set up WhatsApp and email in Settings → WhatsApp & email.",
+    "MESSAGING_NOT_CONFIGURED": "This channel is not set up yet. The owner can set it up in Settings → WhatsApp, SMS & email.",
     "MESSAGE_NO_RECIPIENT": "There is no mobile number or email for {{party}}. Add it to the party, or type one.",
     "MESSAGE_RECIPIENT_INVALID": "“{{to}}” is not a valid mobile number or email address.",
     "MESSAGE_SEND_FAILED": "The message could not be sent: {{reason}}",
@@ -1048,7 +1107,12 @@
     "EINVOICE_NOT_APPLICABLE": "{{number}} is not e-invoiced: only bills to registered buyers, SEZ units and abroad are.",
     "EWAY_BILL_HAS_ERRORS": "{{number}} cannot go to the e-way bill portal yet: see what to fix in GST Reports → E-way bill.",
     "NO_EWAY_BILLS_DUE": "No bill on this trip needs an e-way bill.",
-    "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice."
+    "EWAY_BILL_BEFORE_INVOICE": "The e-way bill cannot be dated before the invoice.",
+    "REMINDER_RULE_OFF": "Switch the reminder rule on first.",
+    "NOT_HELD_FOR_REVIEW": "This bill is not held for review.",
+    "SECTION_REQUIRED": "Choose which table to download.",
+    "DEVICE_NOT_FOUND": "This device is not registered in this business.",
+    "RANGE_TOO_LONG": "Choose at most {{days}} days."
   },
   "validation": {
     "required": "This field is required",
@@ -1063,7 +1127,10 @@
     "amount": "Enter a valid number",
     "hsn": "HSN must be 4, 6 or 8 digits",
     "positive": "Must be more than zero",
-    "ifsc": "Enter a valid IFSC, e.g. SBIN0001234"
+    "ifsc": "Enter a valid IFSC, e.g. SBIN0001234",
+    "tooShort": "At least {{min}} characters",
+    "passwordShort": "At least 8 characters",
+    "email": "Enter a valid email address"
   },
   "designSystem": {
     "title": "Design system",
@@ -1219,6 +1286,7 @@
     "title": "Reports",
     "subtitle": "Sales, collections, purchases and dues for any period",
     "tabs": {
+      "insights": "Insights",
       "sales": "Sales",
       "collections": "Collections",
       "purchases": "Purchases",
@@ -1455,7 +1523,7 @@
       "user": "Users and roles",
       "audit": "Audit log",
       "backup": "Backup",
-      "message": "Messages (WhatsApp, email)"
+      "message": "Messages (WhatsApp, SMS, email)"
     },
     "actions": {
       "view": "View",
@@ -1475,6 +1543,7 @@
       "override_price": "Override price",
       "override_credit_limit": "Override credit limit",
       "backdate": "Backdate",
+      "review": "Review held offline bills",
       "pack": "Pack",
       "dispatch": "Dispatch",
       "deliver": "Deliver",
@@ -2100,6 +2169,87 @@
     "lastSold": "Last sold",
     "movementHint": "Fast: the products making the first 80% of sales. Not moving: in stock but not sold in the period. Days of cover: how long the stock lasts at this period's pace."
   },
+  "insights": {
+    "measures": "Measures",
+    "compare": "Compared with",
+    "compareWith": {
+      "previous": "the period before",
+      "last_year": "the same period last year"
+    },
+    "comparedPeriod": "Compared with {{from}} – {{to}}",
+    "kpis": {
+      "netSales": "Net sales",
+      "grossMargin": "Gross margin",
+      "marginPercent": "Margin %",
+      "costOfGoodsSold": "Cost of goods sold",
+      "bills": "Bills",
+      "averageBill": "Average bill",
+      "customersBilled": "Customers billed",
+      "newCustomers": "New customers",
+      "returns": "Returns",
+      "returnRate": "Return rate",
+      "collections": "Collections",
+      "receivables": "Customers owe",
+      "daysSalesOutstanding": "Days to collect",
+      "inventoryValue": "Stock value",
+      "turnover": "Stock turnover",
+      "daysOfInventory": "Days of stock"
+    },
+    "was": "was {{value}}",
+    "points": "{{value}} pts",
+    "noComparison": "nothing before",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "times": "{{value}}×",
+    "trend": "Last 12 months",
+    "month": "Month",
+    "sales": "Sales",
+    "margin": "Margin",
+    "contribution": "Where sales come from",
+    "by": {
+      "customers": "Customers",
+      "companies": "Companies",
+      "salespeople": "Salespeople"
+    },
+    "share": "Share",
+    "class": "Class",
+    "earlier": "Earlier period",
+    "change": "Change",
+    "status": {
+      "new": "New",
+      "lost": "Lost",
+      "growing": "Growing",
+      "declining": "Declining"
+    },
+    "abcSummary": {
+      "customers_one": "{{class}}: {{count}} customer, {{share}}% of sales",
+      "customers_other": "{{class}}: {{count}} customers, {{share}}% of sales",
+      "companies_one": "{{class}}: {{count}} company, {{share}}% of sales",
+      "companies_other": "{{class}}: {{count}} companies, {{share}}% of sales",
+      "salespeople_one": "{{class}}: {{count}} salesperson, {{share}}% of sales",
+      "salespeople_other": "{{class}}: {{count}} salespeople, {{share}}% of sales"
+    },
+    "newLost": "{{new}} new · {{lost}} lost (they bought {{lostSales}} before)",
+    "abcHint": "A: the few that make the first 80% of sales; B: the next 15%; C: the rest. Growth is against the earlier period.",
+    "noBrand": "No company",
+    "unassigned": "No salesperson",
+    "stock": "How stock moves",
+    "fast": "Fast movers",
+    "slow": "Slow movers",
+    "dead": "Dead stock",
+    "fastHint": "The best sellers of the period, with how long their stock lasts at this pace.",
+    "slowHint": "Selling, but the stock lasts more than {{days}} days at this pace",
+    "deadHint": "In stock, not sold for {{days}} days",
+    "tiedUp_one": "{{value}} tied up in {{count}} product",
+    "tiedUp_other": "{{value}} tied up in {{count}} products",
+    "none": {
+      "fast": "No sales in this period",
+      "slow": "Nothing slow",
+      "dead": "No dead stock"
+    },
+    "neverSold": "Never sold",
+    "hint": "Sales are before GST and net of returns and discounts; margin uses the average purchase cost when each item was sold. Stock is valued at cost on the period's last day; days to collect compare what customers owe with the period's billing."
+  },
   "billImport": {
     "button": "Import bill",
     "title": "Import supplier bill",
@@ -2202,7 +2352,14 @@
       "removedToast": "Device removed",
       "wipedOn": "Copy deleted {{when}}",
       "wipePending": "Deletes its copy when it next connects",
-      "noSeries": "No bills"
+      "noSeries": "No bills",
+      "waiting": "Not sent",
+      "allSent": "All sent",
+      "waitingSince_one": "{{count}} waiting since {{when}}",
+      "waitingSince_other": "{{count}} waiting since {{when}}",
+      "refused_one": "{{count}} refused by the server",
+      "refused_other": "{{count}} refused by the server",
+      "reportedAt": "as of {{when}}"
     },
     "kinds": {
       "invoice": "Bill",
@@ -2214,7 +2371,10 @@
       "collection-note": "Visit note",
       "purchase": "Purchase bill",
       "expense": "Expense",
-      "return": "Return"
+      "return": "Return",
+      "price-note": "Discount note",
+      "invoice-cancel": "Bill cancelled",
+      "visit": "Call on the beat"
     },
     "removeEntryConfirm": "Remove this {{what}} ({{name}})? It will not reach the books.",
     "removeCustomerConfirm": "Remove the new customer {{name}}? Bills, payments and orders for them that are still waiting cannot be sent then.",
@@ -2241,7 +2401,10 @@
     "wiped": "The owner removed this device, so the copy of {{business}} kept on it has been deleted.",
     "theBusiness": "the business",
     "wipedWaiting_one": "{{count}} entry that had not been sent was deleted with it.",
-    "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them."
+    "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them.",
+    "heldForReview": "Held for review: the server took it, and a manager will check it",
+    "editKept": "Their later change kept: {{fields}}",
+    "cancelWaiting": "Cancelled on this device, waiting to send"
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"
@@ -2258,8 +2421,8 @@
     "reminder": "Namaste {{party}}, a reminder from {{business}}: {{balance}} is due, of which {{overdue}} is overdue since {{since}}. Please pay at the earliest. Thank you.",
     "reminderBalance": "Namaste {{party}}, a reminder from {{business}}: your balance is {{balance}}. Thank you.",
     "test": "This is a test message from {{business}} on Digital Bahi. WhatsApp and email are set up.",
-    "title": "WhatsApp & email",
-    "subtitle": "Bills, receipts and payment reminders sent to customers from your own WhatsApp Business number and email",
+    "title": "WhatsApp, SMS & email",
+    "subtitle": "Bills, receipts and payment reminders sent to customers from your own WhatsApp Business number, by SMS and by email",
     "tabs": {
       "sent": "Sent",
       "reminders": "Payment reminders"
@@ -2276,7 +2439,7 @@
     "toHintEmail": "Email address",
     "toOnFile": "The one saved for the party",
     "attachment": "The PDF {{name}} goes with the message.",
-    "notReady": "Not set up yet. The owner can set it up in Settings → WhatsApp & email.",
+    "notReady": "Not set up yet. The owner can set it up in Settings → WhatsApp, SMS & email.",
     "testMode": "Test mode: messages are recorded here but not sent (the server runs with MESSAGING_DRIVER=log).",
     "history": "Sent earlier",
     "noHistory": "Not sent yet.",
@@ -2300,7 +2463,7 @@
     },
     "retry": "Try again",
     "retrying": "Sending again…",
-    "remindersHint": "Customers who owe you money. Tick whom to remind; the messages go out one after another from your WhatsApp Business number or email.",
+    "remindersHint": "Customers who owe you money. Tick whom to remind; the messages go out one after another from your WhatsApp Business number, by SMS or by email.",
     "onlyOverdue": "Only overdue",
     "balance": "Balance",
     "overdue": "Overdue",
@@ -2315,7 +2478,7 @@
     "skipped_other": "{{count}} skipped (no balance or contact)",
     "noCandidates": "No customer owes you money right now.",
     "settings": {
-      "title": "WhatsApp & email",
+      "title": "WhatsApp, SMS & email",
       "hint": "Send bills, receipts and reminders from your own WhatsApp Business number and email. Tokens and passwords are stored encrypted and never shown again.",
       "ready": "Ready",
       "off": "Off",
@@ -2358,8 +2521,28 @@
       "ticksProvider": "Give this address to your provider for status updates. They sign them with the same secret as the messages we send them.",
       "callbackUrl": "Callback URL",
       "verifyToken": "Verify token",
-      "appSecret": "Meta app secret"
-    }
+      "appSecret": "Meta app secret",
+      "templateLanguageHi": "Language code of the same templates in Hindi",
+      "templateLanguageHiHint": "If your templates are approved in Hindi too (usually hi), customers who get messages in Hindi get them in Hindi. Leave empty to send them the default language's.",
+      "smsTitle": "SMS",
+      "smsHint": "Payment reminders by SMS go through your SMS provider. Give them (or your developer) this: we post signed JSON {channel, to, text, senderId, templateId} to their address. In India register the sender id and the reminder text with DLT first.",
+      "smsProvider": "SMS",
+      "smsProviders": {
+        "none": "Off",
+        "webhook": "Through our SMS provider (webhook)"
+      },
+      "smsUrl": "Provider's address (URL)",
+      "smsSecret": "Signing secret",
+      "smsSenderId": "Sender id (DLT header)",
+      "smsTemplate": "DLT template id: reminder in English",
+      "smsTemplateHi": "DLT template id: reminder in Hindi"
+    },
+    "reminderStop": "Reply STOP to stop these reminders.",
+    "automatic": "Automatic",
+    "sms": "SMS",
+    "skippedOptedOut_one": "{{count}} left out: asked not to get reminders",
+    "skippedOptedOut_other": "{{count}} left out: asked not to get reminders",
+    "optedOut": "No reminders"
   },
   "backup": {
     "title": "Backup & Restore",
@@ -2437,7 +2620,7 @@
       "lastSent": "Last backup emailed {{when}}.",
       "lastFailed": "The backup of {{when}} was not sent: {{reason}}",
       "setUpBy": "Set up by {{name}}; the copies go out in their name.",
-      "emailNotReady": "Email is not set up yet. Set it up in Settings → WhatsApp & email, then turn on automatic backups."
+      "emailNotReady": "Email is not set up yet. Set it up in Settings → WhatsApp, SMS & email, then turn on automatic backups."
     }
   },
   "priceLists": {
@@ -2592,7 +2775,10 @@
     "entries_other": "{{count}} entries",
     "onLeaveToday_one": "{{count}} on leave today",
     "onLeaveToday_other": "{{count}} on leave today",
-    "open": "Open"
+    "open": "Open",
+    "reviewHeld": "Offline bills to review",
+    "moreReasons_one": "and {{count}} more",
+    "moreReasons_other": "and {{count}} more"
   },
   "reportViews": {
     "menu": "Saved views",
@@ -2707,6 +2893,429 @@
       "SHIPPING_BILL": "Shipping bill not added yet",
       "VEHICLE_FORMAT": "Vehicle number looks wrong",
       "EXPORT_PORT_STATE": "Export: the port's state is taken as yours; change it on the portal if not"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Reminders and updates for you and your role",
+    "unreadCount_one": "{{count}} unread",
+    "unreadCount_other": "{{count}} unread",
+    "empty": "Nothing here yet. Reminders and updates will show up here.",
+    "emptyUnread": "All caught up: nothing unread.",
+    "markAllRead": "Mark all as read",
+    "markedAll_one": "{{count}} notification marked as read",
+    "markedAll_other": "{{count}} notifications marked as read",
+    "markRead": "Mark as read",
+    "dismiss": "Dismiss",
+    "seeAll": "See all",
+    "unread": "Unread",
+    "generic": "New notification",
+    "tabs": {
+      "inbox": "Inbox",
+      "rules": "Reminder rules"
+    },
+    "rules": {
+      "intro": "Each day, after its hour, a rule checks the business and leaves one notification when there is something to act on. Order and leave rules also notify the moment it happens.",
+      "readOnly": "Only someone whose role can configure notifications can change these.",
+      "hour": "Check after",
+      "daysBefore": "Days ahead",
+      "daysBeforeHint": "Also remind about bills falling due within this many days",
+      "dayOfMonth": "From day",
+      "dayOfMonthHint": "Day of the month the reminder starts",
+      "afterHours": "After",
+      "afterHoursHint": "Remind when a device has held work this long without reporting",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "asItHappens": "Also as it happens",
+      "forRole": "For roles with {{permission}}",
+      "lastRun": "Last checked {{date, date}}",
+      "notRun": "Not checked yet",
+      "saved": "Reminder rule saved",
+      "checkNow": "Check now",
+      "checkedRaised": "Checked: the notification is in the inbox",
+      "checkedAlready": "Already notified today: see the inbox",
+      "checkedNothing": "Nothing to remind about right now",
+      "on": "On",
+      "types": {
+        "customer_payment_due": {
+          "name": "Customer payments due",
+          "help": "Customer bills past their due date, and those falling due in the next few days."
+        },
+        "supplier_payment_due": {
+          "name": "Supplier payments due",
+          "help": "Purchase bills to pay: past their due date, and falling due in the next few days."
+        },
+        "low_stock": {
+          "name": "Low stock",
+          "help": "Products at or below their minimum stock."
+        },
+        "expiring_stock": {
+          "name": "Expiring stock",
+          "help": "Batches in stock that expire within the warning days set for stock, or have expired."
+        },
+        "pending_orders": {
+          "name": "Orders to confirm",
+          "help": "Orders waiting for confirmation."
+        },
+        "to_pack": {
+          "name": "Orders to pack",
+          "help": "Confirmed orders waiting to be packed."
+        },
+        "to_dispatch": {
+          "name": "Orders to dispatch",
+          "help": "Packed orders waiting to go out."
+        },
+        "leave_request": {
+          "name": "Leave requests",
+          "help": "Leave requests waiting for a decision. Employees who use the app hear when theirs is decided."
+        },
+        "salary_due": {
+          "name": "Salary due",
+          "help": "From the set day of the month until last month's salaries are paid."
+        },
+        "devices_unsynced": {
+          "name": "Devices with work not sent",
+          "help": "A phone or PC holding work made offline that has not reached the server after the set hours, or work the server refused."
+        },
+        "orders_waiting": {
+          "name": "Orders waiting too long",
+          "help": "An order that has waited the set hours to be confirmed, packed or dispatched. Looked at every hour from the set time; each order is told once."
+        },
+        "customer_reminders": {
+          "name": "Payment reminders to customers",
+          "help": "Sends customers with overdue bills a reminder themselves, by WhatsApp, SMS or email, in their language: the first some days after the oldest bill fell due, then every few days, up to the set number while those bills stay unpaid. Customers who asked not to get them never do."
+        }
+      },
+      "afterHoursOrdersHint": "Remind when an order has waited this long at one step",
+      "hourly": "Every hour from then",
+      "lastRunAt": "Last checked {{time}}",
+      "sendAfter": "Send after",
+      "firstAfterDays": "First reminder",
+      "firstAfterDaysHint": "Days after the oldest unpaid bill fell due",
+      "repeatDays": "Then every",
+      "maxCount": "At most",
+      "maxCountHint": "While the same bills stay unpaid; paying them starts again",
+      "minAmount": "Overdue at least",
+      "channel": "Send by",
+      "channels": {
+        "whatsapp_or_sms": "WhatsApp, else SMS",
+        "whatsapp": "WhatsApp",
+        "sms": "SMS",
+        "email": "Email"
+      },
+      "dayZero": "The day after",
+      "times_one": "{{count}} reminder",
+      "times_other": "{{count}} reminders",
+      "offNote": "Off until you turn it on: it writes to your customers. Set up WhatsApp, SMS or email first (Settings → WhatsApp, SMS & email).",
+      "dueToday": "Due a reminder today",
+      "dueTodayEmpty": "Nobody is due a reminder today.",
+      "dueLine": "{{overdue, currency}} overdue for {{days}} days · {{sent}} sent so far",
+      "noChannel": "No WhatsApp, SMS or email",
+      "sendNow": "Send now",
+      "sendConfirm": "Send payment reminders now to the customers due one today? Today's scheduled run then sends nothing more.",
+      "sentNow": "Payment reminders are on their way: see Messages"
+    },
+    "customer_payment_due": {
+      "overdue_one": "{{count}} customer bill is overdue: {{overdueAmount, currency}}",
+      "overdue_other": "{{count}} customer bills are overdue: {{overdueAmount, currency}}",
+      "alsoDue": "Also due today or within {{days}} days: {{dueAmount, currency}} (bills: {{dueCount}}).",
+      "soon_one": "{{count}} customer bill is due today or within {{days}} days: {{dueAmount, currency}}",
+      "soon_other": "{{count}} customer bills are due today or within {{days}} days: {{dueAmount, currency}}"
+    },
+    "supplier_payment_due": {
+      "overdue_one": "{{count}} supplier bill is overdue to pay: {{overdueAmount, currency}}",
+      "overdue_other": "{{count}} supplier bills are overdue to pay: {{overdueAmount, currency}}",
+      "alsoDue": "Also due today or within {{days}} days: {{dueAmount, currency}} (bills: {{dueCount}}).",
+      "soon_one": "{{count}} supplier bill is due to pay today or within {{days}} days: {{dueAmount, currency}}",
+      "soon_other": "{{count}} supplier bills are due to pay today or within {{days}} days: {{dueAmount, currency}}"
+    },
+    "low_stock": {
+      "title_one": "{{count}} product is at or below its minimum stock",
+      "title_other": "{{count}} products are at or below their minimum stock",
+      "body": "Lowest first: {{product}}.",
+      "withOut": "Out of stock: {{outOfStock}}. Lowest first: {{product}}."
+    },
+    "expiring_stock": {
+      "title_one": "{{count}} batch in stock expires within {{days}} days",
+      "title_other": "{{count}} batches in stock expire within {{days}} days",
+      "body": "First: {{product}}, expiring {{date, date}}.",
+      "withExpired": "Already expired: {{expired}}. First: {{product}}, expired {{date, date}}."
+    },
+    "pending_orders": {
+      "title_one": "{{count}} order is waiting for confirmation, from {{date, date}}",
+      "title_other": "{{count}} orders are waiting for confirmation, the oldest from {{date, date}}"
+    },
+    "to_pack": {
+      "title_one": "{{count}} order is waiting to be packed, from {{date, date}}",
+      "title_other": "{{count}} orders are waiting to be packed, the oldest from {{date, date}}"
+    },
+    "to_dispatch": {
+      "title_one": "{{count}} packed order is waiting to go out, from {{date, date}}",
+      "title_other": "{{count}} packed orders are waiting to go out, the oldest from {{date, date}}"
+    },
+    "leave_request": {
+      "title_one": "{{count}} leave request is waiting for a decision",
+      "title_other": "{{count}} leave requests are waiting for a decision"
+    },
+    "salary_due": {
+      "title": "Salaries for {{month}} are not paid yet",
+      "noRun_one": "No payroll run for {{month}} yet ({{count}} employee).",
+      "noRun_other": "No payroll run for {{month}} yet ({{count}} employees).",
+      "draft": "The payroll run for {{month}} is a draft: finalize it, then record the payments.",
+      "finalized": "The payroll for {{month}} is finalized: record the salary payments."
+    },
+    "events": {
+      "order_waiting": "Order {{number}} from {{customer}} is waiting for confirmation ({{total, currency}})",
+      "order_to_pack": "Order {{number}} for {{customer}} is confirmed and ready to pack ({{total, currency}})",
+      "order_to_dispatch": "Order {{number}} for {{customer}} is packed and ready to go out ({{total, currency}})",
+      "leave_requested_one": "{{employee}} asked for {{count}} day of {{type}} leave: {{from, date}} to {{to, date}}",
+      "leave_requested_other": "{{employee}} asked for {{count}} days of {{type}} leave: {{from, date}} to {{to, date}}",
+      "leave_approved_one": "Your {{type}} leave of {{count}} day ({{from, date}} to {{to, date}}) is approved",
+      "leave_approved_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) is approved",
+      "leave_rejected_one": "Your {{type}} leave of {{count}} day ({{from, date}} to {{to, date}}) was not approved",
+      "leave_rejected_other": "Your {{type}} leave of {{count}} days ({{from, date}} to {{to, date}}) was not approved",
+      "offline_review": "Bill {{number}} for {{customer}} ({{total, currency}}), made offline, is held for review",
+      "offline_reviewed": "Your bill {{number}} for {{customer}} was reviewed by {{reviewer}}",
+      "customer_edit_replaced": "Your change to {{customer}} ({{fields}}) was replaced by {{editor}}'s change, made offline after it",
+      "reminders_stopped": "{{customer}} asked to stop payment reminders (replied STOP on WhatsApp)"
+    },
+    "review": {
+      "price_changed": "{{product}} was billed at {{billed, currency}}; the rate list says {{list, currency}}.",
+      "customer_inactive": "{{customer}} had been made inactive.",
+      "product_inactive": "{{product}} had been made inactive.",
+      "period_locked": "Its GST month, {{month}}, is already locked or filed.",
+      "late_sync": "It reached the server {{days}} days after it was made.",
+      "stock_short": "{{product}}: {{requested}} sold with {{available}} in stock, where selling short of stock is blocked.",
+      "credit_limit": "{{customer}} went over the credit limit of {{limit, currency}} by {{excess, currency}}.",
+      "credit_overdue_one": "{{customer}} has {{count}} bill overdue ({{amount, currency}}), which blocks new bills.",
+      "credit_overdue_other": "{{customer}} has {{count}} bills overdue ({{amount, currency}}), which blocks new bills."
+    },
+    "devices_unsynced": {
+      "title_one": "{{count}} device has work that has not reached the server",
+      "title_other": "{{count}} devices have work that has not reached the server",
+      "body": "{{device}} ({{person}}): {{waiting}} waiting, the oldest from {{date, date}}.",
+      "refused": "{{device}} ({{person}}): {{refused}} refused by the server, waiting for someone to fix or remove."
+    },
+    "orders_waiting": {
+      "title_one": "An order has waited over {{hours}} hours",
+      "title_other": "{{count}} orders have waited over {{hours}} hours",
+      "confirm": "Oldest: {{order}} for {{customer}}, waiting {{waited}} hours to be confirmed.",
+      "pack": "Oldest: {{order}} for {{customer}}, waiting {{waited}} hours to be packed.",
+      "dispatch": "Oldest: {{order}} for {{customer}}, waiting {{waited}} hours to be dispatched."
+    },
+    "customer_reminders": {
+      "title_one": "Payment reminder sent to {{count}} customer ({{amount, currency}} overdue)",
+      "title_other": "Payment reminders sent to {{count}} customers ({{amount, currency}} overdue)",
+      "noneSent": "No payment reminders could go out today",
+      "unreachable": "Due but not reached: {{unreachable}} (no WhatsApp, SMS or email for them)."
+    },
+    "push": {
+      "testTitle": "Test notification from Digital Bahi",
+      "testBody": "Notifications from {{business}} will show on this phone."
+    }
+  },
+  "beat": {
+    "title": "Beat",
+    "subtitle": "Today's shops on your routes, in the order you call on them",
+    "tabs": {
+      "today": "Today",
+      "routes": "Routes",
+      "report": "Team report"
+    },
+    "whichRoute": "Which route",
+    "myBeat": "My beat today",
+    "refresh": "Refresh",
+    "offlineNote": "No connection: this is the beat kept on this phone at {{time}}. Calls you make are kept here and sent later.",
+    "offlineOld": "No connection: this is the beat of {{date}} kept on this phone; today's opens once you are online.",
+    "offlineNone": "No connection, and no beat is kept on this phone yet. Open the beat once with internet.",
+    "progress": "Today's progress",
+    "calledOf": "{{called}} of {{planned}} shops called",
+    "productiveCount_one": "{{count}} with an order or bill",
+    "productiveCount_other": "{{count}} with an order or bill",
+    "billed": "Billed",
+    "ordered": "Orders",
+    "collected": "Collected",
+    "show": "Show",
+    "toVisit": "To visit",
+    "done": "Done",
+    "allCalled": "Every shop on the beat has been called on today.",
+    "noneCalled": "No shop called on yet today.",
+    "lastCall_one": "last call {{count}} day ago",
+    "lastCall_other": "last call {{count}} days ago",
+    "neverCalled": "not called before",
+    "dueItems_one": "{{count}} item due",
+    "dueItems_other": "{{count}} items due",
+    "noBeat": "No beat today",
+    "noBeatHint": "None of your routes is worked on {{day}}. Pick a route above to see its shops.",
+    "routeEmpty": "No shops on this route",
+    "routeEmptyHint": "Add shops to it under Routes.",
+    "waitingHere": "kept on this phone, not sent yet",
+    "outcome": {
+      "bill": "Billed",
+      "order": "Order",
+      "payment": "Payment",
+      "note": "Visit note",
+      "no_order": "No order",
+      "visited": "Visited"
+    },
+    "reasons": {
+      "shop_closed": "Shop closed",
+      "owner_absent": "Owner not there",
+      "stock_enough": "Has enough stock",
+      "no_money": "No money now",
+      "rate_issue": "Rate issue",
+      "other": "Other"
+    },
+    "today": "Today",
+    "owes": "Owes",
+    "lastCallLabel": "Last call",
+    "buysEvery_one": "buys every {{count}} day",
+    "buysEvery_other": "buys every {{count}} days",
+    "dueTitle": "Due to buy again",
+    "nothingDue": "Nothing is due by their usual buying.",
+    "dueLine": "{{days}} days since the last · usually every {{every}} days · last {{qty}}",
+    "reorder": {
+      "overdue": "Overdue",
+      "due": "Due",
+      "lapsed": "Stopped buying"
+    },
+    "newBill": "New bill",
+    "newOrder": "Book order",
+    "orderDue_one": "Order {{count}} due item",
+    "orderDue_other": "Order {{count}} due items",
+    "collect": "Receive payment",
+    "noOrder": "No order",
+    "checkIn": "Visited only",
+    "profile": "Customer profile",
+    "keptHere": "No connection: what you do here is kept on this phone and sent later.",
+    "visitSaved": "Visit noted",
+    "notSaved": "Could not save",
+    "noOrderSaved": "No order noted",
+    "noOrderTitle": "No order",
+    "noOrderHint": "Why did the shop not order today?",
+    "note": "Note",
+    "notePlaceholder": "e.g. come back on Monday",
+    "routesOffline": "Routes can be changed with a connection.",
+    "routesHint": "Set the days each route is worked, by whom, and the order of its shops.",
+    "newRoute": "New route",
+    "noRoutes": "No routes yet",
+    "noRoutesHint": "Make a route for each area a salesperson covers in a day, and add its shops in the order they are visited.",
+    "inactive": "not in use",
+    "noSalesperson": "No salesperson",
+    "shops_one": "{{count}} shop",
+    "shops_other": "{{count}} shops",
+    "noDays": "No days set",
+    "routeName": "Route name",
+    "salesperson": "Salesperson",
+    "salespersonHint": "Only someone who can see employees can change this.",
+    "visitDays": "Worked on",
+    "routeActive": "In use",
+    "shopsInOrder": "Shops, in calling order",
+    "shopsInOrderHint": "A shop is on one route: adding it here takes it off its other route.",
+    "moveUp": "Move {{name}} up",
+    "moveDown": "Move {{name}} down",
+    "removeShop": "Take {{name}} off the route",
+    "addShop": "Add a shop…",
+    "routeSaved": "Route saved",
+    "reportOffline": "The team report needs a connection.",
+    "period": "Period",
+    "thisWeek": "This week",
+    "custom": "Dates",
+    "reportEmpty": "No beats on these days",
+    "reportEmptyHint": "Give routes weekdays and a salesperson under Routes.",
+    "reportTotals": "Totals",
+    "coverage": "Shops covered",
+    "productiveCalls": "Productive calls",
+    "missedCount_one": "{{count}} shop missed",
+    "missedCount_other": "{{count}} shops missed",
+    "offPlanCount_one": "{{count}} off the plan",
+    "offPlanCount_other": "{{count}} off the plan",
+    "day": "Day",
+    "planned": "Planned",
+    "calledCol": "Called",
+    "offPlan": "Off plan",
+    "whyNoOrder": "Why no order",
+    "addCity": "Add a city's shops…",
+    "allHere": "Every shop of {{city}} is on this route.",
+    "alreadyHere_one": "{{count}} of its shops is on this route already.",
+    "alreadyHere_other": "{{count}} of its shops are on this route already.",
+    "findShops": "Find by name, address or PIN",
+    "tickAll": "Select all ({{n}})",
+    "onRoute": "now on {{route}}",
+    "onOtherRoute": "now on another route",
+    "addShops_one": "Add {{count}} shop",
+    "addShops_other": "Add {{count}} shops",
+    "tooManyShops": "A route takes up to {{max}} shops, and this one has {{shops}}. Take some off to save it.",
+    "byCity": "Shops by city",
+    "allCities": "All cities"
+  },
+  "thermal": {
+    "title": "Receipt printer",
+    "hint": "A Bluetooth thermal printer (58 or 80 mm) for bills and receipts on the go. It is set for this device only.",
+    "print": "Thermal print",
+    "printing": "Printing…",
+    "printed": "Sent to the printer",
+    "failed": "Could not print",
+    "errors": {
+      "unsupported": "This browser cannot reach Bluetooth printers. Use Chrome on a secure (https) address, or the Android app.",
+      "cancelled": "No printer was chosen.",
+      "not_found": "The printer is not in reach. Turn it on and choose it again.",
+      "no_writer": "That device does not take print data. Choose the printer itself.",
+      "write_failed": "The printer stopped taking data. Check that it is on, has paper and is near, then print again."
+    },
+    "paper": "Paper width",
+    "none": "No printer chosen yet",
+    "find": "Find a Bluetooth printer",
+    "paired": "Printers paired with this phone",
+    "pairHint": "Pair the printer in the phone's Bluetooth settings first (the PIN is often 0000 or 1234).",
+    "noPaired": "No printer is paired with this phone yet.",
+    "test": "Print a test page",
+    "forget": "Forget",
+    "chooseTitle": "Choose the receipt printer",
+    "unsupported": "Bluetooth printing works in Chrome (Android, Windows, Mac) on a secure (https) address, and in the Android app.",
+    "thanks": "Thank you! Visit again.",
+    "scanToPay": "Scan to pay {{amount}} by UPI",
+    "testTitle": "Printer test",
+    "testLine": "If you can read this, bills and receipts will print."
+  },
+  "scan": {
+    "dialogHint": "Point the camera at a pack's barcode, or use a barcode scanner: it types the code and presses Enter.",
+    "useCamera": "Scan with the camera",
+    "camera": "Camera",
+    "hint": "Hold the barcode inside the box",
+    "starting": "Starting the camera…",
+    "torch": "Torch",
+    "added": "Added: {{name}}",
+    "addedList": "Added from the camera",
+    "unknown": "No product has the barcode {{code}}.",
+    "typeCode": "Barcode",
+    "problems": {
+      "insecure": "The camera works on a secure (https) address, or in the app.",
+      "no_camera": "No camera was found on this device.",
+      "denied": "The camera was not allowed. Allow it for this site in the browser's settings, then try again.",
+      "failed": "The camera could not start."
+    }
+  },
+  "server": {
+    "title": "Connect to your Digital Bahi",
+    "hint": "Type the address your business opens Digital Bahi at (ask the owner if you do not know it). It is kept on this phone.",
+    "address": "Server address",
+    "connect": "Connect",
+    "checking": "Checking…",
+    "change": "Change server",
+    "problems": {
+      "invalid": "That is not a web address.",
+      "insecure": "The address must start with https:// (a secure server).",
+      "unreachable": "No server answered at that address. Check it, and the internet.",
+      "not_digitalbahi": "That address is not a Digital Bahi server."
+    }
+  },
+  "push": {
+    "channels": {
+      "alerts": "Needs action",
+      "alertsHint": "Payments due, orders waiting, stock running out",
+      "updates": "Updates",
+      "updatesHint": "Orders moving on, leave decided and other news"
     }
   }
 }

@@ -1,9 +1,10 @@
-import type { InvoiceBody } from "@vyapaar/contracts";
+import type { InvoiceBody } from "@digitalbahi/contracts";
 import {
   addDays,
   calculateDocument,
   chargesGst,
   compareTotals,
+  daysBetween,
   dec,
   determineSupplyType,
   documentKindFor,
@@ -20,14 +21,15 @@ import {
   type TaxCategory,
   type TaxRateRule,
   type ZeroRatedType,
-} from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { z } from "zod";
 import { can } from "../lib/access.js";
 import type { RequestCtx } from "../lib/context.js";
 import { inSequence } from "../lib/db.js";
-import { ApiError, badRequest, forbidden } from "../lib/errors.js";
+import { ApiError, badRequest, conflict, forbidden } from "../lib/errors.js";
+import { periodLocked } from "./gst-period.js";
 import { getSettings } from "./settings.js";
 
 type Body = z.output<typeof InvoiceBody>;
@@ -70,6 +72,14 @@ export interface PreparedSale {
   lutArn: string | null;
   rateOverridden: boolean;
   settings: Awaited<ReturnType<typeof loadSaleSettings>>;
+  /** Rules a bill made offline broke by the time it arrived: it is posted and held for a manager instead of refused. */
+  review: ReviewReason[];
+}
+
+/** Why a bill made offline is held for review (codes in invoices.review_reasons). */
+export interface ReviewReason {
+  code: "price_changed" | "customer_inactive" | "product_inactive" | "period_locked" | "late_sync" | "stock_short" | "credit_limit" | "credit_overdue";
+  params?: Record<string, string | number>;
 }
 
 const loadSaleSettings = (tx: Tx, businessId: string) =>
@@ -84,7 +94,7 @@ const loadSaleSettings = (tx: Tx, businessId: string) =>
 /** How long a bill made offline may wait on a device and still keep its own date without the back-date permission. */
 const OFFLINE_DAYS = 7;
 
-export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: string): Promise<PreparedSale> {
+export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: string, options: { order?: boolean } = {}): Promise<PreparedSale> {
   const businessId = ctx.businessId;
   const [business] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, businessId));
   const [customer] = await tx
@@ -92,15 +102,30 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     .from(schema.customers)
     .where(and(eq(schema.customers.id, body.customerId), eq(schema.customers.businessId, businessId), isNull(schema.customers.deletedAt)));
   if (!customer) throw badRequest("REFERENCE_NOT_FOUND", {}, "customerId");
-  if (!customer.isActive) throw badRequest("CUSTOMER_INACTIVE", {}, "customerId");
+  // A bill made offline is a fact by the time it arrives (the customer has it):
+  // what it broke since is noted for a manager instead of refusing it.
+  const offline = body.offline !== undefined;
+  const review: ReviewReason[] = [];
+  if (!customer.isActive) {
+    if (!offline) throw badRequest("CUSTOMER_INACTIVE", {}, "customerId");
+    review.push({ code: "customer_inactive", params: { customer: customer.businessName ?? customer.name } });
+  }
 
   const invoiceDate = body.invoiceDate ?? today;
   if (invoiceDate > today) throw badRequest("FUTURE_DATE_NOT_ALLOWED", {}, "invoiceDate");
   // A bill made offline carries the day it was made; that is not back-dating
-  // (for bills made in the last week: the day comes from the device's clock).
-  const madeOfflineThatDay =
-    body.offline?.savedAt !== undefined && todayIn(ctx.timeZone, new Date(body.offline.savedAt)) === invoiceDate && invoiceDate >= addDays(today, -OFFLINE_DAYS);
-  if (invoiceDate < today && !madeOfflineThatDay && !can(ctx, "invoice.backdate")) throw forbidden("invoice.backdate");
+  // (the day comes from the device's clock). One that took over a week to
+  // arrive is held for review.
+  const madeOfflineThatDay = body.offline?.savedAt !== undefined && todayIn(ctx.timeZone, new Date(body.offline.savedAt)) === invoiceDate;
+  if (invoiceDate < today && !can(ctx, "invoice.backdate")) {
+    if (!madeOfflineThatDay) throw forbidden("invoice.backdate");
+    if (invoiceDate < addDays(today, -OFFLINE_DAYS)) review.push({ code: "late_sync", params: { days: daysBetween(invoiceDate, today) } });
+  }
+  // The month's GSTR-1 is locked or filed: a new bill there would change it (one made offline is held instead).
+  if (!options.order && (await periodLocked(tx, businessId, invoiceDate))) {
+    if (!offline) throw conflict("GST_PERIOD_LOCKED");
+    review.push({ code: "period_locked", params: { month: invoiceDate.slice(0, 7) } });
+  }
 
   let warehouseId = body.warehouseId;
   const [wh] = await tx
@@ -193,7 +218,10 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
   const engineLines: DocumentLineInput[] = body.lines.map((line, i) => {
     const product = productById.get(line.productId);
     if (!product) throw badRequest("REFERENCE_NOT_FOUND", {}, `lines[${i}].productId`);
-    if (!product.isActive) throw badRequest("PRODUCT_INACTIVE", { product: product.name }, `lines[${i}].productId`);
+    if (!product.isActive) {
+      if (!offline) throw badRequest("PRODUCT_INACTIVE", { product: product.name }, `lines[${i}].productId`);
+      if (!review.some((r) => r.code === "product_inactive" && r.params?.product === product.name)) review.push({ code: "product_inactive", params: { product: product.name } });
+    }
     const unitId = line.unitId ?? product.baseUnitId;
     let factor = "1";
     if (unitId !== product.baseUnitId) {
@@ -210,7 +238,13 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     const basePrice = listPrice ?? prices.find((p) => p.productId === product.id && p.unitId === product.baseUnitId);
     const listRate = listPrice ? dec(listPrice.price) : roundRate(dec(basePrice?.price ?? product.sellingPrice).times(factor));
     const rate = line.rate !== undefined ? dec(line.rate) : listRate;
-    if (!rate.eq(listRate)) rateOverridden = true;
+    if (!rate.eq(listRate)) {
+      rateOverridden = true;
+      // The rate list changed while the device was offline: the bill keeps the rate it was made at.
+      if (offline && !can(ctx, "invoice.override_price") && !review.some((r) => r.code === "price_changed" && r.params?.product === product.name)) {
+        review.push({ code: "price_changed", params: { product: product.name, billed: rate.toFixed(2), list: listRate.toFixed(2) } });
+      }
+    }
     const discountPercent = line.discountPercent ?? basePrice?.discountPercent ?? "0";
 
     const category = categoryById.get(product.taxCategoryId);
@@ -253,7 +287,7 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
       uqc: baseUnit?.uqc ?? null,
     };
   });
-  if (rateOverridden && !can(ctx, "invoice.override_price")) throw forbidden("invoice.override_price");
+  if (rateOverridden && !offline && !can(ctx, "invoice.override_price")) throw forbidden("invoice.override_price");
 
   const settings = await loadSaleSettings(tx, businessId);
   // Without payment of IGST (under the LUT) unless asked otherwise, while the LUT is valid on the invoice date.
@@ -299,6 +333,7 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
         : { number: null, date: null, portCode: null },
     lutArn,
     rateOverridden,
+    review,
     settings,
   };
 }

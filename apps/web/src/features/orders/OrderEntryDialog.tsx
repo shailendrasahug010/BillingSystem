@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { searchProducts } from "@vyapaar/core";
+import { searchProducts } from "@digitalbahi/core";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -32,7 +32,23 @@ const SOURCES = ["salesperson", "counter", "phone", "whatsapp"] as const;
  * customer's rate list on the server (the amounts here are an estimate);
  * nothing leaves the godown until the order is invoiced.
  */
-export function OrderEntryDialog({ open, onOpenChange, customerId: initialCustomer }: { open: boolean; onOpenChange(v: boolean): void; customerId?: string }) {
+export function OrderEntryDialog({
+  open,
+  onOpenChange,
+  customerId: initialCustomer,
+  initialLines,
+  stay = false,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange(v: boolean): void;
+  customerId?: string;
+  /** Lines to start with (the beat's products due to be bought again); each can be changed or removed. */
+  initialLines?: Array<{ productId: string; qty: string }>;
+  /** Stay where the order was booked (the beat) instead of opening it. */
+  stay?: boolean;
+  onSaved?(): void;
+}) {
   const { t, money, number } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
@@ -53,11 +69,12 @@ export function OrderEntryDialog({ open, onOpenChange, customerId: initialCustom
   useEffect(() => {
     if (!open) return;
     setCustomerId(initialCustomer ?? null);
-    setLines([]);
+    setLines((initialLines ?? []).filter((l) => productById.has(l.productId)).map((l) => ({ productId: l.productId, unitId: productById.get(l.productId)!.unitId ?? "", qty: l.qty, freeQty: "" })));
     setDelivery("");
     setNotes("");
     setError(null);
     setKey(newIdempotencyKey());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the lines to start with are read when it opens
   }, [open, initialCustomer]);
 
   const customer = customerId ? (customerById.get(customerId) ?? null) : null;
@@ -120,6 +137,7 @@ export function OrderEntryDialog({ open, onOpenChange, customerId: initialCustom
         }));
       if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
       toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("orders.saved")} · ${customer?.businessName ?? ""} · ${t("offline.sendsLater")}` });
+      onSaved?.();
       onOpenChange(false);
     };
     try {
@@ -127,8 +145,9 @@ export function OrderEntryDialog({ open, onOpenChange, customerId: initialCustom
       const res = await api.post<{ id: string; orderNumber: string; grandTotal: string }>("/sales-orders", body, { idempotencyKey: key });
       void qc.invalidateQueries({ queryKey: ["orders"] });
       toast({ tone: "success", title: t("orders.saved"), body: `${res.orderNumber} · ${money(res.grandTotal)}` });
+      onSaved?.();
       onOpenChange(false);
-      navigate({ name: "order-view", orderId: res.id });
+      if (!stay) navigate({ name: "order-view", orderId: res.id });
     } catch (e) {
       if (unreachable(e)) {
         await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));

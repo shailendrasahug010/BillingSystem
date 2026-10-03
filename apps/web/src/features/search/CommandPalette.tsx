@@ -1,4 +1,4 @@
-import { normalizeSearchText, searchProducts } from "@vyapaar/core";
+import { normalizeSearchText, searchProducts } from "@digitalbahi/core";
 import { CornerDownLeft, FileText, Package, Search, Users, Zap } from "lucide-react";
 import { Dialog as D } from "radix-ui";
 import { useQuery } from "@tanstack/react-query";

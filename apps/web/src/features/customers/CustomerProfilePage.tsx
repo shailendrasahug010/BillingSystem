@@ -1,5 +1,5 @@
-import { buildReorderList, daysBetween, findState } from "@vyapaar/core";
-import { ArrowLeft, ClipboardPlus, MapPin, MessageCircle, Pencil, Phone, Receipt, Wallet } from "lucide-react";
+import { buildReorderList, daysBetween, findState } from "@digitalbahi/core";
+import { ArrowLeft, ClipboardPlus, MapPin, Pencil, Phone, Receipt, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -20,9 +20,13 @@ import { ApiError } from "../../lib/api";
 import { useToast } from "../../components/ui/Toast";
 import { AddCustomerDialog } from "./AddCustomerDialog";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 import { customerKind, kindLabel } from "./customerKind";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
+
+/** The day (YYYY-MM-DD, this device's time zone) of an instant. */
+const localDay = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
 
 /** What each tab shows, and the permission it needs. */
 const TAB_PERMISSION = { overview: "customer.view", invoices: "invoice.view", payments: "payment.view", ledger: "customer.view_ledger", products: "customer.view" } as const;
@@ -124,6 +128,14 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               <h1 className="text-[24px] leading-tight font-semibold text-ink">{customer.businessName}</h1>
               <Badge tone={customer.type === "b2b" || customerKind(customer) === "export" ? "accent" : "neutral"}>{t(kindLabel(customer))}</Badge>
               <Badge>{customer.category}</Badge>
+              {customer.remindersOptOut && (
+                <>
+                  <Badge tone="warn">{t("customer.remindersStopped")}</Badge>
+                  {customer.remindersOptOutAt && (
+                    <span className="text-[12.5px] text-ink-3">{t(customer.remindersOptOutBy === "reply" ? "customer.remindersStoppedBy.reply" : "customer.remindersStoppedBy.staff", { date: localDay(customer.remindersOptOutAt) })}</span>
+                  )}
+                </>
+              )}
             </div>
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-ink-3">
               <span>{customer.name}</span>
@@ -150,7 +162,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               <Button icon={<Phone size={16} />} title={customer.mobile} onClick={() => (window.location.href = `tel:${customer.mobile.replace(/\s/g, "")}`)}>
                 {t("common.call")}
               </Button>
-              <Button icon={<MessageCircle size={16} />} onClick={() => shareOnWhatsApp("", customer.mobile)}>
+              <Button icon={<WhatsAppIcon size={16} />} onClick={() => shareOnWhatsApp("", customer.mobile)}>
                 {t("common.whatsapp")}
               </Button>
             </>

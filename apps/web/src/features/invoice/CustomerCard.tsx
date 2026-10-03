@@ -1,4 +1,4 @@
-import { daysBetween, findState, type CreditCheck } from "@vyapaar/core";
+import { daysBetween, findState, type CreditCheck } from "@digitalbahi/core";
 import { MapPin, Phone, TriangleAlert, X } from "lucide-react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -122,5 +122,68 @@ export function CustomerCard({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The customer on a bill being made, in two lines (and the credit warning in a
+ * third): who it is and the figures that matter while billing, so the lines
+ * of the bill get the room.
+ */
+export function CustomerStrip({ customer, insight, credit, onClear }: { customer: Customer; insight: CustomerInsight; credit: CreditCheck | null; onClear(): void }) {
+  const { t, money, date } = useI18n();
+  const { navigate } = useRouter();
+  const limit = customer.creditLimit ?? 0;
+  const lastDays = insight.lastPurchase ? daysBetween(insight.lastPurchase, TODAY) : null;
+  const priceList = WORKSPACE.priceLevels.length > 1 ? WORKSPACE.priceLevels.find((l) => l.id === (customer.priceLevelId ?? WORKSPACE.defaultPriceLevelId))?.name : undefined;
+  const figure = (label: string, value: string, tone?: string) => (
+    <span className="whitespace-nowrap">
+      {label} <span className={cn("num font-semibold", tone ?? "text-ink")}>{value}</span>
+    </span>
+  );
+  return (
+    <section className="rounded-[var(--radius-card)] border border-line bg-surface shadow-card" aria-label={t("invoice.customer")}>
+      <div className="flex items-start gap-3 px-3.5 py-2.5">
+        <Avatar name={customer.businessName} className="mt-0.5 size-9 text-[13px]" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <button type="button" className="truncate text-left font-display text-[16px] font-semibold text-ink hover:underline" onClick={() => navigate({ name: "customer", customerId: customer.id })}>
+              {customer.businessName}
+            </button>
+            <Badge tone={customer.type === "b2b" || customerKind(customer) === "export" ? "accent" : "neutral"} className="h-5 text-[11px]">
+              {t(kindLabel(customer))}
+            </Badge>
+            <Badge tone={BEHAVIOUR_TONE[insight.behaviour.rating]} dot className="h-5 text-[11px]">
+              {t(`behaviour.${insight.behaviour.rating}`)}
+            </Badge>
+            {priceList && (
+              <Badge className="h-5 text-[11px]">
+                <span className="sr-only">{t("customer.priceList")}: </span>
+                <span>{priceList}</span>
+              </Badge>
+            )}
+          </div>
+          <p className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12.5px] text-ink-3">
+            {figure(t("invoice.customerCard.outstanding"), money(insight.outstanding, 0), insight.overdue > 0 ? "text-danger" : undefined)}
+            {insight.overdue > 0 && <span className="num whitespace-nowrap text-danger">{t("dashboard.kpi.overdue", { amount: money(insight.overdue, 0) })}</span>}
+            {limit > 0 && figure(t("invoice.customerCard.available"), t("invoice.customerCard.ofLimit", { amount: money(Math.max(0, limit - insight.outstanding), 0), limit: money(limit, 0) }), insight.outstanding >= limit ? "text-danger" : undefined)}
+            {figure(t("invoice.customerCard.lastPurchase"), insight.lastPurchase ? `${date(insight.lastPurchase)}${lastDays !== null ? ` (${t("common.daysAgo", { count: lastDays })})` : ""}` : t("invoice.customerCard.never"))}
+            {insight.avgOrderValue > 0 && figure(t("invoice.customerCard.avgOrder"), money(insight.avgOrderValue, 0))}
+          </p>
+        </div>
+        <button type="button" onClick={onClear} className="-mr-1 inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label={t("invoice.changeCustomer")}>
+          <X size={16} />
+        </button>
+      </div>
+      {credit && credit.level !== "ok" && (
+        <p className={cn("flex items-start gap-2 border-t px-3.5 py-1.5 text-[12.5px]", credit.level === "block" ? "border-danger/30 bg-danger-soft text-danger" : "border-warn/30 bg-warn-soft text-warn")} role="alert">
+          <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+          <span>
+            <span className="font-semibold">{t("credit.warning")}: </span>
+            {credit.reasons.map((r) => (r.code === "credit_limit_exceeded" ? t("credit.credit_limit_exceeded", r.params) : t("credit.overdue_invoices", r.params))).join(" · ")}
+          </span>
+        </p>
+      )}
+    </section>
   );
 }

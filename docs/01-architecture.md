@@ -1,6 +1,6 @@
 # A. Product architecture
 
-This document describes how Vyapaar CRM is put together: the pieces, how they talk, where each kind of logic lives, and how the system grows from one distributor on a ₹1,500/month server to a multi-tenant SaaS without a rewrite.
+This document describes how Digital Bahi is put together: the pieces, how they talk, where each kind of logic lives, and how the system grows from one distributor on a ₹1,500/month server to a multi-tenant SaaS without a rewrite.
 
 ## 1. Who we are building for
 
@@ -20,7 +20,7 @@ The daily loop that must be fastest and most reliable: **Order → Invoice → S
 ## 2. Architectural principles
 
 1. **Modular monolith first.** One deployable API, split internally into business modules with explicit boundaries. Microservices would multiply cost and operational load for a team and customer base this size. Module boundaries are drawn so any module could be extracted later.
-2. **One calculation engine, everywhere.** Money, GST, stock and suggestion logic lives in `@vyapaar/core`, a pure TypeScript package with no I/O. The browser, the phone (offline) and the server run the same code, so an invoice built offline has exactly the totals the server recomputes.
+2. **One calculation engine, everywhere.** Money, GST, stock and suggestion logic lives in `@digitalbahi/core`, a pure TypeScript package with no I/O. The browser, the phone (offline) and the server run the same code, so an invoice built offline has exactly the totals the server recomputes.
 3. **The database protects the money.** Financial and stock invariants are enforced by PostgreSQL (constraints, append-only triggers, period locks, row-level security), not only by application code.
 4. **History is immutable.** Ledgers are append-only; posted documents are cancelled, never deleted; document lines store a snapshot of the tax that was charged.
 5. **Rules are configuration.** GST rates, thresholds, numbering patterns, credit policy, negative-stock policy and workflow steps are data with effective dates, editable without a deploy.
@@ -38,14 +38,14 @@ flowchart LR
   end
 
   subgraph Device["On each device"]
-    CORE1["@vyapaar/core<br/>GST + totals + suggestions"]
+    CORE1["@digitalbahi/core<br/>GST + totals + suggestions"]
     IDB[("IndexedDB cache<br/>+ sync outbox")]
   end
 
   subgraph Server["Server (single region: India)"]
     API["API — Fastify<br/>modular monolith"]
-    CORE2["@vyapaar/core<br/>(authoritative recalculation)"]
-    JOBS["Workers — pg-boss<br/>outbox, stats, reminders,<br/>exports, PDFs, backups"]
+    CORE2["@digitalbahi/core<br/>(authoritative recalculation)"]
+    JOBS["Workers in the API process<br/>outbox, purchase history,<br/>nightly checks, backups"]
     PG[("PostgreSQL 16+<br/>RLS, append-only ledgers")]
     OBJ[("Object storage<br/>S3 / R2 / MinIO")]
   end
@@ -76,7 +76,7 @@ flowchart LR
 | **Desktop shell** (`apps/desktop`, Tauri) | Wraps the web build for Windows: native printing to thermal/A4 printers, local backup folder, auto-update | — |
 | **Android shell** (`apps/mobile`, Capacitor) | Wraps the web build: ML Kit barcode camera, Bluetooth printer, share sheet, push notifications | — |
 | **API** (`apps/api`, Fastify) | Authentication, authorisation, validation, business services, transactions, audit | Horizontal (stateless); 2+ instances behind a load balancer |
-| **Workers** (`apps/api` worker entrypoint) | Transactional outbox consumer, purchase-history stats, association mining, reminders, report exports, PDF rendering, backups, integration calls | Separate process; more workers per queue |
+| **Workers** (loops in the API process today: `services/outbox-worker.ts`, `nightly-analytics.ts`, `backup-schedule.ts`) | Transactional outbox consumer, purchase-history stats, association mining, drift and balance checks, automatic backups; later reminders, report exports, integration calls | Any number of API servers run them side by side (rows are claimed); each loop can be switched off per server (`…_SECONDS=0`) or moved to its own process |
 | **PostgreSQL** | System of record; integrity rules; reporting summaries | Vertical first, then read replica for reports, then partitioning of ledgers |
 | **Object storage** | Product images, receipts, PDFs, proof of delivery, backup archives | Managed service |
 | **Integration adapters** | GST filing via a GSP, e-invoice via IRP, e-way bill, WhatsApp/SMS/email, payments/UPI | One adapter per provider behind an interface |
@@ -127,7 +127,7 @@ modules/
   reports/       report definitions, summary tables, exports
   intelligence/  purchase-history stats, associations, suggestion endpoint
   notifications/ in-app notifications, reminder rules, channels
-  sync/          offline pull/push protocol
+  sync/          offline pull feed (GET /sync/pull)
   audit/         audit log writer and viewer
   backup/        backup, restore
   files/         uploads, signed URLs
@@ -175,7 +175,7 @@ sequenceDiagram
   G->>G: permission guard: invoice.create
   G->>S: createInvoice(ctx, dto)
   S->>DB: BEGIN, then SET LOCAL app.business_id and app.user_id
-  S->>S: recalculate totals with @vyapaar/core, compare with client totals
+  S->>S: recalculate totals with @digitalbahi/core, compare with client totals
   S->>DB: number, insert, stock ledger, party ledger, GST register, audit log, outbox event
   S->>DB: COMMIT
   S-->>C: 201 + invoice (with server totals)
@@ -217,7 +217,7 @@ Reports must stay fast with years of data, without a separate data warehouse on 
 | Layer | What | Freshness |
 |---|---|---|
 | Transactional tables | Invoices, lines, ledgers, GST register | Real time |
-| Summary tables | `sales_daily_product`, `sales_daily_customer`, `customer_stats`, `customer_product_stats` | Seconds (outbox worker); rebuilt nightly |
+| Summary tables | `customer_stats`, `customer_product_stats`, `sales_daily_product`, `sales_daily_customer` (built; the sales report by product and the home screen's top products and companies read the daily ones for past days once they have been built whole, and the bills for today) | Seconds (outbox worker: each day a document falls on is worked out whole again); rebuilt and checked for drift nightly |
 | Report service | Declarative report definitions (dimensions, measures, filters) compiled to SQL over summaries, falling back to base tables for detail | — |
 | Exports | Excel (ExcelJS), CSV, PDF (HTML template → headless Chromium) generated by workers, stored in object storage, link notified to the user | Async for large ranges |
 
@@ -231,31 +231,42 @@ Files never go through the API as blobs. The client asks `POST /files` for an up
 
 ```mermaid
 flowchart LR
-  EV["Domain events<br/>(outbox)"] --> RULES["Reminder rules<br/>(per business)"]
-  CRON["Scheduled scans<br/>(pg-boss cron)"] --> RULES
-  RULES --> N[("notifications<br/>key + params")]
-  N --> INAPP["In-app bell + SSE"]
-  N --> PUSH["FCM push (Android)"]
-  N --> WA["WhatsApp / SMS / email<br/>(customer-facing reminders)"]
+  EV["Domain events<br/>(outbox worker)"] --> RULES["Reminder rules<br/>(per business)"]
+  CRON["Daily checks<br/>(API scheduler, each rule's hour)"] --> RULES
+  RULES --> N[("notifications<br/>key + params, dedupe key")]
+  N --> RCPT[("notification_receipts<br/>read / dismissed per person")]
+  N -- "NOTIFY on commit (ids only)" --> HUB["LISTEN, one connection<br/>per API server"]
+  HUB --> INAPP["SSE stream → bell + inbox"]
+  N -- "outbox event, after commit" --> PUSH["FCM push to phones<br/>(push_tokens, each phone's language)"]
+  RULES --> WA["Payment reminders to customers<br/>(WhatsApp / SMS / email, message queue)"]
+  WA -. STOP reply on WhatsApp .-> OPT[("customers.reminders_opt_out")]
 ```
 
-* **Event-driven** reminders: order waiting for packing, leave request submitted, payment received.
-* **Scheduled** scans (configurable time, default 08:00 IST): customer payments due in N days / overdue, supplier payments due, low stock, batches expiring within N days, salary due, orders pending more than N hours.
-* Notifications store a translation key and parameters, never rendered text, so each user reads them in their own language; `dedupe_key` stops the same reminder twice.
-* Customer-facing messages (payment reminders on WhatsApp) use pre-approved templates in both languages and respect per-customer opt-out.
+Built in Phase 5.2 (`apps/api/src/services/notifications.ts`, `reminders.ts`, `notification-events.ts`, `notification-hub.ts`; module `notifications`; rule types and defaults in `packages/core/src/notifications/reminders.ts`):
+
+* **Reminder rules.** Twelve per business (`reminder_rules`, seeded at sign-up): customer payments due, supplier payments due, low stock, expiring stock, orders to confirm, to pack, to dispatch, leave requests, salary due, (Phase 5.3) devices with work not sent, orders waiting too long, and payment reminders to customers (off until the business turns it on). Each can be switched off and has an hour (in the business's time zone; 9 am, 10 am for leave, salary and payment reminders) and, where it applies, days ahead (payments, default 3), the day of the month (salary, default 1st), hours (orders waiting, default 4) or the reminder schedule (below).
+* **Daily checks.** Every `REMINDER_SCHEDULER_SECONDS` (default 300) the API asks `reminder_rules_due()` (a `SECURITY DEFINER` function that only answers which businesses have a rule whose hour has come and that has not run today), then, inside each business under row-level security, claims those rules (`FOR UPDATE SKIP LOCKED`, `last_run_on = today`) and runs their checks. A check leaves at most one notification, a summary ("3 customer bills are overdue: ₹45,230.50"), with the dedupe key `<type>:<date>` (salary: `salary_due:<month>`, once a month), so several API servers and a "Check now" from the settings never repeat it. A failing check is rolled back alone (savepoint) and written to the error log.
+* **As things happen.** The outbox worker turns `sales_order.created` / `sales_order.status_changed` into "order waiting for confirmation / to pack / to dispatch" (only for the workflow steps the business uses, and while that rule is on) and `leave.requested` / `leave.decided` into a request for the approvers and the decision for the employee (their linked sign-in, or the member of the business with their mobile number); each with a dedupe key per order and status or per request.
+* **Who sees what.** A notification is addressed to a permission (everyone whose role has it: `customer.view_ledger`, `payment.pay`, `purchase.create`, `inventory.view`, `order.confirm`, `packing.pack`, `dispatch.dispatch`, `leave.approve`, `payroll.run`) or to one person. Read and dismissed are per person (`notification_receipts`), so the owner reading a reminder leaves it unread for the salesperson. Notifications are deleted by the nightly job after 90 days and left out of backups.
+* **Live.** Creating a notification sends `NOTIFY notifications` with only its id, business, person and permission; PostgreSQL delivers it when the transaction commits. Each API server holds one `LISTEN` connection, opened with the first app, and pushes `event: notification` to the open streams (`GET /notifications/stream`) of the people who may see it; the app then fetches the list. The stream ends when the access token would expire and the app opens it again (with fetch, as `EventSource` cannot send the token); a lost connection is retried with a growing wait, and the unread count is also fetched every five minutes.
+* Notifications store a translation key and parameters, never rendered text, so each user reads them in their own language; a test checks that every key the server sends exists in each language with all its values.
+* **Orders waiting too long** is the one hourly rule: from its hour it runs every hour (claimed by `last_run_at`, 55 minutes apart) and tells those who confirm orders about each order that crossed the set hours at one step (to be confirmed, packed or dispatched) since the last run, once per order; a check by hand in the same hour shares that run's notification.
+* **Payment reminders to customers** write to the customers themselves: at the rule's hour, each customer whose oldest unpaid bill fell due at least `firstAfterDays` ago, who owes at least `minAmount` overdue, has had fewer than `maxCount` reminders since that bill fell due and none in the last `repeatDays`, gets one message (WhatsApp, else SMS by default; or one channel) in their language (`customers.message_locale`, else the business's document language), with the approved template in that language (WhatsApp) or the DLT template (SMS). They go through the same message queue as reminders sent by hand, marked `automatic` with the business day (`reminder_on`); a unique index keeps it to one per customer and day even when two runs meet. Customers who asked not to get them (`reminders_opt_out`, ticked on their page or set by a STOP reply on WhatsApp) never do; the staff who send messages get one notification a day with how many went and how many could not be reached.
+* **SMS** goes through the business's own gateway: signed JSON (`{channel, to, text, senderId, templateId}`, HMAC like the WhatsApp provider webhook) to its address; the sender id and template ids are the ones registered on DLT.
+* **Push to phones.** The Android app registers its Firebase Cloud Messaging token (`push_tokens`: business, person, the sign-in it came with, the app's language). Creating a notification in a business with registered phones writes an outbox event; the outbox worker works out, inside its transaction, the phones of the people the notification is for (as the inbox decides: the person, or a role with the permission, and `notification.view`; only active members whose sign-in is still on and working in that business), writes the text in each phone's language with the same code as the app (`notificationText` in `@digitalbahi/i18n`), and sends after the commit through FCM's HTTP v1 API (an OAuth token from the project's service account, `FCM_SERVICE_ACCOUNT`). A push goes at most once; tokens FCM says are gone are deleted, and the nightly job deletes those whose sign-in has ended. Warnings are high priority on the app's *alerts* channel, the rest normal on *updates*; a push replaces the earlier one about the same thing (tag `<type>[:<record>]`), and its data carries the notification, business and record to open.
 
 ## 10. Localisation architecture
 
 * Catalogues live in `packages/i18n/src/locales/<code>.json` (English is the source). Keys are type-checked at compile time; a test fails the build if any language misses a key or uses different placeholders.
-* Numbers, currency and dates use the Indian system (`₹12,34,567.00`, `dd/mm/yyyy`) through `@vyapaar/i18n` formatters.
+* Numbers, currency and dates use the Indian system (`₹12,34,567.00`, `dd/mm/yyyy`) through `@digitalbahi/i18n` formatters.
 * Domain errors carry a code and parameters (`INSUFFICIENT_STOCK {product, available}`), translated on the client. The API never sends English sentences as the only error information.
 * Product master data has an optional local-language name (`name_local`) and search aliases (`"namak"`, `"नमक"`), used by search and by Hindi invoices.
 * Invoices have their own print language, independent of the user's UI language.
-* Adding Marathi, Gujarati or Tamil = a new JSON file, one registry entry, and (for invoices) number words in `@vyapaar/core`.
+* Adding Marathi, Gujarati or Tamil = a new JSON file, one registry entry, and (for invoices) number words in `@digitalbahi/core`.
 
 ## 11. GST architecture (summary)
 
-Calculation (`@vyapaar/core`), recording (`gst_transactions`), reporting (queries) and filing/export (versioned formatters and provider adapters) are four separate layers. Rates and thresholds are effective-dated data. Details: [08-gst-architecture.md](08-gst-architecture.md).
+Calculation (`@digitalbahi/core`), recording (`gst_transactions`), reporting (queries) and filing/export (versioned formatters and provider adapters) are four separate layers. Rates and thresholds are effective-dated data. Details: [08-gst-architecture.md](08-gst-architecture.md).
 
 ## 12. Authentication and authorisation (summary)
 

@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronRight, MessageCircle, NotebookPen, Phone, Printer, UserRound, Wallet } from "lucide-react";
+import { CalendarClock, ChevronRight, NotebookPen, Phone, Printer, UserRound, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -18,6 +18,7 @@ import { CollectionNoteDialog } from "./CollectionNoteDialog";
 import { useOutstandingDetail, type OutstandingRow, type PayPromise } from "./data";
 import { OutstandingStatementPrint } from "./OutstandingPrint";
 import { ProvisionalReceiptDialog } from "./ProvisionalReceiptDialog";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 /** "Promised ₹1,000 by 3 Oct", or "Promise missed: 28 Sep" once the day has passed. */
 export function PromiseLine({ promise, className }: { promise: PayPromise; className?: string }) {
@@ -124,7 +125,7 @@ export function OutstandingDetailDialog({ row, source, onOpenChange }: { row: Ou
               <Button size="sm" icon={<Phone size={15} />} disabled={!mobile} onClick={() => (window.location.href = `tel:${(mobile ?? "").replace(/\s/g, "")}`)}>
                 {t("common.call")}
               </Button>
-              <Button size="sm" icon={<MessageCircle size={15} />} disabled={!whatsappNumber(mobile)} onClick={remind}>
+              <Button size="sm" icon={<WhatsAppIcon size={15} />} disabled={!whatsappNumber(mobile)} onClick={remind}>
                 {t("collect.remind")}
               </Button>
               {canCollect && (

@@ -1,6 +1,7 @@
-import type { Database } from "@vyapaar/db";
+import type { Database } from "@digitalbahi/db";
 import type { Config } from "../config.js";
 import type { Messenger } from "../services/messaging/transport.js";
+import type { PushSender } from "../services/push.js";
 import type { FieldCipher } from "./crypto.js";
 import type { ErrorLog } from "./errorLog.js";
 import type { OtpSender } from "./otp.js";
@@ -21,6 +22,8 @@ export interface AppDeps {
   cipher: FieldCipher;
   /** WhatsApp and email to customers and suppliers. */
   messenger: Messenger;
+  /** Notifications as push messages to the Android app (FCM). */
+  push: PushSender;
   /** Failures written to the error log files (see errorLog.ts). */
   errors: ErrorLog;
 }

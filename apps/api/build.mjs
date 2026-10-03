@@ -1,4 +1,4 @@
-// Bundles the API and the workspace packages it uses (@vyapaar/*, shipped as
+// Bundles the API and the workspace packages it uses (@digitalbahi/*, shipped as
 // TypeScript source) into dist/main.js (server) and dist/deploy.js
 // (migrations + app role + reference data, run once per release) and dist/errors.js (reads the error
 // log: node dist/errors.js). Third-party dependencies declared by
@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-const external = Object.keys(pkg.dependencies).filter((d) => !d.startsWith("@vyapaar/"));
+const external = Object.keys(pkg.dependencies).filter((d) => !d.startsWith("@digitalbahi/"));
 
 await build({
   entryPoints: ["src/main.ts", "src/deploy.ts", "src/errors.ts"],

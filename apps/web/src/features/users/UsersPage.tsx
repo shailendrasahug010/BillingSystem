@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PERMISSION_CATALOG, validateMobile, type PermissionModule } from "@vyapaar/core";
-import type { TranslationKey } from "@vyapaar/i18n";
+import { PERMISSION_CATALOG, validateMobile, type PermissionModule } from "@digitalbahi/core";
+import type { TranslationKey } from "@digitalbahi/i18n";
 import { ShieldPlus, UserPlus } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";

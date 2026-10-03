@@ -1,11 +1,12 @@
-import { DashboardQuery } from "@vyapaar/contracts";
-import { addDays, ageDocuments, dec, financialYearOf } from "@vyapaar/core";
-import { schema } from "@vyapaar/db";
+import { DashboardQuery } from "@digitalbahi/contracts";
+import { addDays, ageDocuments, dec, financialYearOf } from "@digitalbahi/core";
+import { schema } from "@digitalbahi/db";
 import { eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { can, guard } from "../../lib/access.js";
 import { withTenant } from "../../lib/db.js";
 import { resolvePeriod } from "../../lib/period.js";
+import { productSalesRows, summariesThrough } from "../../services/sales-daily.js";
 import { getSettings } from "../../services/settings.js";
 import type { ApiModule } from "../types.js";
 
@@ -127,20 +128,21 @@ export const dashboardModule: ApiModule = async (app, deps) => {
           where i.business_id = ${b} and i.status = 'posted' and i.invoice_date between ${period.from} and ${period.to}
           group by c.id, c.name, c.business_name order by sum(i.grand_total) desc limit 5`)
       ).rows;
+      // Product sales: past days from the daily summaries once they are complete, today from the bills.
+      const sold = productSalesRows(b, period.from, period.to, await summariesThrough(tx, b, today));
       const topBrands = (
         await tx.execute<{ id: string; name: string; taxable: string }>(sql`
-          select coalesce(p.brand_id::text, '-') as id, coalesce(max(br.name), '-') as name, sum(ii.taxable_value)::text as taxable
-          from invoice_items ii join invoices i on i.id = ii.invoice_id
-          join products p on p.id = ii.product_id left join brands br on br.id = p.brand_id
-          where i.business_id = ${b} and i.status = 'posted' and i.invoice_date between ${period.from} and ${period.to}
-          group by 1 order by sum(ii.taxable_value) desc limit 7`)
+          with s as (${sold})
+          select coalesce(p.brand_id::text, '-') as id, coalesce(max(br.name), '-') as name, sum(s.taxable)::text as taxable
+          from s join products p on p.id = s.product_id left join brands br on br.id = p.brand_id
+          group by 1 order by sum(s.taxable) desc limit 7`)
       ).rows;
       const topProducts = (
         await tx.execute<{ id: string; name: string; qty: string; taxable: string }>(sql`
-          select ii.product_id as id, max(ii.product_name) as name, sum(ii.qty_base)::text as qty, sum(ii.taxable_value)::text as taxable
-          from invoice_items ii join invoices i on i.id = ii.invoice_id
-          where i.business_id = ${b} and i.status = 'posted' and i.invoice_date between ${period.from} and ${period.to}
-          group by ii.product_id order by sum(ii.taxable_value) desc limit 5`)
+          with s as (${sold})
+          select s.product_id as id, max(p.name) as name, sum(s.qty)::text as qty, sum(s.taxable)::text as taxable
+          from s join products p on p.id = s.product_id
+          group by s.product_id order by sum(s.taxable) desc limit 5`)
       ).rows;
 
       const [attention] = (

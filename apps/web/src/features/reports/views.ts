@@ -1,4 +1,4 @@
-import { REPORT_VIEW_REPORTS, type ReportViewReportKey, type ReportViewSettings } from "@vyapaar/contracts";
+import { REPORT_VIEW_REPORTS, type ReportViewReportKey, type ReportViewSettings } from "@digitalbahi/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { allowed } from "../../data/db";
 import { api } from "../../lib/api";
@@ -22,6 +22,7 @@ export interface SavedView {
 
 /** How each report opens before anything is chosen. */
 export const REPORT_DEFAULTS: Record<ReportTab, ReportSettings> = {
+  insights: { period: "thisMonth", compare: "previous" },
   sales: { period: "thisMonth", groupBy: "day" },
   collections: { period: "thisMonth", groupBy: "day" },
   purchases: { period: "thisMonth", groupBy: "month" },
@@ -51,6 +52,7 @@ export function savedSettings(report: ReportTab, s: ReportSettings): ReportSetti
   if (filters.includes("party") && s.party) out.party = s.party;
   if (filters.includes("basis") && s.basis) out.basis = s.basis;
   if (filters.includes("movement") && s.movement) out.movement = s.movement;
+  if (filters.includes("compare") && s.compare) out.compare = s.compare;
   return out;
 }
 

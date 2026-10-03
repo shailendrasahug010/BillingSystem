@@ -1,6 +1,6 @@
-import { InvoiceBody, OrderInvoiceBody, OrderListQuery, OrderStatusBody, SalesOrderBody } from "@vyapaar/contracts";
-import { allowedTransitions, dec, DEFAULT_ORDER_WORKFLOW, toAmountString, toQtyString, toRateString, type OrderStatus, type OrderWorkflowConfig } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { InvoiceBody, OrderInvoiceBody, OrderListQuery, OrderStatusBody, SalesOrderBody } from "@digitalbahi/contracts";
+import { allowedTransitions, dec, DEFAULT_ORDER_WORKFLOW, toAmountString, toQtyString, toRateString, type OrderStatus, type OrderWorkflowConfig } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -8,10 +8,11 @@ import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
+import { orderStatusEvent } from "../../services/order-status.js";
 import { prepareSale } from "../../services/sales-document.js";
 import { getSetting } from "../../services/settings.js";
 import { likeContains } from "../catalog/products.js";
@@ -83,6 +84,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
     const result = await tenant(ctx, async (tx) => {
       const workflow = await workflowOf(tx, ctx.businessId);
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.salesOrders.id })
           .from(schema.salesOrders)
@@ -92,7 +94,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
       const today = deps.clock.today(ctx.timeZone);
       if (body.expectedDeliveryDate && body.expectedDeliveryDate < (body.orderDate ?? today)) throw badRequest("DELIVERY_BEFORE_ORDER", {}, "expectedDeliveryDate");
       // Priced by the same code as an invoice on the order date.
-      const sale = await prepareSale(tx, ctx, { customerId: body.customerId, invoiceDate: body.orderDate, lines: body.lines, charges: [] } as z.output<typeof InvoiceBody>, today);
+      const sale = await prepareSale(tx, ctx, { customerId: body.customerId, invoiceDate: body.orderDate, lines: body.lines, charges: [] } as z.output<typeof InvoiceBody>, today, { order: true });
       const t = sale.totals;
       const numbering = await nextDocumentNumber(tx, ctx.businessId, "sales_order", sale.invoiceDate, sale.business.financialYearStartMonth);
       const id = uuidv7();
@@ -167,7 +169,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
       );
       await recordStatus(tx, ctx, id, null, status);
       await audit(tx, ctx, { action: "sales_order.created", entityType: "sales_order", entityId: id, entityLabel: numbering.number, changes: { customer: sale.customer.name, grandTotal: toAmountString(t.grandTotal) } });
-      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id } });
+      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id, status } });
       return { replay: false, detail: await orderDetail(tx, ctx, id, workflow) };
     });
     if (result.replay) reply.header("idempotent-replay", "true");
@@ -247,6 +249,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
         })
         .where(eq(schema.salesOrders.id, o.id));
       await recordStatus(tx, ctx, o.id, from, to, request.body.note);
+      await orderStatusEvent(tx, ctx.businessId, o.id, from, to);
       await audit(tx, ctx, { action: `sales_order.${to}`, entityType: "sales_order", entityId: o.id, entityLabel: o.orderNumber ?? undefined, changes: { status: [from, to] } });
       return orderDetail(tx, ctx, o.id, workflow);
     });
@@ -265,6 +268,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.invoices.id })
           .from(schema.invoices)

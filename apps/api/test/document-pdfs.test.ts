@@ -26,6 +26,9 @@ describe.skipIf(!hasDatabase)("invoices, notes and receipts as PDF", () => {
     owner = await signup(t, { legalName: "Laxmi Traders", stateCode: "23", gstin: "23AAGFG5678G1ZA" });
     await call(t.app, "PATCH", "/business", { token: owner.token, body: { addressLine1: "12 Siyaganj Main Road", city: "Indore", pincode: "452007", phone: "9826012345" } });
     await call(t.app, "PUT", "/settings/invoice.terms", { token: owner.token, body: { value: "Goods once sold will not be taken back." } });
+    const payTo = { bankName: "State Bank of India", accountNumber: "30123456789", ifsc: "sbin0001234", upiId: "laxmi.traders@okaxis" };
+    expect((await call(t.app, "PUT", "/settings/invoice.payment_details", { token: owner.token, body: { value: payTo } })).status).toBe(200);
+    expect((await call(t.app, "PUT", "/settings/invoice.payment_details", { token: owner.token, body: { value: { ...payTo, upiId: "not a upi id" } } })).status).toBe(400);
     const units = Object.fromEntries((await get("/units")).body.data.map((u: { symbol: string; id: string }) => [u.symbol, u.id]));
     const taxes = Object.fromEntries((await get("/tax-categories")).body.data.map((c: { name: string; id: string }) => [c.name, c.id]));
     ids.soap = (await post("/products", { name: "Bath Soap", nameLocal: "नहाने का साबुन", hsnCode: "3401", taxCategoryId: taxes["GST 18%"], baseUnitId: units.PCS, sellingPrice: "100", openingStock: "100", openingStockCost: "70" })).body.id;
@@ -70,6 +73,9 @@ describe.skipIf(!hasDatabase)("invoices, notes and receipts as PDF", () => {
       "SGST",
       "Grand total",
       "Goods once sold will not be taken back.",
+      "Bank details",
+      "State Bank of India · A/c 30123456789 · IFSC SBIN0001234",
+      "UPI: laxmi.traders@okaxis",
       "Authorised signatory",
       "Made with",
       "Page 1 of 1",
@@ -95,6 +101,8 @@ describe.skipIf(!hasDatabase)("invoices, notes and receipts as PDF", () => {
   it("makes the credit note against the invoice, and the receipt", async () => {
     const note = await pdfText((await pdf(`/notes/${ids.note}/pdf`)).rawPayload);
     for (const s of ["CREDIT NOTE", ids.noteNumber!, ids.invoiceNumber!, "Sharma Kirana Store", "Two soaps came back damaged.", "₹236.00"]) expect(note).toContain(s);
+    // Where to pay is for bills, not notes.
+    expect(note).not.toContain("Bank details");
     const receipt = await pdfText((await pdf(`/payments/${ids.receipt}/pdf`)).rawPayload);
     for (const s of ["RECEIPT", ids.receiptNumber!, "Received from", "Sharma Kirana Store", "₹300.00", "Cheque", "004512", "SBI", "Cheque payments are subject to realisation."]) expect(receipt).toContain(s);
   });

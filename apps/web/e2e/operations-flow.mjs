@@ -187,6 +187,8 @@ log("collection recorded against the invoice");
 
 // 8. Reports and GST.
 await nav("Business Reports");
+// Reports open on Insights for the owner; the sales report is the next tab.
+await page.getByRole("tab", { name: "Sales", exact: true }).click();
 await page.getByRole("cell", { name: "Total" }).first().waitFor();
 await page.getByRole("tab", { name: "Outstanding" }).click();
 await page.getByRole("cell", { name: /Sharma Kirana/ }).waitFor();

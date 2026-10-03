@@ -1,4 +1,4 @@
-import { needsEInvoice, needsEwayBill, type ZeroRatedType } from "@vyapaar/core";
+import { needsEInvoice, needsEwayBill, type ZeroRatedType } from "@digitalbahi/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Download, FileJson, Truck } from "lucide-react";
 import { useState } from "react";

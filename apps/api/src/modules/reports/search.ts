@@ -1,5 +1,5 @@
-import { SearchQuery } from "@vyapaar/contracts";
-import { normalizeIndianMobile } from "@vyapaar/core";
+import { SearchQuery } from "@digitalbahi/contracts";
+import { normalizeIndianMobile } from "@digitalbahi/core";
 import { sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { can, guard } from "../../lib/access.js";

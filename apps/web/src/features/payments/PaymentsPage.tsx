@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PaymentMethod } from "@vyapaar/core";
-import type { LocaleCode } from "@vyapaar/i18n";
+import type { PaymentMethod } from "@digitalbahi/core";
+import type { LocaleCode } from "@digitalbahi/i18n";
 import { ArrowDownLeft, ArrowUpRight, Download, Printer, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -10,7 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
-import { createTranslator, formatCurrency, formatDate } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate } from "@digitalbahi/i18n";
 import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, Stat, type Column } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { PrintPortal } from "../../components/ui/PrintPortal";
@@ -24,6 +24,8 @@ import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
 import { ReceiptDocument, type PrintablePayment } from "./ReceiptDocument";
+import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
+import { paymentReceipt } from "../../lib/thermal/receipts";
 
 interface PaymentRow {
   id: string;
@@ -355,6 +357,7 @@ export function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string 
             <Button size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
               {p.direction === "in" ? t("receipt.print") : t("receipt.printVoucher")}
             </Button>
+            {printable && <ThermalPrintButton size="sm" receipt={() => paymentReceipt(printable, printLocale)} />}
             <PdfActions size="sm" path={`/payments/${p.id}/pdf`} locale={printLocale} number={p.paymentNumber ?? ""} shareText={message.text} mobile={message.mobile} />
             <SendButton size="sm" documentType="receipt" documentId={p.id} number={p.paymentNumber ?? ""} party={{ name: printable?.partyName ?? "", mobile: message.mobile}} locale={printLocale} />
           </div>

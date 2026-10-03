@@ -1,4 +1,4 @@
-import { FileDown, MessageCircle } from "lucide-react";
+import { FileDown } from "lucide-react";
 import { useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { api } from "../../lib/api";
@@ -6,6 +6,7 @@ import { downloadBlob } from "../../lib/download";
 import { canShareFiles, pdfFileName, shareFile, shareOnWhatsApp } from "../../lib/share";
 import { Button, type ButtonSize } from "./Button";
 import { useToast } from "./Toast";
+import { WhatsAppIcon } from "../brand/WhatsAppIcon";
 
 /**
  * Download PDF and WhatsApp for an invoice, note or receipt. The PDF is made
@@ -63,7 +64,7 @@ export function PdfActions({ path, locale, number, shareText, mobile, size = "md
       <Button size={size} icon={<FileDown size={iconSize} />} disabled={busy !== null} onClick={() => void download()}>
         {t("share.downloadPdf")}
       </Button>
-      <Button size={size} variant={primaryShare ? "primary" : "secondary"} icon={<MessageCircle size={iconSize} />} disabled={busy !== null} onClick={() => void share()}>
+      <Button size={size} variant={primaryShare ? "primary" : "secondary"} icon={<WhatsAppIcon size={iconSize} mono={primaryShare} />} disabled={busy !== null} onClick={() => void share()}>
         {t("common.whatsapp")}
       </Button>
     </>

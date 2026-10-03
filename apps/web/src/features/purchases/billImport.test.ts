@@ -1,4 +1,4 @@
-import type { BillFileLine } from "@vyapaar/core";
+import type { BillFileLine } from "@digitalbahi/core";
 import { describe, expect, it } from "vitest";
 import type { Product } from "../../data/types";
 import { lineFromItem, sameUnit, unitFor, unitNamed } from "./billImport";

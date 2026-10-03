@@ -1,5 +1,5 @@
-import { MessageCircle, Printer } from "lucide-react";
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { Printer } from "lucide-react";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
@@ -8,7 +8,10 @@ import { PrintPortal } from "../../components/ui/PrintPortal";
 import { BUSINESS, WORKSPACE } from "../../data/db";
 import { shareOnWhatsApp, whatsappNumber } from "../../lib/share";
 import type { SavedPayment } from "../payments/PaymentDialog";
-import { ReceiptDocument } from "../payments/ReceiptDocument";
+import { ReceiptDocument, type PrintablePayment } from "../payments/ReceiptDocument";
+import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
+import { paymentReceipt } from "../../lib/thermal/receipts";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 type Kept = Extract<SavedPayment, { offline: unknown }>["offline"];
 
@@ -22,6 +25,21 @@ export function ProvisionalReceiptDialog({ payment, mobile, onClose }: { payment
   const printLocale = ((WORKSPACE.printLocale as LocaleCode) || locale) as LocaleCode;
   if (!payment) return null;
   const pending = createTranslator(printLocale).t("collect.pendingNumber");
+  const printable: PrintablePayment = {
+    paymentNumber: pending,
+    paymentDate: payment.date,
+    direction: "in",
+    amount: payment.amount.toFixed(2),
+    method: payment.method,
+    referenceNumber: payment.referenceNumber,
+    chequeDate: null,
+    chequeBank: null,
+    unallocatedAmount: "0",
+    status: "posted",
+    notes: createTranslator(printLocale).t("collect.provisional"),
+    partyName: payment.partyName,
+    allocations: [],
+  };
   const share = () => {
     const tr = createTranslator(printLocale).t;
     const text = tr("share.receipt", {
@@ -47,7 +65,8 @@ export function ProvisionalReceiptDialog({ payment, mobile, onClose }: { payment
           <Button icon={<Printer size={16} />} onClick={() => window.print()}>
             {t("receipt.print")}
           </Button>
-          <Button icon={<MessageCircle size={16} />} disabled={!whatsappNumber(mobile)} onClick={share}>
+          <ThermalPrintButton receipt={() => paymentReceipt(printable, printLocale)} />
+          <Button icon={<WhatsAppIcon size={16} />} disabled={!whatsappNumber(mobile)} onClick={share}>
             {t("collect.shareReceipt")}
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -65,24 +84,7 @@ export function ProvisionalReceiptDialog({ payment, mobile, onClose }: { payment
         </div>
       </div>
       <PrintPortal>
-        <ReceiptDocument
-          locale={printLocale}
-          payment={{
-            paymentNumber: pending,
-            paymentDate: payment.date,
-            direction: "in",
-            amount: payment.amount.toFixed(2),
-            method: payment.method,
-            referenceNumber: payment.referenceNumber,
-            chequeDate: null,
-            chequeBank: null,
-            unallocatedAmount: "0",
-            status: "posted",
-            notes: createTranslator(printLocale).t("collect.provisional"),
-            partyName: payment.partyName,
-            allocations: [],
-          }}
-        />
+        <ReceiptDocument locale={printLocale} payment={printable} />
       </PrintPortal>
     </Dialog>
   );

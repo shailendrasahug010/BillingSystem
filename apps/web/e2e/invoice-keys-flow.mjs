@@ -3,9 +3,9 @@
  * while billing: Ctrl+I opens a new invoice -> a shop that is not a customer
  * yet is typed in the customer search -> arrow down to "Add … as a new
  * customer", Enter -> the form opens with the name filled in -> saved, the
- * bill has the new customer -> product search, Enter, the line switched to
- * boxes (re-priced for the box), qty -> Enter -> rate -> Enter -> back to the
- * product search, a second product with Tab through qty, rate and Disc %
+ * bill has the new customer -> product search, Enter, "2b" typed in the
+ * quantity (2, then the B button's letter: 2 boxes, re-priced for the box)
+ * -> Enter -> rate -> Enter -> back to the product search, a second product with Tab through qty, rate and Disc %
  * back to the search, F2, Ctrl+Enter saves. Then at tablet width (900 px): the full invoice screen
  * with the same keys (F3, F2, Ctrl+Enter). Then on a phone: "Add customer"
  * from the search by tap.
@@ -48,6 +48,19 @@ page.on("response", (r) => {
   if (r.status() >= 400) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
 });
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 const focused = () => page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.id ?? "");
 const expectFocus = async (label, step) => {
   await page.waitForTimeout(150);
@@ -104,12 +117,12 @@ await page.keyboard.type("fortune");
 await page.getByRole("option", { name: /Fortune Oil 1L/ }).waitFor();
 await page.keyboard.press("Enter");
 await expectFocus("Qty", "after adding the product");
-// Sold by the box: the rate becomes the box's (12 x 150) and the qty stays 1.
-await page.getByLabel("Unit Fortune Oil 1L").selectOption({ label: "BOX (12 PCS)" });
+// Sold by the box, keyboard only: "2" then "b" (BOX's letter) is 2 boxes at the box's rate (12 x 150).
+await page.keyboard.type("2b");
+for (let i = 0; i < 30 && (await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800"; i++) await page.waitForTimeout(100);
 if ((await page.getByLabel("Rate Fortune Oil 1L").inputValue()) !== "1800") errors.push(`box rate ${await page.getByLabel("Rate Fortune Oil 1L").inputValue()}`);
-// Keyboard only from here: qty, Enter -> rate, Enter -> back to product search.
-await page.getByLabel("Qty Fortune Oil 1L").focus();
-await page.keyboard.type("2");
+if ((await page.getByRole("combobox", { name: "Unit Fortune Oil 1L" }).inputValue()) !== units.BOX) errors.push('"2b": the line is not in boxes');
+// Then Enter -> rate, Enter -> back to product search.
 await page.keyboard.press("Enter");
 await expectFocus("Rate Fortune Oil 1L", "Enter from qty");
 await page.keyboard.press("Enter");
@@ -130,7 +143,14 @@ await page.screenshot({ path: `${OUT}/keys-1b-box.png` });
 await page.keyboard.press("F2");
 await expectFocus("Search product", "F2");
 await page.keyboard.press("Control+Enter");
-await toast(/Invoice INV\/.* saved/);
+// The popup says it was saved; Enter (on "New invoice") closes it and the next bill starts at the customer.
+const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+await popup.waitFor({ timeout: 15000 });
+await popup.getByText(/INV\/\d\d-\d\d\/00001/).waitFor();
+await page.screenshot({ path: `${OUT}/keys-1c-saved.png` });
+await page.keyboard.press("Enter");
+await popup.waitFor({ state: "detached" });
+await expectFocus("Search customer", "after closing the saved popup with Enter");
 let list = await bills();
 if (list.length !== 1 || !list[0].partyName?.includes("Sharma") || list[0].grandTotal !== "3927.00") errors.push(`bills: ${JSON.stringify(list.map((b) => [b.invoiceNumber, b.partyName, b.grandTotal]))}`);
 const first = await api("GET", `/invoices/${list[0].id}`, token);
@@ -154,7 +174,7 @@ await page.keyboard.type("fortune");
 await page.getByRole("option", { name: /Fortune Oil 1L/ }).waitFor();
 await page.keyboard.press("Enter");
 await page.keyboard.press("Control+Enter");
-await toast(/Invoice INV\/.*00002 saved/);
+if (!/00002$/.test(await savedBill(page))) errors.push("900 px: the second bill was not saved as 00002");
 await page.screenshot({ path: `${OUT}/keys-2-tablet.png` });
 log("900 px wide: F3, F2 and Ctrl+Enter work on the full invoice screen");
 

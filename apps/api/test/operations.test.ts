@@ -1,4 +1,4 @@
-import { gstinCheckChar } from "@vyapaar/core";
+import { gstinCheckChar } from "@digitalbahi/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, createTestApp, hasDatabase, nextMobile, signup, type Session, type TestApp } from "./helpers.js";
 

@@ -1,4 +1,4 @@
-import { runMigrations, setupAppRole, createDb, seedReferenceData } from "@vyapaar/db";
+import { runMigrations, setupAppRole, createDb, seedReferenceData } from "@digitalbahi/db";
 
 /**
  * Release step, run once before a new API version starts (the `migrate`
@@ -11,7 +11,7 @@ if (!ownerUrl) throw new Error("MIGRATION_DATABASE_URL (schema owner) is not set
 await runMigrations(ownerUrl);
 console.log("Migrations applied");
 
-await setupAppRole(ownerUrl, process.env.APP_DB_ROLE ?? "vyapaar_app", process.env.APP_DB_PASSWORD);
+await setupAppRole(ownerUrl, process.env.APP_DB_ROLE ?? "digitalbahi_app", process.env.APP_DB_PASSWORD);
 console.log("Application role ready");
 
 const { db, pool } = createDb(ownerUrl, { max: 1 });

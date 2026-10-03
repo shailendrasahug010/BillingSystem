@@ -162,6 +162,48 @@
       "when": 1790780328443,
       "tag": "0022_einvoice_ewaybill",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790850112039,
+      "tag": "0023_purchase_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790852958514,
+      "tag": "0024_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790869456354,
+      "tag": "0025_offline_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790888339487,
+      "tag": "0026_reminders_messaging",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790917496933,
+      "tag": "0027_push_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790920315097,
+      "tag": "0028_beats",
+      "breakpoints": true
     }
   ]
 }

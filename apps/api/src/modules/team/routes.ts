@@ -1,6 +1,6 @@
-import { InviteMemberBody, MemberCredentialsBody, RoleBody, RolePermissionsBody, UpdateMemberBody, UpdateRoleBody } from "@vyapaar/contracts";
-import { ALL_PERMISSIONS, expandGrants, hasPermission, normalizeIndianMobile, PERMISSION_CATALOG, type Grant } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { InviteMemberBody, MemberCredentialsBody, RoleBody, RolePermissionsBody, UpdateMemberBody, UpdateRoleBody } from "@digitalbahi/contracts";
+import { ALL_PERMISSIONS, expandGrants, hasPermission, normalizeIndianMobile, PERMISSION_CATALOG, type Grant } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

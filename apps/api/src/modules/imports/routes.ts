@@ -1,6 +1,6 @@
-import { ImportBody } from "@vyapaar/contracts";
-import { GST_STATES, normalizeGstin, normalizeIndianMobile, resolveTax, stateCodeFromGstin, validateGstin, validatePincode, type TaxCategory } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { ImportBody } from "@digitalbahi/contracts";
+import { GST_STATES, normalizeGstin, normalizeIndianMobile, resolveTax, stateCodeFromGstin, validateGstin, validatePincode, type TaxCategory } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, isNull } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

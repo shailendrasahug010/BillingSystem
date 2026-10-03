@@ -11,9 +11,9 @@ import {
   SwitchBusinessBody,
   type MeResponse,
   type OtpRequestResponse,
-} from "@vyapaar/contracts";
-import { expandGrants, normalizeIndianMobile, type Grant } from "@vyapaar/core";
-import { schema } from "@vyapaar/db";
+} from "@digitalbahi/contracts";
+import { expandGrants, normalizeIndianMobile, type Grant } from "@digitalbahi/core";
+import { schema } from "@digitalbahi/db";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
 import { randomBytes } from "node:crypto";

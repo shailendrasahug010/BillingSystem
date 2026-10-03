@@ -10,7 +10,7 @@
  * where it should.
  *
  * Build the app and serve it with the API behind /api:
- *   pnpm --filter @vyapaar/web build && (cd apps/web && npx vite preview --port 4173)
+ *   pnpm --filter @digitalbahi/web build && (cd apps/web && npx vite preview --port 4173)
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:4173 node apps/web/e2e/offline-work-flow.mjs
  * Needs the `playwright` package (PLAYWRIGHT_PATH if it is not resolvable
  * from here) and a Chromium (CHROMIUM_PATH optional).
@@ -50,7 +50,8 @@ page.on("response", (r) => {
   if (r.status() >= 400) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
 });
 page.on("requestfailed", (r) => {
-  if (!offline && r.url().includes("/api/")) errors.push(`failed ${r.method()} ${r.url()}`);
+  // The live notifications stream is cut by design when the page reloads or the network goes.
+  if (!offline && r.url().includes("/api/") && !r.url().includes("/notifications/stream")) errors.push(`failed ${r.method()} ${r.url()}`);
 });
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
 const dialog = () => page.getByRole("dialog");

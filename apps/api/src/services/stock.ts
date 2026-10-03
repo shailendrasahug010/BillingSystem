@@ -1,5 +1,5 @@
-import { applyMovement, dec, directionOf, roundRate, toQtyString, toRateString, type NegativeStockPolicy, type StockCheck, type StockMovementType } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { applyMovement, dec, directionOf, roundRate, toQtyString, toRateString, type NegativeStockPolicy, type StockCheck, type StockMovementType } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
@@ -98,7 +98,8 @@ async function updateAverageCost(tx: Tx, businessId: string, productId: string, 
     })
     .from(schema.products)
     .where(and(eq(schema.products.id, productId), eq(schema.products.businessId, businessId)))
-    .for("update");
+    // Serialises cost updates without clashing with documents referring to the product.
+    .for("no key update");
   if (!row) return;
   const onHand = dec(row.onHand).gt(0) ? dec(row.onHand) : dec(0);
   const total = onHand.plus(inQty);

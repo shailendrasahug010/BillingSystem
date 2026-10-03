@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { searchProducts } from "@vyapaar/core";
-import type { TranslationKey } from "@vyapaar/i18n";
+import { searchProducts } from "@digitalbahi/core";
+import type { TranslationKey } from "@digitalbahi/i18n";
 import { ArrowLeftRight, ClipboardCheck, Download, Search, Trash2 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";

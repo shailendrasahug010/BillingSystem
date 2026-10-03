@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocaleCode } from "@vyapaar/i18n";
+import type { LocaleCode } from "@digitalbahi/i18n";
 import { Check, CheckCheck, Mail, MessageCircle, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -14,12 +14,14 @@ import { Field, Input } from "../ui/Field";
 import { Segmented } from "../ui/misc";
 import { ErrorNote } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { WhatsAppIcon } from "../brand/WhatsAppIcon";
 
 type Channel = "whatsapp" | "email";
 
 export interface MessageRow {
   id: string;
-  channel: Channel;
+  /** Documents go by WhatsApp or email; payment reminders and tests by SMS too. */
+  channel: Channel | "sms";
   kind: "invoice" | "note" | "receipt" | "reminder" | "test";
   documentId: string | null;
   documentNumber: string | null;
@@ -36,12 +38,15 @@ export interface MessageRow {
   readAt?: string | null;
   createdAt: string;
   sentBy: string | null;
+  /** Sent by a rule (the automatic payment reminders), not by a person. */
+  automatic?: boolean;
 }
 
 interface Channels {
   driver: "live" | "log";
   whatsapp: { ready: boolean; number: string | null };
   email: { ready: boolean };
+  sms: { ready: boolean };
 }
 
 export function useChannels(enabled = true) {
@@ -179,7 +184,7 @@ export function SendDialog({
             inputMode={channel === "email" ? "email" : "tel"}
             placeholder={t("messages.toOnFile")}
             onChange={(e) => setTo(e.target.value)}
-            leading={channel === "email" ? <Mail size={15} /> : <MessageCircle size={15} />}
+            leading={channel === "email" ? <Mail size={15} /> : channel === "whatsapp" ? <WhatsAppIcon size={15} /> : <MessageCircle size={15} />}
           />
         </Field>
         <Segmented

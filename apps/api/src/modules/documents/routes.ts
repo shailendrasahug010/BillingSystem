@@ -1,6 +1,6 @@
-import { zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
-import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@vyapaar/i18n";
+import { zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
+import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@digitalbahi/i18n";
 import { inArray, eq } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -120,7 +120,7 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
   const letterhead = await loadLetterhead(deps, ctx);
   const data = await withTenant(deps.db, ctx, async (tx) => {
     const inv = await invoiceDetail(tx, ctx, id);
-    const settings = await getSettings(tx, ctx.businessId, ["invoice.terms", "invoice.default_print_locale"]);
+    const settings = await getSettings(tx, ctx.businessId, ["invoice.terms", "invoice.default_print_locale", "invoice.payment_details"]);
     const locale = pickLocale(asked, inv.printLocale, settings["invoice.default_print_locale"]);
     const extras = await lineExtras(tx, inv.items);
     const party = await partyContact(tx, "customer", inv.customerId);
@@ -150,6 +150,7 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     balance: inv.balanceDue,
     reason: null,
     terms: (data.settings["invoice.terms"] as string) || null,
+    payment: data.settings["invoice.payment_details"],
     zeroRated: inv.zeroRatedType ? zeroRatedPrint(inv, locale) : null,
     einvoice: inv.irn ? { irn: inv.irn, ackNumber: inv.irnAckNumber, ackDate: inv.irnAckDate, signedQrCode: inv.signedQrCode } : null,
     ewayBill: inv.ewayBillNumber ? { number: inv.ewayBillNumber, date: inv.ewayBillDate, validUntil: inv.ewayBillValidUntil } : null,

@@ -2,7 +2,7 @@
 
 The stack was chosen for one overriding reason and five supporting ones.
 
-**The overriding reason:** the same business logic must run on the server (authoritative), in the browser (instant totals as the user types) and on an offline Android phone (invoices without internet). That means one language end to end. TypeScript is the only mainstream choice that runs natively in all three places, so the GST engine, invoice totals and suggestion logic exist exactly once, in `@vyapaar/core`.
+**The overriding reason:** the same business logic must run on the server (authoritative), in the browser (instant totals as the user types) and on an offline Android phone (invoices without internet). That means one language end to end. TypeScript is the only mainstream choice that runs natively in all three places, so the GST engine, invoice totals and suggestion logic exist exactly once, in `@digitalbahi/core`.
 
 Supporting criteria, in order: data integrity for money and stock, cross-platform reach (web, Windows, Android) from one UI code base, low hosting cost, maintainability by a small team, and a modern, fast UI.
 
@@ -11,12 +11,12 @@ Supporting criteria, in order: data integrity for money and stock, cross-platfor
 | Layer | Choice | Version in repo | Status |
 |---|---|---|---|
 | Language | TypeScript (strict) | 6.0 | Used everywhere |
-| Shared domain logic | `@vyapaar/core` (pure TS) + decimal.js | 10.6 | **Built, 66 tests** |
+| Shared domain logic | `@digitalbahi/core` (pure TS) + decimal.js | 10.6 | **Built, 66 tests** |
 | Database | PostgreSQL | 16+ (tested on 16.13) | **Schema built, integration-tested** |
 | ORM / migrations | Drizzle ORM + drizzle-kit | 0.45 / 0.31 | **Built** |
 | API framework | Fastify (plugins) + fastify-type-provider-zod | 5.12 | **Built** (Phase 3) |
-| Validation / contracts | Zod schemas in `@vyapaar/contracts`, shared by API and clients | 4.x | **Built** |
-| Background jobs | pg-boss (queues + cron on PostgreSQL); outbox rows are already written in every posting transaction | 12.x | Phase 4 |
+| Validation / contracts | Zod schemas in `@digitalbahi/contracts`, shared by API and clients | 4.x | **Built** |
+| Background jobs | Outbox worker and schedulers in the API process, on PostgreSQL itself (`FOR UPDATE SKIP LOCKED`, claimed rows); pg-boss if job types multiply | — | Phase 5 (built) |
 | Web UI | React + Vite | 19.3 / 8.3 | **Prototype built** |
 | Styling | Tailwind CSS v4 on CSS-variable design tokens | 4.3 | **Built** |
 | Accessible primitives | Radix UI (dialog, popover, tabs…) | 1.6 | **Built** |
@@ -25,7 +25,7 @@ Supporting criteria, in order: data integrity for money and stock, cross-platfor
 | Routing (client) | TanStack Router (a minimal screen router is used today) | 1.x | Phase 4 |
 | Data grids | TanStack Table + TanStack Virtual | 9.x / 3.x | Phase 3 |
 | Offline store | IndexedDB via Dexie + service worker (vite-plugin-pwa / Workbox) | 4.x | Phase 5 |
-| Localisation | `@vyapaar/i18n` (typed keys, i18next-compatible JSON) | — | **Built** |
+| Localisation | `@digitalbahi/i18n` (typed keys, i18next-compatible JSON) | — | **Built** |
 | Charts | Hand-built SVG components following one chart spec | — | **Built** (dashboard) |
 | Windows desktop | Tauri 2 | 2.x | Phase 6 |
 | Android | Capacitor + ML Kit barcode scanning | 8.x | Phase 5–6 |
@@ -63,8 +63,8 @@ Phase 1 planned NestJS on the Fastify adapter. While building Phase 3 we used **
 * Business flows that several modules share (numbering, stock movements, party ledger, payments, settings) live in `apps/api/src/services` and always take the caller's transaction.
 * Alternatives considered: NestJS (see above), .NET or Go (excellent, but they break the "one engine everywhere" rule).
 
-### pg-boss (jobs) instead of Redis + BullMQ at the start
-Jobs, retries, cron schedules and the outbox all live in PostgreSQL: one fewer service to run, back up and pay for, and job enqueueing can happen inside the business transaction. Redis is added only when caching or rate-limit volume needs it.
+### Jobs on PostgreSQL instead of Redis + BullMQ
+Jobs, retries, schedules and the outbox all live in PostgreSQL: one fewer service to run, back up and pay for, and a job is enqueued inside the business transaction (the `outbox_events` row is written with the bill). As built, the API process runs small loops instead of a job library: the outbox worker (every few seconds; takes a business's events with `FOR UPDATE SKIP LOCKED`, retries with backoff, sets aside an event after 8 failures), the nightly analytics scheduler (claims a business's day by inserting its `analytics_runs` row) and the automatic-backup scheduler (claims a schedule by moving its next time). Each finds due work across businesses through a `SECURITY DEFINER` function that answers only "whose turn is it", then works inside that business under row-level security; several API servers can run them side by side. pg-boss (queues and cron on the same database) is the next step if the kinds of jobs multiply; Redis is added only when caching or rate-limit volume needs it.
 
 ### React + Vite + Tailwind + Radix (UI)
 * React has the largest hiring pool in India and first-class support in both desktop and mobile shells.

@@ -64,6 +64,19 @@ page.on("requestfailed", (r) => r.failure()?.errorText !== "net::ERR_ABORTED" &&
 const nav = (name) => page.getByRole("navigation", { name: "Main" }).getByRole("button", { name, exact: true }).click();
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
 
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
+
 // 1. Sign up; a product through the API.
 await page.goto(WEB);
 await page.getByRole("button", { name: "Create account" }).click();
@@ -106,6 +119,8 @@ await page.fill("#c-business", "Gulf Traders LLC");
 await page.fill("#c-mobile", `98260${run}`);
 await page.screenshot({ path: `${OUT}/export-1-customer-form.png` });
 await dialog.getByRole("button", { name: "Save", exact: true }).click();
+// Saved when the form closes (a "Customer saved" toast can still be the one before).
+await dialog.waitFor({ state: "detached", timeout: 15000 });
 await toast("Customer saved");
 await page.getByRole("button", { name: "Add customer" }).click();
 dialog = page.getByRole("dialog");
@@ -116,7 +131,7 @@ await page.fill("#c-mobile", `98261${run}`);
 await page.fill("#c-gstin", sezGstin);
 check((await page.inputValue("#c-state")) === "27", "state filled from the SEZ unit's GSTIN");
 await dialog.getByRole("button", { name: "Save", exact: true }).click();
-await toast("Customer saved");
+await dialog.waitFor({ state: "detached", timeout: 15000 });
 const customers = (await api("GET", "/customers?q=", token)).data;
 const gulf = customers.find((c) => c.name === "Gulf Traders LLC");
 const sez = customers.find((c) => c.name === "Pune SEZ Unit");
@@ -156,14 +171,13 @@ await summary.getByRole("radio", { name: "Under LUT / bond, no IGST" }).click();
 await summary.getByText("₹100.00").first().waitFor();
 await page.screenshot({ path: `${OUT}/export-2-invoice-draft.png` });
 await page.getByRole("button", { name: "Save invoice" }).click();
-await toast(/Invoice INV\/\d\d-\d\d\/00001 saved/);
+check(/\/00001$/.test(await savedBill(page, { view: true })), "the export saved as the first bill");
 const exp = (await api("GET", "/invoices", token)).data.find((i) => i.partyName === "Gulf Traders LLC");
 const expDetail = await api("GET", `/invoices/${exp.id}`, token);
 check(expDetail.zeroRatedType === "EXPWOP" && expDetail.igstTotal === "0.00" && expDetail.lutArn === arn && expDetail.shippingBillNumber === "7894561" && expDetail.portCode === "INNSA1" && expDetail.placeOfSupply === "96", `export stored: ${JSON.stringify({ ...expDetail, items: undefined, seller: undefined })}`);
 log("export saved:", expDetail.invoiceNumber, expDetail.zeroRatedType, "IGST", expDetail.igstTotal, "LUT", expDetail.lutArn);
 
-// 5. The invoice: declaration, LUT, shipping bill; the date added later.
-await page.getByRole("button", { name: "Details" }).click();
+// 5. The invoice (opened from the saved popup): declaration, LUT, shipping bill; the date added later.
 await page.getByRole("heading", { name: expDetail.invoiceNumber }).waitFor({ timeout: 15000 });
 await page.getByText("Export · under LUT").first().waitFor();
 const doc = page.locator("article").first();
@@ -200,8 +214,7 @@ check((await page.locator("#sb-number").count()) === 0, "no shipping bill for an
 await summary.getByRole("radio", { name: "With payment of IGST" }).click();
 await summary.getByText("₹118.00").first().waitFor();
 await page.getByRole("button", { name: "Save invoice" }).click();
-await toast(/Invoice INV\/\d\d-\d\d\/00002 saved/);
-await page.getByRole("button", { name: "Details" }).click();
+check(/\/00002$/.test(await savedBill(page, { view: true })), "the SEZ bill saved as the second");
 await page.getByText("SEZ · with IGST").first().waitFor({ timeout: 15000 });
 await page.locator("article").first().getByText("SUPPLY TO SEZ UNIT / DEVELOPER FOR AUTHORISED OPERATIONS ON PAYMENT OF INTEGRATED TAX").waitFor();
 check((await page.getByRole("region", { name: "Shipping bill" }).count()) === 0, "no shipping bill card on an SEZ invoice");

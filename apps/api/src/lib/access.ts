@@ -1,5 +1,5 @@
-import { hasPermission, type Permission } from "@vyapaar/core";
-import type { Database } from "@vyapaar/db";
+import { hasPermission, type Permission } from "@digitalbahi/core";
+import type { Database } from "@digitalbahi/db";
 import { sql } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppDeps } from "./context.js";

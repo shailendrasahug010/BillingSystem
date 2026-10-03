@@ -1,4 +1,4 @@
-import { LOCALES } from "@vyapaar/i18n";
+import { LOCALES } from "@digitalbahi/i18n";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { ACCENTS, applyAccent, applyTheme, useAppearance } from "../../app/theme";

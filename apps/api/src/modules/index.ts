@@ -9,6 +9,7 @@ import { documentsModule } from "./documents/routes.js";
 import { messagingModule } from "./messaging/routes.js";
 import { messagingStatusModule } from "./messaging/status-webhook.js";
 import { backupsModule } from "./backups/routes.js";
+import { beatsModule } from "./beats/routes.js";
 import { expensesModule } from "./expenses/routes.js";
 import { eInvoiceModule } from "./gst/einvoice.js";
 import { gstModule } from "./gst/routes.js";
@@ -21,6 +22,10 @@ import { logisticsModule } from "./logistics/routes.js";
 import { invoicesModule } from "./invoices/routes.js";
 import { suggestionsModule } from "./invoices/suggestions.js";
 import { notesModule } from "./notes/routes.js";
+import { notificationsModule } from "./notifications/routes.js";
+import { pushModule } from "./push/routes.js";
+import { syncPushModule } from "./sync/push.js";
+import { syncModule } from "./sync/routes.js";
 import { ordersModule } from "./orders/routes.js";
 import { partiesModule } from "./parties/routes.js";
 import { employeesModule } from "./people/employees.js";
@@ -32,6 +37,7 @@ import { purchasesModule } from "./purchases/routes.js";
 import { analyticsModule } from "./reports/analytics.js";
 import { collectionsModule } from "./reports/collections.js";
 import { homeModule } from "./reports/home.js";
+import { insightsModule } from "./reports/insights.js";
 import { dashboardModule } from "./reports/dashboard.js";
 import { reportsModule } from "./reports/reports.js";
 import { reportViewsModule } from "./reports/views.js";
@@ -50,6 +56,7 @@ export const MODULES: ApiModule[] = [
   catalogMastersModule,
   productsModule,
   partiesModule,
+  beatsModule,
   importsModule,
   ocrModule,
   invoicesModule,
@@ -58,6 +65,10 @@ export const MODULES: ApiModule[] = [
   documentsModule,
   messagingModule,
   messagingStatusModule,
+  notificationsModule,
+  pushModule,
+  syncModule,
+  syncPushModule,
   backupsModule,
   ordersModule,
   logisticsModule,
@@ -68,6 +79,7 @@ export const MODULES: ApiModule[] = [
   paymentsModule,
   collectionsModule,
   homeModule,
+  insightsModule,
   notesModule,
   expensesModule,
   gstModule,

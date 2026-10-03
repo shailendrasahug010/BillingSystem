@@ -19,20 +19,22 @@ The system holds a business's customers, prices, margins, receivables, employees
 | MFA | TOTP (authenticator app) available for everyone, **enforceable for Admin and Accountant roles** |
 | Key rotation | JWT signing keys rotate with a `kid` header and a two-key overlap window |
 
+**The Android app** (Capacitor, `apps/mobile`): its pages come from the app itself (https://localhost) and call the business's server, which lets that origin in (`APP_ORIGINS`; CORS with every method the API takes, and on the notification stream). It signs in as a native client (`X-Client: native`): no cookies; the refresh token comes in the response body and is kept in the phone's keystore-backed storage (AES-GCM with a key that never leaves the Android keystore; a value that no longer opens reads as signed out), sent back only to `/auth/refresh`. The server address must be https and must answer as a Digital Bahi server. The app has no cloud backup (`allowBackup=false`). Signing out removes the phone's push token and the stored sign-in.
+
 ## 2. Authorisation
 
 Three layers, all of which must allow an action.
 
 ### 2.1 Tenant isolation (which business)
 * The business id comes from the verified token, never from the URL or body.
-* Every repository query filters by `business_id`, and **PostgreSQL row-level security** enforces the same rule underneath: the API connects as a non-owner role (`vyapaar_app`) and sets `app.business_id` per transaction, so a query that forgets its filter returns nothing and cannot insert into another tenant (tested in `packages/db/test/integrity.test.ts`).
+* Every repository query filters by `business_id`, and **PostgreSQL row-level security** enforces the same rule underneath: the API connects as a non-owner role (`digitalbahi_app`) and sets `app.business_id` per transaction, so a query that forgets its filter returns nothing and cannot insert into another tenant (tested in `packages/db/test/integrity.test.ts`).
 * Resource ids of other tenants return `404`, never `403`, so existence is not revealed.
 * **Foreign keys ignore RLS**, so every id a client sends (brand, tax category, route, price level, customer…) is checked against the current business before it is stored (`assertOwned`); tests post another tenant's ids and expect `REFERENCE_NOT_FOUND`.
 * The `businesses` table itself is under RLS: a user sees a business only when it is the current one or they are an active member; memberships can be read across the user's businesses (for the switcher) but only created or changed in the current business.
 * A SaaS business can be `trial`, `active`, `suspended` or `closed`; suspended and closed businesses are refused on every business route while their users can still sign in and see why.
 
 ### 2.2 Role-based permissions (what action)
-* Permissions are code-defined (`PERMISSION_CATALOG` in `@vyapaar/core`, `<module>.<action>`, 100 of them); roles are data, fully editable per business. Grants support wildcards (`invoice.*`, `*`) so new permissions reach Admin automatically.
+* Permissions are code-defined (`PERMISSION_CATALOG` in `@digitalbahi/core`, `<module>.<action>`, 100 of them); roles are data, fully editable per business. Grants support wildcards (`invoice.*`, `*`) so new permissions reach Admin automatically.
 * Default roles seeded per business: **Admin** (everything), **Manager** (sales, purchase, inventory, customers, reports), **Sales Employee** (customers, orders, invoices, collection — no purchase cost, no profit reports), **Accountant** (payments, GST, expenses, reports, audit), **Warehouse** (packing, dispatch, inventory), **HR** (employees, salary, leave).
 * A Fastify `preHandler` checks the permission on every endpoint (`guard(deps, "invoice.cancel")`); the client uses the same catalogue (from `/me`) only to hide what the user cannot do.
 * **No privilege escalation:** creating or editing a role, inviting a member or changing someone's role requires holding every permission involved; a user cannot change their own membership, and the owner's membership cannot be changed.
@@ -46,7 +48,7 @@ Three layers, all of which must allow an action.
 ## 3. Input validation and injection defence
 
 * Every request body, query and path parameter is parsed by a **Zod schema** shared with the clients (`packages/contracts`). Unknown fields are rejected; money arrives as decimal strings with bounded precision; lengths and array sizes are capped.
-* Domain validators from `@vyapaar/core`: GSTIN (format + check digit + state), PAN, IFSC, pincode, Indian mobile, HSN, invoice-number pattern.
+* Domain validators from `@digitalbahi/core`: GSTIN (format + check digit + state), PAN, IFSC, pincode, Indian mobile, HSN, invoice-number pattern.
 * **SQL injection:** all queries go through Drizzle's parameterised builder or tagged `sql` templates (parameters bound, never string-concatenated). Dynamic sorting/filtering uses allow-listed column maps.
 * Output: React escapes by default; no `dangerouslySetInnerHTML` with user content; invoice templates use an escaping template engine.
 * Server-side totals recalculation (`compareTotals`) means a tampered client cannot change what a customer is charged or what tax is reported.
@@ -72,17 +74,19 @@ Implemented in PostgreSQL (token buckets) at small scale; Redis when volume dema
 | Highly sensitive fields | **Application-level encryption** (AES-256-GCM, envelope keys from a KMS / secret manager) for bank account numbers, PAN of employees, Aadhaar (if stored at all), GSP session tokens; a masked copy (last 4) is kept for display |
 | Aadhaar | Not required by the product; if a business insists, only the last 4 digits are stored by default; full number only encrypted, with explicit purpose and access logging (Aadhaar Act and DPDP considerations) |
 | Backups | Encrypted archives with a per-business key, stored in a different region/account, checksummed, access-logged |
-| Offline device cache | **Built (web):** the saved business and the work waiting to sync are encrypted in IndexedDB (AES-256-GCM under a random per-person key, wrapped with AES-KW by the person's device key from the server and by a PBKDF2-SHA-256 key from their password, 310,000 rounds). Online starts open it with the server's key (signed-in sessions only); starting without the server needs the password; the open key is kept in memory only and dropped on sign-out, and the saved business is wiped on sign-out. Planned: OS keystore on Android/desktop, wipe on device revocation or after N days without sync |
+| Offline device cache | **Built (web):** the saved business and the work waiting to sync are encrypted in IndexedDB (AES-256-GCM under a random per-person key, wrapped with AES-KW by the person's device key from the server and by a PBKDF2-SHA-256 key from their password, 310,000 rounds). Online starts open it with the server's key (signed-in sessions only); starting without the server needs the password; the open key is kept in memory only and dropped on sign-out, and the saved business is wiped on sign-out. A removed device wipes its copy when it connects, and a copy is deleted instead of opened after the set days without connecting. What a device reports about its waiting work (`PUT /devices/:id/queue`) is counts and a time, never content. Planned: OS keystore on Android/desktop |
 | Logs | Structured, with ids but no personal data or secrets in messages; secrets redacted by the logger; retention 30–90 days |
 | Retention | GST records must be kept for at least **72 months** after the annual return due date; financial documents are therefore retained 8 years, then archived or purged per business policy; personal data of former employees minimised after statutory periods |
 
-**Privacy (Digital Personal Data Protection Act, 2023):** personal data of customers' contact persons and employees is processed for stated purposes (billing, collection, payroll); WhatsApp/SMS reminders respect per-customer opt-out; businesses can export or delete a person's data where law allows; data is hosted in India by default; a breach-response procedure notifies affected businesses.
+**Privacy (Digital Personal Data Protection Act, 2023):** personal data of customers' contact persons and employees is processed for stated purposes (billing, collection, payroll); WhatsApp/SMS reminders respect per-customer opt-out (automatic ones are off until the business turns them on; a customer is never sent another once staff tick *No payment reminders* or the customer replies STOP, acted on only from a signed callback, Meta's or the provider's; each automatic reminder by WhatsApp says how to stop them); businesses can export or delete a person's data where law allows; data is hosted in India by default; a breach-response procedure notifies affected businesses.
 
 ## 6. Secrets and credentials
 
+* **Push messages** go only to phones whose sign-in is still on and working in that business (signing out, a removed device or member, *sign out everywhere* stop them at once) and only with what the person may see in the inbox; the FCM service account key is a server secret (`FCM_SERVICE_ACCOUNT`), and the phones' tokens are kept per business and never shown. A push's title and text can appear on the phone's lock screen, so the app creates its channels with private lock-screen visibility.
 * No secret ever ships in frontend code or mobile/desktop bundles: database credentials, JWT private keys, GSP/IRP credentials, WhatsApp/SMS API keys, storage keys all live in the server's secret manager (or environment injected at runtime), never in the repository (`.env*` is git-ignored; secret scanning in CI).
 * Integrations run in the worker process only; credentials are encrypted at rest and decrypted just-in-time.
 * The database is reachable only from the API/worker network; operators use a bastion with MFA; migrations run with a separate owner role; the app role cannot alter schema or rewrite ledgers.
+* **One computer (`installer/`)** has no SMS gateway, so its API runs with OTP codes on screen (`OTP_DEV_ECHO`, refused in production). That is safe only because nothing else can reach it: the API and its PostgreSQL listen on 127.0.0.1 alone, and the cluster is Digital Bahi's own, with SCRAM passwords and JWT and data-encryption keys generated at setup into `config.json` (mode 600 on macOS / Linux; the per-user application-data folder on Windows). The same owner / app role split applies. Downloads (Node.js, PostgreSQL, the Visual C++ runtime) are checked against pinned SHA-256 / SHA-512 hashes or Microsoft's signature before use.
 
 ## 7. Integrity and audit
 

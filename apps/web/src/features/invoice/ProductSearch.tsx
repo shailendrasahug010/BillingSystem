@@ -1,6 +1,6 @@
-import { searchProducts, stockLevel } from "@vyapaar/core";
+import { searchProducts, stockLevel } from "@digitalbahi/core";
 import { ScanBarcode, Search } from "lucide-react";
-import { forwardRef, useId, useMemo, useState } from "react";
+import { forwardRef, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
 import { Kbd } from "../../components/ui/misc";
@@ -26,6 +26,9 @@ export const ProductSearch = forwardRef<
   const [active, setActive] = useState(0);
   const listId = useId();
   const searchable = useSearchableProducts();
+  // The list closes a moment after the field loses focus (so a click on it lands); coming back cancels that.
+  const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(closing.current), []);
 
   const affinity = useMemo(() => {
     const m = new Map<string, number>();
@@ -64,8 +67,13 @@ export const ProductSearch = forwardRef<
               setOpen(true);
               setActive(0);
             }}
-            onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 120)}
+            onFocus={() => {
+              clearTimeout(closing.current);
+              setOpen(true);
+            }}
+            onBlur={() => {
+              closing.current = setTimeout(() => setOpen(false), 120);
+            }}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();

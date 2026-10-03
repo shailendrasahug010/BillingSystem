@@ -27,6 +27,19 @@ const log = (...a) => console.log("•", ...a);
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 const errors = [];
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 let signedIn = false;
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(m.text()));
@@ -108,8 +121,7 @@ const productBox = page.getByPlaceholder(/Search product/);
 await productBox.fill("parle");
 await page.getByRole("option", { name: /Parle-G/ }).click();
 await page.getByRole("button", { name: "Save invoice" }).click();
-await page.getByText(/Invoice INV\/\d\d-\d\d\/00001 saved/).waitFor({ timeout: 15000 });
-await page.getByRole("button", { name: "Details" }).click();
+await savedBill(page, { view: true });
 await page.getByRole("heading", { name: /INV\/\d\d-\d\d\/00001/ }).waitFor({ timeout: 15000 });
 const bill = page.locator("article").first();
 await bill.locator("header img[src^='data:image/']").waitFor();

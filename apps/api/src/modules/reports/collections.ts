@@ -1,6 +1,6 @@
-import { Money } from "@vyapaar/contracts";
-import { ageDocuments, dec } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { Money } from "@digitalbahi/contracts";
+import { ageDocuments, dec } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -8,7 +8,7 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, notFound } from "../../lib/errors.js";
 import { getSettings } from "../../services/settings.js";
 import type { ApiModule } from "../types.js";
@@ -347,6 +347,7 @@ export const collectionsModule: ApiModule = async (app, deps) => {
           return row ? { ...row.note, by: row.by } : null;
         };
         if (clientId) {
+          await lockIdempotencyKey(tx, clientId);
           const existing = await read(clientId);
           if (existing) return { replay: true, note: existing };
         }

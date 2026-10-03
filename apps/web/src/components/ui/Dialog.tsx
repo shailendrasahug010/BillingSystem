@@ -16,6 +16,7 @@ export function Dialog({
   footer,
   size = "md",
   closeLabel = "Close",
+  onCloseAutoFocus,
 }: {
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -25,6 +26,8 @@ export function Dialog({
   footer?: ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   closeLabel?: string;
+  /** Where focus goes once it closes (prevent the event to move it yourself). */
+  onCloseAutoFocus?(event: Event): void;
 }) {
   const width = { sm: "sm:max-w-sm", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl" }[size];
   return (
@@ -32,6 +35,7 @@ export function Dialog({
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-[rgb(6_12_28/0.5)] backdrop-blur-sm animate-pop" />
         <D.Content
+          onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
             "fixed z-50 flex max-h-[92vh] w-full flex-col border border-line/70 bg-surface text-ink shadow-pop animate-sheet",
             "inset-x-0 bottom-0 rounded-t-[28px] pb-[env(safe-area-inset-bottom,0px)]",

@@ -1,5 +1,5 @@
-import { dec, toAmountString } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { dec, toAmountString } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { eq, sql } from "drizzle-orm";
 
 export interface PartyEntryInput {

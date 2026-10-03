@@ -13,7 +13,7 @@
  * drops in the middle of work is sent by itself when it returns.
  *
  * Build the app and serve it with the API behind /api:
- *   pnpm --filter @vyapaar/web build && (cd apps/web && npx vite preview --port 4173)
+ *   pnpm --filter @digitalbahi/web build && (cd apps/web && npx vite preview --port 4173)
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:4173 node apps/web/e2e/offline-flow.mjs
  * Needs the `playwright` package (PLAYWRIGHT_PATH if it is not resolvable
  * from here) and a Chromium (CHROMIUM_PATH optional).
@@ -54,10 +54,24 @@ page.on("response", (r) => {
 });
 page.on("requestfailed", (r) => {
   // Without a network the app's requests fail by design.
-  if (!offline && r.url().includes("/api/")) errors.push(`failed ${r.method()} ${r.url()}`);
+  // The live notifications stream is cut by design when the page reloads or the network goes.
+  if (!offline && r.url().includes("/api/") && !r.url().includes("/notifications/stream")) errors.push(`failed ${r.method()} ${r.url()}`);
 });
 
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 const goOffline = async (value) => {
   offline = value;
   await context.setOffline(value);
@@ -141,16 +155,16 @@ log("opened offline from the saved copy");
 await page.goto(`${WEB}/#invoice`);
 await page.getByText("A1/26-27/0001").first().waitFor({ timeout: 15000 });
 await bill("Sharma", "lifebuoy", 3);
-await toast("Invoice A1/26-27/0001 saved");
-await page.getByText("Saved offline · will sync when online").first().waitFor();
-await page.getByRole("button", { name: "Details" }).first().click();
+// The popup says where it is kept.
+await page.getByRole("dialog", { name: "Invoice added successfully" }).getByText("Saved offline · will sync when online").waitFor({ timeout: 15000 });
+if ((await savedBill(page, { view: true })) !== "A1/26-27/0001") errors.push("the first offline bill is not A1/26-27/0001");
 await page.getByRole("heading", { name: "A1/26-27/0001" }).waitFor({ timeout: 15000 });
 await page.getByText("Not synced yet").waitFor();
 await page.screenshot({ path: `${OUT}/offline-2-bill.png`, fullPage: true });
 log("bill A1/26-27/0001 saved and printed offline");
 await page.goto(`${WEB}/#invoice`);
 await bill("Sharma", "lifebuoy", 1);
-await toast("Invoice A1/26-27/0002 saved");
+if ((await savedBill(page)) !== "A1/26-27/0002") errors.push("the second offline bill is not A1/26-27/0002");
 log("second bill queued");
 
 // 4b. More work offline: a new customer (billed at once), a payment, an order and a changed city.
@@ -169,7 +183,7 @@ await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }
 await toast("Saved on this device");
 await page.goto(`${WEB}/#invoice`);
 await bill("Naya", "lifebuoy", 2);
-await toast("Invoice A1/26-27/0003 saved");
+if ((await savedBill(page)) !== "A1/26-27/0003") errors.push("the new customer's bill is not A1/26-27/0003");
 log("new customer added offline and billed A1/26-27/0003");
 
 await openCustomer("Sharma Kirana");
@@ -266,7 +280,7 @@ await page.goto(`${WEB}/#invoice`);
 await page.getByPlaceholder("Search customer by name, mobile, GSTIN or code").waitFor({ timeout: 15000 });
 await goOffline(true);
 await bill("Sharma", "lifebuoy", 2);
-await toast("Invoice A1/26-27/0004 saved");
+if ((await savedBill(page)) !== "A1/26-27/0004") errors.push("the bill made during the drop is not A1/26-27/0004");
 await goOffline(false);
 for (let i = 0; i < 30; i++) {
   const found = (await api("GET", "/invoices?q=A1/26-27/0004", token)).data;

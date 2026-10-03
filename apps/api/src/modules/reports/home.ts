@@ -1,5 +1,5 @@
-import { dec, type Permission } from "@vyapaar/core";
-import type { Tx } from "@vyapaar/db";
+import { dec, type Permission } from "@digitalbahi/core";
+import type { Tx } from "@digitalbahi/db";
 import { sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { can, guard } from "../../lib/access.js";
@@ -133,6 +133,19 @@ export const homeModule: ApiModule = async (app, deps) => {
             balance: dec(x.balance).toFixed(2),
           })),
         };
+      }
+
+      // Bills made offline that reached the server after a rule changed: held until someone reviews them.
+      if (may("invoice.review")) {
+        const held = (
+          await tx.execute<{ id: string; number: string; date: string; customer: string; total: string; reasons: Array<{ code: string; params?: Record<string, string | number> }>; n: number }>(sql`
+            select id, invoice_number as number, invoice_date::text as date, party_name as customer, grand_total::text as total, review_reasons as reasons, count(*) over ()::int as n
+            from invoices where business_id = ${b} and review_status = 'needs_review'
+            order by posted_at, id limit 5`)
+        ).rows;
+        if (held.length) {
+          out.review = { count: held[0]!.n, bills: held.map(({ n: _n, ...x }) => ({ ...x, total: dec(x.total).toFixed(2), reasons: x.reasons ?? [] })) };
+        }
       }
 
       if (may("expense.view")) {

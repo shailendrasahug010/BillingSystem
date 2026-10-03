@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { BookmarkPlus } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { useToast } from "../../components/ui/Toast";
 import { allowed } from "../../data/db";
 import { ApiError, api } from "../../lib/api";
 import { PnlReport, ProductsReport, ProfitReport } from "./Analytics";
+import { InsightsReport } from "./Insights";
 import { ExportButton, PeriodBar, settingsPeriod } from "./period";
 import { ActiveViewBar, ViewDialog, ViewsMenu, type ViewDialogMode } from "./SavedViews";
 import { opensReport, REPORT_DEFAULTS, sameSettings, savedSettings, useReportViews, type ReportSettings, type ReportTab, type SavedView } from "./views";
@@ -37,7 +38,7 @@ export function ReportsPage(props: { initialTab?: ReportTab; initialGroup?: "bra
   return <Reports key={`${props.initialTab ?? ""}-${props.initialGroup ?? ""}`} tabs={tabs} {...props} />;
 }
 
-const REPORT_TABS: ReportTab[] = ["sales", "collections", "purchases", "outstanding", "profit", "pnl", "products"];
+const REPORT_TABS: ReportTab[] = ["insights", "sales", "collections", "purchases", "outstanding", "profit", "pnl", "products"];
 
 function Reports({ tabs, initialTab, initialGroup }: { tabs: ReportTab[]; initialTab?: ReportTab; initialGroup?: "brand" | "product" }) {
   const i18n = useI18n();
@@ -134,6 +135,11 @@ function Reports({ tabs, initialTab, initialGroup }: { tabs: ReportTab[]; initia
             </Tabs.Trigger>
           ))}
         </Tabs.List>
+        {tabs.includes("insights") && (
+          <Tabs.Content value="insights">
+            <InsightsReport settings={settings.insights} onChange={change("insights")} />
+          </Tabs.Content>
+        )}
         {tabs.includes("sales") && (
           <Tabs.Content value="sales">
             <GroupedReport kind="sales" settings={settings.sales} onChange={change("sales")} />

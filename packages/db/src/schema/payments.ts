@@ -34,13 +34,21 @@ export const paymentAccounts = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Name of the account (Cash, SBI current, Shop UPI ...), unique in the business. */
     name: text().notNull(),
+    /** Cash, bank, UPI, wallet or card. */
     type: paymentAccountType().notNull(),
+    /** Bank of the account. */
     bankName: text(),
+    /** Last 4 digits of the account number. */
     accountNumberLast4: varchar({ length: 4 }),
+    /** IFSC of the branch. */
     ifsc: varchar({ length: 11 }),
+    /** UPI ID, printed on bills for customers to pay to. */
     upiId: text(),
+    /** Balance when the account was brought into the app. */
     openingBalance: money().notNull().default("0"),
+    /** Account offered first for new payments. */
     isDefault: boolean().notNull().default(false),
     isActive: boolean().notNull().default(true),
     ...auditColumns,
@@ -58,33 +66,58 @@ export const payments = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** Receipt or voucher number from its series, unique per year and direction. */
     paymentNumber: varchar({ length: 30 }),
+    /** Number series the payment was numbered from. */
     seriesId: uuid().references(() => documentSeries.id),
+    /** Financial year of the payment (2026-27); its number is unique within it. */
     financialYear: varchar({ length: 9 }).notNull(),
+    /** in: money received (receipt); out: money paid (voucher). */
     direction: paymentDirection().notNull(),
+    /** Who paid or was paid: customer, supplier, employee or other. */
     partyType: partyType().notNull(),
+    /** The customer, for receipts and refunds. */
     customerId: uuid().references(() => customers.id),
+    /** The supplier, for supplier payments. */
     supplierId: uuid().references(() => suppliers.id),
+    /** The employee, for salary and advances. */
     employeeId: uuid().references(() => employees.id),
+    /** Name of the party when it is none of the above. */
     otherPartyName: text(),
+    /** Date the money was received or paid. */
     paymentDate: date({ mode: "string" }).notNull(),
+    /** Amount of the payment. */
     amount: money().notNull(),
+    /** Cash, UPI, bank transfer, cheque, card or other. */
     method: paymentMethod().notNull(),
+    /** Account the money went into or came out of. */
     paymentAccountId: uuid().references(() => paymentAccounts.id),
     /** UTR / UPI reference / cheque number / card slip. */
     referenceNumber: varchar({ length: 40 }),
+    /** Date written on the cheque. */
     chequeDate: date({ mode: "string" }),
+    /** Bank the cheque is drawn on. */
     chequeBank: text(),
+    /** Pending, deposited, cleared or bounced; a bounced cheque reverses the payment. */
     chequeStatus: chequeStatus(),
+    /** Part not yet applied to any bill: an advance or on-account amount, used against later bills. */
     unallocatedAmount: money().notNull().default("0"),
+    /** Posted or cancelled. */
     status: documentStatus().notNull().default("posted"),
     notes: text(),
+    /** Employee who collected the money (collection reports). */
     collectedById: uuid().references(() => employees.id),
+    /** Reserved for a photo of the receipt (not filled). */
     receiptFileId: uuid(),
+    /** When the payment was cancelled (it is kept; its ledger entries are reversed and its allocations released). */
     cancelledAt: tstz(),
+    /** User who cancelled the payment. */
     cancelledBy: uuid(),
+    /** Why it was cancelled. */
     cancelReason: text(),
+    /** Device the payment was made on, when it was made offline. */
     deviceId: uuid().references(() => devices.id),
+    /** Id the app gave the payment when it was made: a retried or offline save with the same id returns the saved payment instead of making a second one. */
     clientId: uuid(),
     ...auditColumns,
     ...versioned,
@@ -112,15 +145,23 @@ export const paymentAllocations = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The payment. */
     paymentId: uuid()
       .notNull()
       .references(() => payments.id),
+    /** The invoice it pays (exactly one of invoice, purchase or note is set). */
     invoiceId: uuid().references(() => invoices.id),
+    /** The purchase bill it pays. */
     purchaseId: uuid().references(() => purchases.id),
+    /** The credit or debit note it settles. */
     noteId: uuid().references(() => creditDebitNotes.id),
+    /** Amount applied. */
     amount: money().notNull(),
+    /** When it was applied. */
     allocatedAt: tstz().notNull().defaultNow(),
+    /** User who applied it. */
     allocatedBy: uuid(),
+    /** When the allocation was undone (cancelled payment or bounced cheque). */
     reversedAt: tstz(),
   },
   (t) => [
@@ -142,15 +183,25 @@ export const partyLedgerEntries = pgTable(
   {
     id: bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
     businessId: businessId(),
+    /** customer or supplier. */
     partyType: partyType().notNull(),
+    /** The customer, for customer entries. */
     customerId: uuid().references(() => customers.id),
+    /** The supplier, for supplier entries. */
     supplierId: uuid().references(() => suppliers.id),
+    /** Date of the entry (the document's date). */
     entryDate: date({ mode: "string" }).notNull(),
+    /** Source document: invoice, payment, credit_note, purchase, opening ... */
     docType: varchar({ length: 30 }).notNull(),
+    /** Id of the source document. */
     docId: uuid(),
+    /** Number of the source document, for statements. */
     docNumber: varchar({ length: 40 }),
+    /** Debit amount: what a customer owes more (or what we owe a supplier less). */
     debit: money().notNull().default("0"),
+    /** Credit amount: what a customer owes less (or what we owe a supplier more). */
     credit: money().notNull().default("0"),
+    /** Line shown on the statement. */
     narration: text(),
     /** Set on entries that reverse an earlier one (cancellations). */
     reversesEntryId: bigint({ mode: "number" }),
@@ -183,14 +234,18 @@ export const collectionNotes = pgTable(
   {
     id: pk(),
     businessId: businessId(),
+    /** The customer visited. */
     customerId: uuid()
       .notNull()
       .references(() => customers.id),
     /** promise | note */
     kind: varchar({ length: 10 }).notNull(),
     note: text(),
+    /** How much the customer said they would pay, if they said. */
     promisedAmount: money(),
+    /** Date the customer promised to pay by (required for a promise). */
     promisedOn: date({ mode: "string" }),
+    /** Date of the visit. */
     visitedOn: date({ mode: "string" }).notNull(),
     ...auditColumns,
   },

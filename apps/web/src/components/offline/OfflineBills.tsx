@@ -1,4 +1,4 @@
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { Cloud, CloudOff, LockKeyhole, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -16,6 +16,7 @@ import { useToast } from "../ui/Toast";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
+import { useFieldLabels } from "../../features/notifications/notifications";
 
 /** On a list screen: its kind of work still waiting on this device, and the way to see it. */
 export function WaitingStrip({ kinds }: { kinds: QueuedKind[] }) {
@@ -97,26 +98,31 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const kind = kindOf(entry);
   const bill = kind === "invoice" ? (entry as OutboxEntry) : null;
   const name =
-    entry.kind === "payment" || entry.kind === "return"
+    entry.kind === "payment" || entry.kind === "return" || entry.kind === "price-note"
       ? entry.partyName
       : entry.kind === "purchase"
         ? `${entry.supplierName} · ${entry.billNumber}`
         : entry.kind === "expense"
           ? [entry.categoryName, entry.paidTo].filter(Boolean).join(" · ")
-          : (entry as { customerName: string }).customerName;
+          : entry.kind === "invoice-cancel"
+            ? `${entry.customerName} · ${entry.documentNumber}`
+            : (entry as { customerName: string }).customerName;
   const amount =
     entry.kind === "payment"
       ? entry.amount
-      : entry.kind === "order" || entry.kind === "return"
+      : entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note"
         ? entry.estimate
         : entry.kind === "collection-note"
           ? entry.amount
           : entry.kind === "purchase" || entry.kind === "expense"
             ? entry.total
+            : entry.kind === "invoice-cancel"
+              ? entry.amount
             : bill
               ? bill.total
               : null;
-  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" ? entry.date : bill ? bill.date : null;
+  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" || entry.kind === "price-note" || entry.kind === "visit" ? entry.date : bill ? bill.date : null;
+  const visit = entry.kind === "visit" ? (entry.outcome === "no_order" && entry.reason ? `${t("beat.outcome.no_order")}: ${t(`beat.reasons.${entry.reason as "other"}`)}` : t(`beat.outcome.${entry.outcome}`)) : null;
   const conflict = kind === "customer-edit" && entry.error?.code === "VERSION_CONFLICT";
   const removeText =
     kind === "invoice" ? t("offline.removeConfirm", { number: bill!.number }) : kind === "customer" ? t("offline.removeCustomerConfirm", { name }) : t("offline.removeEntryConfirm", { what: label(entry).toLowerCase(), name });
@@ -135,13 +141,13 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
         </Badge>
         {amount !== null && amount > 0 && (
           <span className="num ml-auto text-[13.5px] font-medium text-ink">
-            {entry.kind === "order" || entry.kind === "return" ? "≈ " : ""}
+            {entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note" ? "≈ " : ""}
             {money(amount)}
           </span>
         )}
       </div>
       <p className="text-[12.5px] text-ink-3">
-        {[name, when ? date(when) : null, entry.kind === "customer-edit" ? t("offline.detailsChanged") : null].filter(Boolean).join(" · ")}
+        {[name, when ? date(when) : null, entry.kind === "customer-edit" ? t("offline.detailsChanged") : null, visit].filter(Boolean).join(" · ")}
       </p>
       {failed && entry.error && (
         <>
@@ -250,6 +256,7 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
   const state = useOffline();
   const offline = state.offlineMode || !state.online;
   const label = useKindLabel();
+  const fieldLabels = useFieldLabels();
   const go = (route: Route) => {
     onOpenChange(false);
     navigate(route);
@@ -315,6 +322,8 @@ export function OfflineBillsDialog({ open, onOpenChange }: { open: boolean; onOp
                     )}
                     {s.serverTotal > 0 && <span className="num ml-auto">{money(s.serverTotal)}</span>}
                     {kind === "invoice" && Math.abs(s.serverTotal - s.total) >= 0.01 && <span className="w-full text-warn">{t("offline.totalChanged", { amount: money(s.serverTotal) })}</span>}
+                    {s.held && <span className="w-full text-warn">{t("offline.heldForReview")}</span>}
+                    {s.kept && s.kept.length > 0 && <span className="w-full text-warn">{t("offline.editKept", { fields: fieldLabels(s.kept) })}</span>}
                     <span className="sr-only">{date(s.syncedAt.slice(0, 10))}</span>
                   </li>
                 );

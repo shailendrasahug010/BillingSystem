@@ -1,0 +1,25 @@
+{
+  "name": "@digitalbahi/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Android app: the web app (apps/web) packaged with Capacitor, with the phone's Bluetooth printing, barcode scanner, share sheet, printing and push notifications.",
+  "type": "module",
+  "scripts": {
+    "build:web": "pnpm --filter @digitalbahi/web build",
+    "sync": "cap sync android",
+    "apk": "pnpm build:web && cap sync android && node scripts/gradle.mjs assembleDebug",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "8.2.1",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/filesystem": "8.1.3",
+    "@capacitor/push-notifications": "8.1.2",
+    "@capacitor/share": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}

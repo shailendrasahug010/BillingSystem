@@ -1,6 +1,6 @@
-import type { BusinessInput, BusinessSummary } from "@vyapaar/contracts";
-import { panFromGstin, stateCodeFromGstin, validateGstin } from "@vyapaar/core";
-import { schema, seedBusinessDefaults, type Executor, type Tx } from "@vyapaar/db";
+import type { BusinessInput, BusinessSummary } from "@digitalbahi/contracts";
+import { panFromGstin, stateCodeFromGstin, validateGstin } from "@digitalbahi/core";
+import { schema, seedBusinessDefaults, type Executor, type Tx } from "@digitalbahi/db";
 import { and, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { z } from "zod";

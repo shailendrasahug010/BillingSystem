@@ -1,12 +1,22 @@
+import { isNative } from "../platform/native";
 import { api } from "./api";
+import { shareFile } from "./share";
 
 /** Saves text as a file (CSV exports, reports). */
 export function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8"): void {
   downloadBlob(filename, new Blob([text], { type }));
 }
 
-/** Saves a file the app has in memory (a PDF from the server, a CSV made here). */
+/**
+ * Saves a file the app has in memory (a PDF from the server, a CSV made
+ * here). In the Android app, whose web view cannot download, it goes to the
+ * share sheet (save to Files or Drive, or send it on).
+ */
 export function downloadBlob(filename: string, blob: Blob): void {
+  if (isNative()) {
+    void shareFile(blob, filename).catch(() => undefined);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

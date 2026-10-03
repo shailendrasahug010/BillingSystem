@@ -1,5 +1,5 @@
-import { SETTING_SCHEMAS, type SettingKey, type SettingValue } from "@vyapaar/contracts";
-import { schema, type Tx } from "@vyapaar/db";
+import { SETTING_SCHEMAS, type SettingKey, type SettingValue } from "@digitalbahi/contracts";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray } from "drizzle-orm";
 
 /** Used when a business has no row for a key (e.g. a key added after it signed up). */
@@ -12,12 +12,18 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "invoice.default_print_locale": "en",
   "invoice.offline_mode": "device_series",
   "invoice.terms": "",
+  "invoice.payment_details": { bankName: "", accountNumber: "", ifsc: "", upiId: "" },
+  // Not set: each unit's symbol's first letter (B for BOX, S for STRIP).
+  "invoice.unit_letters": null,
+  // Not set: new lines start in strips for products sold by the strip.
+  "invoice.default_unit": null,
   "credit.policy": { onLimitExceeded: "warn", onOverdue: "warn", overdueGraceDays: 0 },
   "orders.workflow": { requireConfirmation: true, usePacking: true, useDispatch: true },
   "payments.allocation": "oldest_first",
   "reports.aging_buckets": [30, 60, 90],
   "suggestions.weights": { reorder: 1, frequent: 0.6, together: 0.5, last_order: 0.3 },
   "suggestions.window_days": 365,
+  "suggestions.auto_tune": true,
   "backup.schedule": { frequency: "daily", time: "02:00", retainDays: 30 },
   "offline.wipe_after_days": 30,
   "gst.lut": null,

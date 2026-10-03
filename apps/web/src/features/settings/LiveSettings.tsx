@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { MeResponse } from "@vyapaar/contracts";
-import { GST_STATES, normalizeGstin, stateCodeFromGstin, validateGstin, validatePincode } from "@vyapaar/core";
+import type { MeResponse } from "@digitalbahi/contracts";
+import { GST_STATES, normalizeGstin, stateCodeFromGstin, UPI_ID, validateGstin, validatePincode } from "@digitalbahi/core";
 import { ImageUp, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
@@ -19,6 +19,9 @@ import { api, ApiError } from "../../lib/api";
 import { prepareLogo } from "./firmLogo";
 import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
 import { stateOptions } from "../../lib/states";
+import { PrinterPanel } from "../../components/thermal/ThermalPrint";
+import { serverOrigin } from "../../platform/server";
+import { DEFAULT_START_SYMBOL } from "../invoice/units";
 
 interface BusinessRow {
   legalName: string;
@@ -50,7 +53,11 @@ interface Settings {
   "gst.lut"?: { arn: string; validUntil: string } | null;
   "einvoice.enabled"?: boolean;
   "ewaybill.threshold"?: number;
+  "invoice.payment_details"?: PaymentDetails;
+  "invoice.unit_letters"?: Record<string, string> | null;
+  "invoice.default_unit"?: string | null;
 }
+type PaymentDetails = { bankName: string; accountNumber: string; ifsc: string; upiId: string };
 
 /** The last day of the financial year a date falls in (an LUT is filed for one year). */
 function yearEnd(day: string): string {
@@ -112,6 +119,166 @@ function LutRow({ value, canEdit, onSave }: { value: Settings["gst.lut"]; canEdi
   );
 }
 
+/**
+ * Where customers pay: the bank account and UPI ID printed on invoices, with
+ * a UPI code for what a bill still owes on the PDF and on thermal receipts.
+ */
+function PaymentDetailsRow({ value, canEdit, onSave }: { value: PaymentDetails | undefined; canEdit: boolean; onSave(v: PaymentDetails): Promise<void> }) {
+  const { t } = useI18n();
+  const empty: PaymentDetails = { bankName: "", accountNumber: "", ifsc: "", upiId: "" };
+  const [form, setForm] = useState<PaymentDetails>(value ?? empty);
+  const [busy, setBusy] = useState(false);
+  const clean: PaymentDetails = { bankName: form.bankName.trim(), accountNumber: form.accountNumber.trim(), ifsc: form.ifsc.trim().toUpperCase(), upiId: form.upiId.trim() };
+  const bad = {
+    accountNumber: !/^\d{0,20}$/.test(clean.accountNumber),
+    ifsc: !/^([A-Z]{4}0[A-Z0-9]{6})?$/.test(clean.ifsc),
+    upiId: Boolean(clean.upiId) && !UPI_ID.test(clean.upiId),
+  };
+  const changed = JSON.stringify(clean) !== JSON.stringify(value ?? empty);
+  const field = (key: keyof PaymentDetails, label: string, extra: { placeholder?: string; mono?: boolean; inputMode?: "numeric" } = {}) => (
+    <Field label={label} htmlFor={`pay-${key}`} error={bad[key as keyof typeof bad] ? t("settings.paymentInvalid") : undefined}>
+      <Input
+        id={`pay-${key}`}
+        inputSize="sm"
+        disabled={!canEdit}
+        maxLength={key === "upiId" ? 100 : key === "accountNumber" ? 20 : key === "ifsc" ? 11 : 100}
+        className={extra.mono ? "[&_input]:font-mono" : undefined}
+        placeholder={extra.placeholder}
+        inputMode={extra.inputMode}
+        value={form[key]}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: key === "ifsc" ? e.target.value.toUpperCase() : e.target.value }))}
+      />
+    </Field>
+  );
+  return (
+    <div className="flex flex-col gap-2 border-b border-line py-3">
+      <div>
+        <p className="text-[14px] font-medium text-ink">{t("settings.paymentDetails")}</p>
+        <p className="text-[12.5px] text-ink-3">{t("settings.paymentDetailsHint")}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {field("bankName", t("settings.bankName"), { placeholder: "State Bank of India" })}
+        {field("accountNumber", t("settings.accountNumber"), { mono: true, inputMode: "numeric" })}
+        {field("ifsc", "IFSC", { mono: true, placeholder: "SBIN0001234" })}
+        {field("upiId", t("settings.upiId"), { mono: true, placeholder: "yourshop@okhdfcbank" })}
+      </div>
+      {canEdit && (
+        <div>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={busy || !changed || Object.values(bad).some(Boolean)}
+            onClick={() => {
+              setBusy(true);
+              void onSave(clean).finally(() => setBusy(false));
+            }}
+          >
+            {t("common.save")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Units on a bill's lines: the unit new lines start in (strips, for products
+ * sold by the strip, until set) and the letter each unit is picked with (its
+ * symbol's first until set).
+ */
+function BillUnitsRow({
+  letters,
+  startIn,
+  canEdit,
+  onSaveLetters,
+  onSaveStart,
+}: {
+  letters: Record<string, string> | null | undefined;
+  startIn: string | null | undefined;
+  canEdit: boolean;
+  onSaveLetters(v: Record<string, string> | null): Promise<void>;
+  onSaveStart(v: string): Promise<void>;
+}) {
+  const { t } = useI18n();
+  useStoreVersion();
+  const units = WORKSPACE.unitList;
+  const first = (symbol: string) => (Array.from(symbol)[0] ?? "").toUpperCase();
+  const saved = letters ?? {};
+  // The letters as typed, by unit id, over what is saved ("": the unit's first letter).
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const shown = (id: string) => edited[id] ?? saved[id] ?? "";
+  const [busy, setBusy] = useState(false);
+  const bad = units.some((u) => shown(u.id) !== "" && !/^\p{L}$/u.test(shown(u.id)));
+  // Only letters other than the unit's first are kept.
+  const clean = Object.fromEntries(units.flatMap((u) => (shown(u.id) && shown(u.id) !== first(u.symbol) ? [[u.id, shown(u.id)]] : [])));
+  const sorted = (r: Record<string, string>) => JSON.stringify(Object.entries(r).sort(([a], [b]) => a.localeCompare(b)));
+  const changed = sorted(clean) !== sorted(saved);
+  const startValue = startIn ?? units.find((u) => u.symbol === DEFAULT_START_SYMBOL)?.id ?? "own";
+  const run = (job: Promise<void>, after?: () => void) => {
+    setBusy(true);
+    void job.finally(() => {
+      setBusy(false);
+      after?.();
+    });
+  };
+  return (
+    <div className="flex flex-col gap-3 border-b border-line py-3" role="group" aria-labelledby="bill-units-h">
+      <div>
+        <p id="bill-units-h" className="text-[14px] font-medium text-ink">
+          {t("settings.billUnits")}
+        </p>
+        <p className="text-[12.5px] text-ink-3">{t("settings.billUnitsHint")}</p>
+      </div>
+      <div className="max-w-sm">
+        <Field label={t("settings.startUnit")} hint={t("settings.startUnitHint")} htmlFor="start-unit">
+          <Select id="start-unit" disabled={!canEdit || busy} value={startValue} onChange={(e) => e.target.value !== startValue && run(onSaveStart(e.target.value))}>
+            <option value="own">{t("settings.startUnitOwn")}</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.symbol} — {u.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <div>
+        <p className="text-[13px] font-medium text-ink-2">{t("settings.unitLetters")}</p>
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+          {units.map((u) => (
+            <label key={u.id} className="flex items-center gap-2 rounded-lg border border-line py-1 pr-1 pl-2.5">
+              <span className="min-w-0 flex-1 truncate text-[13px]">
+                <span className="font-medium text-ink">{u.symbol}</span> <span className="text-ink-3">{u.name}</span>
+              </span>
+              <input
+                aria-label={t("settings.unitLetterFor", { unit: u.symbol })}
+                disabled={!canEdit}
+                maxLength={1}
+                placeholder={first(u.symbol)}
+                value={shown(u.id)}
+                onChange={(e) => setEdited((all) => ({ ...all, [u.id]: e.target.value.trim().toUpperCase() }))}
+                className="h-8 w-9 shrink-0 rounded-md border border-line bg-surface text-center text-[14px] font-semibold text-ink uppercase placeholder:font-normal placeholder:text-ink-3 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:bg-surface-2"
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+      {bad && <p className="text-[12.5px] text-danger">{t("settings.unitLettersInvalid")}</p>}
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="primary" disabled={busy || bad || !changed} onClick={() => run(onSaveLetters(Object.keys(clean).length ? clean : null), () => setEdited({}))}>
+            {t("common.save")}
+          </Button>
+          {Object.keys(saved).length > 0 && (
+            <Button size="sm" disabled={busy} onClick={() => run(onSaveLetters(null), () => setEdited({}))}>
+              {t("settings.unitLettersDefault")}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Business header, rules and permissions in the running app follow the saved values at once. */
 async function reloadMe() {
   applyMe(await api.get<MeResponse>("/me"));
@@ -129,7 +296,21 @@ export function LiveSettings() {
       <SeriesCard />
       <MessagingCard />
       <DevicesCard />
+      <PrinterCard />
     </>
+  );
+}
+
+/** The Bluetooth receipt printer of this device (kept on the device, not the server). */
+function PrinterCard() {
+  const { t } = useI18n();
+  return (
+    <Card>
+      <CardHeader title={t("thermal.title")} subtitle={t("thermal.hint")} />
+      <div className="p-4 sm:p-5">
+        <PrinterPanel />
+      </div>
+    </Card>
   );
 }
 
@@ -483,6 +664,14 @@ function RulesCard() {
             className="w-full rounded-[var(--radius-control)] border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:bg-surface-2"
           />
         </div>
+        <PaymentDetailsRow value={s["invoice.payment_details"]} canEdit={canEdit} onSave={(v) => put("invoice.payment_details", v)} />
+        <BillUnitsRow
+          letters={s["invoice.unit_letters"]}
+          startIn={s["invoice.default_unit"]}
+          canEdit={canEdit}
+          onSaveLetters={(v) => put("invoice.unit_letters", v)}
+          onSaveStart={(v) => put("invoice.default_unit", v)}
+        />
         {WORKSPACE.chargeTax && <LutRow value={s["gst.lut"] ?? null} canEdit={canEdit} onSave={(v) => put("gst.lut", v)} />}
         {WORKSPACE.chargeTax &&
           row(
@@ -643,6 +832,17 @@ interface MessagingView {
     documentTemplate: string | null;
     reminderTemplate: string | null;
     templateLanguage: string;
+    /** The same templates' language code in Hindi, for customers who get messages in Hindi. */
+    templateLanguageHi: string | null;
+    ready: boolean;
+  };
+  sms: {
+    provider: "none" | "webhook";
+    webhookUrl: string | null;
+    hasSecret: boolean;
+    senderId: string | null;
+    reminderTemplate: string | null;
+    reminderTemplateHi: string | null;
     ready: boolean;
   };
   email: {
@@ -672,6 +872,13 @@ function formOf(v: MessagingView): MessagingForm {
     whatsappDocumentTemplate: v.whatsapp.documentTemplate ?? "",
     whatsappReminderTemplate: v.whatsapp.reminderTemplate ?? "",
     whatsappTemplateLanguage: v.whatsapp.templateLanguage,
+    whatsappTemplateLanguageHi: v.whatsapp.templateLanguageHi ?? "",
+    smsProvider: v.sms.provider,
+    smsWebhookUrl: v.sms.webhookUrl ?? "",
+    smsSecret: "",
+    smsSenderId: v.sms.senderId ?? "",
+    smsReminderTemplate: v.sms.reminderTemplate ?? "",
+    smsReminderTemplateHi: v.sms.reminderTemplateHi ?? "",
     emailMode: v.email.mode,
     smtpHost: v.email.smtpHost ?? "",
     smtpPort: v.email.smtpPort ? String(v.email.smtpPort) : "",
@@ -686,8 +893,9 @@ function formOf(v: MessagingView): MessagingForm {
 
 /**
  * The business's own WhatsApp Business number (Meta Cloud API or a
- * provider's webhook) and email (the platform's mail server or its own SMTP).
- * Tokens and passwords are write-only: the server keeps them encrypted.
+ * provider's webhook), its SMS gateway (for payment reminders) and email
+ * (the platform's mail server or its own SMTP). Tokens and passwords are
+ * write-only: the server keeps them encrypted.
  */
 function MessagingCard() {
   const { t } = useI18n();
@@ -698,7 +906,7 @@ function MessagingCard() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [testTo, setTestTo] = useState("");
-  const [testChannel, setTestChannel] = useState<"whatsapp" | "email">("whatsapp");
+  const [testChannel, setTestChannel] = useState<"whatsapp" | "sms" | "email">("whatsapp");
   useEffect(() => {
     if (q.data) setForm(formOf(q.data));
   }, [q.data]);
@@ -710,7 +918,7 @@ function MessagingCard() {
       <Input id={`msg-${k}`} type={opts.type ?? "text"} disabled={!canEdit} placeholder={opts.placeholder} className={opts.mono ? "[&_input]:font-mono" : undefined} value={String(form[k] ?? "")} onChange={(e) => set(k, e.target.value)} />
     </Field>
   );
-  const secret = (k: "whatsappSecret" | "whatsappAppSecret" | "smtpPassword", label: string, has: boolean) =>
+  const secret = (k: "whatsappSecret" | "whatsappAppSecret" | "smsSecret" | "smtpPassword", label: string, has: boolean) =>
     text(k, label, { type: "password", ...(has ? { placeholder: "••••••••", hint: t("messages.settings.secretSet") } : {}) });
 
   const save = async () => {
@@ -726,6 +934,12 @@ function MessagingCard() {
       whatsappDocumentTemplate: orNull("whatsappDocumentTemplate"),
       whatsappReminderTemplate: orNull("whatsappReminderTemplate"),
       whatsappTemplateLanguage: String(f.whatsappTemplateLanguage).trim() || "en",
+      whatsappTemplateLanguageHi: orNull("whatsappTemplateLanguageHi"),
+      smsProvider: f.smsProvider,
+      smsWebhookUrl: orNull("smsWebhookUrl"),
+      smsSenderId: orNull("smsSenderId")?.toUpperCase() ?? null,
+      smsReminderTemplate: orNull("smsReminderTemplate"),
+      smsReminderTemplateHi: orNull("smsReminderTemplateHi"),
       emailMode: f.emailMode,
       smtpHost: orNull("smtpHost"),
       smtpPort: String(f.smtpPort).trim() ? Number(f.smtpPort) : null,
@@ -737,6 +951,7 @@ function MessagingCard() {
       // Secrets only when typed: an empty box keeps the saved one.
       ...(String(f.whatsappSecret) ? { whatsappSecret: String(f.whatsappSecret) } : {}),
       ...(String(f.whatsappAppSecret) ? { whatsappAppSecret: String(f.whatsappAppSecret) } : {}),
+      ...(String(f.smsSecret) ? { smsSecret: String(f.smsSecret) } : {}),
       ...(String(f.smtpPassword) ? { smtpPassword: String(f.smtpPassword) } : {}),
     };
     try {
@@ -799,6 +1014,7 @@ function MessagingCard() {
               {text("whatsappDocumentTemplate", t("messages.settings.documentTemplate"), { mono: true, placeholder: "bill_with_pdf" })}
               {text("whatsappReminderTemplate", t("messages.settings.reminderTemplate"), { mono: true, placeholder: "payment_reminder" })}
               {text("whatsappTemplateLanguage", t("messages.settings.templateLanguage"), { mono: true, placeholder: "en" })}
+              {text("whatsappTemplateLanguageHi", t("messages.settings.templateLanguageHi"), { mono: true, placeholder: "hi", hint: t("messages.settings.templateLanguageHiHint") })}
               <p className="text-[12.5px] text-ink-3 sm:col-span-2">{t("messages.settings.templateHelp")}</p>
             </div>
           )}
@@ -811,7 +1027,7 @@ function MessagingCard() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label={t("messages.settings.callbackUrl")} htmlFor="msg-callback">
-                  <Input id="msg-callback" readOnly className="[&_input]:font-mono" value={`${window.location.origin}/api/v1/webhooks/whatsapp/${v.whatsapp.statusKey}`} onFocus={(e) => e.currentTarget.select()} />
+                  <Input id="msg-callback" readOnly className="[&_input]:font-mono" value={`${serverOrigin() || window.location.origin}/api/v1/webhooks/whatsapp/${v.whatsapp.statusKey}`} onFocus={(e) => e.currentTarget.select()} />
                 </Field>
                 {v.whatsapp.provider === "meta" && (
                   <>
@@ -822,6 +1038,31 @@ function MessagingCard() {
                   </>
                 )}
               </div>
+            </div>
+          )}
+        </section>
+        <section className="flex flex-col gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[14px] font-semibold text-ink">{t("messages.settings.smsTitle")}</h3>
+            <Badge tone={v.sms.ready ? "good" : "neutral"} dot>
+              {v.sms.ready ? t("messages.settings.ready") : t("messages.settings.off")}
+            </Badge>
+          </div>
+          <p className="text-[12.5px] text-ink-3">{t("messages.settings.smsHint")}</p>
+          <Field label={t("messages.settings.smsProvider")} htmlFor="msg-sms-provider">
+            <Select id="msg-sms-provider" disabled={!canEdit} value={String(form.smsProvider)} onChange={(e) => set("smsProvider", e.target.value)}>
+              <option value="none">{t("messages.settings.smsProviders.none")}</option>
+              <option value="webhook">{t("messages.settings.smsProviders.webhook")}</option>
+            </Select>
+          </Field>
+          {form.smsProvider === "webhook" && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {text("smsWebhookUrl", t("messages.settings.smsUrl"), { placeholder: "https://", mono: true })}
+              {secret("smsSecret", t("messages.settings.smsSecret"), v.sms.hasSecret)}
+              {text("smsSenderId", t("messages.settings.smsSenderId"), { mono: true, placeholder: "DGBAHI" })}
+              <span className="hidden sm:block" aria-hidden />
+              {text("smsReminderTemplate", t("messages.settings.smsTemplate"), { mono: true, placeholder: "1207161234567890123" })}
+              {text("smsReminderTemplateHi", t("messages.settings.smsTemplateHi"), { mono: true, placeholder: "1207161234567890124" })}
             </div>
           )}
         </section>
@@ -866,6 +1107,7 @@ function MessagingCard() {
                 onChange={setTestChannel}
                 options={[
                   { value: "whatsapp", label: "WhatsApp" },
+                  { value: "sms", label: t("messages.sms") },
                   { value: "email", label: t("messages.email") },
                 ]}
               />
@@ -895,6 +1137,11 @@ interface DeviceRow {
   revokedAt: string | null;
   wipedAt: string | null;
   offlineBills: number;
+  /** Work waiting on the device, as it last reported (it can only while online). */
+  queueWaiting: number;
+  queueRefused: number;
+  queueOldestAt: string | null;
+  queueReportedAt: string | null;
 }
 
 /** Phones and PCs that keep a copy of the business (those that bill, with their own series); a lost one can be removed. */
@@ -926,7 +1173,7 @@ function DevicesCard() {
           rows={q.data ?? []}
           loading={q.isPending}
           rowKey={(d) => d.id}
-          minWidth={640}
+          minWidth={680}
           empty={<p className="p-4 text-[13.5px] text-ink-3">{t("offline.devices.empty")}</p>}
           columns={[
             {
@@ -942,6 +1189,24 @@ function DevicesCard() {
             { key: "series", header: t("offline.devices.series"), render: (d) => (d.seriesCode ? <span className="font-mono">{d.seriesCode}</span> : <span className="text-ink-3">{t("offline.devices.noSeries")}</span>) },
             { key: "seen", header: t("offline.devices.lastSeen"), render: (d) => <span className="text-ink-2">{d.lastSeenAt ? dateTime(d.lastSeenAt) : "—"}</span> },
             { key: "bills", header: t("offline.devices.bills"), align: "right", render: (d) => d.offlineBills },
+            {
+              key: "waiting",
+              header: t("offline.devices.waiting"),
+              render: (d) =>
+                d.revokedAt || (d.queueWaiting === 0 && d.queueRefused === 0) ? (
+                  <span className="text-ink-3">{d.queueReportedAt ? t("offline.devices.allSent") : "—"}</span>
+                ) : (
+                  <span className="flex flex-col gap-0.5">
+                    {d.queueWaiting > 0 && (
+                      <span className={d.queueRefused > 0 ? "text-ink-2" : "text-warn"}>
+                        {t("offline.devices.waitingSince", { count: d.queueWaiting, when: d.queueOldestAt ? dateTime(d.queueOldestAt) : "—" })}
+                      </span>
+                    )}
+                    {d.queueRefused > 0 && <span className="text-danger">{t("offline.devices.refused", { count: d.queueRefused })}</span>}
+                    {d.queueReportedAt && <span className="text-[11.5px] text-ink-3">{t("offline.devices.reportedAt", { when: dateTime(d.queueReportedAt) })}</span>}
+                  </span>
+                ),
+            },
             {
               key: "action",
               header: "",

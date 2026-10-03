@@ -1,5 +1,5 @@
-import { dec, daysBetween } from "@vyapaar/core";
-import type { Tx } from "@vyapaar/db";
+import { dec, daysBetween } from "@digitalbahi/core";
+import type { Tx } from "@digitalbahi/db";
 import { sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -18,7 +18,7 @@ const ProfitQuery = z.object({ ...Range, groupBy: z.enum(["product", "brand", "c
  * returns take back quantity, value and cost; discounts and rate differences
  * take back value only.
  */
-function netSaleLines(businessId: string, from: string, to: string): SQL {
+export function netSaleLines(businessId: string, from: string, to: string): SQL {
   return sql`
     select ii.product_id, i.customer_id, i.salesperson_id, i.invoice_date as day,
            (ii.qty_base + ii.free_qty * ii.conversion_factor) as qty, ii.taxable_value as sales,

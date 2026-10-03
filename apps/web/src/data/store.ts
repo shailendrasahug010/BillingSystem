@@ -10,7 +10,7 @@ import {
   type CustomerProductStats,
   type CustomerSummary,
   type PaymentBehaviour,
-} from "@vyapaar/core";
+} from "@digitalbahi/core";
 import {
   CUSTOMERS,
   customerById,

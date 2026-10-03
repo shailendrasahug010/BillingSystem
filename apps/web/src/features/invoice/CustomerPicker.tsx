@@ -1,6 +1,6 @@
-import { normalizeSearchText } from "@vyapaar/core";
+import { normalizeSearchText } from "@digitalbahi/core";
 import { Search, UserPlus } from "lucide-react";
-import { forwardRef, useId, useMemo, useState } from "react";
+import { forwardRef, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Kbd } from "../../components/ui/misc";
 import { CUSTOMERS, WALK_IN_ID } from "../../data/db";
@@ -44,6 +44,9 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
   const [active, setActive] = useState(0);
   const listId = useId();
   const results = useMemo(() => searchCustomers(query), [query]);
+  // The list closes a moment after the field loses focus (so a click on it lands); coming back cancels that.
+  const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(closing.current), []);
 
   const choose = (c: Customer) => {
     onSelect(c.id);
@@ -76,8 +79,13 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
             setOpen(true);
             setActive(0);
           }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onFocus={() => {
+            clearTimeout(closing.current);
+            setOpen(true);
+          }}
+          onBlur={() => {
+            closing.current = setTimeout(() => setOpen(false), 120);
+          }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();

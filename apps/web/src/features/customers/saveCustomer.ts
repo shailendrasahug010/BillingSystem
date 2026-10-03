@@ -19,6 +19,10 @@ export interface CustomerInput {
   addressLine1?: string;
   creditLimit?: string | null;
   priceLevelId?: string;
+  /** Messages in this language; null: the business's. */
+  messageLocale?: "en" | "hi" | null;
+  /** No automatic or bulk payment reminders (editing only). */
+  remindersOptOut?: boolean;
 }
 
 /** The device could not keep the work (storage blocked, nobody signed in). */
@@ -61,6 +65,10 @@ function currentRow(id: string): CustomerRow {
     priceLevelId: c.priceLevelId ?? null,
     categoryId: null,
     isActive: true,
+    messageLocale: c.messageLocale ?? null,
+    remindersOptOut: c.remindersOptOut ?? false,
+    remindersOptOutAt: c.remindersOptOutAt ?? null,
+    remindersOptOutBy: c.remindersOptOutBy ?? null,
     ...(c.version !== undefined ? { version: c.version } : {}),
   };
 }
@@ -101,6 +109,7 @@ export async function createCustomer(body: CustomerInput): Promise<{ customer: C
     priceLevelId: body.priceLevelId ?? null,
     categoryId: null,
     isActive: true,
+    messageLocale: body.messageLocale ?? null,
   };
   const kept = await queueEntry({ kind: "customer", id, userId: scope.userId, businessId: scope.businessId, savedAt: new Date().toISOString(), status: "pending", error: null, customerId: id, customerName: body.businessName || body.name, body: { ...body }, row });
   if (!kept) throw new NotKeptOffline();
@@ -124,7 +133,13 @@ export async function editCustomer(id: string, patch: Partial<CustomerInput>): P
     }
   }
   const scope = scopeOrFail();
-  const after: CustomerRow = { ...before, ...patch, businessName: patch.businessName ?? before.businessName, creditLimit: patch.creditLimit !== undefined ? patch.creditLimit : before.creditLimit };
+  const after: CustomerRow = {
+    ...before,
+    ...patch,
+    businessName: patch.businessName ?? before.businessName,
+    creditLimit: patch.creditLimit !== undefined ? patch.creditLimit : before.creditLimit,
+    ...(patch.remindersOptOut !== undefined ? { remindersOptOutAt: patch.remindersOptOut ? new Date().toISOString() : null, remindersOptOutBy: patch.remindersOptOut ? ("staff" as const) : null } : {}),
+  };
   const kept = await queueCustomerChange(id, patch, after, () => ({
     kind: "customer-edit",
     id: newIdempotencyKey(),

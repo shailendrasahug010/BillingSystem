@@ -2,8 +2,11 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from "../../lib/cn";
 
 const control =
-  "w-full rounded-[var(--radius-control)] border border-line bg-surface text-ink shadow-[inset_0_1px_1px_rgb(16_24_40/0.03)] placeholder:text-ink-3 " +
-  "transition-[border-color,box-shadow] duration-150 hover:border-line-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 disabled:bg-surface-2";
+  "w-full rounded-[var(--radius-control)] border bg-surface text-ink shadow-[inset_0_1px_1px_rgb(16_24_40/0.03)] placeholder:text-ink-3 " +
+  "transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-4 disabled:bg-surface-2";
+// The border's colours, one set or the other (cn does not drop a class another overrides).
+const tone = "border-line hover:border-line-strong focus:border-accent focus:ring-accent/15";
+const invalidTone = "border-danger focus:border-danger focus:ring-danger/20";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   leading?: ReactNode;
@@ -23,7 +26,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       <input
         ref={ref}
         aria-invalid={invalid || undefined}
-        className={cn(control, height, leading ? "pl-9" : "pl-3", trailing ? "pr-10" : "pr-3", invalid && "border-danger focus:border-danger focus:ring-danger/20")}
+        className={cn(control, invalid ? invalidTone : tone, height, leading ? "pl-9" : "pl-3", trailing ? "pr-10" : "pr-3")}
         {...rest}
       />
       {trailing && <span className="absolute right-2 flex items-center">{trailing}</span>}
@@ -33,7 +36,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cn(control, "h-10 px-3 text-sm", className)} {...rest}>
+    <select className={cn(control, tone, "h-10 px-3 text-sm", className)} {...rest}>
       {children}
     </select>
   );

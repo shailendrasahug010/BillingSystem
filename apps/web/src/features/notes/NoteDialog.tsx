@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@vyapaar/i18n";
+import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { Percent, Printer, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -175,16 +175,21 @@ export function ReturnsCard({
   canReturn,
   deviceCopy = false,
   reverseCharge = false,
+  party,
+  totals,
 }: {
   kind: "sale" | "purchase";
   documentId: string;
   documentNumber: string;
   returns: ReturnRow[];
   canReturn: boolean;
-  /** Opened from the copy on this device: returns can be kept to send later; discounts and note details need the server. */
+  /** Opened from the copy on this device: returns (and discounts, with `party` and `totals`) can be kept to send later; note details need the server. */
   deviceCopy?: boolean;
   /** A reverse-charge purchase: notes take back the value only; their GST lowers the reverse-charge tax. */
   reverseCharge?: boolean;
+  /** The customer or supplier and the bill's totals: a discount note can then be kept on this device without a connection. */
+  party?: { id: string; name: string };
+  totals?: { grandTotal: number; taxable: number };
 }) {
   const { t, money, dateMedium } = useI18n();
   const [open, setOpen] = useState<string | null>(null);
@@ -197,7 +202,7 @@ export function ReturnsCard({
         action={
           canReturn && allowed("note.create") ? (
             <div className="flex flex-wrap gap-2">
-              {!deviceCopy && (
+              {(!deviceCopy || (party && totals)) && (
                 <Button size="sm" icon={<Percent size={14} />} onClick={() => setPricing(true)}>
                   {kind === "sale" ? t("notes.priceNote") : t("notes.supplierCreditNote")}
                 </Button>
@@ -230,7 +235,7 @@ export function ReturnsCard({
       </div>
       <NoteDialog noteId={open} onClose={() => setOpen(null)} />
       <ReturnDialog kind={kind} documentId={documentId} open={recording} onOpenChange={setRecording} />
-      <PriceNoteDialog kind={kind} documentId={documentId} documentNumber={documentNumber} open={pricing} onOpenChange={setPricing} />
+      <PriceNoteDialog kind={kind} documentId={documentId} documentNumber={documentNumber} open={pricing} onOpenChange={setPricing} {...(party ? { party } : {})} {...(totals ? { totals } : {})} />
     </Card>
   );
 }

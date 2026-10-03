@@ -12,13 +12,15 @@ export const ACCENTS: Array<{ key: AccentChoice; swatch: string; swatch2: string
   { key: "teal", swatch: "#0e7490", swatch2: "#06b6d4" },
 ];
 
-const KEY = "vyapaar.theme";
-const ACCENT_KEY = "vyapaar.accent";
+const KEY = "digitalbahi.theme";
+const ACCENT_KEY = "digitalbahi.accent";
+/** Where these were kept under the project's former working name: read until saved under the new key. */
+const LEGACY_KEYS: Record<string, string> = { [KEY]: "vyapaar.theme", [ACCENT_KEY]: "vyapaar.accent" };
 const listeners = new Set<() => void>();
 
 function read<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
-    const v = localStorage.getItem(key);
+    const v = localStorage.getItem(key) ?? localStorage.getItem(LEGACY_KEYS[key]!);
     if (v && (allowed as readonly string[]).includes(v)) return v as T;
   } catch {
     /* ignore */
@@ -29,6 +31,7 @@ function read<T extends string>(key: string, allowed: readonly T[], fallback: T)
 function save(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
+    localStorage.removeItem(LEGACY_KEYS[key]!);
   } catch {
     /* ignore */
   }

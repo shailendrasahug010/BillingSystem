@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { calculateTaxLine, determineSupplyType, isValidGstin, taxAt, type PaymentMethod } from "@vyapaar/core";
+import { calculateTaxLine, determineSupplyType, isValidGstin, taxAt, type PaymentMethod } from "@digitalbahi/core";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";

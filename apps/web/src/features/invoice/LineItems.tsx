@@ -1,4 +1,4 @@
-import type { DocumentTotals } from "@vyapaar/core";
+import type { DocumentTotals } from "@digitalbahi/core";
 import { Minus, Plus, ShoppingBasket, Trash, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useI18n } from "../../app/i18n";
@@ -6,7 +6,8 @@ import { EmptyState } from "../../components/ui/misc";
 import { allowed, productById } from "../../data/db";
 import { cn } from "../../lib/cn";
 import type { Product } from "../../data/types";
-import { factorOf, type DraftLine } from "./useInvoiceDraft";
+import { saleUnits, unitByLetter, type SaleUnit } from "./units";
+import { factorOf, unitSymbolOf, type DraftLine } from "./useInvoiceDraft";
 
 /** Numeric input that keeps the typed text (e.g. "12.") and commits valid numbers. */
 function NumberCell({
@@ -17,6 +18,7 @@ function NumberCell({
   inputRef,
   onEnter,
   onTab,
+  onLetter,
   decimals = 2,
 }: {
   value: number;
@@ -28,6 +30,8 @@ function NumberCell({
   onEnter?(): void;
   /** Tab (without Shift) from the line's last field: back to product search. */
   onTab?(): void;
+  /** A letter typed in it (a unit's letter after the quantity); true when it was taken. */
+  onLetter?(letter: string): boolean;
   decimals?: number;
 }) {
   const [text, setText] = useState(String(value));
@@ -62,6 +66,8 @@ function NumberCell({
         } else if (e.key === "Tab" && !e.shiftKey && onTab) {
           e.preventDefault();
           onTab();
+        } else if (onLetter && e.key.length === 1 && /\p{L}/u.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey && onLetter(e.key)) {
+          e.preventDefault();
         }
       }}
       className={cn(
@@ -73,15 +79,42 @@ function NumberCell({
 }
 
 /**
- * The unit a line is sold in: the stock unit or one of the product's packs
- * (box of 24, strip of 10). Changing it re-prices the line for that unit.
+ * The unit a line is sold in: the product's own or one of its packs (box of
+ * 24, strip of 10), each shown with its letter. Changing it re-prices the line
+ * for that unit; the letter, typed on the list or after the quantity, picks it.
+ * A product sold in one unit only shows it.
  */
-function UnitSelect({ product, line, onUnit, onEnter, className }: { product: Product; line: DraftLine; onUnit(unitId: string | null): void; onEnter?(): void; className?: string }) {
+function UnitSelect({
+  product,
+  line,
+  units,
+  onUnit,
+  onEnter,
+  onTab,
+  selectRef,
+  className,
+}: {
+  product: Product;
+  line: DraftLine;
+  units: SaleUnit[];
+  onUnit(unitId: string | null): void;
+  onEnter?(): void;
+  /** Tab (without Shift): the next field of the line (it comes after the quantity, wherever it is drawn). */
+  onTab?(): void;
+  selectRef?: Ref<HTMLSelectElement>;
+  className?: string;
+}) {
   const { t } = useI18n();
-  const packs = product.packUnits ?? [];
-  if (packs.length === 0) return <span className={cn("text-[11px] text-ink-3", className)}>{product.unit}</span>;
+  if (units.length < 2) {
+    return (
+      <span className="shrink-0 font-medium text-ink-2" title={t("invoice.unitOnly", { unit: product.unit })}>
+        {product.unit}
+      </span>
+    );
+  }
   return (
     <select
+      ref={selectRef}
       aria-label={`${t("invoice.unit")} ${product.name}`}
       value={line.unitId ?? ""}
       onChange={(e) => onUnit(e.target.value || null)}
@@ -89,18 +122,23 @@ function UnitSelect({ product, line, onUnit, onEnter, className }: { product: Pr
         if (e.key === "Enter" && onEnter) {
           e.preventDefault();
           onEnter();
+        } else if (e.key === "Tab" && !e.shiftKey && onTab) {
+          e.preventDefault();
+          onTab();
+        } else if (e.key.length === 1 && /\p{L}/u.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          // The unit's letter, the business's own ones included (the list's type-to-find goes by the text).
+          e.preventDefault();
+          const u = unitByLetter(units, line.unitId, e.key);
+          if (u && u.unitId !== line.unitId) onUnit(u.unitId);
         }
       }}
-      className={cn("rounded-md border border-line bg-surface px-1.5 text-ink-2 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none", className)}
+      className={cn("shrink-0 rounded-md border border-line bg-surface px-1 font-medium text-ink-2 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none", className)}
     >
-      <option value="">{product.unit}</option>
-      {[...packs]
-        .sort((a, b) => a.factor - b.factor)
-        .map((u) => (
-          <option key={u.unitId} value={u.unitId}>
-            {u.symbol} ({u.factor} {product.unit})
-          </option>
-        ))}
+      {units.map((u) => (
+        <option key={u.unitId ?? ""} value={u.unitId ?? ""}>
+          {u.letter} · {u.factor === 1 ? u.symbol : `${u.symbol} (${u.factor} ${product.unit})`}
+        </option>
+      ))}
     </select>
   );
 }
@@ -128,6 +166,22 @@ function LineWarnings({ line }: { line: DraftLine }) {
   );
 }
 
+/**
+ * Scrolls an element into view clear of what stays on screen over the page:
+ * the bars marked data-overlay (the top bar and the pinned search above, the
+ * total bar and a phone's tab bar below), measured where they are now, so at
+ * any zoom. Chrome's scrollIntoView({ block: "nearest" }) leaves an element
+ * alone while any of it shows, even under those bars.
+ */
+function reveal(el: HTMLElement, behavior: ScrollBehavior = "auto") {
+  const bars = [...document.querySelectorAll<HTMLElement>("[data-overlay]")].map((b) => ({ side: b.dataset.overlay, box: b.getBoundingClientRect() })).filter((b) => b.box.height > 0);
+  const top = Math.max(0, ...bars.filter((b) => b.side === "top").map((b) => b.box.bottom)) + 8;
+  const bottom = Math.min(window.innerHeight, ...bars.filter((b) => b.side === "bottom").map((b) => b.box.top)) - 8;
+  const box = el.getBoundingClientRect();
+  if (box.bottom > bottom) window.scrollBy({ top: box.bottom - bottom, behavior });
+  else if (box.top < top) window.scrollBy({ top: box.top - top, behavior });
+}
+
 export function LineItems({
   lines,
   totals,
@@ -151,8 +205,13 @@ export function LineItems({
 }) {
   const { t, money, locale } = useI18n();
   const qtyRefs = useRef(new Map<string, HTMLInputElement>());
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
   const canChangeRate = allowed("invoice.override_price");
   const rateRefs = useRef(new Map<string, HTMLInputElement>());
+  const unitRefs = useRef(new Map<string, HTMLSelectElement>());
+  const discountRefs = useRef(new Map<string, HTMLInputElement>());
+  // The line just added or added to, lit for a moment (on a phone, where its quantity is not focused).
+  const [lit, setLit] = useState<string | null>(null);
   // Keyboard billing: product search -> Enter -> qty -> Enter -> rate -> Enter -> product search.
   // Without the price-override permission the rate is fixed, so qty goes straight back.
   const toRate = (key: string) => {
@@ -160,16 +219,41 @@ export function LineItems({
     if (el) el.focus();
     else onBackToSearch();
   };
+  // A unit's letter typed after the quantity (2 then B: 2 boxes) picks it, as on the unit list.
+  const byLetter = (units: SaleUnit[], line: DraftLine, letter: string) => {
+    const u = unitByLetter(units, line.unitId, letter);
+    if (!u) return false;
+    if (u.unitId !== line.unitId) onUnit(line.key, u.unitId);
+    return true;
+  };
+  // Tab keeps the old order, qty → unit → rate → Disc %, though the unit is drawn under the name.
+  const afterUnit = (key: string) => (canChangeRate ? rateRefs.current.get(key) : discountRefs.current.get(key))?.focus();
+  const keep = <E,>(refs: { current: Map<string, E> }, key: string) => (el: E | null) => {
+    if (el) refs.current.set(key, el);
+    else refs.current.delete(key);
+  };
 
   useEffect(() => {
     if (!focusKey) return;
-    const el = qtyRefs.current.get(focusKey);
-    if (el && variant === "desktop") {
-      el.focus();
-      el.select();
+    if (variant === "desktop") {
+      const el = qtyRefs.current.get(focusKey);
+      if (el) {
+        // Shown by the table's focus handler, clear of the bars.
+        el.focus({ preventScroll: true });
+        el.select();
+      }
+    } else {
+      const row = rowRefs.current.get(focusKey);
+      if (row) reveal(row, "smooth");
+      setLit(focusKey);
     }
     onFocused();
   }, [focusKey, onFocused, variant]);
+  useEffect(() => {
+    if (!lit) return;
+    const timer = setTimeout(() => setLit(null), 1200);
+    return () => clearTimeout(timer);
+  }, [lit]);
 
   const resultFor = (key: string) => totals?.lines.find((l) => l.key === key);
 
@@ -178,43 +262,54 @@ export function LineItems({
   }
 
   if (variant === "mobile") {
+    // Two rows a line: the name and the quantity at the thumb, then the price and the amount.
     return (
       <ul className="flex flex-col divide-y divide-line">
         {lines.map((line) => {
           const p = productById.get(line.productId)!;
           const r = resultFor(line.key);
+          const name = locale === "hi" ? p.nameHi : p.name;
+          const units = saleUnits(p);
           return (
-            <li key={line.key} className="flex flex-col gap-2 py-3">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14.5px] font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
-                  <p className="num text-[12.5px] text-ink-3">
-                    {money(line.rate)} × {line.qty} · GST {p.gstRate}%
-                  </p>
-                  {(p.packUnits?.length ?? 0) > 0 && <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} className="mt-1 h-9 text-[13.5px]" />}
-                  <LineWarnings line={line} />
-                </div>
-                <span className="num text-[15px] font-semibold text-ink">{r ? money(r.total.toNumber()) : "—"}</span>
-              </div>
+            <li
+              key={line.key}
+              ref={(el) => {
+                if (el) rowRefs.current.set(line.key, el);
+                else rowRefs.current.delete(line.key);
+              }}
+              className={cn("-mx-4 scroll-mt-36 scroll-mb-48 px-4 py-2 transition-colors duration-700", lit === line.key && "bg-accent-soft")}
+            >
               <div className="flex items-center gap-2">
-                <div className="flex items-center rounded-xl border border-line">
-                  <button type="button" className="flex size-11 items-center justify-center text-ink-2" aria-label="−1" onClick={() => (line.qty > 1 ? onUpdate(line.key, { qty: line.qty - 1 }) : onRemove(line.key))}>
-                    <Minus size={18} />
+                <p className="min-w-0 flex-1 text-[14.5px] leading-snug font-medium text-ink">{name}</p>
+                <div className="flex w-[8.5rem] shrink-0 items-center rounded-xl border border-line bg-surface">
+                  <button type="button" className="flex size-10 shrink-0 items-center justify-center text-ink-2" aria-label={`−1 ${p.name}`} onClick={() => (line.qty > 1 ? onUpdate(line.key, { qty: line.qty - 1 }) : onRemove(line.key))}>
+                    <Minus size={17} />
                   </button>
-                  <NumberCell value={line.qty} label={t("invoice.qty")} decimals={3} onCommit={(v) => onUpdate(line.key, { qty: v })} onEnter={onBackToSearch} className="h-11 w-14 text-center text-[16px] font-semibold" />
-                  <button type="button" className="flex size-11 items-center justify-center text-ink-2" aria-label="+1" onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
-                    <Plus size={18} />
+                  <NumberCell
+                    value={line.qty}
+                    label={`${t("invoice.qty")} ${p.name}`}
+                    decimals={3}
+                    onCommit={(v) => onUpdate(line.key, { qty: v })}
+                    onEnter={onBackToSearch}
+                    onLetter={(letter) => byLetter(units, line, letter)}
+                    className="h-10 px-1 text-center text-[16px] font-semibold"
+                  />
+                  <button type="button" className="flex size-10 shrink-0 items-center justify-center text-ink-2" aria-label={`+1 ${p.name}`} onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
+                    <Plus size={17} />
                   </button>
                 </div>
-                {[p.caseSize > 1 ? p.caseSize : 5, 10].map((inc) => (
-                  <button key={inc} type="button" onClick={() => onUpdate(line.key, { qty: line.qty + inc })} className="num h-11 rounded-xl border border-line px-3 text-[14px] font-medium text-ink-2">
-                    +{inc}
-                  </button>
-                ))}
-                <button type="button" onClick={() => onRemove(line.key)} className="ml-auto flex size-11 items-center justify-center rounded-xl text-ink-3 hover:text-danger" aria-label={t("invoice.remove")}>
-                  <Trash size={17} />
+              </div>
+              <div className="mt-0.5 flex items-center gap-2">
+                <p className="num min-w-0 flex-1 truncate text-[12.5px] text-ink-3">
+                  {money(line.rate)} × {line.qty} {unitSymbolOf(p, line.unitId)} · GST {p.gstRate}%
+                </p>
+                {units.length > 1 && <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} className="h-8 text-[13px]" />}
+                <span className="num text-[15px] font-semibold text-ink">{r ? money(r.total.toNumber()) : "—"}</span>
+                <button type="button" onClick={() => onRemove(line.key)} className="-mr-1.5 flex size-8 items-center justify-center rounded-lg text-ink-3 hover:text-danger" aria-label={`${t("invoice.remove")}: ${p.name}`}>
+                  <Trash size={16} />
                 </button>
               </div>
+              <LineWarnings line={line} />
             </li>
           );
         })}
@@ -222,103 +317,127 @@ export function LineItems({
     );
   }
 
+  // One compact row a line, the table as wide as its card (no sideways scrolling to see the amount).
   return (
-    <div className="scroll-x">
-      <table className="w-full min-w-[760px] text-[13.5px]">
-        <thead>
-          <tr className="border-b border-line text-left text-[12px] text-ink-3">
-            <th className="w-8 py-2 pl-4 font-medium">#</th>
-            <th className="py-2 pl-2 font-medium">{t("invoice.product")}</th>
-            <th className="w-[124px] py-2 text-center font-medium">{t("invoice.qty")}</th>
-            <th className="w-[96px] py-2 pr-2 text-right font-medium">{t("invoice.rate")}</th>
-            <th className="w-[72px] py-2 pr-2 text-right font-medium">{t("invoice.discount")}</th>
-            <th className="w-[64px] py-2 pr-2 text-right font-medium">{t("invoice.gstRate")}</th>
-            <th className="w-[110px] py-2 pr-3 text-right font-medium">{t("invoice.amount")}</th>
-            <th className="w-10 py-2 pr-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line, i) => {
-            const p = productById.get(line.productId)!;
-            const r = resultFor(line.key);
-            return (
-              <tr key={line.key} className="border-b border-line align-top last:border-b-0 hover:bg-surface-2/60">
-                <td className="num py-2.5 pl-4 text-ink-3">{i + 1}</td>
-                <td className="py-2.5 pl-2">
-                  <p className="font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
-                  <p className="text-[12px] text-ink-3">
-                    <span className="font-mono">{p.code}</span> · HSN <span className="font-mono">{p.hsn}</span> · {p.packSize}
-                    {p.batch && (
-                      <>
-                        {" "}
-                        · {t("invoice.batch")} {p.batch.number}
-                      </>
-                    )}
-                  </p>
-                  <LineWarnings line={line} />
-                </td>
-                <td className="py-1.5">
-                  <div className="flex items-center justify-center">
-                    <button type="button" tabIndex={-1} className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="−1" onClick={() => onUpdate(line.key, { qty: Math.max(1, line.qty - 1) })}>
-                      <Minus size={14} />
-                    </button>
-                    <NumberCell
-                      value={line.qty}
-                      decimals={3}
-                      label={`${t("invoice.qty")} ${p.name}`}
-                      inputRef={(el) => {
-                        if (el) qtyRefs.current.set(line.key, el);
-                        else qtyRefs.current.delete(line.key);
-                      }}
-                      onCommit={(v) => onUpdate(line.key, { qty: v })}
-                      onEnter={() => toRate(line.key)}
-                      className="w-14 text-center font-semibold"
-                    />
-                    <button type="button" tabIndex={-1} className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label="+1" onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                  <div className="flex justify-center">
-                    <UnitSelect product={p} line={line} onUnit={(u) => onUnit(line.key, u)} onEnter={() => toRate(line.key)} className="h-7 text-[11.5px]" />
-                  </div>
-                </td>
-                <td className="py-1.5 pr-2">
-                  {/* The rate-list price; only roles allowed to change prices can type another. */}
-                  {canChangeRate ? (
-                    <NumberCell
-                      value={line.rate}
-                      label={`${t("invoice.rate")} ${p.name}`}
-                      inputRef={(el) => {
-                        if (el) rateRefs.current.set(line.key, el);
-                        else rateRefs.current.delete(line.key);
-                      }}
-                      onCommit={(v) => onUpdate(line.key, { rate: v })}
-                      onEnter={onBackToSearch}
-                    />
-                  ) : (
-                    <p className="num h-9 px-2 text-right text-[14px] leading-9 text-ink" aria-label={`${t("invoice.rate")} ${p.name}`}>
-                      {line.rate}
-                    </p>
-                  )}
-                </td>
-                <td className="py-1.5 pr-2">
-                  <NumberCell value={line.discountPercent} label={`${t("invoice.discount")} ${p.name}`} onCommit={(v) => onUpdate(line.key, { discountPercent: Math.min(100, v) })} onEnter={onBackToSearch} onTab={onBackToSearch} />
-                </td>
-                <td className="num py-2.5 pr-2 text-right text-ink-2">{r ? `${r.gstRate.toNumber()}%` : "—"}</td>
-                <td className="py-2.5 pr-3 text-right">
-                  <p className="num font-semibold text-ink">{r ? money(r.total.toNumber()) : "—"}</p>
-                  {r && r.taxTotal.gt(0) && <p className="num text-[11.5px] text-ink-3">+{money(r.taxTotal.toNumber())} {t("invoice.tax")}</p>}
-                </td>
-                <td className="py-2 pr-2">
-                  <button type="button" onClick={() => onRemove(line.key)} className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-danger-soft hover:text-danger" aria-label={`${t("invoice.remove")}: ${p.name}`}>
-                    <Trash size={15} />
+    <table
+      className="w-full table-fixed text-[13.5px]"
+      // A field reached by Enter, Tab or a new line: in view, clear of the search bar and the total bar.
+      onFocus={(e) => {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) reveal(e.target);
+      }}
+    >
+      <colgroup>
+        <col className="w-8" />
+        <col />
+        <col className="w-[116px]" />
+        <col className="w-20" />
+        <col className="w-14" />
+        <col className="w-[104px]" />
+        <col className="w-9" />
+      </colgroup>
+      <thead>
+        <tr className="border-b border-line text-left text-[12px] text-ink-3">
+          <th className="py-1.5 pl-3 font-medium">#</th>
+          <th className="py-1.5 pl-1 font-medium">{t("invoice.product")}</th>
+          <th className="py-1.5 text-center font-medium">{t("invoice.qty")}</th>
+          <th className="py-1.5 pr-2 text-right font-medium">{t("invoice.rate")}</th>
+          <th className="py-1.5 pr-2 text-right font-medium">{t("invoice.discount")}</th>
+          <th className="py-1.5 pr-2 text-right font-medium">{t("invoice.amount")}</th>
+          <th className="py-1.5" />
+        </tr>
+      </thead>
+      <tbody>
+        {lines.map((line, i) => {
+          const p = productById.get(line.productId)!;
+          const r = resultFor(line.key);
+          const name = locale === "hi" ? p.nameHi : p.name;
+          const units = saleUnits(p);
+          return (
+            // The search bar stays at the top while lines scroll: a focused field keeps clear of it.
+            <tr key={line.key} className="border-b border-line last:border-b-0 hover:bg-surface-2/60 focus-within:bg-accent-soft/40 [&_input]:scroll-mt-48 [&_input]:scroll-mb-28 [&_select]:scroll-mt-48">
+              <td className="num py-1 pl-3 align-middle text-[12px] text-ink-3">{i + 1}</td>
+              <td className="py-1 pl-1 align-middle">
+                <p className="truncate leading-tight font-medium text-ink" title={name}>
+                  {name}
+                </p>
+                <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] leading-tight text-ink-3">
+                  <span className="truncate">
+                    <span className="font-mono">{p.code}</span> · GST {r ? r.gstRate.toNumber() : p.gstRate}%{p.batch ? ` · ${t("invoice.batch")} ${p.batch.number}` : ""}
+                  </span>
+                  <span aria-hidden>·</span>
+                  <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} onEnter={() => toRate(line.key)} onTab={() => afterUnit(line.key)} selectRef={keep(unitRefs, line.key)} className="h-5 text-[11px]" />
+                </div>
+                <LineWarnings line={line} />
+              </td>
+              <td className="py-1 align-middle">
+                <div className="flex items-center justify-center">
+                  <button type="button" tabIndex={-1} className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label={`−1 ${p.name}`} onClick={() => onUpdate(line.key, { qty: Math.max(1, line.qty - 1) })}>
+                    <Minus size={14} />
                   </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  <NumberCell
+                    value={line.qty}
+                    decimals={3}
+                    label={`${t("invoice.qty")} ${p.name}`}
+                    inputRef={(el) => {
+                      if (el) qtyRefs.current.set(line.key, el);
+                      else qtyRefs.current.delete(line.key);
+                    }}
+                    onCommit={(v) => onUpdate(line.key, { qty: v })}
+                    onEnter={() => toRate(line.key)}
+                    onLetter={(letter) => byLetter(units, line, letter)}
+                    {...(units.length > 1 ? { onTab: () => unitRefs.current.get(line.key)?.focus() } : {})}
+                    className="h-8 px-1 text-center font-semibold"
+                  />
+                  <button type="button" tabIndex={-1} className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label={`+1 ${p.name}`} onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
+                    <Plus size={14} />
+                  </button>
+                </div>
+              </td>
+              <td className="py-1 pr-1 align-middle">
+                {/* The rate-list price; only roles allowed to change prices can type another. */}
+                {canChangeRate ? (
+                  <NumberCell
+                    value={line.rate}
+                    label={`${t("invoice.rate")} ${p.name}`}
+                    inputRef={(el) => {
+                      if (el) rateRefs.current.set(line.key, el);
+                      else rateRefs.current.delete(line.key);
+                    }}
+                    onCommit={(v) => onUpdate(line.key, { rate: v })}
+                    onEnter={onBackToSearch}
+                    className="h-8"
+                  />
+                ) : (
+                  <p className="num h-8 px-2 text-right text-[14px] leading-8 text-ink" aria-label={`${t("invoice.rate")} ${p.name}`}>
+                    {line.rate}
+                  </p>
+                )}
+              </td>
+              <td className="py-1 pr-1 align-middle">
+                <NumberCell
+                  value={line.discountPercent}
+                  label={`${t("invoice.discount")} ${p.name}`}
+                  inputRef={keep(discountRefs, line.key)}
+                  onCommit={(v) => onUpdate(line.key, { discountPercent: Math.min(100, v) })}
+                  onEnter={onBackToSearch}
+                  onTab={onBackToSearch}
+                  className="h-8"
+                />
+              </td>
+              <td className="py-1 pr-2 text-right align-middle">
+                <p className="num truncate font-semibold text-ink" title={r && r.taxTotal.gt(0) ? `${t("invoice.tax")} ${money(r.taxTotal.toNumber())}` : undefined}>
+                  {r ? money(r.total.toNumber()) : "—"}
+                </p>
+              </td>
+              <td className="py-1 pr-1 align-middle">
+                <button type="button" onClick={() => onRemove(line.key)} className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-danger-soft hover:text-danger" aria-label={`${t("invoice.remove")}: ${p.name}`}>
+                  <Trash size={15} />
+                </button>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

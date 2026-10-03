@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { searchProducts } from "@vyapaar/core";
+import { searchProducts } from "@digitalbahi/core";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";

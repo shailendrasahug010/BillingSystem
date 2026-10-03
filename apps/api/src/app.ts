@@ -9,6 +9,7 @@ import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from "fast
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "./lib/context.js";
 import { errorHandler } from "./lib/errors.js";
+import { assertWebApp, registerWebApp } from "./lib/webApp.js";
 import { MODULES } from "./modules/index.js";
 import type { ApiModule } from "./modules/types.js";
 
@@ -26,7 +27,7 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
         : {
             level: config.logLevel,
             redact: ["req.headers.authorization", "req.headers.cookie", "res.headers['set-cookie']"],
-            ...(config.env === "development" ? { transport: { target: "pino-pretty" } } : {}),
+            ...(config.logPretty ? { transport: { target: "pino-pretty" } } : {}),
           },
     genReqId: (req) => {
       const incoming = req.headers["x-request-id"];
@@ -50,7 +51,7 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
   });
 
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false, credentials: true });
+  await app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : false, credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] });
   await app.register(cookie);
   await app.register(rateLimit, {
     max: config.rateLimit.max,
@@ -61,7 +62,7 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
   if (config.docsEnabled) {
     await app.register(swagger, {
       openapi: {
-        info: { title: "Vyapaar CRM API", version: "1.0.0", description: "Billing, stock, GST and collections for distributors" },
+        info: { title: "Digital Bahi API", version: "1.0.0", description: "Billing, stock, GST and collections for distributors" },
         components: { securitySchemes: { bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" } } },
         security: [{ bearer: [] }],
       },
@@ -76,6 +77,12 @@ export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModul
     },
     { prefix: "/api/v1" },
   );
+
+  // One computer without Caddy in front: the web app comes from the API too, on the same origin.
+  if (config.webDir) {
+    assertWebApp(config.webDir);
+    registerWebApp(app, config.webDir);
+  }
 
   return app;
 }

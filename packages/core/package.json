@@ -1,5 +1,5 @@
 {
-  "name": "@vyapaar/core",
+  "name": "@digitalbahi/core",
   "version": "0.1.0",
   "private": true,
   "description": "Pure, framework-free business logic: money, GST engine, invoice totals, stock rules, payments, order workflow, suggestions. Shared by the API (authoritative) and the client (offline + instant UI).",

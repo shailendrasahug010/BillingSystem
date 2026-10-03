@@ -1,6 +1,6 @@
-import { CancelBody, NoteListQuery, PriceNoteBody, ReturnBody } from "@vyapaar/contracts";
-import { applyRoundOff, dec, roundAmount, toAmountString, toQtyString, toRateString, type Dec } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { CancelBody, NoteListQuery, PriceNoteBody, ReturnBody } from "@digitalbahi/contracts";
+import { applyRoundOff, dec, roundAmount, toAmountString, toQtyString, toRateString, type Dec } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, desc, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -9,7 +9,7 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { periodLocked } from "../../services/gst-period.js";
@@ -629,6 +629,7 @@ export const notesModule: ApiModule = async (app, deps) => {
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.creditDebitNotes.id })
           .from(schema.creditDebitNotes)
@@ -786,6 +787,13 @@ export const notesModule: ApiModule = async (app, deps) => {
         .update(schema.creditDebitNotes)
         .set({ status: "cancelled", cancelledAt: now, cancelReason: request.body.reason, amountSettled: "0", settlementStatus: "unpaid", version: note.version + 1, updatedBy: ctx.userId })
         .where(eq(schema.creditDebitNotes.id, note.id));
+      await tx.insert(schema.outboxEvents).values({
+        businessId: ctx.businessId,
+        eventType: isSale ? "credit_note.cancelled" : valueOnly ? "supplier_credit_note.cancelled" : "debit_note.cancelled",
+        aggregateType: "note",
+        aggregateId: note.id,
+        payload: { [isSale ? "invoiceId" : "purchaseId"]: docId },
+      });
       await audit(tx, ctx, {
         action: isSale ? "credit_note.cancelled" : "debit_note.cancelled",
         entityType: "note",

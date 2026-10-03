@@ -2,7 +2,7 @@ import { idbAll, idbDelete, idbGet, idbKeys } from "./idb";
 
 /**
  * Deletes one business's copy from this device: the saved business, its kept
- * bills and, for a device the owner removed, the device record and the work
+ * bills and the day's beat and, for a device the owner removed, the device record and the work
  * still waiting to sync (and the person's key, when nothing else of theirs is
  * left here). A copy that expired keeps its waiting work, still encrypted, to
  * send at the next sign-in. Returns how many waiting entries were deleted.
@@ -10,6 +10,7 @@ import { idbAll, idbDelete, idbGet, idbKeys } from "./idb";
 export async function wipeBusinessCopy(userId: string, businessId: string, options: { removedDevice: boolean }): Promise<number> {
   await idbDelete("kv", `snapshot:${userId}:${businessId}`);
   await idbDelete("kv", `docs:${userId}:${businessId}`);
+  await idbDelete("kv", `beat:${userId}:${businessId}`);
   const last = await idbGet<{ userId?: string; businessId?: string } | string>("kv", "snapshot:last");
   if (last && typeof last === "object" && last.userId === userId && last.businessId === businessId) await idbDelete("kv", "snapshot:last");
   if (!options.removedDevice) return 0;

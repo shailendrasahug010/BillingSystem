@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { schema, type Database } from "@vyapaar/db";
+import { schema, type Database } from "@digitalbahi/db";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import type { AppDeps } from "../../lib/context.js";

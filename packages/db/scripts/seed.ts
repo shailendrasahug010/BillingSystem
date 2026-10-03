@@ -1,4 +1,4 @@
-import { todayIn } from "@vyapaar/core";
+import { todayIn } from "@digitalbahi/core";
 import { createDb, seedBusinessDefaults, seedReferenceData } from "../src/index.js";
 import { businesses } from "../src/schema/index.js";
 

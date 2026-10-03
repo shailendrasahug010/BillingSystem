@@ -1,9 +1,10 @@
-import { schema, type Tx } from "@vyapaar/db";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { ApiError } from "../../lib/errors.js";
 import type { AppDeps } from "../../lib/context.js";
+import { notify } from "../../services/notifications.js";
 import type { ApiModule } from "../types.js";
 
 /** A status the provider reports for a message it sent. */
@@ -25,6 +26,9 @@ const MetaPayload = z.object({
               value: z
                 .object({
                   metadata: z.object({ phone_number_id: z.string() }).partial().optional(),
+                  messages: z
+                    .array(z.object({ from: z.string(), timestamp: z.string().optional(), type: z.string().optional(), text: z.object({ body: z.string() }).optional() }))
+                    .optional(),
                   statuses: z
                     .array(
                       z.object({
@@ -47,8 +51,21 @@ const MetaPayload = z.object({
 
 /** A provider behind the signed webhook reports the same way, without Meta's envelope. */
 const ProviderPayload = z.object({
-  statuses: z.array(z.object({ id: z.string(), status: z.string(), timestamp: z.union([z.string(), z.number()]).optional(), error: z.string().optional() })),
+  statuses: z.array(z.object({ id: z.string(), status: z.string(), timestamp: z.union([z.string(), z.number()]).optional(), error: z.string().optional() })).default([]),
+  /** Messages customers wrote (only STOP and START are acted on). */
+  messages: z.array(z.object({ from: z.string(), text: z.string(), timestamp: z.union([z.string(), z.number()]).optional() })).default([]),
 });
+
+/** A message a customer wrote to the business's number. */
+interface Reply {
+  from: string;
+  text: string;
+  at: Date;
+}
+
+/** STOP (or बंद) stops payment reminders; START brings them back if the customer had stopped them so. */
+const STOP = /^\s*(stop|unsubscribe|band|band karo|बंद|बंद करें|बंद करो)\s*[.!।]?\s*$/i;
+const START = /^\s*(start|resume|shuru|शुरू|चालू)\s*[.!।]?\s*$/i;
 
 const KNOWN = new Set(["sent", "delivered", "read", "failed"]);
 const when = (ts: string | number | undefined) => {
@@ -101,6 +118,48 @@ async function applyStatuses(tx: Tx, businessId: string, events: StatusEvent[]):
   return changed;
 }
 
+/**
+ * Customers who wrote STOP no longer get payment reminders (the staff who
+ * send messages are told); START undoes a STOP of theirs, not a stop the
+ * business set. Matched by the last ten digits of the mobile.
+ */
+async function applyReplies(tx: Tx, businessId: string, replies: Reply[]): Promise<void> {
+  for (const r of replies) {
+    const mobile = r.from.replace(/\D/g, "").slice(-10);
+    if (mobile.length !== 10) continue;
+    const sameMobile = sql`right(regexp_replace(coalesce(${schema.customers.mobile}, ''), '\\D', '', 'g'), 10) = ${mobile}`;
+    if (STOP.test(r.text)) {
+      const stopped = await tx
+        .update(schema.customers)
+        .set({ remindersOptOut: true, remindersOptOutAt: r.at.toISOString(), remindersOptOutBy: "reply", updatedAt: sql`now()` })
+        .where(and(eq(schema.customers.businessId, businessId), sameMobile, eq(schema.customers.remindersOptOut, false), sql`${schema.customers.deletedAt} is null`))
+        .returning({ id: schema.customers.id, name: sql<string>`coalesce(${schema.customers.businessName}, ${schema.customers.name})` });
+      for (const c of stopped) {
+        await notify(
+          tx,
+          businessId,
+          {
+            type: "reminders_stopped",
+            permission: "message.send",
+            severity: "info",
+            titleKey: "notifications.events.reminders_stopped",
+            params: { customer: c.name },
+            entityType: "customer",
+            entityId: c.id,
+            dedupeKey: `reminders_stopped:${c.id}:${r.at.toISOString()}`,
+          },
+          r.at.toISOString(),
+        );
+      }
+    } else if (START.test(r.text)) {
+      await tx
+        .update(schema.customers)
+        .set({ remindersOptOut: false, remindersOptOutAt: null, remindersOptOutBy: null, updatedAt: sql`now()` })
+        .where(and(eq(schema.customers.businessId, businessId), sameMobile, eq(schema.customers.remindersOptOutBy, "reply")));
+    }
+  }
+}
+
 /** One transaction in the business the callback's key belongs to (none: null). */
 async function inBusinessOfKey<T>(deps: AppDeps, key: string, fn: (tx: Tx, businessId: string) => Promise<T>): Promise<T | null> {
   return deps.db.transaction(async (tx) => {
@@ -114,7 +173,7 @@ async function inBusinessOfKey<T>(deps: AppDeps, key: string, fn: (tx: Tx, busin
 
 /**
  * Delivery and read ticks for WhatsApp. Each business has its own callback
- * address (/webhooks/whatsapp/<key>), shown in Settings → WhatsApp & email:
+ * address (/webhooks/whatsapp/<key>), shown in Settings → WhatsApp, SMS & email:
  * - Meta calls GET once to check it (hub.verify_token = the key) and then
  *   POSTs status changes signed with the app's secret (X-Hub-Signature-256).
  * - A provider behind the business's own webhook POSTs { statuses: [...] }
@@ -152,6 +211,7 @@ export const messagingStatusModule: ApiModule = async (app, deps) => {
           return false;
         }
         const events: StatusEvent[] = [];
+        const replies: Reply[] = [];
         if (settings.whatsappProvider === "meta") {
           const secret = settings.whatsappAppSecret ? deps.cipher.decrypt(settings.whatsappAppSecret) : null;
           const given = String(request.headers["x-hub-signature-256"] ?? "");
@@ -167,6 +227,7 @@ export const messagingStatusModule: ApiModule = async (app, deps) => {
                 if (!KNOWN.has(st.status)) continue;
                 events.push({ id: st.id, status: st.status as StatusEvent["status"], at: when(st.timestamp), error: st.errors?.[0]?.title ?? st.errors?.[0]?.message ?? null });
               }
+              for (const msg of value?.messages ?? []) if (msg.text?.body) replies.push({ from: msg.from, text: msg.text.body, at: when(msg.timestamp) });
             }
           }
         } else if (settings.whatsappProvider === "webhook") {
@@ -181,8 +242,10 @@ export const messagingStatusModule: ApiModule = async (app, deps) => {
             if (!KNOWN.has(st.status)) continue;
             events.push({ id: st.id, status: st.status as StatusEvent["status"], at: when(st.timestamp), error: st.error ?? null });
           }
+          for (const msg of body.data.messages) replies.push({ from: msg.from, text: msg.text, at: when(msg.timestamp) });
         } else return false;
         await applyStatuses(tx, businessId, events);
+        await applyReplies(tx, businessId, replies);
         return true;
       });
       if (!result) throw new ApiError(403, "FORBIDDEN");

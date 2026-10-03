@@ -1,4 +1,4 @@
-import { financialYearOf, formatDocumentNumber } from "@vyapaar/core";
+import { financialYearOf, formatDocumentNumber } from "@digitalbahi/core";
 import { api } from "../lib/api";
 import { idbGet, idbKeys, idbPut } from "./idb";
 

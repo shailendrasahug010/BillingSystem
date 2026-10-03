@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { isNative } from "../platform/native";
 
 /**
  * Installing the web app (Chrome / Edge on Windows, Mac, Linux and Android
@@ -30,7 +31,8 @@ export function setupPwa(): void {
     installEvent = null;
     emit();
   });
-  if (!import.meta.env.PROD || import.meta.env.MODE === "singlefile" || !("serviceWorker" in navigator)) return;
+  // The Android app carries its files itself: no service worker there.
+  if (!import.meta.env.PROD || import.meta.env.MODE === "singlefile" || !("serviceWorker" in navigator) || isNative()) return;
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")

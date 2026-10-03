@@ -1,4 +1,4 @@
-import { EwayBillBody, EwayFileQuery, IrnBody } from "@vyapaar/contracts";
+import { EwayBillBody, EwayFileQuery, IrnBody } from "@digitalbahi/contracts";
 import {
   buildEInvoice,
   buildEwayBill,
@@ -13,8 +13,8 @@ import {
   type EDocument,
   type EwayTransport,
   type ZeroRatedType,
-} from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";

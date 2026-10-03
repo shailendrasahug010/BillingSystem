@@ -162,7 +162,12 @@ export const InvoiceListQuery = PageQuery.extend({
   to: IsoDate.optional(),
   status: z.enum(["posted", "cancelled", "all"]).default("all"),
   paymentStatus: z.enum(["unpaid", "partial", "paid", "open", "all"]).default("all"),
+  /** Bills made offline that were held for a manager (needs_review), or those already reviewed. */
+  review: z.enum(["needs_review", "reviewed"]).optional(),
 });
+
+/** Marks a bill held for review as reviewed (what was done about it, optionally). */
+export const InvoiceReviewBody = z.strictObject({ note: z.string().trim().max(500).optional() });
 
 export const PurchaseLineInput = z.strictObject({
   productId: Id,
@@ -409,6 +414,7 @@ export const SearchQuery = z.object({
  * A preset period ("this month") is kept as the preset, a custom one as dates.
  */
 export const REPORT_VIEW_REPORTS = {
+  insights: { permission: "report.view_bi", groups: [], filters: ["period", "compare"] },
   sales: { permission: "report.view_sales", groups: SalesReportQuery.shape.groupBy.unwrap().options, filters: ["period"] },
   collections: { permission: "report.view_collection", groups: CollectionReportQuery.shape.groupBy.unwrap().options, filters: ["period"] },
   purchases: { permission: "report.view_purchase", groups: PurchaseReportQuery.shape.groupBy.unwrap().options, filters: ["period"] },
@@ -416,7 +422,7 @@ export const REPORT_VIEW_REPORTS = {
   profit: { permission: "report.view_profit", groups: ["product", "brand", "category", "customer", "salesperson", "month"], filters: ["period"] },
   pnl: { permission: "report.view_profit", groups: [], filters: ["period"] },
   products: { permission: "report.view_sales", groups: [], filters: ["period", "movement"] },
-} as const satisfies Record<string, { permission: string; groups: readonly string[]; filters: readonly ("period" | "party" | "basis" | "movement")[] }>;
+} as const satisfies Record<string, { permission: string; groups: readonly string[]; filters: readonly ("period" | "party" | "basis" | "movement" | "compare")[] }>;
 
 export type ReportViewReportKey = keyof typeof REPORT_VIEW_REPORTS;
 export const ReportViewReport = z.enum(Object.keys(REPORT_VIEW_REPORTS) as [ReportViewReportKey, ...ReportViewReportKey[]]);
@@ -431,6 +437,8 @@ export const ReportViewSettings = z
     party: z.enum(["customer", "supplier"]).optional(),
     basis: z.enum(["due_date", "invoice_date"]).optional(),
     movement: z.enum(["fast", "slow", "not_moving"]).optional(),
+    /** Insights: compared with the period before, or the same dates a year earlier. */
+    compare: z.enum(["previous", "last_year"]).optional(),
   })
   .refine((s) => s.period !== "custom" || (s.from !== undefined && s.to !== undefined && s.from <= s.to), { message: "A custom period needs from and to", path: ["from"] });
 export type ReportViewSettings = z.infer<typeof ReportViewSettings>;

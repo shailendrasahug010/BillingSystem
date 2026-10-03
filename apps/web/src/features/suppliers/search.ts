@@ -1,4 +1,4 @@
-import { normalizeSearchText } from "@vyapaar/core";
+import { normalizeSearchText } from "@digitalbahi/core";
 import { SUPPLIERS, type Supplier } from "../../data/db";
 
 /** Local supplier search: name, company, code, city, GSTIN or mobile. */

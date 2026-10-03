@@ -1,20 +1,23 @@
 # Single-server deployment: PostgreSQL, a one-shot release job, the API and
 # Caddy serving the web app. Copy .env.example to .env and fill it in first.
 #   docker compose up -d --build
-name: vyapaar
+# The project, database and role names can be set in .env; a server installed
+# before the rename to Digital Bahi keeps its data that way (see HOW-TO-RUN.md,
+# "Servers installed before the rename").
+name: digitalbahi
 
 services:
   postgres:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: vyapaar_owner
+      POSTGRES_USER: ${POSTGRES_USER:-digitalbahi_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: vyapaar
+      POSTGRES_DB: ${POSTGRES_DB:-digitalbahi}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vyapaar_owner -d vyapaar"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-digitalbahi_owner} -d ${POSTGRES_DB:-digitalbahi}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -23,8 +26,8 @@ services:
   migrate:
     build: { context: ., target: migrate }
     environment:
-      MIGRATION_DATABASE_URL: postgres://vyapaar_owner:${POSTGRES_PASSWORD}@postgres:5432/vyapaar
-      APP_DB_ROLE: vyapaar_app
+      MIGRATION_DATABASE_URL: postgres://${POSTGRES_USER:-digitalbahi_owner}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-digitalbahi}
+      APP_DB_ROLE: ${APP_DB_ROLE:-digitalbahi_app}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
     depends_on:
       postgres: { condition: service_healthy }
@@ -35,14 +38,15 @@ services:
     build: { context: ., target: api }
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://vyapaar_app:${APP_DB_PASSWORD}@postgres:5432/vyapaar
-      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?run pnpm --filter @vyapaar/api keys}
-      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?run pnpm --filter @vyapaar/api keys}
-      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?run pnpm --filter @vyapaar/api keys}
+      DATABASE_URL: postgres://${APP_DB_ROLE:-digitalbahi_app}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-digitalbahi}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?run pnpm --filter @digitalbahi/api keys}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?run pnpm --filter @digitalbahi/api keys}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?run pnpm --filter @digitalbahi/api keys}
       OTP_WEBHOOK_URL: ${OTP_WEBHOOK_URL:?set the OTP gateway URL}
       OTP_WEBHOOK_TOKEN: ${OTP_WEBHOOK_TOKEN:-}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
       COOKIE_SECURE: "true"
       CORS_ORIGINS: https://${DOMAIN:-localhost}
       LOG_LEVEL: info

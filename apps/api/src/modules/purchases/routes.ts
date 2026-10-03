@@ -1,4 +1,4 @@
-import { CancelBody, PurchaseBody, PurchaseListQuery } from "@vyapaar/contracts";
+import { CancelBody, PurchaseBody, PurchaseListQuery } from "@digitalbahi/contracts";
 import {
   addDays,
   apportion,
@@ -17,8 +17,8 @@ import {
   type ResolvedTax,
   type TaxCategory,
   type TaxRateRule,
-} from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -26,7 +26,7 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
-import { inSequence, withTenant } from "../../lib/db.js";
+import { inSequence, lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
@@ -84,6 +84,7 @@ export const purchasesModule: ApiModule = async (app, deps) => {
 
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.purchases.id })
           .from(schema.purchases)
@@ -605,6 +606,8 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           entityLabel: p.purchaseNumber ?? p.supplierInvoiceNumber,
           changes: { reason: request.body.reason, grandTotal: p.grandTotal, releasedToAdvance: released },
         });
+        // The daily summaries count what was bought in on its day.
+        await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "purchase.cancelled", aggregateType: "purchase", aggregateId: p.id, payload: {} });
         return { ...(await purchaseDetail(tx, ctx, p.id)), warnings };
       });
     },

@@ -1,4 +1,4 @@
-import { gstinCheckChar } from "@vyapaar/core";
+import { gstinCheckChar } from "@digitalbahi/core";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, createTestApp, hasDatabase, signup, type Session, type TestApp } from "./helpers.js";

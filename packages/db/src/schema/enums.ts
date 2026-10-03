@@ -1,8 +1,8 @@
 import { pgEnum } from "drizzle-orm/pg-core";
-import { ORDER_STATUSES, PAYMENT_METHODS, STOCK_MOVEMENT_TYPES } from "@vyapaar/core";
+import { ORDER_STATUSES, PAYMENT_METHODS, STOCK_MOVEMENT_TYPES } from "@digitalbahi/core";
 
 /**
- * Enum values are shared with @vyapaar/core so the database, API and UI can
+ * Enum values are shared with @digitalbahi/core so the database, API and UI can
  * never disagree about what a status means. Adding a value is a migration
  * (ALTER TYPE ... ADD VALUE); business-configurable lists (expense categories,
  * leave types, customer categories...) are tables, not enums.
@@ -103,3 +103,5 @@ export const gstPeriodStatus = pgEnum("gst_period_status", ["open", "locked", "f
 export const notificationSeverity = pgEnum("notification_severity", ["info", "success", "warning", "critical"]);
 export const jobStatus = pgEnum("job_status", ["queued", "running", "completed", "failed"]);
 export const syncMutationStatus = pgEnum("sync_mutation_status", ["applied", "rejected", "conflict"]);
+/** A bill made offline held for a manager (it broke a rule by the time it reached the server), then marked reviewed. */
+export const invoiceReviewStatus = pgEnum("invoice_review_status", ["needs_review", "reviewed"]);

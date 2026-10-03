@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocaleCode } from "@vyapaar/i18n";
+import type { LocaleCode } from "@digitalbahi/i18n";
 import { Tabs } from "radix-ui";
-import { Mail, MessageCircle, RotateCcw, Send } from "lucide-react";
+import { Mail, MessageSquareText, RotateCcw, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { MessageStatus, showRecipient, useChannels, type MessageRow } from "../../components/messaging/SendDialog";
@@ -15,8 +15,9 @@ import { allowed, WORKSPACE } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { usePaged } from "../../lib/usePaged";
+import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
-type Channel = "whatsapp" | "email";
+type Channel = "whatsapp" | "sms" | "email";
 
 interface Candidate {
   id: string;
@@ -26,11 +27,14 @@ interface Candidate {
   balance: string;
   overdue: string;
   oldestDue: string | null;
+  /** Asked not to get payment reminders (on their page, or by replying STOP). */
+  optedOut: boolean;
 }
 
 /**
- * WhatsApp and email to customers: what was sent (with its status and any
- * error), and payment reminders to customers with a balance.
+ * WhatsApp, SMS and email to customers: what was sent (with its status and
+ * any error; those the automatic reminders sent marked so), and payment
+ * reminders to customers with a balance.
  */
 export function MessagesPage() {
   const { t } = useI18n();
@@ -92,6 +96,7 @@ function SentList() {
             {t("messages.channel")}: {t("common.all")}
           </option>
           <option value="whatsapp">{t("messages.whatsapp")}</option>
+          <option value="sms">{t("messages.sms")}</option>
           <option value="email">{t("messages.email")}</option>
         </Select>
         <Select aria-label={t("messages.kind")} value={kind} onChange={(e) => setKind(e.target.value)} className="md:w-44">
@@ -128,7 +133,7 @@ function SentList() {
         ) : (
           <ul className="divide-y divide-line">
             {list.rows.map((m) => {
-              const Icon = m.channel === "email" ? Mail : MessageCircle;
+              const Icon = m.channel === "email" ? Mail : m.channel === "sms" ? MessageSquareText : WhatsAppIcon;
               const expanded = open === m.id;
               return (
                 <li key={m.id}>
@@ -140,6 +145,11 @@ function SentList() {
                         {" · "}
                         {t(`messages.kinds.${m.kind}`)}
                         {m.documentNumber && <span className="font-mono text-[12.5px]"> {m.documentNumber}</span>}
+                        {m.automatic && (
+                          <Badge tone="accent" className="ml-2 align-middle">
+                            {t("messages.automatic")}
+                          </Badge>
+                        )}
                       </span>
                       <span className="block truncate text-[12.5px] text-ink-3">
                         {showRecipient(m.recipient)} · {dateTime(m.createdAt)}
@@ -188,7 +198,7 @@ function Reminders() {
   const [error, setError] = useState<unknown>(null);
   const rows = useMemo(() => (q.data ?? []).filter((c) => !onlyOverdue || Number(c.overdue) > 0), [q.data, onlyOverdue]);
   const contact = (c: Candidate) => (channel === "email" ? c.email : c.mobile);
-  const sendable = rows.filter((c) => contact(c));
+  const sendable = rows.filter((c) => contact(c) && !c.optedOut);
   const chosen = sendable.filter((c) => picked.has(c.id));
   const ready = channels.data?.[channel].ready ?? false;
 
@@ -197,7 +207,9 @@ function Reminders() {
     setError(null);
     try {
       const res = await api.post<{ queued: number; skipped: Array<{ reason: string }> }>("/messages/reminders", { channel, customerIds: chosen.map((c) => c.id), locale: lang });
-      toast({ tone: "success", title: t("messages.remindersQueued", { count: res.queued }), ...(res.skipped.length ? { body: t("messages.skipped", { count: res.skipped.length }) } : {}) });
+      const optedOut = res.skipped.filter((s) => s.reason === "opted_out").length;
+      const skipped = [optedOut ? t("messages.skippedOptedOut", { count: optedOut }) : "", res.skipped.length > optedOut ? t("messages.skipped", { count: res.skipped.length - optedOut }) : ""].filter(Boolean).join(" · ");
+      toast({ tone: "success", title: t("messages.remindersQueued", { count: res.queued }), ...(skipped ? { body: skipped } : {}) });
       setPicked(new Set());
       setTimeout(() => void qc.invalidateQueries({ queryKey: ["messages"] }), 1000);
     } catch (e) {
@@ -217,6 +229,7 @@ function Reminders() {
           onChange={setChannel}
           options={[
             { value: "whatsapp", label: t("messages.whatsapp") },
+            { value: "sms", label: t("messages.sms") },
             { value: "email", label: t("messages.email") },
           ]}
         />
@@ -264,13 +277,14 @@ function Reminders() {
               <tbody className="divide-y divide-line">
                 {rows.map((c) => {
                   const to = contact(c);
+                  const can = Boolean(to) && !c.optedOut;
                   return (
-                    <tr key={c.id} className={cn(!to && "text-ink-3")}>
+                    <tr key={c.id} className={cn(!can && "text-ink-3")}>
                       <td className="px-3 py-2">
                         <Checkbox
                           label={<span className="sr-only">{c.name}</span>}
-                          disabled={!to}
-                          checked={picked.has(c.id) && Boolean(to)}
+                          disabled={!can}
+                          checked={picked.has(c.id) && can}
                           onChange={(v) =>
                             setPicked((s) => {
                               const next = new Set(s);
@@ -281,7 +295,14 @@ function Reminders() {
                           }
                         />
                       </td>
-                      <td className="px-3 py-2 font-medium text-ink">{c.name}</td>
+                      <td className="px-3 py-2 font-medium text-ink">
+                        {c.name}
+                        {c.optedOut && (
+                          <Badge tone="neutral" className="ml-2 align-middle">
+                            {t("messages.optedOut")}
+                          </Badge>
+                        )}
+                      </td>
                       <td className="num px-3 py-2 text-right">{money(c.balance)}</td>
                       <td className={cn("num px-3 py-2 text-right", Number(c.overdue) > 0 && "text-danger")}>{Number(c.overdue) > 0 ? money(c.overdue) : "—"}</td>
                       <td className="px-3 py-2">{c.oldestDue ? date(c.oldestDue) : "—"}</td>

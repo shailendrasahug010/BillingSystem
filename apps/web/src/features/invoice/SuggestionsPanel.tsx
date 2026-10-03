@@ -1,15 +1,15 @@
-import type { ReorderRow, Suggestion, SuggestionGroup, SuggestionReason } from "@vyapaar/core";
-import { CircleQuestionMark, Plus, Sparkles } from "lucide-react";
+import type { ReorderRow, Suggestion, SuggestionGroup, SuggestionReason } from "@digitalbahi/core";
+import { ChevronDown, ChevronUp, CircleQuestionMark, Plus, Sparkles } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useShortcuts } from "../../app/shortcuts";
 import { Badge } from "../../components/ui/Badge";
 import { Kbd } from "../../components/ui/misc";
 import { productById, TODAY } from "../../data/db";
 import { cn } from "../../lib/cn";
-import { daysBetween } from "@vyapaar/core";
-import type { Translate } from "@vyapaar/i18n";
+import { daysBetween } from "@digitalbahi/core";
+import type { Translate } from "@digitalbahi/i18n";
 
 type Tab = "all" | SuggestionGroup;
 
@@ -28,25 +28,40 @@ export function reasonText(t: Translate, reason: SuggestionReason, locale: strin
 
 const reasonTone = (code: SuggestionReason["code"]) =>
   code === "overdue" || code === "out_of_stock" ? "danger" : code === "due" || code === "low_stock" || code === "lapsed" ? "warn" : "accent";
+const dotClass = (code: SuggestionReason["code"]) => (reasonTone(code) === "danger" ? "bg-danger" : reasonTone(code) === "warn" ? "bg-warn" : "bg-accent");
+
+/** How many suggestions the one-row strip offers (it scrolls sideways). */
+const STRIP_MAX = 12;
 
 /**
  * Smart suggestions. Everything here is a recommendation with its reason on
- * screen; nothing is added until the user clicks (or presses Alt+1…9).
+ * screen; nothing is added until the user clicks a suggestion (anywhere on
+ * it) or presses Alt+1…9. Once the bill has lines they fold into one row of
+ * chips, so the bill keeps the room; "All" opens the cards again.
  */
 export function SuggestionsPanel({
   customerName,
   suggestions,
   reorder,
   onAdd,
+  onShown,
   hasCustomer,
   variant = "desktop",
+  strip = false,
+  onStrip,
 }: {
   customerName: string | null;
   suggestions: Suggestion[];
   reorder: ReorderRow[];
   onAdd(productId: string, qty: number): void;
+  /** The suggestions on screen, each time they change (for measuring whether suggestions help). */
+  onShown?(visible: Suggestion[]): void;
   hasCustomer: boolean;
   variant?: "desktop" | "mobile";
+  /** One row of chips instead of the cards. */
+  strip?: boolean;
+  /** Switches between the row of chips (true) and the cards (false). */
+  onStrip?(strip: boolean): void;
 }) {
   const { t, locale, date } = useI18n();
   const [tab, setTab] = useState<Tab>("all");
@@ -58,7 +73,15 @@ export function SuggestionsPanel({
     return c;
   }, [suggestions]);
 
-  const visible = (tab === "all" ? suggestions : suggestions.filter((s) => s.group === tab)).slice(0, variant === "mobile" ? 12 : 9);
+  const visible = strip ? suggestions.slice(0, STRIP_MAX) : (tab === "all" ? suggestions : suggestions.filter((s) => s.group === tab)).slice(0, variant === "mobile" ? 12 : 9);
+  // The suggestions are on screen unless the reorder tab shows its table instead.
+  const cardsShown = hasCustomer && (strip || !(tab === "reorder" && tableView && variant === "desktop"));
+  const shownKey = cardsShown ? visible.map((s) => s.productId).join(",") : "";
+  useEffect(() => {
+    if (shownKey) onShown?.(visible);
+    // Only when what is on screen changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownKey]);
 
   useShortcuts(
     Array.from({ length: 9 }, (_, i) => ({
@@ -74,11 +97,57 @@ export function SuggestionsPanel({
   );
 
   if (!hasCustomer) {
+    if (strip) return null;
     return (
       <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-dashed border-line-strong bg-surface px-4 py-4 text-[13.5px] text-ink-3">
         <Sparkles size={18} className="shrink-0 text-marigold" />
         {t("suggestions.pickCustomer")}
       </div>
+    );
+  }
+
+  const qtyOf = (s: Suggestion) => s.suggestedQty?.toNumber() ?? productById.get(s.productId)?.caseSize ?? 1;
+
+  if (strip) {
+    if (suggestions.length === 0) return null;
+    return (
+      <section className="flex items-center gap-2 rounded-[var(--radius-card)] border border-line bg-surface py-1.5 pr-1.5 pl-3 shadow-card" aria-labelledby="sugg-title">
+        <h2 id="sugg-title" className="flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-ink">
+          <Sparkles size={15} className="text-marigold" aria-hidden />
+          <span className={cn(variant === "mobile" && "sr-only")}>{t("suggestions.title")}</span>
+        </h2>
+        <ul className="scroll-x flex min-w-0 flex-1 gap-1.5 py-0.5">
+          {visible.map((s) => {
+            const p = productById.get(s.productId)!;
+            const qty = qtyOf(s);
+            const main = s.reasons[0]!;
+            return (
+              <li key={s.productId} className="shrink-0">
+                <button
+                  type="button"
+                  onClick={() => onAdd(s.productId, qty)}
+                  title={reasonText(t, main, locale)}
+                  aria-label={`${t("suggestions.add")} ${qty} ${p.name}`}
+                  className="press flex h-9 max-w-[15rem] items-center gap-1.5 rounded-full border border-line bg-surface-2/60 pr-1 pl-2.5 text-[13px] text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                >
+                  <span className={cn("size-1.5 shrink-0 rounded-full", dotClass(main.code))} aria-hidden />
+                  <span className="truncate font-medium">{locale === "hi" ? p.nameHi : p.name}</span>
+                  <span className="num inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full bg-accent-soft px-2 text-[12px] font-semibold text-accent-ink" aria-hidden>
+                    <Plus size={12} />
+                    {qty}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {onStrip && (
+          <button type="button" onClick={() => onStrip(false)} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-[12.5px] font-medium text-accent hover:bg-accent-soft">
+            {t("suggestions.showAll", { count: suggestions.length })}
+            <ChevronDown size={14} aria-hidden />
+          </button>
+        )}
+      </section>
     );
   }
 
@@ -94,11 +163,19 @@ export function SuggestionsPanel({
           </h2>
           <p className="text-[12.5px] text-ink-3">{t("suggestions.subtitle", { name: customerName ?? "" })}</p>
         </div>
-        {variant === "desktop" && tab === "reorder" && reorder.length > 0 && (
-          <button type="button" onClick={() => setTableView((v) => !v)} className="text-[12.5px] font-medium text-accent hover:underline">
-            {tableView ? t("suggestions.title") : t("suggestions.reorder.title")}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {variant === "desktop" && tab === "reorder" && reorder.length > 0 && (
+            <button type="button" onClick={() => setTableView((v) => !v)} className="text-[12.5px] font-medium text-accent hover:underline">
+              {tableView ? t("suggestions.title") : t("suggestions.reorder.title")}
+            </button>
+          )}
+          {onStrip && (
+            <button type="button" onClick={() => onStrip(true)} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent hover:underline">
+              {t("suggestions.showLess")}
+              <ChevronUp size={14} aria-hidden />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="scroll-x mt-2.5 border-b border-line px-2">
@@ -140,7 +217,7 @@ export function SuggestionsPanel({
               {reorder.map((row) => {
                 const p = productById.get(row.productId)!;
                 return (
-                  <tr key={row.productId} className="border-t border-line">
+                  <tr key={row.productId} className="cursor-pointer border-t border-line hover:bg-surface-2" onClick={() => onAdd(row.productId, row.suggestedQty.toNumber())}>
                     <td className="px-2 py-2 text-ink">{locale === "hi" ? p.nameHi : p.name}</td>
                     <td className="px-2 py-2 text-right">{row.lastQty.toString()}</td>
                     <td className="px-2 py-2 text-ink-2">
@@ -151,7 +228,8 @@ export function SuggestionsPanel({
                       <Badge tone={row.status === "overdue" ? "danger" : row.status === "due" ? "warn" : "neutral"}>{t(`suggestions.reorder.status.${row.status}`)}</Badge>
                     </td>
                     <td className="px-2 py-2 text-right">
-                      <button type="button" onClick={() => onAdd(row.productId, row.suggestedQty.toNumber())} className="inline-flex h-7 items-center gap-1 rounded-md bg-accent-soft px-2 text-[12px] font-semibold text-accent-ink">
+                      {/* Its click reaches the row, which adds the product. */}
+                      <button type="button" className="inline-flex h-7 items-center gap-1 rounded-md bg-accent-soft px-2 text-[12px] font-semibold text-accent-ink" aria-label={`${t("suggestions.add")} ${row.suggestedQty.toString()} ${p.name}`}>
                         <Plus size={13} /> {t("suggestions.add")}
                       </button>
                     </td>
@@ -168,18 +246,25 @@ export function SuggestionsPanel({
           {visible.map((s, i) => {
             const p = productById.get(s.productId)!;
             // No purchase history for this product (e.g. "bought together"): start with one case.
-            const qty = s.suggestedQty?.toNumber() ?? p.caseSize;
+            const qty = qtyOf(s);
             const main = s.reasons[0]!;
             const flags = s.reasons.filter((r) => r.code === "out_of_stock" || r.code === "low_stock");
             return (
-              <li key={s.productId} className="group flex items-center gap-3 rounded-xl border border-transparent px-2.5 py-2 hover:border-line hover:bg-surface-2">
-                <div className="min-w-0 flex-1">
+              <li key={s.productId} className="group relative flex items-center gap-3 rounded-xl border border-transparent px-2.5 py-2 hover:border-line hover:bg-surface-2">
+                {/* The whole card adds the product: a button under its text (the "why" button sits above it). */}
+                <button
+                  type="button"
+                  onClick={() => onAdd(s.productId, qty)}
+                  className="absolute inset-0 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:outline-offset-0"
+                  aria-label={`${t("suggestions.add")} ${qty} ${p.name}`}
+                />
+                <div className="pointer-events-none relative min-w-0 flex-1">
                   <p className="truncate text-[13.5px] font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
                   <p className="flex items-start gap-1.5 text-[12px] leading-snug text-ink-3">
-                    <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", reasonTone(main.code) === "danger" ? "bg-danger" : reasonTone(main.code) === "warn" ? "bg-warn" : "bg-accent")} aria-hidden />
+                    <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", dotClass(main.code))} aria-hidden />
                     <span className="line-clamp-2">{reasonText(t, main, locale)}</span>
                     <Popover.Root>
-                      <Popover.Trigger className="mt-px inline-flex shrink-0 text-ink-3 hover:text-accent" aria-label={t("suggestions.why")}>
+                      <Popover.Trigger className="pointer-events-auto relative z-10 mt-px inline-flex shrink-0 text-ink-3 hover:text-accent" aria-label={t("suggestions.why")}>
                         <CircleQuestionMark size={13} />
                       </Popover.Trigger>
                       <Popover.Portal>
@@ -212,16 +297,14 @@ export function SuggestionsPanel({
                     </div>
                   )}
                 </div>
-                {variant === "desktop" && i < 9 && <Kbd keys={`alt+${i + 1}`} className="hidden opacity-0 group-hover:opacity-100 xl:inline-flex" />}
-                <button
-                  type="button"
-                  onClick={() => onAdd(s.productId, qty)}
-                  className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-accent-soft px-3 text-[13px] font-semibold text-accent-ink transition-colors hover:bg-accent hover:text-ink-inverse"
-                  aria-label={`${t("suggestions.add")} ${qty} ${p.name}`}
+                {variant === "desktop" && i < 9 && <Kbd keys={`alt+${i + 1}`} className="pointer-events-none relative hidden opacity-0 group-hover:opacity-100 xl:inline-flex" />}
+                <span
+                  className="pointer-events-none relative inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-accent-soft px-3 text-[13px] font-semibold text-accent-ink transition-colors group-hover:bg-accent group-hover:text-ink-inverse"
+                  aria-hidden
                 >
                   <Plus size={14} />
                   <span className="num">{qty}</span>
-                </button>
+                </span>
               </li>
             );
           })}

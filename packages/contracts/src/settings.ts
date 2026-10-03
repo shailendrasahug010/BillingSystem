@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Gstin, Pan, Pincode, StateCode } from "./common.js";
+import { Gstin, Id, Pan, Pincode, StateCode } from "./common.js";
 
 const policy = z.enum(["allow", "warn", "block"]);
 
@@ -16,6 +16,13 @@ export const PtRuleSchema = z.strictObject({
   slabs: z.array(PtSlab).max(12),
   femaleSlabs: z.array(PtSlab).max(12).optional(),
 });
+
+/** The letter a unit is picked with on a bill's line ("B" for BOX): one letter, any script, kept in capitals. */
+const UnitLetter = z
+  .string()
+  .trim()
+  .regex(/^\p{L}$/u)
+  .transform((s) => s.toUpperCase());
 
 /**
  * Every configurable business rule, with its value schema. The API rejects
@@ -34,6 +41,31 @@ export const SETTING_SCHEMAS = {
   "invoice.offline_mode": z.enum(["device_series", "server_only"]),
   /** Printed at the foot of every invoice (return policy, interest, jurisdiction). */
   "invoice.terms": z.string().trim().max(1000),
+  /**
+   * Where customers pay the business, printed on invoices: the bank account and the UPI ID (also as a
+   * QR code for what a bill still owes, on the PDF and on thermal receipts). Empty strings when not set.
+   */
+  "invoice.payment_details": z.strictObject({
+    bankName: z.string().trim().max(100),
+    accountNumber: z.string().trim().regex(/^\d{0,20}$/),
+    ifsc: z.string().trim().toUpperCase().regex(/^([A-Z]{4}0[A-Z0-9]{6})?$/),
+    upiId: z.string().trim().regex(/^([a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{2,63})?$/),
+  }),
+  /**
+   * The letters units are picked with on a bill's line, by unit id: typed after the quantity ("2" then "B":
+   * 2 boxes) or on the line's unit list. A unit not listed has its symbol's first letter (BOX: B, STRIP: S);
+   * a letter two of a product's units share picks the first, and pressed again the next. Null until the
+   * business sets one.
+   */
+  "invoice.unit_letters": z
+    .record(Id, UnitLetter)
+    .refine((letters) => Object.keys(letters).length <= 500, { message: "At most 500 units" })
+    .nullable(),
+  /**
+   * The unit a new line of a bill starts in when the product is sold in it (a strip of 10): a unit id, or
+   * "own" for each product's own unit. Null until the business sets it: STRIP.
+   */
+  "invoice.default_unit": z.union([Id, z.literal("own")]).nullable(),
   "credit.policy": z.strictObject({
     onLimitExceeded: policy,
     onOverdue: policy,
@@ -57,6 +89,8 @@ export const SETTING_SCHEMAS = {
     last_order: z.number().min(0).max(5),
   }),
   "suggestions.window_days": z.number().int().min(30).max(1095),
+  /** The nightly job sets suggestions.weights from what the billing screen offered and what was taken (saving the weights by hand turns it off). */
+  "suggestions.auto_tune": z.boolean(),
   /**
    * Letter of undertaking for exports and supplies to SEZ without payment of IGST (form GST RFD-11):
    * its ARN and the last day it is valid (the end of the financial year); null when the business has none.

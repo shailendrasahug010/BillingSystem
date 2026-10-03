@@ -1,6 +1,6 @@
-import { AdjustmentBody, StockLedgerQuery, StockQuery, TransferBody } from "@vyapaar/contracts";
-import { dec, toQtyString, type StockMovementType } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { AdjustmentBody, StockLedgerQuery, StockQuery, TransferBody } from "@digitalbahi/contracts";
+import { dec, toQtyString, type StockMovementType } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";

@@ -1,5 +1,5 @@
 {
-  "name": "@vyapaar/db",
+  "name": "@digitalbahi/db",
   "version": "0.1.0",
   "private": true,
   "description": "PostgreSQL schema (Drizzle ORM), SQL migrations and reference-data seeds.",
@@ -17,10 +17,11 @@
     "verify": "vitest run --reporter=verbose",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "reference": "tsx scripts/db-docs.ts",
     "setup-app-role": "tsx scripts/setup-app-role.ts"
   },
   "dependencies": {
-    "@vyapaar/core": "workspace:*",
+    "@digitalbahi/core": "workspace:*",
     "drizzle-orm": "0.45.3",
     "pg": "8.23.0"
   },

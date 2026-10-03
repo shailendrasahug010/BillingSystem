@@ -1,6 +1,6 @@
-import { CancelBody, InvoiceBody, InvoiceListQuery, ShippingBillBody } from "@vyapaar/contracts";
-import { addDays, amountInWords, dec, evaluateCredit, taxComponentLabels, toAmountString, toQtyString, toRateString, type DocumentTotals, type OpenDocument } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { CancelBody, InvoiceBody, InvoiceListQuery, InvoiceReviewBody, ShippingBillBody } from "@digitalbahi/contracts";
+import { addDays, amountInWords, dec, evaluateCredit, taxComponentLabels, toAmountString, toQtyString, toRateString, type DocumentTotals, type OpenDocument } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, gt, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -8,14 +8,15 @@ import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { AppDeps, RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { offlineInvoiceNumber } from "../../services/devices.js";
+import { notify } from "../../services/notifications.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
 import { recordPayment, releaseAllocations } from "../../services/payments.js";
-import { prepareSale, type PreparedSale } from "../../services/sales-document.js";
+import { prepareSale, type PreparedSale, type ReviewReason } from "../../services/sales-document.js";
 import { getSetting } from "../../services/settings.js";
 import { postStockMovement } from "../../services/stock.js";
 import { likeContains } from "../catalog/products.js";
@@ -83,8 +84,12 @@ async function openInvoices(tx: Tx, businessId: string, customerId: string): Pro
   return rows.map((r) => ({ id: r.id, number: r.number ?? "", date: r.date, dueDate: r.dueDate ?? r.date, balance: r.balance }));
 }
 
-/** Credit check against the business policy; returns warnings or throws when blocked (never for a bill made offline). */
-function checkCredit(ctx: RequestCtx, sale: PreparedSale, outstanding: string, open: OpenDocument[], offline = false): Warning[] {
+/**
+ * Credit check against the business policy; returns warnings or throws when
+ * blocked. A bill made offline is never refused: `blocked` says it went past
+ * a blocking limit (it is then held for review).
+ */
+function checkCredit(ctx: RequestCtx, sale: PreparedSale, outstanding: string, open: OpenDocument[], offline = false): Warning[] & { blocked?: boolean } {
   const newAmount = sale.totals.grandTotal.minus(sale.totals.amountPaid);
   const result = evaluateCredit({
     creditLimit: sale.customer.creditLimit,
@@ -95,11 +100,12 @@ function checkCredit(ctx: RequestCtx, sale: PreparedSale, outstanding: string, o
     policy: sale.settings["credit.policy"],
   });
   const warnings = result.reasons.map((r) => ({ code: r.code, params: r.params }));
-  if (result.level === "block" && !offline && !can(ctx, "invoice.override_credit_limit")) {
+  const blocked = result.level === "block" && !can(ctx, "invoice.override_credit_limit");
+  if (blocked && !offline) {
     const first = result.reasons[0]!;
     throw new ApiError(409, "CREDIT_BLOCKED", { reason: first.code, ...first.params });
   }
-  return warnings;
+  return Object.assign(warnings, { blocked });
 }
 
 export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
@@ -127,12 +133,15 @@ export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .where(eq(schema.paymentAllocations.invoiceId, id));
   const [biz] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
   const returns = await documentReturns(tx, { invoiceId: id });
+  const [reviewer] = inv.reviewedBy ? await tx.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, inv.reviewedBy)) : [];
   const showCost = can(ctx, "product.view_cost");
   const { businessId: _b, costTotal, ...rest } = inv;
   return {
     ...rest,
     ...(showCost ? { costTotal } : {}),
     returns,
+    /** Who marked it reviewed, for a bill made offline that was held. */
+    reviewerName: reviewer?.name ?? null,
     seller: {
       legalName: biz!.legalName,
       tradeName: biz!.tradeName,
@@ -168,6 +177,7 @@ export async function postInvoice(
   const sale = await prepareSale(tx, ctx, body, today);
   const t = sale.totals;
   const warnings: Warning[] = [];
+  const review: ReviewReason[] = [...sale.review];
 
   // 1. Number (locks the series row: gap-free, never duplicated). A bill made
   //    offline keeps the number its device gave it.
@@ -322,17 +332,23 @@ export async function postInvoice(
       policy,
     );
     if (moved.warning) {
-      warnings.push({
-        code: "insufficient_stock",
-        params: { product: p.productName, available: moved.warning.available.toString(), requested: moved.warning.requested.toString() },
-      });
+      const params = { product: p.productName, available: moved.warning.available.toString(), requested: moved.warning.requested.toString() };
+      warnings.push({ code: "insufficient_stock", params });
+      // Short of stock where the business blocks it: the bill made offline is held.
+      if (policy !== setPolicy) review.push({ code: "stock_short", params });
     }
   }
 
   // 4. Credit policy, with the customer row locked.
-  const [locked] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, c.id)).for("update");
+  // NO KEY UPDATE: it serialises balance changes without clashing with the key-share lock other
+  // bills take on the customer by referring to it (FOR UPDATE would, and two bills deadlock).
+  const [locked] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, c.id)).for("no key update");
   const open = (await openInvoices(tx, ctx.businessId, c.id)).filter((d) => d.id !== id);
-  warnings.push(...checkCredit(ctx, sale, locked!.balance, open, Boolean(body.offline)));
+  const credit = checkCredit(ctx, sale, locked!.balance, open, Boolean(body.offline));
+  warnings.push(...credit);
+  if (credit.blocked) {
+    for (const w of credit) review.push({ code: w.code === "overdue_invoices" ? "credit_overdue" : "credit_limit", params: { customer: c.businessName ?? c.name, ...w.params } });
+  }
 
   // 5. Customer ledger debit.
   await postPartyEntry(tx, {
@@ -413,6 +429,27 @@ export async function postInvoice(
     });
   }
 
+  // 8. Made offline and broke a rule meanwhile: posted, and held for a manager.
+  if (review.length) {
+    await tx.update(schema.invoices).set({ reviewStatus: "needs_review", reviewReasons: review }).where(eq(schema.invoices.id, id));
+    await notify(
+      tx,
+      ctx.businessId,
+      {
+        type: "offline_review",
+        permission: "invoice.review",
+        severity: "warning",
+        titleKey: "notifications.events.offline_review",
+        bodyKey: `notifications.review.${review[0]!.code}`,
+        params: { ...review[0]!.params, number: numbering.number, customer: c.businessName ?? c.name, total: toAmountString(t.grandTotal), reasons: review.length },
+        entityType: "invoice",
+        entityId: id,
+        dedupeKey: `invoice:${id}:review`,
+      },
+      deps.clock.now().toISOString(),
+    );
+  }
+
   await audit(tx, ctx, {
     action: "invoice.posted",
     entityType: "invoice",
@@ -424,6 +461,7 @@ export async function postInvoice(
       ...(sale.rateOverridden ? { rateOverridden: true } : {}),
       ...(warnings.length ? { warnings: warnings.map((w) => w.code) } : {}),
       ...(body.offline ? { savedOffline: body.offline.savedAt ?? true, device: body.offline.deviceId } : {}),
+      ...(review.length ? { heldForReview: review.map((r) => r.code) } : {}),
     },
   });
   await tx.insert(schema.outboxEvents).values({
@@ -495,6 +533,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
 
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.invoices.id })
           .from(schema.invoices)
@@ -520,6 +559,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
     if (q.paymentStatus === "open") where.push(sql`${i.status} = 'posted' and ${i.balanceDue} > 0`);
     else if (q.paymentStatus !== "all") where.push(eq(i.paymentStatus, q.paymentStatus));
     if (q.q) where.push(sql`(${i.invoiceNumber} ilike ${likeContains(q.q)} or ${i.partyName} ilike ${likeContains(q.q)})`);
+    if (q.review) where.push(eq(i.reviewStatus, q.review));
     if (cursor) where.push(sql`(${i.invoiceDate}, ${i.id}) < (${String(cursor.v)}::date, ${cursor.id}::uuid)`);
     const rows = await tenant(ctx, (tx) =>
       tx
@@ -536,6 +576,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
           balanceDue: i.balanceDue,
           paymentStatus: i.paymentStatus,
           status: i.status,
+          reviewStatus: i.reviewStatus,
         })
         .from(i)
         .where(and(...where))
@@ -587,6 +628,73 @@ export const invoicesModule: ApiModule = async (app, deps) => {
    * and any payment becomes an advance. Blocked by the DB when the GST
    * period is locked.
    */
+  /** How many bills made offline are held for review (the Invoices screen's tab). */
+  r.get("/invoices/review-count", { preHandler: guard(deps, "invoice.view"), schema: { tags: ["invoices"] } }, async (request) => {
+    const ctx = request.ctx;
+    return tenant(ctx, async (tx) => {
+      const [row] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.invoices)
+        .where(and(eq(schema.invoices.businessId, ctx.businessId), eq(schema.invoices.reviewStatus, "needs_review")));
+      return { count: row!.n };
+    });
+  });
+
+  /**
+   * Marks a bill held for review as reviewed: the manager accepts it as it is
+   * (after a credit note, a word with the salesperson …). Cancelling it
+   * instead settles the review too. Whoever made the bill is told.
+   */
+  r.post(
+    "/invoices/:id/review",
+    { preHandler: guard(deps, "invoice.review"), schema: { tags: ["invoices"], params: IdParams, body: InvoiceReviewBody } },
+    async (request) => {
+      const ctx = request.ctx;
+      return tenant(ctx, async (tx) => {
+        const [inv] = await tx
+          .select()
+          .from(schema.invoices)
+          .where(and(eq(schema.invoices.id, request.params.id), eq(schema.invoices.businessId, ctx.businessId)))
+          .for("update");
+        if (!inv) throw notFound("invoice");
+        if (inv.reviewStatus !== "needs_review") throw conflict("NOT_HELD_FOR_REVIEW");
+        const now = deps.clock.now().toISOString();
+        const note = request.body.note || null;
+        await tx
+          .update(schema.invoices)
+          .set({ reviewStatus: "reviewed", reviewedBy: ctx.userId, reviewedAt: now, reviewNote: note, updatedBy: ctx.userId })
+          .where(eq(schema.invoices.id, inv.id));
+        await audit(tx, ctx, {
+          action: "invoice.reviewed",
+          entityType: "invoice",
+          entityId: inv.id,
+          entityLabel: inv.invoiceNumber ?? undefined,
+          changes: { reasons: (inv.reviewReasons ?? []).map((x) => x.code), ...(note ? { note } : {}) },
+        });
+        if (inv.postedBy && inv.postedBy !== ctx.userId) {
+          const [reviewer] = await tx.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, ctx.userId));
+          await notify(
+            tx,
+            ctx.businessId,
+            {
+              type: "offline_reviewed",
+              permission: null,
+              userId: inv.postedBy,
+              severity: "success",
+              titleKey: "notifications.events.offline_reviewed",
+              params: { number: inv.invoiceNumber, customer: inv.partyName, reviewer: reviewer?.name ?? null, note },
+              entityType: "invoice",
+              entityId: inv.id,
+              dedupeKey: `invoice:${inv.id}:reviewed`,
+            },
+            now,
+          );
+        }
+        return invoiceDetail(tx, ctx, inv.id);
+      });
+    },
+  );
+
   r.post(
     "/invoices/:id/cancel",
     { preHandler: guard(deps, "invoice.cancel"), schema: { tags: ["invoices"], params: IdParams, body: CancelBody } },
@@ -643,6 +751,8 @@ export const invoicesModule: ApiModule = async (app, deps) => {
             amountPaid: "0",
             balanceDue: "0",
             paymentStatus: "unpaid",
+            // Cancelling a bill held for review settles the review.
+            ...(inv.reviewStatus === "needs_review" ? { reviewStatus: "reviewed" as const, reviewedBy: ctx.userId, reviewedAt: now, reviewNote: request.body.reason } : {}),
             version: inv.version + 1,
             updatedBy: ctx.userId,
           })

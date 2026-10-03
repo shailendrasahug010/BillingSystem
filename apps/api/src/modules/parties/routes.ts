@@ -9,9 +9,9 @@ import {
   SupplierBody,
   SupplierListQuery,
   SupplierPatch,
-} from "@vyapaar/contracts";
-import { dec, financialYearOf, normalizeIndianMobile, stateCodeFromGstin, validateGstin, validatePan } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+} from "@digitalbahi/contracts";
+import { dec, financialYearOf, normalizeIndianMobile, stateCodeFromGstin, validateGstin, validatePan } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -19,13 +19,14 @@ import { z } from "zod";
 import { guard } from "../../lib/access.js";
 import { audit, diff } from "../../lib/audit.js";
 import type { AppDeps, RequestCtx } from "../../lib/context.js";
-import { withTenant } from "../../lib/db.js";
+import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextMasterCode } from "../../services/numbering.js";
 import { assertOwned } from "../../services/owned.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
 import { likeContains } from "../catalog/products.js";
+import { notify } from "../../services/notifications.js";
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
@@ -141,6 +142,155 @@ async function partyLedger(tx: Tx, ctx: RequestCtx, kind: PartyKind, id: string,
   };
 }
 
+/** The same value for an edit: empty, null and missing alike, and numbers however written. */
+function sameValue(a: unknown, b: unknown): boolean {
+  const text = (v: unknown) => (v === undefined || v === null ? "" : String(v));
+  const [x, y] = [text(a), text(b)];
+  if (x === y) return true;
+  return x !== "" && y !== "" && Number.isFinite(Number(x)) && Number.isFinite(Number(y)) && Number(x) === Number(y);
+}
+
+/**
+ * A customer edit made offline on a version that has changed since: each
+ * field the device changed is applied when no one else changed it (the
+ * server still has the value the device saw), skipped when it already has the
+ * new value, and otherwise goes to the later of the two changes (the other
+ * change's time from the audit log). Returns what to apply, the fields kept
+ * as they are (a later change stands) and those whose value this edit
+ * replaces, with who had set it.
+ */
+async function mergeOfflineEdit(tx: Tx, ctx: RequestCtx, current: Record<string, unknown> & { id: string }, patch: Record<string, unknown>, offline: { base: Record<string, unknown>; madeAt: string }) {
+  const apply: Record<string, unknown> = {};
+  const kept: Array<{ field: string }> = [];
+  const overwritten: Array<{ field: string; userId: string | null }> = [];
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === undefined || sameValue(current[field], value)) continue;
+    if (field in offline.base && sameValue(current[field], offline.base[field])) {
+      apply[field] = value;
+      continue;
+    }
+    const [last] = (
+      await tx.execute<{ created_at: string; user_id: string | null }>(sql`
+        select created_at, user_id from audit_logs
+        where business_id = ${ctx.businessId} and entity_type = 'customer' and entity_id = ${current.id}
+          and action = 'customer.updated' and changes ? ${field}
+        order by id desc limit 1`)
+    ).rows;
+    if (!last || Date.parse(offline.madeAt) >= new Date(last.created_at).getTime()) {
+      apply[field] = value;
+      overwritten.push({ field, userId: last?.user_id ?? null });
+    } else {
+      kept.push({ field });
+    }
+  }
+  // The PAN goes with the GSTIN it was taken from.
+  if (kept.some((k) => k.field === "gstin")) delete apply.pan;
+  return { patch: apply, kept, overwritten };
+}
+
+type CustomerRowDb = {
+  id: string;
+  code: string;
+  name: string;
+  business_name: string | null;
+  customer_type: string;
+  mobile: string | null;
+  city: string | null;
+  gstin: string | null;
+  balance: string;
+  credit_limit: string | null;
+  credit_days: number;
+  route_id: string | null;
+  state_code: string;
+  address_line1: string | null;
+  pincode: string | null;
+  price_level_id: string | null;
+  category_id: string | null;
+  is_active: boolean;
+  version: number;
+  created_at: string;
+  overdue: string;
+  gst_registration: string;
+  message_locale: string | null;
+  reminders_opt_out: boolean;
+  reminders_opt_out_at: string | null;
+  reminders_opt_out_by: string | null;
+};
+
+/**
+ * Customers as the list (and the device's copy) shows them, with what is
+ * overdue on `today`. `rest` is the WHERE condition on `c`, with any ORDER BY
+ * and LIMIT after it.
+ */
+export async function customerRows(tx: Tx, today: string, rest: SQL) {
+  const rows = (
+    await tx.execute<CustomerRowDb>(sql`
+      select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
+             c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
+             c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue,
+             c.message_locale, c.reminders_opt_out, c.reminders_opt_out_at, c.reminders_opt_out_by
+      from customers c
+      left join lateral (
+        select sum(i.balance_due) as amount from invoices i
+        where i.customer_id = c.id and i.status = 'posted' and i.balance_due > 0 and i.due_date < ${today}
+      ) od on true
+      where ${rest}`)
+  ).rows;
+  return rows.map((c) => ({
+    id: c.id,
+    code: c.code,
+    name: c.name,
+    businessName: c.business_name,
+    customerType: c.customer_type,
+    /** regular, consumer, sez, overseas…: exports and supplies to SEZ are billed differently. */
+    gstRegistration: c.gst_registration,
+    mobile: c.mobile,
+    city: c.city,
+    gstin: c.gstin,
+    balance: c.balance,
+    overdue: c.overdue,
+    creditLimit: c.credit_limit,
+    creditDays: c.credit_days,
+    routeId: c.route_id,
+    stateCode: c.state_code,
+    addressLine1: c.address_line1,
+    pincode: c.pincode,
+    priceLevelId: c.price_level_id,
+    categoryId: c.category_id,
+    isActive: c.is_active,
+    /** The language messages to them go in (null: the business's), and whether they stopped payment reminders (when, and how: staff or a STOP reply). */
+    messageLocale: c.message_locale,
+    remindersOptOut: c.reminders_opt_out,
+    remindersOptOutAt: c.reminders_opt_out_at ? new Date(c.reminders_opt_out_at).toISOString() : null,
+    remindersOptOutBy: c.reminders_opt_out_by,
+    /** For If-Match on edits (an edit made offline is checked against it). */
+    version: c.version,
+    createdAt: new Date(c.created_at).toISOString(),
+  }));
+}
+
+/** Suppliers as the list (and the device's copy) shows them. */
+export function supplierRows(tx: Tx, where: SQL | undefined) {
+  const s = schema.suppliers;
+  return tx
+    .select({
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      companyName: s.companyName,
+      mobile: s.mobile,
+      city: s.city,
+      gstin: s.gstin,
+      stateCode: s.stateCode,
+      gstRegistration: s.gstRegistration,
+      balance: s.balance,
+      creditDays: s.creditDays,
+      isActive: s.isActive,
+    })
+    .from(s)
+    .where(where);
+}
+
 export const partiesModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
@@ -219,71 +369,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
       recent: { by: sql`c.created_at desc, c.id desc`, after: sql`(c.created_at, c.id) < (${String(cursor?.v)}::timestamptz, ${cursor?.id ?? null}::uuid)` },
     }[q.sort];
     if (cursor) where.push(order.after);
-    const rows = await tenant(ctx, async (tx) =>
-      (
-        await tx.execute<{
-          id: string;
-          code: string;
-          name: string;
-          business_name: string | null;
-          customer_type: string;
-          mobile: string | null;
-          city: string | null;
-          gstin: string | null;
-          balance: string;
-          credit_limit: string | null;
-          credit_days: number;
-          route_id: string | null;
-          state_code: string;
-          address_line1: string | null;
-          pincode: string | null;
-          price_level_id: string | null;
-          category_id: string | null;
-          is_active: boolean;
-          version: number;
-          created_at: string;
-          overdue: string;
-          gst_registration: string;
-        }>(sql`
-          select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
-                 c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
-                 c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue
-          from customers c
-          left join lateral (
-            select sum(i.balance_due) as amount from invoices i
-            where i.customer_id = c.id and i.status = 'posted' and i.balance_due > 0 and i.due_date < ${today}
-          ) od on true
-          where ${sql.join(where, sql` and `)}
-          order by ${order.by}
-          limit ${q.limit + 1}`)
-      ).rows,
-    );
-    const data = rows.map((c) => ({
-      id: c.id,
-      code: c.code,
-      name: c.name,
-      businessName: c.business_name,
-      customerType: c.customer_type,
-      /** regular, consumer, sez, overseas…: exports and supplies to SEZ are billed differently. */
-      gstRegistration: c.gst_registration,
-      mobile: c.mobile,
-      city: c.city,
-      gstin: c.gstin,
-      balance: c.balance,
-      overdue: c.overdue,
-      creditLimit: c.credit_limit,
-      creditDays: c.credit_days,
-      routeId: c.route_id,
-      stateCode: c.state_code,
-      addressLine1: c.address_line1,
-      pincode: c.pincode,
-      priceLevelId: c.price_level_id,
-      categoryId: c.category_id,
-      isActive: c.is_active,
-      /** For If-Match on edits (an edit made offline is checked against it). */
-      version: c.version,
-      createdAt: new Date(c.created_at).toISOString(),
-    }));
+    const data = await tenant(ctx, (tx) => customerRows(tx, today, sql`${sql.join(where, sql` and `)} order by ${order.by} limit ${q.limit + 1}`));
     return page(data, q.limit, (c) => ({ v: q.sort === "name" ? c.name : q.sort === "outstanding" ? c.balance : c.createdAt, id: c.id }));
   });
 
@@ -303,6 +389,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
       if (clientId) {
+        await lockIdempotencyKey(tx, clientId);
         const [existing] = await tx
           .select({ id: schema.customers.id })
           .from(schema.customers)
@@ -329,6 +416,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
           businessId: ctx.businessId,
           openingBalanceDate: today,
           balance: "0",
+          ...(body.remindersOptOut ? { remindersOptOutAt: deps.clock.now().toISOString(), remindersOptOutBy: "staff" } : {}),
           createdBy: ctx.userId,
           updatedBy: ctx.userId,
         })
@@ -359,6 +447,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
   r.patch("/customers/:id", { preHandler: guard(deps, "customer.update"), schema: { tags: ["customers"], params: IdParams, body: CustomerPatch } }, async (request) => {
     const ctx = request.ctx;
     const expectedVersion = request.headers["if-match"] ? Number(request.headers["if-match"]) : null;
+    const { offline, ...input } = request.body;
     return tenant(ctx, async (tx) => {
       const [c] = await tx
         .select()
@@ -366,25 +455,69 @@ export const partiesModule: ApiModule = async (app, deps) => {
         .where(and(eq(schema.customers.id, request.params.id), eq(schema.customers.businessId, ctx.businessId), isNull(schema.customers.deletedAt)))
         .for("update");
       if (!c) throw notFound("customer");
-      if (expectedVersion !== null && expectedVersion !== c.version) throw conflict("VERSION_CONFLICT", { current: c.version });
-      const type = request.body.customerType ?? c.customerType;
-      const gstin = request.body.gstin !== undefined ? request.body.gstin : c.gstin;
+      // Changed since the version the client saw: an online edit is refused; one made offline is merged field by field.
+      const stale = expectedVersion !== null && expectedVersion !== c.version;
+      if (stale && !offline) throw conflict("VERSION_CONFLICT", { current: c.version });
+      const type = input.customerType ?? c.customerType;
+      const gstin = input.gstin !== undefined ? input.gstin : c.gstin;
       if (type === "b2b" && !gstin) throw badRequest("GSTIN_REQUIRED_FOR_B2B", {}, "gstin");
-      const body = await normaliseParty(tx, request.body, c);
-      await assertOwned(tx, schema.priceLevels, ctx.businessId, body.priceLevelId, "priceLevelId");
-      await assertOwned(tx, schema.customerCategories, ctx.businessId, body.categoryId, "categoryId");
-      await assertOwned(tx, schema.salesRoutes, ctx.businessId, body.routeId, "routeId");
-      await assertOwned(tx, schema.employees, ctx.businessId, body.salesRepId, "salesRepId");
-      if (body.code) body.code = body.code.toUpperCase();
+      const normalised = await normaliseParty(tx, input, c);
+      await assertOwned(tx, schema.priceLevels, ctx.businessId, normalised.priceLevelId, "priceLevelId");
+      await assertOwned(tx, schema.customerCategories, ctx.businessId, normalised.categoryId, "categoryId");
+      await assertOwned(tx, schema.salesRoutes, ctx.businessId, normalised.routeId, "routeId");
+      await assertOwned(tx, schema.employees, ctx.businessId, normalised.salesRepId, "salesRepId");
+      if (normalised.code) normalised.code = normalised.code.toUpperCase();
+      const merge = stale && offline ? await mergeOfflineEdit(tx, ctx, c, normalised, offline) : null;
+      const body = merge ? (merge.patch as typeof normalised) : normalised;
       const changes = diff(c, body);
+      // Payment reminders stopped (or started again) by staff: when, and by whom (the audit says who).
+      const optOut =
+        body.remindersOptOut !== undefined && body.remindersOptOut !== c.remindersOptOut
+          ? { remindersOptOutAt: body.remindersOptOut ? deps.clock.now().toISOString() : null, remindersOptOutBy: body.remindersOptOut ? "staff" : null }
+          : {};
       await tx
         .update(schema.customers)
-        .set({ ...body, updatedBy: ctx.userId, version: c.version + 1 })
+        .set({ ...body, ...optOut, updatedBy: ctx.userId, version: c.version + 1 })
         .where(eq(schema.customers.id, c.id));
-      if (Object.keys(changes).length) {
-        await audit(tx, ctx, { action: "customer.updated", entityType: "customer", entityId: c.id, entityLabel: `${c.code} ${body.name ?? c.name}`, changes });
+      if (Object.keys(changes).length || merge?.kept.length) {
+        await audit(tx, ctx, {
+          action: "customer.updated",
+          entityType: "customer",
+          entityId: c.id,
+          entityLabel: `${c.code} ${body.name ?? c.name}`,
+          changes: {
+            ...changes,
+            ...(offline ? { madeOffline: offline.madeAt } : {}),
+            // The device's values that a later change kept out.
+            ...(merge?.kept.length ? { notApplied: Object.fromEntries(merge.kept.map((k) => [k.field, (normalised as Record<string, unknown>)[k.field] ?? null])) } : {}),
+          },
+        });
       }
-      return customerDetail(tx, ctx, c.id);
+      // Whoever's change this one replaced is told.
+      if (merge?.overwritten.length) {
+        const [editor] = await tx.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, ctx.userId));
+        const byUser = new Map<string, string[]>();
+        for (const o of merge.overwritten) if (o.userId && o.userId !== ctx.userId) byUser.set(o.userId, [...(byUser.get(o.userId) ?? []), o.field]);
+        for (const [userId, fields] of byUser) {
+          await notify(
+            tx,
+            ctx.businessId,
+            {
+              type: "customer_edit_replaced",
+              permission: null,
+              userId,
+              severity: "info",
+              titleKey: "notifications.events.customer_edit_replaced",
+              params: { customer: body.businessName ?? c.businessName ?? c.name, fields: fields.join(","), editor: editor?.name ?? null },
+              entityType: "customer",
+              entityId: c.id,
+              dedupeKey: `customer:${c.id}:v${c.version + 1}:${userId}`,
+            },
+            deps.clock.now().toISOString(),
+          );
+        }
+      }
+      return { ...(await customerDetail(tx, ctx, c.id)), ...(merge ? { merge: { kept: merge.kept.map((k) => k.field), overwritten: merge.overwritten.map((o) => o.field) } } : {}) };
     });
   });
 
@@ -470,23 +603,7 @@ export const partiesModule: ApiModule = async (app, deps) => {
     }
     if (cursor) where.push(sql`(${s.name}, ${s.id}) > (${String(cursor.v)}, ${cursor.id}::uuid)`);
     const rows = await tenant(ctx, (tx) =>
-      tx
-        .select({
-          id: s.id,
-          code: s.code,
-          name: s.name,
-          companyName: s.companyName,
-          mobile: s.mobile,
-          city: s.city,
-          gstin: s.gstin,
-          stateCode: s.stateCode,
-          gstRegistration: s.gstRegistration,
-          balance: s.balance,
-          creditDays: s.creditDays,
-          isActive: s.isActive,
-        })
-        .from(s)
-        .where(and(...where))
+      supplierRows(tx, and(...where))
         .orderBy(asc(s.name), asc(s.id))
         .limit(q.limit + 1),
     );

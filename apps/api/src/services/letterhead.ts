@@ -1,4 +1,4 @@
-import { schema } from "@vyapaar/db";
+import { schema } from "@digitalbahi/db";
 import { and, eq, isNull } from "drizzle-orm";
 import type { AppDeps, RequestCtx } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";

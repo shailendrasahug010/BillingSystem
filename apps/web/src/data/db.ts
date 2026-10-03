@@ -1,4 +1,4 @@
-import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig } from "@vyapaar/core";
+import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig } from "@digitalbahi/core";
 import * as mock from "./mock";
 import { LIVE } from "./source";
 import type { Brand, Business, Customer, DayAmount, Invoice, Order, Payment, Product } from "./types";
@@ -53,6 +53,12 @@ export const WORKSPACE = {
   einvoice: false,
   /** Value above which a bill needs an e-way bill. */
   ewayThreshold: 50000,
+  /** How much each kind of suggestion counts on the billing screen (tuned nightly from what was taken; null = the defaults). */
+  suggestionWeights: null as Record<"reorder" | "frequent" | "together" | "last_order", number> | null,
+  /** Letters the business set for units on a bill's lines, by unit id (null, or a unit not in it: its symbol's first letter). */
+  unitLetters: null as Record<string, string> | null,
+  /** The unit new lines start in when the product is sold in it: a unit id, "own" (each product's), or null (STRIP). */
+  defaultUnit: null as string | null,
   /** Letter of undertaking for exports and supplies to SEZ without IGST (null = none). */
   lut: null as { arn: string; validUntil: string } | null,
   /** Terms printed on invoices ("" = none). */

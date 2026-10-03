@@ -6,7 +6,7 @@ export default defineConfig({
   out: "./migrations",
   casing: "snake_case",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/vyapaar",
+    url: process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/digitalbahi",
   },
   strict: true,
   verbose: true,

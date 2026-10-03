@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { createDb, runMigrations, seedReferenceData, setupAppRole } from "@vyapaar/db";
+import { createDb, runMigrations, seedReferenceData, setupAppRole } from "@digitalbahi/db";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import pg from "pg";
 import { buildApp } from "../src/app.js";
@@ -10,13 +10,14 @@ import { ErrorLog } from "../src/lib/errorLog.js";
 import type { ApiModule } from "../src/modules/types.js";
 import { createTokenService } from "../src/lib/security.js";
 import { LogMessenger } from "../src/services/messaging/transport.js";
+import { LogPush } from "../src/services/push.js";
 
 export const ADMIN_URL = process.env.DATABASE_URL;
 export const hasDatabase = Boolean(ADMIN_URL);
 export const TEST_TODAY = "2026-09-24";
 
-const APP_ROLE = "vyapaar_app_test";
-const APP_PASSWORD = "vyapaar_app_test";
+const APP_ROLE = "digitalbahi_app_test";
+const APP_PASSWORD = "digitalbahi_app_test";
 
 function withDatabase(url: string, database: string, user?: { name: string; password: string }): string {
   const u = new URL(url);
@@ -46,8 +47,12 @@ export interface TestApp {
   otp: MemoryOtpSender;
   /** Moves the API clock forward (token expiry, OTP expiry, rotation grace). */
   advance(ms: number): void;
+  /** Sets the business day the API sees (TEST_TODAY unless set; null goes back to it). */
+  setToday(date: string | null): void;
   /** Messages "sent" (recorded, not delivered). */
   messenger: LogMessenger;
+  /** Push messages "sent" to phones (recorded, not delivered). */
+  push: LogPush;
   /** Superuser/owner access to the test database, for assertions that bypass RLS. */
   owner: pg.Pool;
   close(): Promise<void>;
@@ -60,7 +65,7 @@ export interface TestApp {
 /** Options for tests that need them: folders for the error log and web source maps, routes of their own. */
 export async function createTestApp(options: { logDir?: string; webSourceMapsDir?: string; extraModules?: ApiModule[] } = {}): Promise<TestApp> {
   if (!ADMIN_URL) throw new Error("DATABASE_URL is required for API tests");
-  const dbName = `vyapaar_api_${Date.now()}_${randomBytes(3).toString("hex")}`;
+  const dbName = `digitalbahi_api_${Date.now()}_${randomBytes(3).toString("hex")}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
   await admin.connect();
   await admin.query(`create database ${dbName}`);
@@ -85,15 +90,18 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
   const { db, pool } = createDb(config.databaseUrl, { max: 8 });
   const otp = new MemoryOtpSender();
   const messenger = new LogMessenger();
+  const push = new LogPush();
   let offsetMs = 0;
+  let today: string | null = null;
   const app = await buildApp({
     config,
     db,
     tokens: await createTokenService(config),
     otp,
-    clock: { now: () => new Date(Date.now() + offsetMs), today: () => TEST_TODAY },
+    clock: { now: () => new Date(Date.now() + offsetMs), today: () => today ?? TEST_TODAY },
     cipher: createFieldCipher(undefined, "test"),
     messenger,
+    push,
     errors: new ErrorLog({ ...config.errorLog, dir: options.logDir ?? null, webSourceMapsDir: options.webSourceMapsDir ?? null }),
   }, { extraModules: options.extraModules ?? [] });
   await app.ready();
@@ -103,9 +111,13 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
     app,
     otp,
     messenger,
+    push,
     owner,
     advance(ms) {
       offsetMs += ms;
+    },
+    setToday(date) {
+      today = date;
     },
     async close() {
       await app.close();
@@ -193,7 +205,7 @@ export async function signup(
   if (res.status !== 201) throw new Error(`signup failed: ${JSON.stringify(res.body)}`);
   return {
     token: res.body.accessToken,
-    refreshCookie: res.cookies.find((c) => c.name === "vy_rt")!.value,
+    refreshCookie: res.cookies.find((c) => c.name === "db_rt")!.value,
     userId: res.body.user.id,
     businessId: res.body.business.id,
     mobile,

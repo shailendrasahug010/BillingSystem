@@ -1,6 +1,6 @@
-import { DeviceBody } from "@vyapaar/contracts";
-import { financialYearOf } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { DeviceBody } from "@digitalbahi/contracts";
+import { financialYearOf } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -25,6 +25,14 @@ const hashSecret = (secret: string) => createHash("sha256").update(secret).diges
  * series for those who bill offline), list, removal, and the check a removed
  * device makes to wipe itself.
  */
+const QueueBody = z.strictObject({
+  waiting: z.number().int().min(0).max(100_000),
+  bills: z.number().int().min(0).max(100_000),
+  refused: z.number().int().min(0).max(100_000),
+  /** When the oldest waiting work was done on the device. */
+  oldestAt: z.iso.datetime({ offset: true }).nullable().optional(),
+});
+
 export const devicesModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
@@ -85,6 +93,11 @@ export const devicesModule: ApiModule = async (app, deps) => {
           lastSyncAt: d.lastSyncAt,
           revokedAt: d.revokedAt,
           wipedAt: d.wipedAt,
+          queueWaiting: d.queueWaiting,
+          queueBills: d.queueBills,
+          queueRefused: d.queueRefused,
+          queueOldestAt: d.queueOldestAt,
+          queueReportedAt: d.queueReportedAt,
           offlineBills: sql<number>`(select count(*)::int from invoices i where i.device_id = "devices"."id")`,
         })
         .from(d)
@@ -94,6 +107,26 @@ export const devicesModule: ApiModule = async (app, deps) => {
       return { data: rows };
     }),
   );
+
+  /**
+   * What waits on the device to be sent (it reports while online, after each
+   * sync and when its waiting work changes): shown in Settings → Devices and
+   * watched by the "devices with work not sent" reminder.
+   */
+  r.put("/devices/:id/queue", { preHandler: guard(deps), schema: { tags: ["sync"], params: IdParams, body: QueueBody } }, async (request, reply) => {
+    const ctx = request.ctx;
+    await tenant(ctx, async (tx) => {
+      const d = schema.devices;
+      const b = request.body;
+      const [device] = await tx
+        .update(d)
+        .set({ queueWaiting: b.waiting, queueBills: b.bills, queueRefused: b.refused, queueOldestAt: b.oldestAt ?? null, queueReportedAt: sql`now()`, lastSeenAt: sql`now()` })
+        .where(and(eq(d.id, request.params.id), eq(d.businessId, ctx.businessId), eq(d.userId, ctx.userId), isNull(d.revokedAt)))
+        .returning({ id: d.id });
+      if (!device) throw notFound("device");
+    });
+    return reply.code(204).send();
+  });
 
   /** A lost or retired device: its unsynced offline bills will be refused, and it wipes its copy the next time it connects. */
   r.post("/devices/:id/revoke", { preHandler: guard(deps, "settings.update"), schema: { tags: ["sync"], params: IdParams } }, async (request) => {

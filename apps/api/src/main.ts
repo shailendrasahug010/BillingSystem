@@ -1,14 +1,19 @@
-import { todayIn } from "@vyapaar/core";
-import { createDb } from "@vyapaar/db";
+import { todayIn } from "@digitalbahi/core";
+import { checkSchema, createDb } from "@digitalbahi/db";
 import { buildApp } from "./app.js";
 import { uuidv7 } from "uuidv7";
 import { createFieldCipher } from "./lib/crypto.js";
 import { ErrorLog } from "./lib/errorLog.js";
+import { rootMessage } from "./lib/errors.js";
 import { loadConfig } from "./config.js";
 import { ConsoleOtpSender, WebhookOtpSender } from "./lib/otp.js";
 import { createTokenService } from "./lib/security.js";
 import { startBackupScheduler } from "./services/backup-schedule.js";
+import { startNightlyScheduler } from "./services/nightly-analytics.js";
+import { startOutboxWorker } from "./services/outbox-worker.js";
+import { startReminderScheduler } from "./services/reminders.js";
 import { LiveMessenger, LogMessenger } from "./services/messaging/transport.js";
+import { pushSender } from "./services/push.js";
 
 const config = loadConfig();
 const errors = new ErrorLog(config.errorLog);
@@ -44,17 +49,47 @@ const app = await buildApp({
   cipher: createFieldCipher(config.dataEncryptionKey, config.env),
   // "log" (development) records messages instead of sending them.
   messenger: config.messaging.driver === "live" ? new LiveMessenger(config.messaging.whatsappApiBase) : new LogMessenger((msg) => app.log.info(`message (not sent): ${msg}`)),
+  // FCM with a service account; "log" (development) records pushes; "off" sends none.
+  push: pushSender(config.push, (msg) => app.log.info(`${msg} (not sent)`)),
   errors,
 });
 if (config.errorLog.dir) app.log.info({ dir: config.errorLog.dir, webSourceMaps: config.errorLog.webSourceMapsDir }, "error log");
 
+// Code started on a database it is ahead of fails on whatever it added ("function … does not exist",
+// "relation … does not exist") on every request and job: say so once, with the fix, and stop.
+const DEPLOY_HINT = 'run "pnpm db:deploy" (HOW-TO-RUN.md, "Steps"; the installed app does it at every start) and start the API again';
+const schemaState = await checkSchema(pool).catch((e: unknown) => {
+  app.log.warn({ err: rootMessage(e) }, "could not check that the database has this version's migrations");
+  return null;
+});
+if (schemaState?.status === "behind" || schemaState?.status === "not_granted") {
+  if (schemaState.status === "behind") {
+    app.log.error({ missing: schemaState.missing }, `the database is behind this version of the API: ${schemaState.missing.length} migration(s) not applied; ${DEPLOY_HINT}`);
+  } else {
+    app.log.error(`this version's database step has not run (the API's database role may not read which migrations are applied); ${DEPLOY_HINT}`);
+  }
+  await app.close();
+  await errors.flush();
+  await pool.end();
+  process.exit(1);
+}
+if (schemaState?.status === "ahead") app.log.warn("the database has migrations this version of the API does not know: an older version started on a newer database");
+
 log = (msg, err) => app.log.warn({ err: err.message }, msg);
 // Automatic backups (emailed on each firm's schedule).
 const stopBackups = startBackupScheduler(app.deps, config.backupSchedulerSeconds, app.log);
+// Purchase history a few seconds after each bill; the nightly rebuild, drift and balance checks.
+const stopOutbox = startOutboxWorker(app.deps, config.outboxWorkerSeconds, app.log);
+const stopNightly = startNightlyScheduler(app.deps, config.nightlyAnalytics.schedulerSeconds, app.log);
+// Daily reminder checks (each rule after its hour, in each firm's time zone).
+const stopReminders = startReminderScheduler(app.deps, config.reminderSchedulerSeconds, app.log);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");
   stopBackups();
+  stopOutbox();
+  stopNightly();
+  stopReminders();
   await app.close();
   await errors.flush();
   await pool.end();

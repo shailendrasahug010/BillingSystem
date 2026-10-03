@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { addDays } from "@vyapaar/core";
+import { addDays } from "@digitalbahi/core";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";

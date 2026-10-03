@@ -1,4 +1,4 @@
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { Building2, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";

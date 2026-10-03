@@ -11,6 +11,7 @@ import { allowed, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { api } from "../../lib/api";
 import { cn } from "../../lib/cn";
+import { useReviewReasonText, type ReviewReason } from "../invoice/InvoiceReview";
 
 interface QueueRow {
   id: string;
@@ -36,6 +37,8 @@ export interface HomeData {
     promises: Array<{ customerId: string; name: string; city: string | null; mobile: string | null; date: string; amount: string | null; balance: string }>;
   };
   expenses?: { month: string; total: string; count: number };
+  /** Bills made offline held for review (for invoice.review), oldest first; absent when none. */
+  review?: { count: number; bills: Array<{ id: string; number: string; date: string; customer: string; total: string; reasons: ReviewReason[] }> };
 }
 
 export function useHome() {
@@ -75,6 +78,39 @@ export function roleHeroFigures(home: HomeData | undefined, t: ReturnType<typeof
   }
   if (!out.length && home.orders?.pending !== undefined) out.push({ label: t("dashboard.kpi.pendingOrders"), value: home.orders.pending, format: count });
   return out.slice(0, 2);
+}
+
+/** Bills made offline that reached the server after a rule changed: what each broke, oldest first. */
+export function ReviewCard({ data }: { data: NonNullable<HomeData["review"]> }) {
+  const { t, money, date } = useI18n();
+  const { navigate } = useRouter();
+  const reasonText = useReviewReasonText();
+  return (
+    <Card>
+      <CardHeader title={t("home.reviewHeld")} subtitle={String(data.count)} />
+      <ul className="px-2 pt-2 pb-3">
+        {data.bills.map((b) => (
+          <li key={b.id}>
+            <button type="button" onClick={() => navigate({ name: "invoice-view", invoiceId: b.id })} className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-surface-2">
+              <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-xl bg-warn-soft text-warn" aria-hidden>
+                <FileText size={15} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-medium text-ink">
+                  <span className="font-mono">{b.number}</span> · {b.customer}
+                </span>
+                <span className="block text-[12.5px] text-ink-3">
+                  {date(b.date)} · {b.reasons[0] ? reasonText(b.reasons[0]) : ""}
+                  {b.reasons.length > 1 && ` ${t("home.moreReasons", { count: b.reasons.length - 1 })}`}
+                </span>
+              </span>
+              <span className="num hidden text-[14px] font-semibold text-ink sm:block">{money(b.total, 0)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
 }
 
 /** Promises to pay by today, not paid since: whom to visit or call first. */

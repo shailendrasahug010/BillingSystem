@@ -23,7 +23,7 @@ function publicFiles(dir = join(here, "public")): string[] {
  */
 function serviceWorker(): Plugin {
   return {
-    name: "vyapaar-service-worker",
+    name: "digitalbahi-service-worker",
     apply: "build",
     generateBundle(_options, bundle) {
       const built = Object.keys(bundle)
@@ -63,9 +63,10 @@ export default defineConfig(({ mode }) => ({
     // The prototype ships as one bundle; production code-splits each module route (React.lazy).
     chunkSizeWarningLimit: 800,
   },
-  // The Excel and PDF readers load only when a file is picked; prepare them at start so the
+  // The Excel and PDF readers load only when a file is picked (the barcode reader when the camera
+  // opens); prepare them at start so the
   // dev server does not reload the page the first time one is used.
-  optimizeDeps: { include: ["read-excel-file/browser", "pdfjs-dist/legacy/build/pdf.mjs"] },
+  optimizeDeps: { include: ["read-excel-file/browser", "pdfjs-dist/legacy/build/pdf.mjs", "barcode-detector/ponyfill"] },
   // Same-origin /api in development too, so the refresh-token cookie behaves as in production.
   server: { port: 5173, proxy: { "/api": { target: process.env.API_URL ?? "http://localhost:3000", changeOrigin: false } } },
 }));

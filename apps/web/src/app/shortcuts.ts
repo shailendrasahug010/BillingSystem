@@ -3,8 +3,9 @@ import { useEffect, useRef } from "react";
 /**
  * Keyboard shortcuts. Bindings use `event.code` (physical key) so they work
  * with Hindi/other keyboard layouts and on macOS where Alt+letter types a
- * symbol. Browser-reserved combos are avoided: Ctrl+P (print) and Ctrl+C
- * (copy) stay with the browser; Purchase and Collection use Alt+P / Alt+C.
+ * symbol. Browser combos stay with the browser (Ctrl+C copies, and Purchase
+ * and Collection use Alt+P / Alt+C), except on the bill being made, where
+ * Ctrl+S saves it and Ctrl+P saves and prints it rather than the screen.
  * Tally-style F-keys are offered as an alternative preset for accountants.
  */
 export interface Shortcut {
@@ -58,6 +59,14 @@ export function useShortcuts(shortcuts: Shortcut[], enabled = true): void {
   }, [enabled]);
 }
 
+/** For aria-keyshortcuts on the button a shortcut presses, e.g. "Control+S" / "Meta+S". */
+export function ariaShortcut(keys: string): string {
+  return keys
+    .split("+")
+    .map((k) => (k === "mod" ? (isMac ? "Meta" : "Control") : k === "alt" ? "Alt" : k === "shift" ? "Shift" : k === "enter" ? "Enter" : k.toUpperCase()))
+    .join("+");
+}
+
 /** Label for display, e.g. "Ctrl K" / "⌘ K". */
 export function shortcutLabel(keys: string): string[] {
   return keys.split("+").map((k) => {
@@ -90,5 +99,8 @@ export const GLOBAL_SHORTCUTS = {
 export const INVOICE_SHORTCUTS = {
   focusProduct: "f2",
   focusCustomer: "f3",
-  save: "mod+enter",
+  save: "mod+s",
+  /** Saves too, as before Ctrl+S did. */
+  saveAlt: "mod+enter",
+  saveAndPrint: "mod+p",
 } as const;

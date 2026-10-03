@@ -1,5 +1,5 @@
-import { allowedTransitions, DEFAULT_ORDER_WORKFLOW, type OrderStatus } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { allowedTransitions, DEFAULT_ORDER_WORKFLOW, type OrderStatus } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { eq } from "drizzle-orm";
 import { audit } from "../lib/audit.js";
 import type { RequestCtx } from "../lib/context.js";
@@ -22,8 +22,14 @@ export async function advanceOrder(tx: Tx, ctx: RequestCtx, orderId: string, pat
     version += 1;
     await tx.update(schema.salesOrders).set({ status: to, version, updatedBy: ctx.userId }).where(eq(schema.salesOrders.id, o.id));
     await tx.insert(schema.statusHistory).values({ businessId: ctx.businessId, entityType: "sales_order", entityId: o.id, fromStatus: status, toStatus: to, note: note ?? null, createdBy: ctx.userId });
+    await orderStatusEvent(tx, ctx.businessId, o.id, status, to);
     await audit(tx, ctx, { action: `sales_order.${to}`, entityType: "sales_order", entityId: o.id, entityLabel: o.orderNumber ?? undefined, changes: { status: [status, to], via: note ?? null } });
     status = to;
   }
   return status;
+}
+
+/** Tells the outbox an order moved on (notifications: to pack, to dispatch). */
+export async function orderStatusEvent(tx: Tx, businessId: string, orderId: string, from: string, to: string): Promise<void> {
+  await tx.insert(schema.outboxEvents).values({ businessId, eventType: "sales_order.status_changed", aggregateType: "sales_order", aggregateId: orderId, payload: { from, to } });
 }

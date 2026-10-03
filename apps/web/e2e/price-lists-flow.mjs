@@ -38,6 +38,19 @@ async function api(method, path, token, body) {
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 const errors = [];
+
+/**
+ * The popup a saved bill opens ("Invoice added successfully"): its number, then on to a new bill,
+ * or to the bill itself with view.
+ */
+async function savedBill(page, { view = false } = {}) {
+  const popup = page.getByRole("dialog", { name: "Invoice added successfully" });
+  await popup.waitFor({ timeout: 20000 });
+  const number = (await popup.innerText()).match(/[A-Z][A-Z0-9]*\/\d\d-\d\d\/\d+/)?.[0] ?? "";
+  await popup.getByRole("button", { name: view ? "View invoice" : "New invoice" }).click();
+  await popup.waitFor({ state: "detached" });
+  return number;
+}
 let signedIn = false;
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(m.text()));
@@ -134,14 +147,16 @@ const bill = async (expectedRate, list, number, boxRate) => {
   await page.getByRole("option", { name: /Parle-G 100g/ }).click();
   const rate = await page.getByLabel("Rate Parle-G 100g").inputValue();
   if (rate !== expectedRate) errors.push(`${list}: rate ${rate}, expected ${expectedRate}`);
-  // By the box: the list's own box rate, or its piece price x 24.
-  await page.getByLabel("Unit Parle-G 100g").selectOption({ label: "BOX (24 PCS)" });
+  // By the box (on the line's unit list): the list's own box rate, or its piece price x 24.
+  await page.getByRole("combobox", { name: "Unit Parle-G 100g" }).selectOption({ label: "B · BOX (24 PCS)" });
+  for (let i = 0; i < 30 && (await page.getByLabel("Rate Parle-G 100g").inputValue()) === rate; i++) await page.waitForTimeout(100);
   const box = await page.getByLabel("Rate Parle-G 100g").inputValue();
   if (box !== boxRate) errors.push(`${list}: box rate ${box}, expected ${boxRate}`);
   await page.getByLabel("Qty Parle-G 100g").fill("2");
   await page.screenshot({ path: `${OUT}/price-lists-bill-${number}.png` });
   await page.keyboard.press("Control+Enter");
-  await page.getByText(`Invoice INV/26-27/0000${number} saved`).first().waitFor({ timeout: 15000 });
+  const saved = await savedBill(page);
+  if (saved !== `INV/26-27/0000${number}`) errors.push(`${list}: saved as ${saved}`);
 };
 await bill("9.5", "Price B", 1, "220");
 await page.screenshot({ path: `${OUT}/price-lists-3-invoice.png` });

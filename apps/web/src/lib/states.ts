@@ -1,4 +1,4 @@
-import { findState, GST_STATES, type GstState } from "@vyapaar/core";
+import { findState, GST_STATES, type GstState } from "@digitalbahi/core";
 
 /** A state's name in the app's language, without its GST code ("Madhya Pradesh"). */
 export function stateName(code: string | null | undefined, locale: string): string {

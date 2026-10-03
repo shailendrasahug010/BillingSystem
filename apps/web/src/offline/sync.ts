@@ -11,10 +11,12 @@ import { isSealed, seal, unseal, type Sealed } from "./vault";
 /**
  * Work done without a connection waits here (on the device, in IndexedDB)
  * until the server takes it: bills, payments, orders, new customers, changes
- * to customers, collectors' visit notes, purchase bills, expenses and
- * returns. Each is sent with its own Idempotency-Key, so a send
- * cut off half-way is simply sent again; the server keeps the number the
- * device gave a bill, and a new customer keeps the id it was billed under.
+ * to customers, collectors' visit notes, salespeople's calls (no order and
+ * why), purchase bills, expenses, returns, discount notes and cancelled bills. Each is sent with its own
+ * Idempotency-Key, so a send cut off half-way is simply sent again; the
+ * server keeps the number the device gave a bill, and a new customer keeps
+ * the id it was billed under. Up to 25 go in one request (POST /sync/push),
+ * so a weak connection needs few round trips.
  */
 interface EntryBase {
   /** Also the Idempotency-Key (and a new customer's id). */
@@ -84,6 +86,8 @@ export interface CustomerEditEntry extends EntryBase {
   body: Record<string, unknown>;
   /** The version the change was made on; null once the person chose to keep theirs over a later change. */
   version: number | null;
+  /** When it was last changed on the device (a change made meanwhile on the server wins only if later). */
+  madeAt?: string;
   /** The customer before and after, to show now and to put back if the change is removed. */
   before: CustomerRow;
   after: CustomerRow;
@@ -142,7 +146,49 @@ export interface ReturnEntry extends EntryBase {
   body: Record<string, unknown>;
 }
 
-export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | PurchaseEntry | ExpenseEntry | ReturnEntry;
+/** A discount or rate difference after a bill (credit note), or a supplier's credit note on a purchase: only the value changes. */
+export interface PriceNoteEntry extends EntryBase {
+  kind: "price-note";
+  side: "sale" | "purchase";
+  /** The bill: its server id, or the key of a bill made on this device and not sent yet. */
+  documentId: string;
+  documentNumber: string;
+  partyId: string;
+  partyName: string;
+  date: string;
+  /** The device's estimate (GST included); the server works out the exact amounts. */
+  estimate: number;
+  body: Record<string, unknown>;
+}
+
+/** A bill cancelled on this device: its goods go back on the shelf and the customer no longer owes it. */
+export interface CancelEntry extends EntryBase {
+  kind: "invoice-cancel";
+  /** The bill: its server id, or the key of a bill made on this device and not sent yet. */
+  documentId: string;
+  documentNumber: string;
+  customerId: string;
+  customerName: string;
+  /** What the bill still owed, taken off the customer's balance here. */
+  amount: number;
+  /** Stock put back on this device (base units). */
+  stock: Array<{ productId: string; qty: number }>;
+  body: { reason: string };
+}
+
+/** A salesperson's call on the beat that left no bill, order or payment: checked in, or no order and why. */
+export interface VisitEntry extends EntryBase {
+  kind: "visit";
+  customerId: string;
+  customerName: string;
+  outcome: "visited" | "no_order";
+  reason: string | null;
+  /** The day of the call. */
+  date: string;
+  body: Record<string, unknown>;
+}
+
+export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | PurchaseEntry | ExpenseEntry | ReturnEntry | PriceNoteEntry | CancelEntry | VisitEntry;
 export type QueuedKind = NonNullable<QueuedEntry["kind"]>;
 export const kindOf = (e: { kind?: QueuedKind }): QueuedKind => e.kind ?? "invoice";
 
@@ -159,6 +205,10 @@ export interface SyncedEntry {
   serverNumber: string;
   serverTotal: number;
   syncedAt: string;
+  /** A bill the server took but held for a manager (it broke a rule by the time it arrived). */
+  held?: boolean;
+  /** A customer change merged with a later one: the fields where the later change stands. */
+  kept?: string[];
 }
 
 export interface OfflineState {
@@ -189,6 +239,39 @@ const syncedListeners = new Set<(count: number) => void>();
 function set(patch: Partial<OfflineState>): void {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
+  if ("entries" in patch || "online" in patch || "offlineMode" in patch) scheduleReport();
+}
+
+let reportTimer: ReturnType<typeof setTimeout> | undefined;
+let lastReport = "";
+
+/**
+ * Tells the server what waits on this device (counts and the oldest time, no
+ * content), so the owner sees it under Settings → Devices and is reminded
+ * when a device keeps work too long. Only while online; a report that would
+ * say the same as the last one is not sent.
+ */
+function scheduleReport(): void {
+  clearTimeout(reportTimer);
+  reportTimer = setTimeout(() => void reportQueue(), 2_000);
+}
+
+async function reportQueue(): Promise<void> {
+  if (!scope || workingOffline()) return;
+  const { userId, businessId } = scope;
+  const device = await loadDevice(userId, businessId);
+  if (!device?.id) return;
+  const pending = state.entries.filter((e) => e.status === "pending");
+  const oldest = state.entries.map((e) => e.savedAt).sort()[0] ?? null;
+  const body = { waiting: pending.length, bills: pending.filter((e) => kindOf(e) === "invoice").length, refused: state.entries.length - pending.length, oldestAt: oldest };
+  const signature = `${device.id}:${JSON.stringify(body)}`;
+  if (signature === lastReport) return;
+  try {
+    await api.put(`/devices/${device.id}/queue`, body);
+    lastReport = signature;
+  } catch {
+    // Not reachable just now: the next change or sync reports again.
+  }
 }
 
 const subscribe = (l: () => void) => {
@@ -295,8 +378,8 @@ function customerOf(e: QueuedEntry): string | null {
   const kind = kindOf(e);
   if (kind === "payment") return (e as PaymentEntry).direction === "in" ? (e as PaymentEntry).partyId : null;
   if (kind === "purchase" || kind === "expense") return null;
-  if (kind === "return") return (e as ReturnEntry).side === "sale" ? (e as ReturnEntry).partyId : null;
-  return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry).customerId;
+  if (kind === "return" || kind === "price-note") return (e as ReturnEntry | PriceNoteEntry).side === "sale" ? (e as ReturnEntry | PriceNoteEntry).partyId : null;
+  return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | CancelEntry | VisitEntry).customerId;
 }
 
 /**
@@ -351,9 +434,23 @@ function applyEffects(e: QueuedEntry, sign: 1 | -1): void {
       if (party) party.balance = (party.balance ?? 0) - sign * r.estimate;
       return;
     }
+    case "price-note": {
+      const n = e as PriceNoteEntry;
+      const party = n.side === "sale" ? customerById.get(n.partyId) : supplierById.get(n.partyId);
+      if (party) party.balance = (party.balance ?? 0) - sign * n.estimate;
+      return;
+    }
+    case "invoice-cancel": {
+      const c = e as CancelEntry;
+      for (const x of c.stock) adjustStock(x.productId, sign * x.qty);
+      const customer = customerById.get(c.customerId);
+      if (customer) customer.balance = (customer.balance ?? 0) - sign * c.amount;
+      return;
+    }
     case "order":
     case "collection-note":
     case "expense":
+    case "visit":
       return;
   }
 }
@@ -385,7 +482,7 @@ export async function queueCustomerChange(customerId: string, patch: Record<stri
   }
   if (pending) {
     const edit = pending as CustomerEditEntry;
-    return queueEntry({ ...edit, customerName: after.businessName ?? after.name, body: { ...edit.body, ...patch }, after });
+    return queueEntry({ ...edit, customerName: after.businessName ?? after.name, body: { ...edit.body, ...patch }, after, madeAt: new Date().toISOString() });
   }
   return queueEntry(make());
 }
@@ -418,73 +515,198 @@ export async function retryEntry(id: string): Promise<void> {
 
 export const retryBill = retryEntry;
 
-/** Sends one entry; returns what the server made of it. */
-async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt">> {
+/**
+ * The record an entry acts on, as the server knows it: a bill made on this
+ * device and sent since is found under the id the server gave it.
+ */
+function resolveTarget(id: string): string {
+  return state.synced.find((x) => x.id === id)?.serverId ?? id;
+}
+
+/** What a sent entry became, from the server's answer. */
+function syncedFrom(e: QueuedEntry, res: Record<string, unknown>): Omit<SyncedEntry, "id" | "syncedAt"> {
+  const text = (k: string) => String(res[k] ?? "");
   switch (kindOf(e)) {
     case "invoice": {
       const bill = e as OutboxEntry;
-      const res = await api.post<{ id: string; invoiceNumber: string; grandTotal: string }>("/invoices", bill.body, { idempotencyKey: bill.id });
-      return { kind: "invoice", number: bill.number, customerName: bill.customerName, total: bill.total, serverId: res.id, serverNumber: res.invoiceNumber, serverTotal: Number(res.grandTotal) };
+      return {
+        kind: "invoice",
+        number: bill.number,
+        customerName: bill.customerName,
+        total: bill.total,
+        serverId: text("id"),
+        serverNumber: text("invoiceNumber"),
+        serverTotal: Number(res.grandTotal),
+        ...(res.reviewStatus === "needs_review" ? { held: true } : {}),
+      };
     }
     case "payment": {
       const p = e as PaymentEntry;
-      const res = await api.post<{ id: string; paymentNumber: string; amount: string }>("/payments", p.body, { idempotencyKey: p.id });
-      return { kind: "payment", number: "", customerName: p.partyName, total: p.amount, serverId: res.id, serverNumber: res.paymentNumber, serverTotal: Number(res.amount) };
+      return { kind: "payment", number: "", customerName: p.partyName, total: p.amount, serverId: text("id"), serverNumber: text("paymentNumber"), serverTotal: Number(res.amount) };
     }
     case "order": {
       const o = e as OrderEntry;
-      const res = await api.post<{ id: string; orderNumber: string; grandTotal: string }>("/sales-orders", o.body, { idempotencyKey: o.id });
-      return { kind: "order", number: "", customerName: o.customerName, total: o.estimate, serverId: res.id, serverNumber: res.orderNumber, serverTotal: Number(res.grandTotal) };
+      return { kind: "order", number: "", customerName: o.customerName, total: o.estimate, serverId: text("id"), serverNumber: text("orderNumber"), serverTotal: Number(res.grandTotal) };
     }
     case "customer": {
       const c = e as CustomerEntry;
-      const res = await api.post<{ id: string; code: string }>("/customers", c.body, { idempotencyKey: c.id });
-      return { kind: "customer", number: "", customerName: c.customerName, total: 0, serverId: res.id, serverNumber: res.code, serverTotal: 0 };
+      return { kind: "customer", number: "", customerName: c.customerName, total: 0, serverId: text("id"), serverNumber: text("code"), serverTotal: 0 };
     }
     case "customer-edit": {
       const c = e as CustomerEditEntry;
-      const path = `/customers/${c.customerId}`;
-      let res: { id: string; code: string };
-      try {
-        res = await api.patch<{ id: string; code: string }>(path, c.body, c.version === null ? {} : { headers: { "if-match": String(c.version) } });
-      } catch (err) {
-        // Changed since: fine if the server already shows this change (it was sent before, the answer lost).
-        if (!(err instanceof ApiError && err.code === "VERSION_CONFLICT")) throw err;
-        const now = await api.get<Record<string, unknown> & { id: string; code: string }>(path);
-        if (!Object.entries(c.body).every(([k, v]) => (now[k] ?? null) === (v ?? null))) throw err;
-        res = now;
-      }
-      return { kind: "customer-edit", number: "", customerName: c.customerName, total: 0, serverId: res.id, serverNumber: res.code, serverTotal: 0 };
+      const merge = res.merge as { kept: string[] } | undefined;
+      return { kind: "customer-edit", number: "", customerName: c.customerName, total: 0, serverId: text("id"), serverNumber: text("code"), serverTotal: 0, ...(merge?.kept.length ? { kept: merge.kept } : {}) };
     }
     case "purchase": {
       const p = e as PurchaseEntry;
-      const res = await api.post<{ id: string; purchaseNumber: string; grandTotal: string }>("/purchases", p.body, { idempotencyKey: p.id });
-      return { kind: "purchase", number: "", customerName: p.supplierName, total: p.total, serverId: res.id, serverNumber: res.purchaseNumber, serverTotal: Number(res.grandTotal) };
+      return { kind: "purchase", number: "", customerName: p.supplierName, total: p.total, serverId: text("id"), serverNumber: text("purchaseNumber"), serverTotal: Number(res.grandTotal) };
     }
     case "expense": {
       const x = e as ExpenseEntry;
-      const res = await api.post<{ id: string; expenseNumber: string; totalAmount: string }>("/expenses", x.body, { idempotencyKey: x.id });
-      return { kind: "expense", number: "", customerName: x.paidTo || x.categoryName, total: x.total, serverId: res.id, serverNumber: res.expenseNumber, serverTotal: Number(res.totalAmount) };
+      return { kind: "expense", number: "", customerName: x.paidTo || x.categoryName, total: x.total, serverId: text("id"), serverNumber: text("expenseNumber"), serverTotal: Number(res.totalAmount) };
     }
     case "return": {
       const r = e as ReturnEntry;
-      const res = await api.post<{ id: string; noteNumber: string; grandTotal: string }>(`/${r.side === "sale" ? "invoices" : "purchases"}/${r.documentId}/returns`, r.body, { idempotencyKey: r.id });
-      return { kind: "return", number: "", customerName: r.partyName, total: r.estimate, serverId: res.id, serverNumber: res.noteNumber, serverTotal: Number(res.grandTotal) };
+      return { kind: "return", number: "", customerName: r.partyName, total: r.estimate, serverId: text("id"), serverNumber: text("noteNumber"), serverTotal: Number(res.grandTotal) };
+    }
+    case "price-note": {
+      const n = e as PriceNoteEntry;
+      return { kind: "price-note", number: "", customerName: n.partyName, total: n.estimate, serverId: text("id"), serverNumber: text("noteNumber"), serverTotal: Number(res.grandTotal) };
+    }
+    case "invoice-cancel": {
+      const c = e as CancelEntry;
+      return { kind: "invoice-cancel", number: "", customerName: c.customerName, total: c.amount, serverId: text("id") || resolveTarget(c.documentId), serverNumber: text("invoiceNumber") || c.documentNumber, serverTotal: 0 };
     }
     case "collection-note": {
       const n = e as CollectionNoteEntry;
-      const res = await api.post<{ id: string }>("/collections/notes", n.body, { idempotencyKey: n.id });
-      return { kind: "collection-note", number: "", customerName: n.customerName, total: n.amount ?? 0, serverId: res.id, serverNumber: "", serverTotal: n.amount ?? 0 };
+      return { kind: "collection-note", number: "", customerName: n.customerName, total: n.amount ?? 0, serverId: text("id"), serverNumber: "", serverTotal: n.amount ?? 0 };
+    }
+    case "visit": {
+      const v = e as VisitEntry;
+      return { kind: "visit", number: "", customerName: v.customerName, total: 0, serverId: text("id"), serverNumber: "", serverTotal: 0 };
     }
   }
 }
 
+/** A cancellation answered "not posted: cancelled": it was done before and the answer lost. */
+const alreadyCancelled = (e: QueuedEntry, status: number, body: unknown) =>
+  kindOf(e) === "invoice-cancel" &&
+  status === 409 &&
+  (body as { error?: { code?: string; params?: { status?: string } } } | null)?.error?.code === "INVOICE_NOT_POSTED" &&
+  (body as { error: { params?: { status?: string } } }).error.params?.status === "cancelled";
+
+/** A customer change and what the device had before it, so a change made meanwhile is merged field by field. */
+function customerEditBody(c: CustomerEditEntry): Record<string, unknown> {
+  if (c.version === null) return c.body;
+  const before = c.before as unknown as Record<string, unknown>;
+  const base = Object.fromEntries(Object.keys(c.body).filter((k) => k in before).map((k) => [k, (before[k] ?? null) as string | number | boolean | null]));
+  return { ...c.body, offline: { base, madeAt: c.madeAt ?? c.savedAt } };
+}
+
+/** Sends one entry on its own; returns what the server made of it. */
+async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt">> {
+  switch (kindOf(e)) {
+    case "invoice":
+      return syncedFrom(e, await api.post("/invoices", (e as OutboxEntry).body, { idempotencyKey: e.id }));
+    case "payment":
+      return syncedFrom(e, await api.post("/payments", (e as PaymentEntry).body, { idempotencyKey: e.id }));
+    case "order":
+      return syncedFrom(e, await api.post("/sales-orders", (e as OrderEntry).body, { idempotencyKey: e.id }));
+    case "customer":
+      return syncedFrom(e, await api.post("/customers", (e as CustomerEntry).body, { idempotencyKey: e.id }));
+    case "customer-edit": {
+      const c = e as CustomerEditEntry;
+      const path = `/customers/${c.customerId}`;
+      try {
+        return syncedFrom(e, await api.patch(path, customerEditBody(c), c.version === null ? {} : { headers: { "if-match": String(c.version) } }));
+      } catch (err) {
+        // Changed since: fine if the server already shows this change (it was sent before, the answer lost).
+        if (!(err instanceof ApiError && err.code === "VERSION_CONFLICT")) throw err;
+        const now = await api.get<Record<string, unknown>>(path);
+        if (!Object.entries(c.body).every(([k, v]) => (now[k] ?? null) === (v ?? null))) throw err;
+        return syncedFrom(e, now);
+      }
+    }
+    case "purchase":
+      return syncedFrom(e, await api.post("/purchases", (e as PurchaseEntry).body, { idempotencyKey: e.id }));
+    case "expense":
+      return syncedFrom(e, await api.post("/expenses", (e as ExpenseEntry).body, { idempotencyKey: e.id }));
+    case "return": {
+      const r = e as ReturnEntry;
+      return syncedFrom(e, await api.post(`/${r.side === "sale" ? "invoices" : "purchases"}/${resolveTarget(r.documentId)}/returns`, r.body, { idempotencyKey: r.id }));
+    }
+    case "price-note": {
+      const n = e as PriceNoteEntry;
+      return syncedFrom(e, await api.post(`/${n.side === "sale" ? "invoices" : "purchases"}/${resolveTarget(n.documentId)}/price-notes`, n.body, { idempotencyKey: n.id }));
+    }
+    case "invoice-cancel": {
+      const c = e as CancelEntry;
+      try {
+        return syncedFrom(e, await api.post(`/invoices/${resolveTarget(c.documentId)}/cancel`, c.body, { idempotencyKey: c.id }));
+      } catch (err) {
+        if (err instanceof ApiError && alreadyCancelled(e, err.status, { error: { code: err.code, params: err.params } })) return syncedFrom(e, {});
+        throw err;
+      }
+    }
+    case "collection-note":
+      return syncedFrom(e, await api.post("/collections/notes", (e as CollectionNoteEntry).body, { idempotencyKey: e.id }));
+    case "visit":
+      return syncedFrom(e, await api.post("/visits", (e as VisitEntry).body, { idempotencyKey: e.id }));
+  }
+}
+
+/** One item of POST /sync/push for an entry (customer changes go on their own: a clash with a later change needs a look first). */
+function pushItem(e: QueuedEntry, inBatch: ReadonlySet<string>): Record<string, unknown> | null {
+  const customer = customerOf(e);
+  // Work for a new customer sent in the same batch waits for it.
+  const after = customer && customer !== e.id && inBatch.has(customer) ? { after: customer } : {};
+  const target = (id: string) => ({ target: inBatch.has(id) ? id : resolveTarget(id) });
+  switch (kindOf(e)) {
+    case "invoice":
+      return { id: e.id, kind: "invoice", ...after, body: (e as OutboxEntry).body };
+    case "payment":
+      return { id: e.id, kind: "payment", ...after, body: (e as PaymentEntry).body };
+    case "order":
+      return { id: e.id, kind: "order", ...after, body: (e as OrderEntry).body };
+    case "customer":
+      return { id: e.id, kind: "customer", body: (e as CustomerEntry).body };
+    case "purchase":
+      return { id: e.id, kind: "purchase", body: (e as PurchaseEntry).body };
+    case "expense":
+      return { id: e.id, kind: "expense", body: (e as ExpenseEntry).body };
+    case "collection-note":
+      return { id: e.id, kind: "collection-note", ...after, body: (e as CollectionNoteEntry).body };
+    case "visit":
+      return { id: e.id, kind: "visit", ...after, body: (e as VisitEntry).body };
+    case "return": {
+      const r = e as ReturnEntry;
+      return { id: e.id, kind: r.side === "sale" ? "sale-return" : "purchase-return", ...target(r.documentId), body: r.body };
+    }
+    case "price-note": {
+      const n = e as PriceNoteEntry;
+      return { id: e.id, kind: n.side === "sale" ? "sale-price-note" : "purchase-price-note", ...target(n.documentId), body: n.body };
+    }
+    case "invoice-cancel": {
+      const c = e as CancelEntry;
+      return { id: e.id, kind: "invoice-cancel", ...target(c.documentId), body: c.body };
+    }
+    case "customer-edit":
+      return null;
+  }
+}
+
+/** Entries sent in one request at most. */
+const BATCH = 25;
+/** The server has no POST /sync/push (an older version): entries go one by one. */
+let batchUnsupported = false;
+
 let running: Promise<number> | null = null;
 
 /**
- * Sends waiting work oldest first. Stops at the first network or server error
- * (tried again later); anything the server refuses is marked and the rest
- * still go, except work for a new customer the server has not taken yet.
+ * Sends waiting work oldest first, up to BATCH in a request. Stops at the
+ * first network or server error (tried again later); anything the server
+ * refuses is marked and the rest still go, except work for a new customer the
+ * server has not taken yet, and work on a bill made here that it refused.
  */
 export function syncNow(): Promise<number> {
   running ??= (async () => {
@@ -493,29 +715,83 @@ export function syncNow(): Promise<number> {
     if (pending.length === 0) return 0;
     set({ syncing: true });
     let done = 0;
-    // Customers the server does not have yet: what is for them waits.
-    const blocked = new Set(state.entries.filter((e) => kindOf(e) === "customer" && e.status === "failed").map((e) => (e as CustomerEntry).customerId));
+    // Customers and bills the server does not have yet (refused): what is for them waits.
+    const blocked = new Set(state.entries.filter((e) => (kindOf(e) === "customer" || kindOf(e) === "invoice") && e.status === "failed").map((e) => e.id));
+    const isBlocked = (e: QueuedEntry) => {
+      const customer = customerOf(e);
+      if (customer && customer !== e.id && blocked.has(customer)) return true;
+      const target = (e as Partial<ReturnEntry | PriceNoteEntry | CancelEntry>).documentId;
+      return Boolean(target && blocked.has(target));
+    };
+    const succeeded = async (e: QueuedEntry, result: Omit<SyncedEntry, "id" | "syncedAt">) => {
+      await idbDelete("outbox", e.id);
+      const history = [{ ...result, id: e.id, syncedAt: new Date().toISOString() }, ...state.synced].slice(0, 30);
+      await saveSynced(history);
+      set({ entries: state.entries.filter((x) => x.id !== e.id), synced: history });
+      done += 1;
+    };
+    /** Refused for good (a 4xx the person must look at): kept, marked; true. Otherwise false: stop and try later. */
+    const refused = async (e: QueuedEntry, error: ApiError) => {
+      if (!(error.status >= 400 && error.status < 500 && ![401, 408, 429].includes(error.status))) return false;
+      const failed = { ...e, status: "failed", error: { status: error.status, code: error.code, params: error.params } } as QueuedEntry;
+      await putEntry(failed);
+      set({ entries: state.entries.map((x) => (x.id === e.id ? failed : x)) });
+      if (kindOf(e) === "customer" || kindOf(e) === "invoice") blocked.add(e.id);
+      return true;
+    };
+    const one = async (e: QueuedEntry): Promise<boolean> => {
+      try {
+        await succeeded(e, await send(e));
+        return true;
+      } catch (err) {
+        return refused(e, err instanceof ApiError ? err : new ApiError(0, "network"));
+      }
+    };
     try {
-      for (const e of pending) {
-        const customer = customerOf(e);
-        if (customer && blocked.has(customer) && kindOf(e) !== "customer") continue;
+      let i = 0;
+      outer: while (i < pending.length) {
+        const e = pending[i]!;
+        if (isBlocked(e)) {
+          i++;
+          continue;
+        }
+        if (batchUnsupported || kindOf(e) === "customer-edit") {
+          i++;
+          if (!(await one(e))) break;
+          continue;
+        }
+        // The next run of entries that can go together.
+        const group: QueuedEntry[] = [];
+        while (i < pending.length && group.length < BATCH && kindOf(pending[i]!) !== "customer-edit") {
+          if (!isBlocked(pending[i]!)) group.push(pending[i]!);
+          i++;
+        }
+        const ids = new Set(group.map((x) => x.id));
+        let results: Array<{ id: string; status: number; body: unknown }>;
         try {
-          const result = await send(e);
-          await idbDelete("outbox", e.id);
-          const history = [{ ...result, id: e.id, syncedAt: new Date().toISOString() }, ...state.synced].slice(0, 30);
-          await saveSynced(history);
-          set({ entries: state.entries.filter((x) => x.id !== e.id), synced: history });
-          done += 1;
+          results = (await api.post<{ results: typeof results }>("/sync/push", { items: group.map((x) => pushItem(x, ids)) })).results;
         } catch (err) {
-          const error = err instanceof ApiError ? err : new ApiError(0, "network");
-          if (error.status >= 400 && error.status < 500 && ![401, 408, 429].includes(error.status)) {
-            const failed = { ...e, status: "failed", error: { status: error.status, code: error.code, params: error.params } } as QueuedEntry;
-            await putEntry(failed);
-            set({ entries: state.entries.map((x) => (x.id === e.id ? failed : x)) });
-            if (kindOf(e) === "customer") blocked.add((e as CustomerEntry).customerId);
+          if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+            // An older server: one by one, from this group on.
+            batchUnsupported = true;
+            i -= group.length;
             continue;
           }
           break;
+        }
+        for (const [k, x] of group.entries()) {
+          const r = results[k];
+          if (!r || r.status === 0) {
+            // Not tried: waits for something refused (stays waiting), or the server stopped the batch.
+            if (results.some((y) => y.status >= 500 || y.status === 429)) break outer;
+            continue;
+          }
+          if ((r.status >= 200 && r.status < 300) || alreadyCancelled(x, r.status, r.body)) {
+            await succeeded(x, syncedFrom(x, (r.body ?? {}) as Record<string, unknown>));
+            continue;
+          }
+          const error = (r.body as { error?: { code?: string; params?: Record<string, string | number>; field?: string } } | null)?.error;
+          if (!(await refused(x, new ApiError(r.status, error?.code ?? "generic", error?.params ?? {}, error?.field)))) break outer;
         }
       }
     } finally {

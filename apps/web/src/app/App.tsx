@@ -1,4 +1,4 @@
-import { translateError } from "@vyapaar/i18n";
+import { translateError } from "@digitalbahi/i18n";
 import { lazy, Suspense, useState } from "react";
 import { ScreenErrorBoundary } from "../components/ErrorBoundary";
 import { AppShell } from "../components/layout/AppShell";
@@ -6,6 +6,8 @@ import { Dialog } from "../components/ui/Dialog";
 import { Kbd, Skeleton } from "../components/ui/misc";
 import { ToastProvider } from "../components/ui/Toast";
 import { AuthLayout, AuthPage } from "../features/auth/AuthPage";
+import { ServerSetup, useNeedsServer } from "../features/auth/ServerSetup";
+import { NativePush } from "../components/NativePush";
 import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
 import { UnlockPage } from "../features/auth/UnlockPage";
@@ -51,9 +53,11 @@ const PackingPage = lazy(() => import("../features/logistics/PackingPage").then(
 const DispatchPage = lazy(() => import("../features/logistics/DispatchPage").then((m) => ({ default: m.DispatchPage })));
 const BackupPage = lazy(() => import("../features/backup/BackupPage").then((m) => ({ default: m.BackupPage })));
 const MessagesPage = lazy(() => import("../features/messages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
+const NotificationsPage = lazy(() => import("../features/notifications/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const AuditLogPage = lazy(() => import("../features/audit/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
 const UsersPage = lazy(() => import("../features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 const OutstandingPage = lazy(() => import("../features/outstanding/OutstandingPage").then((m) => ({ default: m.OutstandingPage })));
+const BeatPage = lazy(() => import("../features/beats/BeatPage").then((m) => ({ default: m.BeatPage })));
 const DesignSystemPage = lazy(() => import("../features/design-system/DesignSystemPage").then((m) => ({ default: m.DesignSystemPage })));
 
 function ScreenLoading() {
@@ -74,13 +78,15 @@ function Screen({ route }: { route: Route }) {
       // key: a fresh draft whenever the entry customer changes
       return <CreateInvoicePage key={route.customerId ?? "new"} {...(route.customerId ? { customerId: route.customerId } : {})} />;
     case "invoice-view":
-      return <InvoiceViewPage invoiceId={route.invoiceId} />;
+      return <InvoiceViewPage invoiceId={route.invoiceId} print={route.print ?? false} />;
     case "customers":
       return <CustomersPage />;
     case "customer":
       return <CustomerProfilePage customerId={route.customerId} />;
     case "outstanding":
       return <OutstandingPage />;
+    case "beat":
+      return <BeatPage />;
     case "products":
       return <ProductsPage />;
     case "settings":
@@ -134,6 +140,8 @@ function Screen({ route }: { route: Route }) {
             return <AuditLogPage />;
           case "messages":
             return <MessagesPage />;
+          case "notifications":
+            return <NotificationsPage />;
           case "backup":
             return <BackupPage />;
         }
@@ -156,6 +164,7 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v
     [INVOICE_SHORTCUTS.focusProduct, t("shortcuts.focusProduct")],
     ["alt+1", t("shortcuts.addSuggestion")],
     [INVOICE_SHORTCUTS.save, t("shortcuts.saveInvoice")],
+    [INVOICE_SHORTCUTS.saveAndPrint, t("shortcuts.saveAndPrint")],
     ["escape", t("shortcuts.closeDialog")],
     ["?", t("shortcuts.help")],
   ];
@@ -266,20 +275,27 @@ function Root() {
       </div>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      {LIVE && <NativePush />}
     </AppShell>
   );
 }
 
 export function App() {
+  // The Android app first needs its server's address; nothing reaches the API before.
+  const needsServer = useNeedsServer();
   return (
     <I18nProvider>
-      <SessionProvider>
-        <RouterProvider>
-          <ToastProvider>
-            <SessionGate />
-          </ToastProvider>
-        </RouterProvider>
-      </SessionProvider>
+      {needsServer ? (
+        <ServerSetup />
+      ) : (
+        <SessionProvider>
+          <RouterProvider>
+            <ToastProvider>
+              <SessionGate />
+            </ToastProvider>
+          </RouterProvider>
+        </SessionProvider>
+      )}
     </I18nProvider>
   );
 }

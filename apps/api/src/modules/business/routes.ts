@@ -1,8 +1,8 @@
-import { BusinessLogoBody, BusinessProfilePatch, patchOf, SeriesPatch, SETTING_SCHEMAS, SettingBody, WarehouseBody } from "@vyapaar/contracts";
-import { stateCodeFromGstin, validateGstin, validatePan, validateSeriesPattern } from "@vyapaar/core";
-import { schema, type Tx } from "@vyapaar/db";
+import { BusinessLogoBody, BusinessProfilePatch, patchOf, SeriesPatch, SETTING_SCHEMAS, SettingBody, WarehouseBody } from "@digitalbahi/contracts";
+import { stateCodeFromGstin, validateGstin, validatePan, validateSeriesPattern } from "@digitalbahi/core";
+import { schema, type Tx } from "@digitalbahi/db";
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
@@ -147,6 +147,13 @@ export const businessModule: ApiModule = async (app, deps) => {
       const parsed = SETTING_SCHEMAS[key].safeParse(request.body.value);
       if (!parsed.success) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
       return tenant(ctx, async (tx) => {
+        // The bill's unit letters and the unit new lines start in name units of this business.
+        const unitIds = key === "invoice.unit_letters" && parsed.data ? Object.keys(parsed.data) : key === "invoice.default_unit" && parsed.data && parsed.data !== "own" ? [parsed.data as string] : null;
+        if (unitIds) {
+          const ids = unitIds;
+          const found = ids.length ? await tx.select({ id: schema.units.id }).from(schema.units).where(and(eq(schema.units.businessId, ctx.businessId), inArray(schema.units.id, ids))) : [];
+          if (found.length !== ids.length) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
+        }
         const [before] = await tx
           .select({ value: schema.settings.value })
           .from(schema.settings)
@@ -162,6 +169,13 @@ export const businessModule: ApiModule = async (app, deps) => {
               set: { value: parsed.data, updatedBy: ctx.userId, updatedAt: deps.clock.now().toISOString() },
             });
         await audit(tx, ctx, { action: "setting.changed", entityType: "setting", entityLabel: key, changes: { [key]: [before?.value ?? null, parsed.data] } });
+        // Weights set by hand stay: the nightly tuning stops.
+        if (key === "suggestions.weights") {
+          await tx
+            .insert(schema.settings)
+            .values({ businessId: ctx.businessId, key: "suggestions.auto_tune", value: false, updatedBy: ctx.userId })
+            .onConflictDoUpdate({ target: [schema.settings.businessId, schema.settings.key], set: { value: false, updatedBy: ctx.userId, updatedAt: deps.clock.now().toISOString() } });
+        }
         return { key, value: parsed.data };
       });
     },

@@ -1,4 +1,4 @@
-import { addDays, daysBetween, financialYearOf } from "@vyapaar/core";
+import { addDays, daysBetween, financialYearOf } from "@digitalbahi/core";
 import { badRequest } from "./errors.js";
 
 export interface Period {
