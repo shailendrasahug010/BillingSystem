@@ -421,7 +421,9 @@
     "paidInFull": "पूरा भुगतान हो गया",
     "sendOnWhatsApp": "WhatsApp पर भेजें",
     "copyMessage": "मैसेज कॉपी करें",
-    "copied": "कॉपी हो गया"
+    "copied": "कॉपी हो गया",
+    "whatsAppWithPdf": "इनवॉइस की PDF मैसेज के साथ जाती है।",
+    "whatsAppPdfLater": "मैसेज अभी जाएगा; PDF बिल सर्वर पर पहुँचने के बाद भेजी जा सकती है।"
   },
   "suggestions": {
     "title": "स्मार्ट सुझाव",
@@ -1601,7 +1603,8 @@
     "pdfFailed": "PDF नहीं बन सका। इंटरनेट देखकर फिर से कोशिश करें।",
     "pdfReady": "PDF डाउनलोड हुआ: {{name}}",
     "tapAgain": "PDF तैयार है। भेजने के लिए व्हाट्सऐप फिर से दबाएँ।",
-    "note": "नमस्ते {{party}}, {{kind}} {{number}} दिनांक {{date}}, राशि {{amount}}। – {{business}}"
+    "note": "नमस्ते {{party}}, {{kind}} {{number}} दिनांक {{date}}, राशि {{amount}}। – {{business}}",
+    "attachPdf": "{{name}} डाउनलोड हो गई: WhatsApp में इसे जोड़ें (📎 → Document)।"
   },
   "audit": {
     "title": "ऑडिट लॉग",

@@ -421,7 +421,9 @@
     "paidInFull": "Paid in full",
     "sendOnWhatsApp": "Send on WhatsApp",
     "copyMessage": "Copy message",
-    "copied": "Copied"
+    "copied": "Copied",
+    "whatsAppWithPdf": "The invoice PDF goes with the message.",
+    "whatsAppPdfLater": "The message goes now; the PDF can be sent once the bill reaches the server."
   },
   "suggestions": {
     "title": "Smart suggestions",
@@ -1601,7 +1603,8 @@
     "pdfFailed": "The PDF could not be made. Check the connection and try again.",
     "pdfReady": "PDF downloaded: {{name}}",
     "tapAgain": "The PDF is ready. Tap WhatsApp again to send it.",
-    "note": "Namaste {{party}}, {{kind}} {{number}} dated {{date}} for {{amount}}. – {{business}}"
+    "note": "Namaste {{party}}, {{kind}} {{number}} dated {{date}} for {{amount}}. – {{business}}",
+    "attachPdf": "{{name}} is downloaded: attach it in WhatsApp (📎 → Document)."
   },
   "audit": {
     "title": "Audit log",

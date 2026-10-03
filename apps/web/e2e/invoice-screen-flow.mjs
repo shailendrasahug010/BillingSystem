@@ -5,7 +5,8 @@
  * suggestions fold into one row, and a chip adds another -> ten lines: the
  * table fits its card (the amounts are on screen, no sideways scrolling),
  * the search stays at the top and Save stays in view -> Ctrl+S saves and a
- * popup says "Invoice added successfully" (print, view, WhatsApp, new) ->
+ * popup says "Invoice added successfully" (print, view, WhatsApp, new), and
+ * its WhatsApp hands the bill's PDF with the message to the share sheet ->
  * another bill: the line of Rin (also sold by the box) has a unit list,
  * "P · PCS" and "B · BOX (24 PCS)", and starts in pieces; "2b" typed in the
  * quantity makes it 2 boxes at the box price, "p" pieces again, the list and
@@ -128,6 +129,11 @@ await laptop.addInitScript(() => {
   window.print = () => {
     window.__printed = (window.__printed ?? 0) + 1;
   };
+  // A computer whose browser hands files to other apps (Chrome or Edge on Windows): record what WhatsApp would get.
+  navigator.canShare = (data) => Boolean(data?.files?.length);
+  navigator.share = async (data) => {
+    window.__shared = { files: data.files.map((f) => [f.name, f.type, f.size]), text: data.text };
+  };
 });
 const page = await laptop.newPage();
 const deskState = { signedIn: false };
@@ -187,6 +193,15 @@ await popup.waitFor({ timeout: 15000 });
 await page.screenshot({ path: `${OUT}/invoice-screen-2b-saved.png` });
 for (const button of ["Print", "View invoice", "New invoice", "Send on WhatsApp"]) if (!(await popup.getByRole("button", { name: button }).count())) errors.push(`saved popup: no ${button}`);
 log("saved popup:", (await popup.innerText()).replace(/\s+/g, " ").slice(0, 120));
+// Send on WhatsApp: the bill's PDF goes with the message.
+const savedNumber = (await popup.innerText()).match(/INV\/\d\d-\d\d\/\d+/)[0];
+await popup.getByText("The invoice PDF goes with the message.").waitFor();
+await popup.getByRole("button", { name: "Send on WhatsApp" }).click();
+await page.waitForFunction(() => window.__shared, null, { timeout: 15000 });
+const shared = await page.evaluate(() => window.__shared);
+const pdfName = `${savedNumber.replaceAll("/", "-")}.pdf`;
+if (shared.files[0]?.[0] !== pdfName || shared.files[0]?.[1] !== "application/pdf" || shared.files[0]?.[2] < 1000 || !shared.text.includes(savedNumber)) errors.push(`WhatsApp from the popup: ${JSON.stringify(shared)}`);
+log("Send on WhatsApp from the popup:", shared.files[0]?.[0], `${shared.files[0]?.[2]} bytes`, "with the message");
 await savedBill(page);
 const saved = await invoicesOf();
 if (saved.length !== before + 1) errors.push(`Ctrl+S: ${saved.length - before} bills saved`);

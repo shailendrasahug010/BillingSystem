@@ -1,12 +1,16 @@
 import { Check, CircleCheck, CloudOff, Copy, Eye, Plus, Printer, TriangleAlert } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
-import { allowed } from "../../data/db";
-import { shareOnWhatsApp } from "../../lib/share";
+import { useToast } from "../../components/ui/Toast";
+import { allowed, WORKSPACE } from "../../data/db";
+import { LIVE } from "../../data/source";
+import { api } from "../../lib/api";
+import { whatsAppWithPdf } from "../../lib/sendPdf";
+import { pdfFileName, shareOnWhatsApp } from "../../lib/share";
 
 /** A bill just saved, for the popup that says so. */
 export interface SavedNotice {
@@ -28,14 +32,48 @@ export interface SavedNotice {
 
 /**
  * Says a new bill was saved, with what comes next: a new bill (Enter), print,
- * WhatsApp to the customer, or the bill itself. The bill screen behind is
- * already empty for the next one.
+ * WhatsApp to the customer with the bill's PDF, or the bill itself. The bill
+ * screen behind is already empty for the next one.
  */
 export function InvoiceSavedDialog({ notice, onClose, onNext }: { notice: SavedNotice | null; onClose(): void; onNext(): void }) {
   const { t, money } = useI18n();
   const { navigate } = useRouter();
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
   const text = useRef<HTMLTextAreaElement>(null);
+  // The PDF is made by the server: none yet for a bill still waiting on this device (or in the demo).
+  const withPdf = LIVE && notice !== null && !notice.offline;
+  const pdf = useRef<{ id: string; blob: Promise<Blob> } | null>(null);
+  const loadPdf = () => {
+    if (!notice) return Promise.reject(new Error("no bill"));
+    if (pdf.current?.id !== notice.id) {
+      const blob = api.blob(`/invoices/${notice.id}/pdf`, { locale: WORKSPACE.printLocale });
+      // A failed fetch is tried again on the next tap.
+      blob.catch(() => pdf.current?.blob === blob && (pdf.current = null));
+      pdf.current = { id: notice.id, blob };
+    }
+    return pdf.current.blob;
+  };
+  // Saved with the WhatsApp button: the PDF is fetched at once, so the share sheet opens on the tap.
+  useEffect(() => {
+    if (withPdf && notice?.share) loadPdf().catch(() => undefined);
+  }, [notice?.id, withPdf]);
+  const sendOnWhatsApp = async () => {
+    if (!notice) return;
+    if (!withPdf) return shareOnWhatsApp(notice.shareText, notice.mobile);
+    setSending(true);
+    try {
+      const name = pdfFileName(notice.number);
+      if ((await whatsAppWithPdf(loadPdf, name, notice.shareText, notice.mobile)) === "downloaded") toast({ tone: "info", title: t("share.attachPdf", { name }) });
+    } catch (e) {
+      // The browser may want a fresh tap once the file is ready.
+      if ((e as Error).name === "NotAllowedError") toast({ tone: "info", title: t("share.tapAgain") });
+      else toast({ tone: "danger", title: t("share.pdfFailed") });
+    } finally {
+      setSending(false);
+    }
+  };
   const balance = notice ? Math.max(0, notice.total - notice.paid) : 0;
   const go = (print: boolean) => {
     if (!notice) return;
@@ -107,7 +145,16 @@ export function InvoiceSavedDialog({ notice, onClose, onNext }: { notice: SavedN
             <div className="flex w-full flex-col gap-2">
               {notice.share && <textarea ref={text} readOnly value={notice.shareText} rows={7} aria-label={t("invoice.saveAndShare")} className="w-full rounded-lg border border-line bg-surface-2 p-2.5 text-left font-mono text-[12px] text-ink" />}
               <div className="flex gap-2">
-                <Button className="flex-1" variant={notice.share ? "primary" : "secondary"} icon={<WhatsAppIcon size={17} mono={notice.share} />} onClick={() => shareOnWhatsApp(notice.shareText, notice.mobile)} autoFocus={notice.share}>
+                <Button
+                  className="flex-1"
+                  variant={notice.share ? "primary" : "secondary"}
+                  icon={<WhatsAppIcon size={17} mono={notice.share} />}
+                  disabled={sending}
+                  onPointerEnter={() => withPdf && void loadPdf().catch(() => undefined)}
+                  onFocus={() => withPdf && void loadPdf().catch(() => undefined)}
+                  onClick={() => void sendOnWhatsApp()}
+                  autoFocus={notice.share}
+                >
                   {t("invoice.sendOnWhatsApp")}
                 </Button>
                 {notice.share && (
@@ -126,6 +173,7 @@ export function InvoiceSavedDialog({ notice, onClose, onNext }: { notice: SavedN
                   </Button>
                 )}
               </div>
+              {(withPdf || notice.offline) && <p className="text-[12px] text-ink-3">{withPdf ? t("invoice.whatsAppWithPdf") : t("invoice.whatsAppPdfLater")}</p>}
             </div>
           )}
         </div>
