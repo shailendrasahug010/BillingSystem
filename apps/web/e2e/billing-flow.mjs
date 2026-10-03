@@ -143,6 +143,20 @@ await pdf.saveAs(pdfPath);
 const head = (await import("node:fs")).readFileSync(pdfPath).subarray(0, 5).toString();
 if (pdf.suggestedFilename() !== "INV-26-27-00001.pdf" || head !== "%PDF-") throw new Error(`bad PDF download ${pdf.suggestedFilename()} ${head}`);
 log("PDF downloaded:", pdf.suggestedFilename());
+// A computer whose browser cannot hand files to other apps: WhatsApp opens with the message to the
+// customer and the PDF is downloaded, to attach there.
+const whatsAppUrls = [];
+await page.context().route("https://wa.me/**", (route) => {
+  whatsAppUrls.push(route.request().url());
+  return route.fulfill({ status: 200, contentType: "text/html", body: "WhatsApp" });
+});
+const [waPage, waDownload] = await Promise.all([page.context().waitForEvent("page"), page.waitForEvent("download"), page.getByRole("button", { name: "WhatsApp" }).click()]);
+await page.getByText("INV-26-27-00001.pdf is downloaded: attach it in WhatsApp").first().waitFor({ timeout: 15000 });
+for (let i = 0; i < 30 && whatsAppUrls.length === 0; i++) await page.waitForTimeout(100);
+const waText = new URL(whatsAppUrls[0] ?? "https://wa.me/").searchParams.get("text") ?? "";
+if (waDownload.suggestedFilename() !== "INV-26-27-00001.pdf" || !waText.includes("INV/26-27/00001")) throw new Error(`WhatsApp without file sharing: ${waDownload.suggestedFilename()} ${whatsAppUrls[0]}`);
+await waPage.close();
+log("computer: WhatsApp opened with the message", new URL(whatsAppUrls[0]).pathname, "and the PDF downloaded to attach");
 await page.evaluate(() => {
   // A phone's share sheet: record what would be handed to WhatsApp.
   navigator.canShare = (data) => Boolean(data?.files?.length);
