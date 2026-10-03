@@ -7,7 +7,7 @@
   "scripts": {
     "build:web": "pnpm --filter @digitalbahi/web build",
     "sync": "cap sync android",
-    "apk": "pnpm build:web && cap sync android && cd android && ./gradlew assembleDebug",
+    "apk": "pnpm build:web && cap sync android && node scripts/gradle.mjs assembleDebug",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -232,11 +232,19 @@ The phone needs the **https** address of your server (section 5).
 
 The Android app is the same app with the phone's own Bluetooth printing (classic Bluetooth, which most small receipt printers use), Google's barcode scanner, the share sheet, printing to any Android printer, and push notifications.
 
-1. Get the APK: every change builds one (GitHub → **Actions** → **Android app** → the run → **digitalbahi-android-debug**), or build it yourself with Android Studio's SDK installed: `pnpm install`, then `pnpm --filter @digitalbahi/mobile apk` (it is in `apps/mobile/android/app/build/outputs/apk/debug/`).
+1. Get the APK: every change builds one (GitHub → **Actions** → **Android app** → the run → **digitalbahi-android-debug**, a zip with `app-debug.apk` inside), or build it yourself: install **Android Studio** (it brings the Android SDK; open it once so it downloads the SDK), and Java 21 (Android Studio's own works: point `JAVA_HOME` at its `jbr` folder, e.g. `C:\Program Files\Android\Android Studio\jbr`), set `ANDROID_HOME` to the SDK folder (e.g. `%LOCALAPPDATA%\Android\Sdk`), then in the `BillingSystem` folder `pnpm install` and `pnpm --filter @digitalbahi/mobile apk` (Windows, macOS and Linux). The APK is in `apps/mobile/android/app/build/outputs/apk/debug/`.
 2. Install it on the phone (allow installing from this source when Android asks).
 3. On first start it asks for your **server address** (for example `billing.yourshop.in`; https only). Then sign in as on the website. The sign-in is kept in the phone's secure storage.
 4. **Receipt printer:** pair the printer in the phone's **Settings → Bluetooth** first (PIN often 0000 or 1234), then in the app **Settings → Receipt printer** pick it from *Printers paired with this phone*.
 5. **Push notifications** need your own Firebase project: put its `google-services.json` in `apps/mobile/android/app/` before building the APK, and its service account key in the server's `.env` as `FCM_SERVICE_ACCOUNT` (section 5). Without them the bell and the inbox still work.
+
+**Trying the app with Digital Bahi on your own computer.** The app only talks to an `https` address, and the server on your computer is `http://localhost`. To try it before you have a server, give your computer a temporary https address with a tunnel, for example Cloudflare's (install `cloudflared`, no account needed):
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+(`http://localhost:8710` for the installed Digital Bahi instead of `pnpm dev:api`). It prints an address like `https://random-words.trycloudflare.com`: type that in the app as the server address. Anyone with that address can reach your copy while the tunnel runs, and sign-up codes are shown on screen there, so use it only to try the app and close it (Ctrl+C) afterwards; for real use, put Digital Bahi on a server (section 5).
 
 ### Android (Chrome)
 
