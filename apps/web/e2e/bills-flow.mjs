@@ -119,6 +119,26 @@ log("Invoices lists", number, "and filters by payment and customer");
 await page.getByText(number).click();
 await page.getByRole("heading", { name: number }).waitFor({ timeout: 15000 });
 
+// 4. Each screen has its own link: a reload keeps it, Back and Forward move between screens in the app.
+const billUrl = page.url();
+check(/#invoice\/[0-9a-f-]{36}$/.test(billUrl), `bill link ${billUrl}`);
+await page.reload();
+await page.getByRole("heading", { name: number }).waitFor({ timeout: 15000 });
+log("reload on the bill keeps the bill:", new URL(billUrl).hash);
+await page.goBack();
+await page.getByRole("heading", { name: "Sales bills" }).waitFor({ timeout: 15000 });
+await page.goForward();
+await page.getByRole("heading", { name: number }).waitFor({ timeout: 15000 });
+log("browser Back returns to Sales bills, Forward to the bill");
+await page.getByRole("link", { name: "Payments" }).or(page.getByRole("button", { name: "Payments", exact: true })).first().click();
+await page.waitForURL(/#payments$/);
+await page.reload();
+await page.waitForTimeout(1500);
+check(page.url().endsWith("#payments") && (await page.getByRole("heading", { name: "Payments" }).count()) > 0, `reload on Payments: ${page.url()}`);
+await page.goBack();
+await page.getByRole("heading", { name: number }).waitFor({ timeout: 15000 });
+log("reload on Payments keeps it; Back returns to the bill");
+
 console.log("errors:", errors.length ? errors : "none");
 await browser.close();
 if (errors.length) process.exit(1);

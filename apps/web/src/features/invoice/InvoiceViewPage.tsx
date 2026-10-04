@@ -44,7 +44,7 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
   const kept = offlineKey ? findOfflineBill(offlineKey) : {};
   const syncedId = kept.synced?.serverId;
   useEffect(() => {
-    if (syncedId) navigate({ name: "invoice-view", invoiceId: syncedId });
+    if (syncedId) navigate({ name: "invoice-view", invoiceId: syncedId }, { replace: true });
   }, [syncedId, navigate]);
   const live = useQuery({
     queryKey: ["invoice-raw", invoiceId],
