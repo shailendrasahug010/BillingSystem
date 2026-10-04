@@ -78,6 +78,19 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
   const balance = invoice.balance;
   const stateLabel = pos?.component === "UTGST" ? "UTGST" : "SGST";
   const isNote = invoice.kind === "credit_note" || invoice.kind === "debit_note";
+  const isQuote = invoice.kind === "quotation";
+  const isChallan = invoice.kind === "delivery_challan";
+  // Nothing is paid or owed on a note, a quotation or a challan.
+  const noPayment = isNote || isQuote || isChallan;
+  const title = isNote
+    ? t(invoice.kind === "credit_note" ? "notes.creditNote" : "notes.debitNote")
+    : isQuote
+      ? t("orders.quotation.title")
+      : isChallan
+        ? t("orders.challan.title")
+        : invoice.billOfSupply
+          ? t("invoice.billOfSupply")
+          : t("invoice.taxInvoice");
 
   const th = "border border-[#c8d1e0] bg-[#eef2f9] px-2 py-1.5 text-left font-semibold";
   const td = "border border-[#c8d1e0] px-2 py-1.5 align-top";
@@ -92,20 +105,36 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
         <FirmHeader />
         <div className="text-right">
           <p className="text-[18px] font-bold tracking-wide text-[#1450b4]">
-            {(isNote ? t(invoice.kind === "credit_note" ? "notes.creditNote" : "notes.debitNote") : invoice.billOfSupply ? t("invoice.billOfSupply") : t("invoice.taxInvoice")).toUpperCase()}
+            {title.toUpperCase()}
           </p>
-          <p className="text-[11px] text-[#4a5570]">{t("invoice.print.original")}</p>
+          {!isQuote && <p className="text-[11px] text-[#4a5570]">{t("invoice.print.original")}</p>}
           <table className="mt-2 ml-auto text-left text-[12px]">
             <tbody>
               <tr>
-                <td className="pr-3 text-[#4a5570]">{isNote ? t("notes.number") : t("invoice.number")}</td>
+                <td className="pr-3 text-[#4a5570]">{isNote ? t("notes.number") : isQuote ? t("orders.quotation.number") : isChallan ? t("orders.challan.number") : t("invoice.number")}</td>
                 <td className="font-mono font-semibold">{invoice.number}</td>
               </tr>
               <tr>
-                <td className="pr-3 text-[#4a5570]">{isNote ? t("notes.date") : t("invoice.date")}</td>
+                <td className="pr-3 text-[#4a5570]">{isNote ? t("notes.date") : isQuote || isChallan ? t("common.date") : t("invoice.date")}</td>
                 <td>{formatDate(invoice.date)}</td>
               </tr>
-              {isNote ? (
+              {isQuote ? (
+                invoice.dueDate !== invoice.date && (
+                  <tr>
+                    <td className="pr-3 text-[#4a5570]">{t("orders.quotation.validUntil")}</td>
+                    <td>{formatDate(invoice.dueDate)}</td>
+                  </tr>
+                )
+              ) : isChallan ? (
+                invoice.against && (
+                  <tr>
+                    <td className="pr-3 text-[#4a5570]">{t("orders.challan.againstOrder")}</td>
+                    <td>
+                      <span className="font-mono">{invoice.against.number}</span> · {formatDate(invoice.against.date)}
+                    </td>
+                  </tr>
+                )
+              ) : isNote ? (
                 invoice.against && (
                   <tr>
                     <td className="pr-3 text-[#4a5570]">{t("notes.against")}</td>
@@ -301,7 +330,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
             <dd className="num">{m(totals.grandTotal)}</dd>
           </div>
           {invoice.reverseCharge && <p className="max-w-[16rem] text-right text-[10.5px] text-[#4a5570]">{t("invoice.print.rcmNotIncluded")}</p>}
-          {!isNote && (
+          {!noPayment && (
             <>
               <div className="flex justify-between gap-3">
                 <dt className="text-[#4a5570]">{t("invoice.print.paid")}</dt>
@@ -324,13 +353,14 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
 
       <footer className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-[#c8d1e0] pt-3">
         <div className="max-w-md text-[10.5px] text-[#4a5570]">
-          {WORKSPACE.invoiceTerms && !isNote && (
+          {(isQuote || isChallan) && <p className="mb-2 font-semibold text-[#0e1a33]">{isQuote ? t("orders.quotation.printNote") : t("orders.challan.printNote")}</p>}
+          {WORKSPACE.invoiceTerms && !isNote && !isChallan && (
             <>
               <p className="font-semibold text-[#0e1a33]">{t("invoice.print.terms")}</p>
               <p className="whitespace-pre-line">{WORKSPACE.invoiceTerms}</p>
             </>
           )}
-          <p className="mt-2">{isNote ? t("notes.computerGenerated") : t("invoice.print.computerGenerated")}</p>
+          <p className="mt-2">{isNote ? t("notes.computerGenerated") : isQuote || isChallan ? t("orders.computerGenerated") : t("invoice.print.computerGenerated")}</p>
         </div>
         <div className="text-right">
           <p className="font-semibold">{t("invoice.print.for", { business: BUSINESS.name })}</p>

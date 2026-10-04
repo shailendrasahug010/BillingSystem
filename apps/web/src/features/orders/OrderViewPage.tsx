@@ -1,7 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@digitalbahi/core";
-import { Ban, CheckCircle2, Receipt } from "lucide-react";
+import { Ban, CheckCircle2, FileText, Printer, Receipt, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { LocaleCode } from "@digitalbahi/i18n";
+import { PrintPortal } from "../../components/ui/PrintPortal";
+import { InvoiceDocument } from "../invoice/InvoiceDocument";
+import { printableFromOrder, type ApiOrderForPrint } from "../invoice/printable";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
@@ -37,6 +41,11 @@ interface OrderDetail {
   orderNumber: string;
   orderDate: string;
   expectedDeliveryDate: string | null;
+  /** The quotation it started as (and still is, while a draft). */
+  quotationNumber: string | null;
+  validUntil: string | null;
+  challanNumber: string | null;
+  challanDate: string | null;
   status: OrderStatus;
   source: string;
   customerId: string;
@@ -76,7 +85,17 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
   const [invoicing, setInvoicing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // The quotation or the delivery challan, printed once it is on the page.
+  const [printing, setPrinting] = useState<"quotation" | "delivery_challan" | null>(null);
   const q = useQuery({ queryKey: ["orders", "detail", orderId], queryFn: () => api.get<OrderDetail>(`/sales-orders/${orderId}`) });
+  useEffect(() => {
+    if (!printing) return;
+    const timer = setTimeout(() => {
+      window.print();
+      setPrinting(null);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [printing]);
 
   if (q.isPending) return <Skeleton className="h-60 w-full" />;
   if (q.error) return <ErrorNote error={q.error} />;
@@ -97,6 +116,22 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
     }
   };
 
+  const quotation = o.status === "draft";
+  // The challan is numbered the first time it is printed, the same after.
+  const printChallan = async () => {
+    setError(null);
+    try {
+      if (!o.challanNumber) {
+        const fresh = await api.post<OrderDetail>(`/sales-orders/${o.id}/challan`, {});
+        qc.setQueryData(["orders", "detail", orderId], fresh);
+      }
+      setPrinting("delivery_challan");
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    }
+  };
+  const canChallan = INVOICEABLE.has(o.status) && (allowed("order.update") || allowed("dispatch.dispatch"));
+
   const open = o.items.some((i) => Number(i.remainingQty) > 0);
   const moves = o.nextStatuses.filter((s) => s !== "cancelled" && allowed(STATUS_PERMISSION[s] ?? "order.update"));
 
@@ -109,17 +144,35 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
             {o.orderNumber} <Badge tone={ORDER_TONE[o.status]}>{t(`status.order.${o.status}`)}</Badge>
           </span>
         }
-        subtitle={`${o.customer?.name ?? ""} · ${dateMedium(o.orderDate)} · ${t(`orders.sources.${o.source as "counter"}`)}`}
+        subtitle={[
+          o.customer?.name ?? "",
+          dateMedium(o.orderDate),
+          quotation ? (o.validUntil ? t("orders.quotation.validUntilShort", { date: dateMedium(o.validUntil) }) : null) : t(`orders.sources.${o.source as "counter"}`),
+          !quotation && o.quotationNumber ? t("orders.quotation.from", { number: o.quotationNumber }) : null,
+          o.challanNumber ? t("orders.challan.short", { number: o.challanNumber }) : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         actions={
           <>
+            {quotation && (
+              <Button icon={<Printer size={16} />} onClick={() => setPrinting("quotation")}>
+                {t("orders.quotation.print")}
+              </Button>
+            )}
+            {canChallan && (
+              <Button icon={<Truck size={16} />} onClick={() => void printChallan()}>
+                {t("orders.challan.print")}
+              </Button>
+            )}
             {o.nextStatuses.includes("cancelled") && allowed("order.cancel") && !cancelling && (
               <Button variant="ghost" icon={<Ban size={16} />} onClick={() => setCancelling(true)}>
                 {t("orders.cancel")}
               </Button>
             )}
             {moves.map((s) => (
-              <Button key={s} variant={s === "confirmed" ? "primary" : "secondary"} icon={s === "confirmed" ? <CheckCircle2 size={16} /> : undefined} disabled={busy} onClick={() => void move(s)}>
-                {t(`orders.moveTo.${s as "confirmed"}`)}
+              <Button key={s} variant={s === "confirmed" || quotation ? "primary" : "secondary"} icon={s === "confirmed" || quotation ? <CheckCircle2 size={16} /> : undefined} disabled={busy} onClick={() => void move(s)}>
+                {quotation ? t("orders.quotation.accept") : t(`orders.moveTo.${s as "confirmed"}`)}
               </Button>
             ))}
             {INVOICEABLE.has(o.status) && open && allowed("invoice.create") && (
@@ -132,6 +185,12 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       />
       {error ? <ErrorNote error={error} /> : null}
       {o.status === "pending" && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[13px] text-warn">{t("orders.pendingHint")}</p>}
+      {quotation && (
+        <p className="flex items-start gap-2 rounded-lg bg-info-soft px-3 py-2 text-[13px] text-ink-2">
+          <FileText size={15} className="mt-0.5 shrink-0 text-info" />
+          {t("orders.quotation.hint")}
+        </p>
+      )}
       {cancelling && (
         <Card className="flex flex-col gap-3 border-danger/40 p-4">
           <Field label={t("common.reason")} htmlFor="so-cancel" hint={t("orders.cancelHint")}>
@@ -226,6 +285,11 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
         </Card>
       </div>
       <InvoiceOrderDialog order={o} open={invoicing} onOpenChange={setInvoicing} />
+      {printing && (
+        <PrintPortal>
+          <InvoiceDocument invoice={printableFromOrder(o as unknown as ApiOrderForPrint, printing)} locale={(WORKSPACE.printLocale as LocaleCode) || "en"} />
+        </PrintPortal>
+      )}
     </div>
   );
 }

@@ -5,8 +5,8 @@ import type { ReviewFields } from "./InvoiceReview";
 
 /** Everything the printed invoice shows, independent of where it came from. */
 export interface PrintableInvoice {
-  /** Credit / debit notes print on the same template. */
-  kind?: "invoice" | "credit_note" | "debit_note";
+  /** Credit / debit notes, quotations and delivery challans print on the same template. */
+  kind?: "invoice" | "credit_note" | "debit_note" | "quotation" | "delivery_challan";
   /** The invoice or bill a note is issued against. */
   against?: { number: string; date: string } | null;
   id: string;
@@ -323,4 +323,62 @@ export function printableFromNote(note: ApiNote): PrintableInvoice {
     items: note.items,
   } as ApiInvoice);
   return { ...base, kind: note.noteType === "credit" ? "credit_note" : "debit_note", against: note.original ? { number: note.original.number, date: note.original.date } : null };
+}
+
+/** What GET /sales-orders/:id gives that a quotation or a delivery challan prints. */
+export interface ApiOrderForPrint {
+  id: string;
+  orderNumber: string;
+  orderDate: string;
+  quotationNumber: string | null;
+  validUntil: string | null;
+  challanNumber: string | null;
+  challanDate: string | null;
+  customerId: string;
+  customer: { name: string } | null;
+  placeOfSupply: string;
+  status: string;
+  taxableTotal: string;
+  cgstTotal: string;
+  sgstTotal: string;
+  igstTotal: string;
+  cessTotal: string;
+  roundOff: string;
+  grandTotal: string;
+  items: ApiInvoice["items"];
+}
+
+/** An order's quotation, or its delivery challan, in the invoice layout (the buyer from the customer list). */
+export function printableFromOrder(o: ApiOrderForPrint, kind: "quotation" | "delivery_challan"): PrintableInvoice {
+  const c = customerById.get(o.customerId);
+  const challan = kind === "delivery_challan";
+  const date = challan ? (o.challanDate ?? o.orderDate) : o.orderDate;
+  const base = printableFromApi({
+    id: o.id,
+    invoiceNumber: challan ? (o.challanNumber ?? "") : (o.quotationNumber ?? o.orderNumber),
+    invoiceDate: date,
+    dueDate: challan ? null : o.validUntil,
+    documentKind: "tax_invoice",
+    customerId: o.customerId,
+    partyName: c?.businessName ?? o.customer?.name ?? "",
+    partyGstin: c?.gstin ?? null,
+    partyStateCode: c?.stateCode ?? o.placeOfSupply,
+    billingAddress: c ? { line1: c.address || null, line2: null, city: c.city || null, stateCode: c.stateCode, pincode: c.pincode || null } : null,
+    placeOfSupply: o.placeOfSupply,
+    supplyType: o.placeOfSupply === BUSINESS.stateCode ? "intra_state" : "inter_state",
+    isReverseCharge: false,
+    status: o.status === "cancelled" ? "cancelled" : "posted",
+    paymentStatus: "unpaid",
+    taxableTotal: o.taxableTotal,
+    cgstTotal: o.cgstTotal,
+    sgstTotal: o.sgstTotal,
+    igstTotal: o.igstTotal,
+    cessTotal: o.cessTotal,
+    roundOff: o.roundOff,
+    grandTotal: o.grandTotal,
+    amountPaid: "0",
+    balanceDue: "0",
+    items: o.items,
+  } as ApiInvoice);
+  return { ...base, kind, against: challan ? { number: o.orderNumber, date: o.orderDate } : null };
 }

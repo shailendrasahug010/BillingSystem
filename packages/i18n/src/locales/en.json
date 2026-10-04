@@ -669,7 +669,7 @@
   },
   "status": {
     "order": {
-      "draft": "Draft",
+      "draft": "Quotation",
       "pending": "Pending",
       "confirmed": "Confirmed",
       "packing": "Packing",
@@ -1146,7 +1146,8 @@
     "NOT_HELD_FOR_REVIEW": "This bill is not held for review.",
     "SECTION_REQUIRED": "Choose which table to download.",
     "DEVICE_NOT_FOUND": "This device is not registered in this business.",
-    "RANGE_TOO_LONG": "Choose at most {{days}} days."
+    "RANGE_TOO_LONG": "Choose at most {{days}} days.",
+    "VALID_UNTIL_BEFORE_DATE": "The valid-until date is for a quotation, on or after its date."
   },
   "validation": {
     "required": "This field is required",
@@ -1802,7 +1803,35 @@
     "makeInvoiceHint": "At the order's rates. Lower a quantity to invoice part of the order now.",
     "invoices": "Invoices",
     "noInvoices": "Not invoiced yet.",
-    "history": "History"
+    "history": "History",
+    "quotation": {
+      "tab": "Quotations",
+      "new": "New quotation",
+      "newHint": "Prices from the customer's rate list, as on an order. Nothing is packed or billed until the customer accepts it.",
+      "save": "Save quotation",
+      "saved": "Quotation saved",
+      "title": "Quotation",
+      "number": "Quotation no.",
+      "validUntil": "Valid until",
+      "validUntilShort": "valid until {{date}}",
+      "from": "from quotation {{number}}",
+      "print": "Print quotation",
+      "accept": "Accept quotation",
+      "hint": "A quotation for the customer to agree to. Print it or send it; once they accept, it becomes an order with its own order number.",
+      "printNote": "This is a quotation, not a tax invoice. Prices and GST as on the date above.",
+      "listHint": "Quotations sent to customers and not yet accepted. Open one to print it again or accept it.",
+      "empty": "No quotations waiting",
+      "emptyHint": "Make one with New quotation."
+    },
+    "challan": {
+      "title": "Delivery challan",
+      "number": "Challan no.",
+      "againstOrder": "Against order",
+      "print": "Delivery challan",
+      "short": "challan {{number}}",
+      "printNote": "Delivery challan: goods sent before the bill. Not a tax invoice; the tax invoice follows."
+    },
+    "computerGenerated": "This is a computer-generated document."
   },
   "expenses": {
     "title": "Expenses",
