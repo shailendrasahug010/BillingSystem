@@ -1264,7 +1264,9 @@
     "cancel": "Cancel purchase",
     "confirmCancel": "Yes, cancel purchase",
     "cancelHint": "Stock goes back out and the supplier's payable is reduced. Payments made against it stay as an advance.",
-    "cancelledDone": "Purchase cancelled"
+    "cancelledDone": "Purchase cancelled",
+    "addNewSupplier": "Add “{{name}}” as a new supplier",
+    "addNewProduct": "Add “{{name}}” as a new product"
   },
   "inventory": {
     "title": "Inventory",
@@ -2341,7 +2343,8 @@
     "billRate": "Bill: GST {{rate}}%, not in your list",
     "photo": "Photo of the bill",
     "photoTip": "A printed bill can be photographed, or a scanned PDF uploaded: keep the whole bill in the frame, straight from above, in good light. Reading a photo needs internet.",
-    "fromPhoto": "Read from a photo or scan: check every item, quantity and rate against the paper bill before saving."
+    "fromPhoto": "Read from a photo or scan: check every item, quantity and rate against the paper bill before saving.",
+    "addSupplier": "Add as new supplier"
   },
   "offline": {
     "notReady": "This device is not ready for offline bills yet. Open Digital Bahi once while connected to the internet.",

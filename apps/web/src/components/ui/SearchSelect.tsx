@@ -1,6 +1,8 @@
-import { Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { useId, useMemo, useState, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
+
+const CREATE = "\u0000create";
 
 export interface SearchOption {
   id: string;
@@ -12,7 +14,8 @@ export interface SearchOption {
 /**
  * Keyboard-first combobox over a local list (customers, suppliers, products):
  * type to filter, arrows to move, Enter to pick. Shows the chosen option as a
- * chip with a clear button.
+ * chip with a clear button. With `create`, what was typed and not found can
+ * be added as a new entry from the same list.
  */
 export function SearchSelect({
   id,
@@ -25,6 +28,7 @@ export function SearchSelect({
   invalid,
   clearLabel,
   emptyText,
+  create,
 }: {
   id?: string;
   value: string | null;
@@ -36,12 +40,16 @@ export function SearchSelect({
   invalid?: boolean;
   clearLabel: string;
   emptyText: string;
+  /** The last option: add what was typed as a new entry (a product, a supplier). */
+  create?: { label(query: string): string; onCreate(query: string): void };
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listId = useId();
-  const results = useMemo(() => (open ? search(query) : []), [open, query, search]);
+  const found = useMemo(() => (open ? search(query) : []), [open, query, search]);
+  const typed = query.trim();
+  const results: SearchOption[] = create && typed.length >= 2 ? [...found, { id: CREATE, label: create.label(typed) }] : found;
 
   if (value) {
     return (
@@ -60,7 +68,8 @@ export function SearchSelect({
   }
 
   const pick = (o: SearchOption) => {
-    onChange(o.id);
+    if (o.id === CREATE) create?.onCreate(typed);
+    else onChange(o.id);
     setQuery("");
     setOpen(false);
   };
@@ -110,12 +119,19 @@ export function SearchSelect({
                 aria-selected={i === active}
                 onMouseDown={(e) => (e.preventDefault(), pick(o))}
                 onMouseEnter={() => setActive(i)}
-                className={cn("flex cursor-pointer items-center justify-between gap-3 px-3 py-2", i === active && "bg-accent-soft")}
+                className={cn("flex cursor-pointer items-center justify-between gap-3 px-3 py-2", i === active && "bg-accent-soft", o.id === CREATE && "border-t border-line text-accent")}
               >
+                {o.id === CREATE ? (
+                  <span className="flex min-w-0 items-center gap-2 text-[14px] font-medium">
+                    <Plus size={15} className="shrink-0" />
+                    <span className="truncate">{o.label}</span>
+                  </span>
+                ) : (
                 <span className="min-w-0">
                   <span className="block truncate text-[14px] font-medium text-ink">{o.label}</span>
                   {o.sub && <span className="block truncate text-[12px] text-ink-3">{o.sub}</span>}
                 </span>
+                )}
                 {o.trailing && <span className="num shrink-0 text-[12.5px]">{o.trailing}</span>}
               </li>
             ))

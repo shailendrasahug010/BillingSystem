@@ -34,6 +34,7 @@ import { cn } from "../../lib/cn";
 import { invalidateMoney, METHODS } from "../payments/PaymentDialog";
 import { ProductEditor, type ProductPrefill } from "../products/ProductEditor";
 import { searchSuppliers, supplierLabel } from "../suppliers/search";
+import { SupplierDialog } from "../suppliers/SupplierDialog";
 import { lineFromItem, newProductFrom, type ImportedItem, type PurchaseDraft } from "./billImport";
 import { NewProductsDialog } from "./NewProductsDialog";
 import { uuid } from "../../lib/uuid";
@@ -124,6 +125,9 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
   const [pending, setPending] = useState<ImportedItem[]>(() => (draft?.items ?? []).filter((item) => !item.productId || !productById.has(item.productId)));
   const matchedAtOpen = useRef(draft ? draft.items.length - pending.length : 0);
   const [creating, setCreating] = useState<ImportedItem | null>(null);
+  // A product or supplier not in the lists yet, added from here: what is known of it.
+  const [newProduct, setNewProduct] = useState<string | null>(null);
+  const [newSupplier, setNewSupplier] = useState<{ name?: string; gstin?: string } | null>(null);
   const [addingAll, setAddingAll] = useState(false);
   const [charges, setCharges] = useState<Charge[]>([]);
   const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
@@ -348,7 +352,16 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
             </p>
             {draft.scanned && <p className="font-medium text-warn">{t("billImport.fromPhoto")}</p>}
             <p className="text-ink-2">{t("billImport.reviewHint")}</p>
-            {!draft.supplierId && draft.supplierHint && <p className="text-warn">{t("billImport.supplierNotFound", { value: draft.supplierHint })}</p>}
+            {!draft.supplierId && draft.supplierHint && !supplier && (
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-warn">{t("billImport.supplierNotFound", { value: draft.supplierHint })}</p>
+                {allowed("supplier.create") && draft.supplierFromBill && (
+                  <Button size="sm" variant="soft" icon={<Plus size={14} />} onClick={() => setNewSupplier(draft.supplierFromBill!)}>
+                    {t("billImport.addSupplier")}
+                  </Button>
+                )}
+              </div>
+            )}
             {draft.duplicate && (
               <p className="font-medium text-danger" role="alert">
                 {t("billImport.duplicate", { number: draft.billNumber, ours: draft.duplicate.purchaseNumber ?? "" })}
@@ -373,6 +386,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
                 emptyText={t("search.noResults")}
                 selectedLabel={supplier ? `${supplierLabel(supplier)} · ${supplier.code}` : null}
                 search={(q) => searchSuppliers(q).map((s) => ({ id: s.id, label: supplierLabel(s), sub: [s.code, s.city, s.gstin].filter(Boolean).join(" · ") }))}
+                {...(allowed("supplier.create") ? { create: { label: (q: string) => t("purchase.addNewSupplier", { name: q }), onCreate: (q: string) => setNewSupplier({ name: q }) } } : {})}
               />
               {!supplier && draft && draft.supplierCandidates.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-ink-3">
@@ -511,6 +525,7 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
             placeholder={t("invoice.searchProduct")}
             clearLabel={t("common.clear")}
             emptyText={t("empty.products")}
+            {...(allowed("product.create") ? { create: { label: (q: string) => t("purchase.addNewProduct", { name: q }), onCreate: setNewProduct } } : {})}
             search={(q) =>
               (q.trim() ? searchProducts(q, searchable, { limit: 8 }).map((h) => h.product) : []).map((p) => ({
                 id: p.id,
@@ -736,6 +751,25 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
             if (item) matchItem(item, c.productId);
           }
         }}
+      />
+      {newProduct !== null && (
+        <ProductEditor
+          productId={null}
+          open
+          prefill={{ name: newProduct }}
+          onOpenChange={(v) => !v && setNewProduct(null)}
+          onSaved={(id) => {
+            setNewProduct(null);
+            addProduct(id);
+          }}
+        />
+      )}
+      <SupplierDialog
+        supplierId={null}
+        open={newSupplier !== null}
+        onOpenChange={(v) => !v && setNewSupplier(null)}
+        {...(newSupplier ? { prefill: newSupplier } : {})}
+        onSaved={(id) => setSupplierId(id)}
       />
       {creating && (
         <ProductEditor
