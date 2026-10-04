@@ -196,6 +196,11 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
                   <td className={`${td} font-mono`}>{l.hsn}</td>
                   <td className={`${td} text-right`}>
                     {l.qty} {l.unit}
+                    {l.freeQty ? (
+                      <span className="block text-[0.9em]">
+                        +{l.freeQty} {t("invoice.free")}
+                      </span>
+                    ) : null}
                   </td>
                   <td className={`${td} text-right`}>{n(l.rate)}</td>
                   <td className={`${td} text-right`}>{l.discountPercent ? `${l.discountPercent}%` : "—"}</td>

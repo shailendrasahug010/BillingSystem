@@ -71,6 +71,8 @@ interface Item {
   unitId: string;
   batchId: string | null;
   qty: string;
+  /** Absent on notes' lines. */
+  freeQty?: string;
   rate: string;
   discountPercent: string;
   taxableValue: string;
@@ -87,6 +89,7 @@ function pdfLines(items: Item[], extras: Awaited<ReturnType<typeof lineExtras>>,
     batch: i.batchId ? (extras.batch.get(i.batchId) ?? null) : null,
     hsn: i.hsnCode ?? "",
     qty: i.qty,
+    ...(i.freeQty ? { freeQty: i.freeQty } : {}),
     unit: extras.unit.get(i.unitId) ?? "",
     rate: i.rate,
     discountPercent: i.discountPercent,

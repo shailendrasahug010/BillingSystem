@@ -37,6 +37,8 @@ export interface DraftLine {
   /** The unit sold in: null for the stock unit, else one of the product's packs (box, strip). */
   unitId: string | null;
   qty: number;
+  /** Given free on the scheme (10+1), in the line's unit: moves stock, carries no value. */
+  freeQty: number;
   rate: number;
   discountPercent: number;
 }
@@ -143,7 +145,7 @@ function reducer(state: Draft, action: Action): Draft {
       const key = `l${lineSeq}`;
       return {
         ...state,
-        lines: [...state.lines, { key, productId: product.id, unitId, qty, rate: rateFor(product, customer, unitId), discountPercent: discountFor(product, customer, unitId) }],
+        lines: [...state.lines, { key, productId: product.id, unitId, qty, freeQty: 0, rate: rateFor(product, customer, unitId), discountPercent: discountFor(product, customer, unitId) }],
         focusKey: key,
       };
     }

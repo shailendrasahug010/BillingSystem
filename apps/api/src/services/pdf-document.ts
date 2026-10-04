@@ -15,6 +15,8 @@ export interface DocumentPdfLine {
   batch: string | null;
   hsn: string;
   qty: string;
+  /** Scheme quantity given free (purchases and sales); "0" or absent: none. */
+  freeQty?: string;
   unit: string;
   rate: string;
   discountPercent: string;
@@ -111,7 +113,12 @@ function table(doc: Pdf, x: number, y: number, width: number, columns: Column[],
     doc.font("b");
     let w = doc.widthOfString(c.label);
     doc.font("r");
-    rows.forEach((r, i) => (w = Math.max(w, doc.widthOfString(c.value(r, i)))));
+    rows.forEach((r, i) => {
+      // A cell of several lines (a quantity and its free units) is as wide as its longest line,
+      // with a little room so the line that sets the width does not wrap.
+      const parts = c.value(r, i).split("\n");
+      for (const part of parts) w = Math.max(w, doc.widthOfString(part) + (parts.length > 1 ? 2 : 0));
+    });
     return w + pad * 2 + 1 + (opts.bold?.(ci) ? 2 : 0);
   });
   const flexIndex = columns.findIndex((c) => c.flex);
@@ -255,7 +262,7 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
     { label: t("invoice.print.sn"), value: (_, i) => String(i + 1) },
     { label: t("invoice.print.description"), value: (l) => (l.batch ? `${l.name}\n${t("invoice.batch")} ${l.batch}` : l.name), flex: true },
     { label: t("invoice.hsn"), value: (l) => l.hsn },
-    { label: t("invoice.qty"), value: (l) => `${trimQty(l.qty)} ${l.unit}`.trim(), right: true },
+    { label: t("invoice.qty"), value: (l) => `${trimQty(l.qty)} ${l.unit}`.trim() + (num(l.freeQty ?? "0") ? `\n+${trimQty(l.freeQty!)} ${t("invoice.free")}` : ""), right: true },
     { label: t("invoice.rate"), value: (l) => n(l.rate), right: true },
     { label: t("invoice.discount"), value: (l) => (num(l.discountPercent) ? `${trimQty(l.discountPercent)}%` : "—"), right: true },
     { label: t("invoice.taxable"), value: (l) => n(l.taxable), right: true },

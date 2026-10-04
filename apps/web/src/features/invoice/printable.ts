@@ -26,6 +26,8 @@ export interface PrintableInvoice {
     batch: string | null;
     hsn: string;
     qty: number;
+    /** Scheme quantity given free, in the line's unit (0 or absent: none). */
+    freeQty?: number;
     unit: string;
     rate: number;
     discountPercent: number;
@@ -197,6 +199,7 @@ export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
       batch: null,
       hsn: i.hsnCode ?? "",
       qty: num(i.qty),
+      freeQty: num(i.freeQty),
       unit: WORKSPACE.units.get(i.unitId) ?? product?.unit ?? "",
       rate: num(i.rate),
       discountPercent: num(i.discountPercent),

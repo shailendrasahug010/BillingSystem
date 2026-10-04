@@ -44,6 +44,7 @@ export async function postInvoice(view: DraftView, idempotencyKey: string): Prom
         productId: l.productId,
         ...(l.unitId ? { unitId: l.unitId } : {}),
         qty: l.qty.toFixed(3),
+        ...(l.freeQty > 0 ? { freeQty: l.freeQty.toFixed(3) } : {}),
         rate: l.rate.toFixed(4),
         discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),
       })),
