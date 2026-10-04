@@ -8,6 +8,7 @@ import { api, ApiError, onSessionChange, refreshSession, setSession } from "../l
 import { ensureDevice, removedDevices } from "../offline/device";
 import { clearDeviceDocuments, openDeviceDocuments, refreshDeviceDocuments } from "../offline/documents";
 import { wipeBusinessCopy } from "../offline/wipe";
+import { clearKeptDrafts } from "../features/invoice/keptDraft";
 import { clearSnapshots, copyExpired, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
 import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
@@ -183,6 +184,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         // Signed out (or the session ended): forget the saved business; waiting work stays, locked, for the next sign-in.
         void clearSnapshots();
         void clearDeviceDocuments();
+        void clearKeptDrafts();
         lockVault();
         clearOfflineScope();
         resetWorkspace();
@@ -291,6 +293,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!res) {
         void clearSnapshots();
         void clearDeviceDocuments();
+        void clearKeptDrafts();
         lockVault();
         clearOfflineScope();
         offlineMode.current = false;

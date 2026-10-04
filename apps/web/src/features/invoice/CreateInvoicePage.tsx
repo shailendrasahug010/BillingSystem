@@ -29,6 +29,8 @@ import { InvoiceSavedDialog, type SavedNotice } from "./InvoiceSavedDialog";
 import { saleUnits } from "./units";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
+import { dropKeptDraft } from "./keptDraft";
+import { KeptDraftOffer, useKeptDraft, type KeptDraftState } from "./KeptDraftNotice";
 import { BarcodeCamera } from "../../components/scan/BarcodeCamera";
 import { nativeScanner, scanWithPhone } from "../../components/scan/barcode";
 
@@ -167,6 +169,8 @@ function useSave(view: DraftView) {
       // Feedback on the suggestions goes with a bill saved online (the server knows that bill).
       if (offline) view.feedback.reset();
       else view.feedback.send(invoice.id, view.draft.lines.map((l) => l.productId));
+      // Saved: not kept as unfinished any more (before Save & print leaves the screen).
+      void dropKeptDraft();
       view.dispatch({ type: "reset" });
       // Save & print: the bill opens with the print dialog.
       if (mode === "print") {
@@ -270,7 +274,7 @@ function useSave(view: DraftView) {
   return { save, saved, closeSaved: () => setSaved(null) };
 }
 
-function DesktopInvoice({ view }: { view: DraftView }) {
+function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }) {
   const i18n = useI18n();
   const { t, money } = i18n;
   const { navigate } = useRouter();
@@ -348,6 +352,8 @@ function DesktopInvoice({ view }: { view: DraftView }) {
           {hint(INVOICE_SHORTCUTS.saveAndPrint, t("shortcuts.saveAndPrint"))}
         </div>
       </div>
+
+      <KeptDraftOffer state={kept} />
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-3">
@@ -453,7 +459,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
 }
 
 /** Phone flow: Customer → Products → Review & pay, big targets, sticky total. */
-function MobileInvoice({ view }: { view: DraftView }) {
+function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }) {
   const { t, money, locale } = useI18n();
   const { save, saved, closeSaved } = useSave(view);
   const [step, setStep] = useState(view.customer ? 1 : 0);
@@ -508,6 +514,11 @@ function MobileInvoice({ view }: { view: DraftView }) {
   );
 
   const steps = [t("invoice.steps.customer"), t("invoice.steps.products"), t("invoice.steps.review")];
+  // A kept bill brought back: on to its products.
+  useEffect(() => {
+    if (kept.restoredAt) setStep(view.customer ? 1 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kept.restoredAt]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -515,6 +526,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
         <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
         <span className="font-mono text-[12.5px] text-ink-3">{numberLabel}</span>
       </div>
+      <KeptDraftOffer state={kept} />
       <ol className="grid grid-cols-3 gap-2" aria-label={t("invoice.quick")}>
         {steps.map((s, i) => (
           <li key={s}>
@@ -674,7 +686,8 @@ const canAddCustomer = () => LIVE && allowed("customer.create");
 
 export function CreateInvoicePage({ customerId }: { customerId?: string }) {
   const view = useInvoiceDraft(customerId ?? null);
+  const kept = useKeptDraft(view, customerId ?? null);
   // The full screen (with its keyboard shortcuts) from tablet width up; the step-by-step one on phones.
   const desktop = useMediaQuery("(min-width: 768px)");
-  return desktop ? <DesktopInvoice view={view} /> : <MobileInvoice view={view} />;
+  return desktop ? <DesktopInvoice view={view} kept={kept} /> : <MobileInvoice view={view} kept={kept} />;
 }

@@ -72,7 +72,9 @@ type Action =
   | { type: "method"; value: PaymentMethod }
   | { type: "focused" }
   | { type: "zeroRated"; patch: Partial<ZeroRatedChoice> }
-  | { type: "reset"; customerId?: string | null };
+  | { type: "reset"; customerId?: string | null }
+  /** A bill left half made, brought back (see keptDraft). */
+  | { type: "restore"; draft: Omit<Draft, "focusKey"> };
 
 let lineSeq = 0;
 
@@ -176,6 +178,23 @@ function reducer(state: Draft, action: Action): Draft {
       return { ...state, zeroRated: { ...state.zeroRated, ...action.patch } };
     case "reset":
       return initialDraft(action.customerId ?? null);
+    case "restore": {
+      // Products and customers since removed drop out; the bill is for today, as a new one is.
+      const kept = action.draft;
+      const lines = kept.lines
+        .filter((l) => productById.has(l.productId))
+        .map((l) => {
+          lineSeq += 1;
+          return { ...l, key: `l${lineSeq}`, freeQty: l.freeQty ?? 0 };
+        });
+      return {
+        ...initialDraft(kept.customerId && customerById.has(kept.customerId) ? kept.customerId : null),
+        lines,
+        received: kept.received,
+        method: kept.method,
+        zeroRated: kept.zeroRated,
+      };
+    }
   }
 }
 

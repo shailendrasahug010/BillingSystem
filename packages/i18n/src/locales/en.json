@@ -423,7 +423,14 @@
     "copyMessage": "Copy message",
     "copied": "Copied",
     "whatsAppWithPdf": "The invoice PDF goes with the message.",
-    "whatsAppPdfLater": "The message goes now; the PDF can be sent once the bill reaches the server."
+    "whatsAppPdfLater": "The message goes now; the PDF can be sent once the bill reaches the server.",
+    "kept": {
+      "restored": "Unfinished bill brought back",
+      "startNew": "Start a new bill",
+      "offer": "Unfinished bill:",
+      "resume": "Resume",
+      "discard": "Discard"
+    }
   },
   "bills": {
     "title": "Sales bills",

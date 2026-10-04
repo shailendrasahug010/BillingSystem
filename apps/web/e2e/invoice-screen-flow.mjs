@@ -99,10 +99,14 @@ log(`owner, ${products.length} products, Sharma Kirana with ${before} bills befo
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
-/** Opens a new bill for Sharma Kirana. */
+/** Opens a new bill for Sharma Kirana (a bill left half made before is brought back: started afresh). */
 async function newBill(page) {
   await page.goto(`${WEB}/#invoice`);
-  await page.getByRole("combobox", { name: "Search customer by name, mobile, GSTIN or code" }).fill("Sharma");
+  const customer = page.getByRole("combobox", { name: "Search customer by name, mobile, GSTIN or code" });
+  const startNew = page.getByRole("button", { name: "Start a new bill" });
+  await customer.or(startNew).first().waitFor({ timeout: 15000 });
+  if (await startNew.isVisible()) await startNew.click();
+  await customer.fill("Sharma");
   await page.getByRole("option", { name: /Sharma Kirana/ }).first().click();
 }
 const search = (page) => page.getByRole("combobox", { name: "Search product, code or scan barcode" });
