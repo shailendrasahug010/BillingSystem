@@ -117,8 +117,8 @@ export function InvoiceSavedDialog({ notice, onClose, onNext }: { notice: SavedN
     >
       {notice && (
         <div className="flex flex-col items-center gap-3 text-center">
-          <span className="flex size-14 items-center justify-center rounded-full bg-good-soft text-good" aria-hidden>
-            <CircleCheck size={32} />
+          <span className="flex size-14 items-center justify-center rounded-full bg-good-soft text-good tick-ring" aria-hidden>
+            <CircleCheck size={32} className="tick-draw" />
           </span>
           <div>
             <p className="font-mono text-[15px] font-semibold text-ink">{notice.number}</p>

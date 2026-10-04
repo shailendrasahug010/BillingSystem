@@ -7,7 +7,7 @@ import { ariaShortcut, INVOICE_SHORTCUTS, useShortcuts } from "../../app/shortcu
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Field";
-import { Kbd } from "../../components/ui/misc";
+import { CountUp, Kbd } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BUSINESS, CUSTOMERS, PRODUCTS, productById } from "../../data/db";
 import { LIVE } from "../../data/source";
@@ -33,6 +33,7 @@ import { dropKeptDraft } from "./keptDraft";
 import { KeptDraftOffer, useKeptDraft, type KeptDraftState } from "./KeptDraftNotice";
 import { BarcodeCamera } from "../../components/scan/BarcodeCamera";
 import { nativeScanner, scanWithPhone } from "../../components/scan/barcode";
+import { buzz, SAVED, SCANNED } from "../../lib/haptics";
 
 /**
  * Adds products by barcode: the camera reads packs one after another (on
@@ -71,7 +72,10 @@ function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChan
   const withPhone = async () => {
     try {
       const scanned = await scanWithPhone();
-      if (scanned) take(scanned, true);
+      if (scanned) {
+        buzz(SCANNED);
+        take(scanned, true);
+      }
     } catch {
       // The phone's scanner is not ready (Google's module downloads once): the camera in the page meanwhile.
       void nativeScanner()
@@ -163,6 +167,7 @@ function useSave(view: DraftView) {
 
   const afterSave = useCallback(
     (invoice: SavedInvoice, mode: "save" | "print" | "share", offline: boolean) => {
+      buzz(SAVED);
       const { customer, dueDate } = view;
       const warning = invoice.warnings[0];
       const warningText = warning ? t((WARNING_KEYS[warning.code] ?? "errors.generic") as "errors.generic", warning.params) : null;
@@ -427,7 +432,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
-                <p className="num font-display text-[20px] leading-tight font-semibold text-ink">{money(totals?.grandTotal.toNumber() ?? 0)}</p>
+                <p className="num font-display text-[20px] leading-tight font-semibold text-ink"><CountUp value={totals?.grandTotal.toNumber() ?? 0} format={(v) => money(v)} duration={300} /></p>
               </div>
               {allowed("invoice.print") && (
                 <Button icon={<Printer size={16} />} disabled={!canSave} onClick={() => save("print")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.saveAndPrint)}>
@@ -631,7 +636,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
             <div className="mx-auto flex max-w-xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
-                <p className="num font-display text-[22px] leading-tight font-semibold text-ink">{money(totals?.grandTotal.toNumber() ?? 0)}</p>
+                <p className="num font-display text-[22px] leading-tight font-semibold text-ink"><CountUp value={totals?.grandTotal.toNumber() ?? 0} format={(v) => money(v)} duration={300} /></p>
               </div>
               <Button variant="primary" size="lg" disabled={!totals} onClick={() => setStep(2)} trailing={<ArrowRight size={18} />}>
                 {t("common.next")}

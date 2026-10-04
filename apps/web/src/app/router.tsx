@@ -56,6 +56,8 @@ interface RouterValue {
   route: Route;
   /** Opens a screen as a new step (the browser's Back returns from it); replace: in place of this one. */
   navigate(route: Route, options?: { replace?: boolean }): void;
+  /** Whether the screen open now came forward (opened) or back (the browser's Back): phones slide it in from that side. */
+  direction: "forward" | "back";
 }
 
 const RouterContext = createContext<RouterValue | null>(null);
@@ -197,6 +199,7 @@ export const goBack = (): boolean => backFn?.() ?? false;
 export function RouterProvider({ children }: { children: ReactNode }) {
   const [start] = useState(startRoute);
   const [route, setRoute] = useState<Route>(start.route);
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
   // How many of the app's screens lie behind this one in the browser's history.
   const step = useRef(start.step);
 
@@ -209,6 +212,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     const replace = options.replace || hashFor(next) === window.location.hash;
     if (!replace) step.current += 1;
     writeHistory(replace ? "replace" : "push", next, step.current);
+    setDirection("forward");
     setRoute(next);
     window.scrollTo({ top: 0 });
   }, []);
@@ -222,6 +226,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     // Back and Forward, and a link to a screen (#customers) followed inside the app.
     const onPop = (e: PopStateEvent) => {
       if (isOurs(e.state)) {
+        setDirection(e.state.step < step.current ? "back" : "forward");
         step.current = e.state.step;
         setRoute(e.state.route);
         return;
@@ -230,6 +235,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
       if (!linked) return;
       step.current += 1;
       writeHistory("replace", linked, step.current);
+      setDirection("forward");
       setRoute(linked);
       window.scrollTo({ top: 0 });
     };
@@ -240,7 +246,7 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <RouterContext.Provider value={{ route, navigate }}>{children}</RouterContext.Provider>;
+  return <RouterContext.Provider value={{ route, navigate, direction }}>{children}</RouterContext.Provider>;
 }
 
 export function useRouter(): RouterValue {

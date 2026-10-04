@@ -143,7 +143,7 @@ export function ProductsPage() {
                   <th className="px-4 py-2.5 text-right font-medium">{t("product.currentStock")}</th>
                 </tr>
               </thead>
-              <tbody className="num">
+              <tbody className="num rows-in">
                 {rows.map((p) => {
                   const level = stockLevel(p.stock, p.minStock);
                   const margin = ((p.rate - p.purchasePrice) / p.rate) * 100;

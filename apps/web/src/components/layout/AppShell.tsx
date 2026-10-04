@@ -154,7 +154,7 @@ function NavItem({ mod, active, onClick }: { mod: ModuleDef; active: boolean; on
       aria-current={active ? "page" : undefined}
       className={cn(
         "press group flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
-        active ? "bg-accent bg-accent-grad font-semibold text-ink-inverse shadow-glow" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
+        active ? "animate-pill bg-accent bg-accent-grad font-semibold text-ink-inverse shadow-glow" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
       )}
     >
       <Icon size={17} className={cn("shrink-0 transition-transform duration-200", active ? "text-ink-inverse" : "text-ink-3 group-hover:scale-110 group-hover:text-ink")} />
@@ -347,7 +347,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   ).filter((b): b is NonNullable<typeof b> => Boolean(b) && !b!.hidden);
 
   return (
-    <div className="min-h-full lg:grid lg:grid-cols-[256px_1fr]">
+    <div className="animate-fade min-h-full lg:grid lg:grid-cols-[256px_1fr]">
       {/* Desktop sidebar: the menu on the accent-tinted navy. */}
       <aside className="on-dark bg-side sticky top-0 hidden h-screen flex-col lg:flex">
         <div className="flex h-16 items-center px-4">
@@ -477,7 +477,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
               aria-current={active ? "page" : undefined}
               className={cn("press flex flex-col items-center justify-center gap-1 text-[10.5px] font-semibold", active ? "text-accent-ink" : "text-ink-3")}
             >
-              <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200", active ? "bg-accent-soft text-accent" : "")}>{item.icon}</span>
+              <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200", active ? "animate-pill-x bg-accent-soft text-accent" : "")}>{item.icon}</span>
               {item.label}
             </button>
           );

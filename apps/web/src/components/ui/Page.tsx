@@ -76,7 +76,7 @@ export function DataTable<T>({
                 ))}
               </tr>
             </thead>
-            <tbody className="num">
+            <tbody className="num rows-in">
               {rows.map((row) => (
                 <tr
                   key={rowKey(row)}

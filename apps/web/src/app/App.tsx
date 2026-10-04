@@ -242,7 +242,7 @@ function NoAccess({ onHome }: { onHome(): void }) {
 }
 
 function Root() {
-  const { route, navigate } = useRouter();
+  const { route, navigate, direction } = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -270,8 +270,8 @@ function Root() {
 
   return (
     <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
-      {/* Each screen rises in as it opens. */}
-      <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className="animate-page">
+      {/* Each screen rises in as it opens (on a phone, slides in from the side it came from). */}
+      <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className={`animate-page screen-${direction}`}>
         <ScreenErrorBoundary>
           <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
         </ScreenErrorBoundary>

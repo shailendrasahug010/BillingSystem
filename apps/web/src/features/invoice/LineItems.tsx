@@ -280,7 +280,7 @@ export function LineItems({
                 if (el) rowRefs.current.set(line.key, el);
                 else rowRefs.current.delete(line.key);
               }}
-              className={cn("-mx-4 scroll-mt-36 scroll-mb-48 px-4 py-2 transition-colors duration-700", lit === line.key && "bg-accent-soft")}
+              className={cn("animate-line -mx-4 scroll-mt-36 scroll-mb-48 px-4 py-2 transition-colors duration-700", lit === line.key && "bg-accent-soft")}
             >
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 text-[14.5px] leading-snug font-medium text-ink">{name}</p>
@@ -394,7 +394,7 @@ export function LineItems({
           const units = saleUnits(p);
           return (
             // The search bar stays at the top while lines scroll: a focused field keeps clear of it.
-            <tr key={line.key} className="border-b border-line last:border-b-0 hover:bg-surface-2/60 focus-within:bg-accent-soft/40 [&_input]:scroll-mt-48 [&_input]:scroll-mb-28 [&_select]:scroll-mt-48">
+            <tr key={line.key} className="animate-line border-b border-line last:border-b-0 hover:bg-surface-2/60 focus-within:bg-accent-soft/40 [&_input]:scroll-mt-48 [&_input]:scroll-mb-28 [&_select]:scroll-mt-48">
               <td className="num py-1 pl-3 align-middle text-[12px] text-ink-3">{i + 1}</td>
               <td className="py-1 pl-1 align-middle">
                 <p className="truncate leading-tight font-medium text-ink" title={name}>

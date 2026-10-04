@@ -169,7 +169,7 @@ export function CustomersPage() {
                   <th className="w-8" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="rows-in">
                 {rows.map(({ c, ins }) => (
                   <tr key={c.id} onClick={() => navigate({ name: "customer", customerId: c.id })} className="cursor-pointer border-b border-line/70 transition-colors last:border-b-0 hover:bg-accent-soft/40">
                     <td className="px-4 py-3">
@@ -213,7 +213,7 @@ export function CustomersPage() {
                 ))}
               </tbody>
             </table>
-            <ul className="divide-y divide-line md:hidden">
+            <ul className="rows-in divide-y divide-line md:hidden">
               {rows.map(({ c, ins }) => (
                 <li key={c.id}>
                   <button type="button" onClick={() => navigate({ name: "customer", customerId: c.id })} className="press flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-surface-2">

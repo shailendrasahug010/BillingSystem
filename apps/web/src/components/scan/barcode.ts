@@ -1,4 +1,5 @@
 import { nativePlugin } from "../../platform/native";
+import { buzz, SCANNED } from "../../lib/haptics";
 
 /**
  * Reading barcodes with the camera. The browser's own reader where it has one
@@ -65,7 +66,7 @@ export async function scanWithPhone(): Promise<string | null> {
 /** A short beep and a buzz when a code is read. */
 export function beep(): void {
   try {
-    navigator.vibrate?.(40);
+    buzz(SCANNED);
     const Ctx = window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
