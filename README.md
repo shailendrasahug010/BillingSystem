@@ -30,7 +30,7 @@ In the code the name is written `digitalbahi`: the `@digitalbahi/*` packages, th
 ```
 apps/
   api/            Fastify REST API, multi-tenant, with its background workers (339 integration tests against PostgreSQL)
-  web/            React 19 + Vite + Tailwind 4 — live on the API; demo mode for previews (35 unit tests)
+  web/            React 19 + Vite + Tailwind 4 — live on the API; demo mode for previews (39 unit tests)
   mobile/         The Android app: the web app packaged with Capacitor, with Bluetooth printing, the ML Kit scanner, the share sheet, printing and push
 packages/
   core/           Pure TypeScript business logic shared by server and clients (139 tests)

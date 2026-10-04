@@ -117,7 +117,8 @@ log("saved privately: Festive margin (15 Aug – 5 Sep, by customer)");
 
 // 5. After a reload both open as saved.
 await owner.reload();
-await owner.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
+// A reload stays on Business Reports.
+await owner.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
 await o.nav("Business Reports");
 let menu = await o.menu();
 const listed = await menu.innerText();
@@ -170,7 +171,8 @@ await o.dialog().getByText("It is shared: the team will no longer see it either"
 await o.dialog().getByRole("button", { name: "Delete" }).click();
 await o.toast("View “Sales by company” deleted");
 await analyst.reload();
-await analyst.getByRole("heading", { name: /Kiran/ }).waitFor({ timeout: 15000 });
+// A reload stays on Business Reports.
+await analyst.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
 await a.nav("Business Reports");
 menu = await a.menu();
 const after = await menu.innerText();

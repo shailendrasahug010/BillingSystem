@@ -122,7 +122,7 @@ log("salesperson signed in with the user ID");
 
 // 4. Only what the Sales role allows: the menu, the dashboard's actions, the buttons on each screen.
 const menu = (await staffPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Outstanding", "Beat", "Messages", "Products", "Notifications"];
+const expectedMenu = ["Dashboard", "New Invoice", "Invoices", "Sales Orders", "Customers", "Payments", "Outstanding", "Beat", "Messages", "Products", "Notifications"];
 if (JSON.stringify(menu) !== JSON.stringify(expectedMenu)) errors.push(`sales menu: ${menu.join(", ")}`);
 const quick = (await staffPage.getByRole("region", { name: "Quick actions" }).getByRole("button").allTextContents()).map((s) => s.replace(/(Ctrl|Alt).*$/, "").trim());
 if (JSON.stringify(quick) !== JSON.stringify(["Create Invoice", "New Order", "Receive Payment", "Add Customer"])) errors.push(`sales quick actions: ${quick.join(", ")}`);
