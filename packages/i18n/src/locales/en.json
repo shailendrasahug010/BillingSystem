@@ -185,7 +185,14 @@
     "switchBusiness": "Switch business",
     "loadingWorkspace": "Loading your business…",
     "loadFailed": "Could not load your business.",
-    "offlineStart": "You are offline. Your business opens as soon as the internet connection is back; your data is kept safely on the server."
+    "offlineStart": "You are offline. Your business opens as soon as the internet connection is back; your data is kept safely on the server.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "perks": {
+      "offline": "Works without internet",
+      "whatsapp": "Bills on WhatsApp as PDF",
+      "language": "English · हिन्दी"
+    }
   },
   "dashboard": {
     "greeting": "Good morning, {{name}}",

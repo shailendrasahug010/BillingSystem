@@ -468,6 +468,7 @@ h3 {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -508,17 +509,76 @@ h3 {
   animation: rise-in 360ms var(--ease-out) backwards;
 }
 
+/* --stagger-start holds a list back until what is above it has arrived. */
 .stagger > * {
-  animation: rise-in 480ms var(--ease-out) backwards;
+  animation: rise-in 480ms var(--ease-out) var(--stagger-start, 0ms) backwards;
 }
-.stagger > :nth-child(2) { animation-delay: 40ms; }
-.stagger > :nth-child(3) { animation-delay: 80ms; }
-.stagger > :nth-child(4) { animation-delay: 120ms; }
-.stagger > :nth-child(5) { animation-delay: 160ms; }
-.stagger > :nth-child(6) { animation-delay: 200ms; }
-.stagger > :nth-child(7) { animation-delay: 240ms; }
-.stagger > :nth-child(8) { animation-delay: 280ms; }
-.stagger > :nth-child(n + 9) { animation-delay: 320ms; }
+.stagger > :nth-child(2) { animation-delay: calc(var(--stagger-start, 0ms) + 40ms); }
+.stagger > :nth-child(3) { animation-delay: calc(var(--stagger-start, 0ms) + 80ms); }
+.stagger > :nth-child(4) { animation-delay: calc(var(--stagger-start, 0ms) + 120ms); }
+.stagger > :nth-child(5) { animation-delay: calc(var(--stagger-start, 0ms) + 160ms); }
+.stagger > :nth-child(6) { animation-delay: calc(var(--stagger-start, 0ms) + 200ms); }
+.stagger > :nth-child(7) { animation-delay: calc(var(--stagger-start, 0ms) + 240ms); }
+.stagger > :nth-child(8) { animation-delay: calc(var(--stagger-start, 0ms) + 280ms); }
+.stagger > :nth-child(n + 9) { animation-delay: calc(var(--stagger-start, 0ms) + 320ms); }
+
+/* The app fades in once signed in (opacity only: nothing fixed inside it moves). */
+.animate-fade {
+  animation: fade-in 320ms ease-out backwards;
+}
+
+/* The sign-in screen: the logo settles in, the shapes behind it drift slowly. */
+@keyframes logo-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-logo {
+  animation: logo-in 560ms var(--ease-out) backwards;
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate3d(-28px, 22px, 0) rotate(10deg);
+  }
+}
+.animate-drift {
+  animation: drift 14s ease-in-out infinite alternate;
+}
+.animate-drift-slow {
+  animation: drift 19s ease-in-out -7s infinite alternate-reverse;
+}
+
+/* A refused sign-in shakes its form, the way a wrong PIN does on a phone. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+.animate-shake {
+  animation: shake 380ms var(--ease-out);
+}
 
 /* Bottom sheets on phones slide up. */
 @keyframes sheet-up {

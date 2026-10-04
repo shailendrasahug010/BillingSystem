@@ -1,17 +1,18 @@
-import { Building2, KeyRound, LockKeyhole, Smartphone, UserRound } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Building2, CloudOff, Eye, EyeOff, Languages, KeyRound, Loader2, LockKeyhole, MessageCircle, Smartphone, UserRound } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { UpdateBanner } from "../../components/layout/UpdateBanner";
 import { useI18n } from "../../app/i18n";
 import { useSession } from "../../app/session";
 import { DIGITAL_BAHI_LOGO } from "../../components/brand/Brand";
 import { LanguageToggle } from "../../components/layout/AppShell";
 import { Button } from "../../components/ui/Button";
-import { Field, Input, Select } from "../../components/ui/Field";
+import { Field, Input, Select, type InputProps } from "../../components/ui/Field";
 import { ApiError } from "../../lib/api";
 import { translateError } from "@digitalbahi/i18n";
 import { validateEmail, validateGstin, validateMobile } from "@digitalbahi/core";
 import { stateOptions } from "../../lib/states";
 import { ServerLine } from "./ServerSetup";
+import { lastSignIn, rememberSignIn } from "../../lib/lastSignIn";
 
 type Mode = "password" | "otp" | "signup" | "reset";
 
@@ -20,20 +21,21 @@ export function AuthHero() {
   const { t } = useI18n();
   return (
     <section className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-accent-soft via-surface to-good-soft p-10 text-ink lg:flex">
-      <div className="pointer-events-none absolute -top-28 -right-28 size-[380px] rounded-full border-[36px] border-accent/10" aria-hidden />
-      <div className="pointer-events-none absolute -bottom-24 -left-20 size-72 rounded-full bg-brand-green/10" aria-hidden />
+      <div className="animate-drift pointer-events-none absolute -top-28 -right-28 size-[380px] rounded-full border-[36px] border-accent/10" aria-hidden />
+      <div className="animate-drift-slow pointer-events-none absolute -bottom-24 -left-20 size-72 rounded-full bg-brand-green/10" aria-hidden />
+      <div className="animate-drift-slow pointer-events-none absolute top-1/2 right-16 size-24 rounded-full bg-accent/5" aria-hidden />
       <div className="relative flex justify-center pt-4">
-        <img src={DIGITAL_BAHI_LOGO} alt={`Digital Bahi · ${t("app.brandTagline")}`} width={480} height={431} className="w-full max-w-[340px] rounded-3xl bg-white p-4 shadow-card" />
+        <img src={DIGITAL_BAHI_LOGO} alt={`Digital Bahi · ${t("app.brandTagline")}`} width={480} height={431} className="animate-logo w-full max-w-[340px] rounded-3xl bg-white p-4 shadow-card" />
       </div>
       <div className="relative max-w-md">
-        <p className="font-display text-[34px] leading-[1.1] font-semibold text-brand-navy">{t("app.tagline")}</p>
-        <ul className="mt-5 flex flex-col gap-2 text-[15px] text-ink-2">
+        <p className="animate-page font-display text-[34px] leading-[1.1] font-semibold text-brand-navy [animation-delay:160ms]">{t("app.tagline")}</p>
+        <ul className="stagger mt-5 flex flex-col gap-2 text-[15px] text-ink-2 [--stagger-start:280ms]">
           <li>GST · CGST / SGST / IGST · HSN</li>
           <li>English · हिन्दी</li>
           <li>Web · Windows · Mac · Android · iPhone</li>
         </ul>
       </div>
-      <p className="relative text-[12.5px] text-ink-3">{t("auth.secureNote")}</p>
+      <p className="animate-page relative text-[12.5px] text-ink-3 [animation-delay:480ms]">{t("auth.secureNote")}</p>
     </section>
   );
 }
@@ -44,10 +46,10 @@ export function AuthLayout({ children }: { children: ReactNode }) {
     <div className="grid min-h-full grid-cols-1 bg-bg lg:grid-cols-[1.05fr_1fr]">
       <AuthHero />
       <section className="flex flex-col justify-center px-4 py-10 sm:px-10">
-        <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
+        <div className="animate-page mx-auto flex w-full max-w-sm flex-col gap-6 lg:[animation-delay:120ms]">
           <UpdateBanner className="rounded-lg" />
           <div className="flex items-center justify-between">
-            <img src={DIGITAL_BAHI_LOGO} alt="Digital Bahi" width={480} height={431} className="w-36 lg:hidden" />
+            <img src={DIGITAL_BAHI_LOGO} alt="Digital Bahi" width={480} height={431} className="animate-logo w-36 lg:hidden" />
             <LanguageToggle className="ml-auto self-start" />
           </div>
           {children}
@@ -69,6 +71,30 @@ type SignupField = (typeof SIGNUP_FIELDS)[number];
 const SIGNUP_IDS: Record<SignupField, string> = { name: "su-name", mobile: "su-mobile", email: "su-email", password: "su-password", legalName: "su-business", stateCode: "su-state", gstin: "su-gstin" };
 const signupField = (path: string | undefined): SignupField | undefined => SIGNUP_FIELDS.find((f) => path === f || path === `business.${f}`);
 
+/** A password field with an eye to show what was typed. */
+function PasswordInput(props: InputProps) {
+  const { t } = useI18n();
+  const [shown, setShown] = useState(false);
+  return (
+    <Input
+      {...props}
+      type={shown ? "text" : "password"}
+      trailing={
+        <button
+          type="button"
+          aria-label={shown ? t("auth.hidePassword") : t("auth.showPassword")}
+          aria-pressed={shown}
+          title={shown ? t("auth.hidePassword") : t("auth.showPassword")}
+          onClick={() => setShown((v) => !v)}
+          className="press flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink"
+        >
+          {shown ? <EyeOff size={17} /> : <Eye size={17} />}
+        </button>
+      }
+    />
+  );
+}
+
 /**
  * Sign in (password or OTP), self-service sign-up that creates the business,
  * and password reset by OTP. Errors come back as codes and are shown in the
@@ -86,8 +112,9 @@ export function AuthPage() {
   const [devCode, setDevCode] = useState<string | null>(null);
   // Sign-up's first panel was sent once: its fields show what is missing from then on.
   const [tried, setTried] = useState(false);
+  const [remembered] = useState(lastSignIn);
   const [form, setForm] = useState({
-    identifier: "",
+    identifier: remembered,
     password: "",
     name: "",
     mobile: "",
@@ -121,6 +148,16 @@ export function AuthPage() {
     return detail ? (field === "password" ? t("validation.passwordShort") : t("validation.invalid_format")) : null;
   };
 
+  // A refused attempt shakes the form.
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const el = formRef.current;
+    if (!error || !el) return;
+    el.classList.remove("animate-shake");
+    void el.offsetWidth;
+    el.classList.add("animate-shake");
+  }, [error]);
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
@@ -152,8 +189,18 @@ export function AuthPage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (mode === "password") return void run(() => session.login(form.identifier.trim(), form.password));
-    if (mode === "otp") return void (otpSent ? run(() => session.loginWithOtp(form.mobile, form.otp)) : sendOtp("login"));
+    if (mode === "password")
+      return void run(async () => {
+        await session.login(form.identifier.trim(), form.password);
+        rememberSignIn(form.identifier.trim());
+      });
+    if (mode === "otp")
+      return void (otpSent
+        ? run(async () => {
+            await session.loginWithOtp(form.mobile, form.otp);
+            rememberSignIn(form.mobile.trim());
+          })
+        : sendOtp("login"));
     if (mode === "reset") {
       if (!otpSent) return void sendOtp("reset");
       return void run(async () => {
@@ -180,6 +227,7 @@ export function AuthPage() {
           preferredLocale: locale === "hi" ? "hi" : "en",
           business: { legalName: form.legalName.trim(), stateCode: form.stateCode, ...(form.gstin.trim() ? { gstin: form.gstin.trim().toUpperCase() } : {}) },
         });
+        rememberSignIn(form.mobile.trim());
       } catch (e) {
         // Refused for a field of the first panel (a GSTIN already registered…): back there, the message at the field.
         if (e instanceof ApiError && (signupField(e.field) || e.details?.some((d) => signupField(d.field)))) {
@@ -212,14 +260,14 @@ export function AuthPage() {
           {session.wiped.waiting > 0 && ` ${t("offline.wipedWaiting", { count: session.wiped.waiting })}`}
         </p>
       )}
-      <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+      <form ref={formRef} className="flex flex-col gap-4" onSubmit={onSubmit} onAnimationEnd={(e) => e.currentTarget.classList.remove("animate-shake")} noValidate>
         {mode === "password" && (
           <>
             <Field label={t("auth.mobileOrEmail")} htmlFor="auth-id">
-              <Input id="auth-id" inputSize="lg" autoComplete="username" leading={<Smartphone size={18} />} value={form.identifier} onChange={set("identifier")} autoFocus />
+              <Input id="auth-id" inputSize="lg" autoComplete="username" leading={<Smartphone size={18} />} value={form.identifier} onChange={set("identifier")} autoFocus={!remembered} />
             </Field>
             <Field label={t("auth.password")} htmlFor="auth-password">
-              <Input id="auth-password" inputSize="lg" type="password" autoComplete="current-password" leading={<LockKeyhole size={18} />} value={form.password} onChange={set("password")} />
+              <PasswordInput id="auth-password" inputSize="lg" autoComplete="current-password" leading={<LockKeyhole size={18} />} value={form.password} onChange={set("password")} autoFocus={Boolean(remembered)} />
             </Field>
           </>
         )}
@@ -242,7 +290,7 @@ export function AuthPage() {
               <Input id="su-email" invalid={Boolean(signupError("email"))} type="email" autoComplete="email" value={form.email} onChange={set("email")} />
             </Field>
             <Field label={t("auth.newPassword")} htmlFor="su-password" hint={t("auth.passwordHint")} error={signupError("password")}>
-              <Input id="su-password" invalid={Boolean(signupError("password"))} type="password" autoComplete="new-password" leading={<LockKeyhole size={17} />} value={form.password} onChange={set("password")} />
+              <PasswordInput id="su-password" invalid={Boolean(signupError("password"))} autoComplete="new-password" leading={<LockKeyhole size={17} />} value={form.password} onChange={set("password")} />
             </Field>
             <p className="eyebrow pt-1">{t("auth.businessDetails")}</p>
             <Field label={t("auth.businessName")} htmlFor="su-business" error={signupError("legalName")}>
@@ -265,7 +313,7 @@ export function AuthPage() {
 
         {mode === "reset" && otpSent && (
           <Field label={t("auth.newPassword")} htmlFor="reset-password" hint={t("auth.passwordHint")}>
-            <Input id="reset-password" type="password" autoComplete="new-password" leading={<LockKeyhole size={17} />} value={form.password} onChange={set("password")} />
+            <PasswordInput id="reset-password" autoComplete="new-password" leading={<LockKeyhole size={17} />} value={form.password} onChange={set("password")} />
           </Field>
         )}
         {otpField}
@@ -284,7 +332,7 @@ export function AuthPage() {
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" size="lg" block disabled={busy}>
+        <Button type="submit" variant="primary" size="lg" block disabled={busy} aria-busy={busy} icon={busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : undefined}>
           {mode === "password"
             ? t("auth.signIn")
             : !otpSent
@@ -326,6 +374,19 @@ export function AuthPage() {
         </p>
         <ServerLine />
       </div>
+      {/* On a phone the hero is hidden: what the app does, in three lines under the form. */}
+      <ul className="stagger flex flex-wrap justify-center gap-2 text-[12.5px] text-ink-2 [--stagger-start:240ms] lg:hidden">
+        {[
+          { icon: <CloudOff size={14} />, label: t("auth.perks.offline") },
+          { icon: <MessageCircle size={14} />, label: t("auth.perks.whatsapp") },
+          { icon: <Languages size={14} />, label: t("auth.perks.language") },
+        ].map((p) => (
+          <li key={p.label} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5">
+            <span className="text-accent">{p.icon}</span>
+            {p.label}
+          </li>
+        ))}
+      </ul>
     </AuthLayout>
   );
 }

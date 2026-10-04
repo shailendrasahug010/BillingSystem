@@ -1,3 +1,4 @@
+import { rememberSignIn } from "../lib/lastSignIn";
 import { idbAll, idbDelete, idbGet, idbKeys } from "./idb";
 
 /**
@@ -15,6 +16,9 @@ export async function wipeBusinessCopy(userId: string, businessId: string, optio
   const last = await idbGet<{ userId?: string; businessId?: string } | string>("kv", "snapshot:last");
   if (last && typeof last === "object" && last.userId === userId && last.businessId === businessId) await idbDelete("kv", "snapshot:last");
   if (!options.removedDevice) return 0;
+
+  // A device the owner removed no longer offers who signed in on it.
+  rememberSignIn(null);
 
   await idbDelete("kv", `device:${userId}:${businessId}`);
   await idbDelete("kv", `synced:${userId}:${businessId}`);
