@@ -437,6 +437,14 @@
       "offer": "Unfinished bill:",
       "resume": "Resume",
       "discard": "Discard"
+    },
+    "copy": {
+      "button": "Copy bill",
+      "title": "Start a new bill with this bill's items",
+      "done": "Copied from {{number}}",
+      "hint": "Same items, quantities and rates, dated today. Change anything before saving.",
+      "replaceTitle": "Replace the unfinished bill?",
+      "replaceBody": "You have a bill not saved yet ({{bill}}). Copying this bill puts it in its place."
     }
   },
   "bills": {

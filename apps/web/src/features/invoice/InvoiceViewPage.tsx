@@ -1,11 +1,12 @@
 import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
-import { ArrowLeft, Ban, CloudOff, Printer } from "lucide-react";
+import { ArrowLeft, Ban, CloudOff, Copy, Printer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import { Dialog } from "../../components/ui/Dialog";
 import { EmptyState, Segmented } from "../../components/ui/misc";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
@@ -28,6 +29,8 @@ import { CancelInvoiceDialog, type CancellableBill } from "./CancelInvoiceDialog
 import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
 import { invoiceReceipt } from "../../lib/thermal/receipts";
 import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
+import { copyBill, type CopiedLine } from "./copyBill";
+import { loadKeptDraft, type KeptDraft } from "./keptDraft";
 
 /** Bills already sent to the printer from Save & print (going back to one does not print it again). */
 const printed = new Set<string>();
@@ -41,6 +44,8 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
   const offlineKey = invoiceId.startsWith("offline:") ? invoiceId.slice("offline:".length) : null;
   const offline = useOffline();
   const [cancelling, setCancelling] = useState(false);
+  // Copying over a bill left half made asks first.
+  const [replacing, setReplacing] = useState<KeptDraft | null>(null);
   const kept = offlineKey ? findOfflineBill(offlineKey) : {};
   const syncedId = kept.synced?.serverId;
   useEffect(() => {
@@ -105,6 +110,23 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
           }
         : null;
 
+  // What the bill sold, to start a new bill from (the server's bill, or the demo's).
+  const copyLines: CopiedLine[] | null = !allowed("invoice.create")
+    ? null
+    : LIVE
+      ? (live.data?.items.map((i) => ({ productId: i.productId, unitId: i.unitId, qty: Number(i.qty), freeQty: Number(i.freeQty ?? 0), rate: Number(i.rate), discountPercent: Number(i.discountPercent) })) ?? null)
+      : (demo?.lines.map((l) => ({ productId: l.productId, unitId: null, qty: l.qty, rate: l.rate, discountPercent: l.discountPercent })) ?? null);
+  const openCopy = () => {
+    if (!copyLines) return;
+    setReplacing(null);
+    copyBill(invoice.number, invoice.customerId, copyLines);
+    navigate({ name: "invoice-new", customerId: invoice.customerId });
+  };
+  const startCopy = () =>
+    void loadKeptDraft()
+      .catch(() => null)
+      .then((kept) => (kept && kept.draft.lines.length > 0 ? setReplacing(kept) : openCopy()));
+
   return (
     <div className="flex flex-col gap-5">
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
@@ -154,6 +176,11 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
               { value: "hi", label: "हिन्दी" },
             ]}
           />
+          {copyLines && copyLines.length > 0 && (
+            <Button icon={<Copy size={16} />} title={t("invoice.copy.title")} onClick={startCopy}>
+              {t("invoice.copy.button")}
+            </Button>
+          )}
           {cancellable && (
             <Button variant="ghost" icon={<Ban size={16} />} onClick={() => setCancelling(true)}>
               {t("invoice.cancel.button")}
@@ -215,6 +242,24 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
         </div>
       )}
       {cancellable && <CancelInvoiceDialog bill={cancellable} open={cancelling} onOpenChange={setCancelling} />}
+      <Dialog
+        open={replacing !== null}
+        onOpenChange={(v) => !v && setReplacing(null)}
+        title={t("invoice.copy.replaceTitle")}
+        description={t("invoice.copy.replaceBody", {
+          bill: [replacing?.draft.customerId ? customerById.get(replacing.draft.customerId)?.businessName : null, t("common.items", { count: replacing?.draft.lines.length ?? 0 })].filter(Boolean).join(" · "),
+        })}
+        size="sm"
+        closeLabel={t("common.close")}
+        footer={
+          <>
+            <Button onClick={() => setReplacing(null)}>{t("common.cancel")}</Button>
+            <Button variant="primary" icon={<Copy size={16} />} onClick={openCopy}>
+              {t("invoice.copy.button")}
+            </Button>
+          </>
+        }
+      />
       <PrintPortal>
         <InvoiceDocument invoice={invoice} locale={printLocale} />
       </PrintPortal>

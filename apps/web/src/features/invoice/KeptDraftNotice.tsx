@@ -4,6 +4,7 @@ import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { customerById } from "../../data/db";
+import { takeCopiedBill } from "./copyBill";
 import { draftOutlivesReload, dropKeptDraft, keepDraft, loadKeptDraft, type KeptDraft } from "./keptDraft";
 import type { DraftView } from "./useInvoiceDraft";
 
@@ -40,6 +41,14 @@ export function useKeptDraft(view: DraftView, routeCustomerId: string | null): K
   };
 
   useEffect(() => {
+    // An old bill copied from its screen: opened here as the new bill (it replaces a kept one).
+    const copied = takeCopiedBill();
+    if (copied) {
+      restore({ savedAt: "", draft: copied.draft });
+      toast({ tone: "info", title: t("invoice.copy.done", { number: copied.number }), body: t("invoice.copy.hint") });
+      setReady(true);
+      return;
+    }
     let active = true;
     void loadKeptDraft()
       .then((kept) => {

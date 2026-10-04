@@ -4,7 +4,8 @@
  * sign up -> products and a customer (API) -> a bill with a scheme's free
  * pieces -> the server took them (stock, PDF) -> Invoices lists it, filters
  * -> reload on the bill and on a module keeps the screen, Back goes back ->
- * a bill left half made is offered again and can be thrown away.
+ * a bill left half made is offered again and can be thrown away -> a bill
+ * copied into a new one, asking first over an unfinished bill.
  *
  * Run against an empty database, with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/bills-flow.mjs
@@ -182,6 +183,31 @@ await customerBox.waitFor({ timeout: 15000 });
 await page.waitForTimeout(1500);
 check((await lineCount()) === 0 && (await page.getByText("Unfinished bill brought back").count()) === 0, "a saved bill came back as unfinished");
 log("saved bill: not offered again");
+
+// 6. Copy a bill: the first bill's items, quantities, free pieces and rates on a new bill for the same shop.
+await page.goto(billUrl);
+await page.getByRole("heading", { name: number }).waitFor({ timeout: 15000 });
+await page.getByRole("button", { name: "Copy bill" }).click();
+await page.getByText(`Copied from ${number}`).first().waitFor({ timeout: 10000 });
+check((await page.getByRole("textbox", { name: "Qty Parle-G 100g" }).inputValue()) === "10", "copied bill: Parle-G quantity");
+check((await page.getByRole("textbox", { name: "Free Parle-G 100g" }).inputValue()) === "1", "copied bill: free pieces");
+check((await lineCount()) === 2 && (await page.getByText("Gupta Stores").count()) > 0, "copied bill: lines or customer");
+await page.screenshot({ path: `${OUT}/bills-5-copied.png` });
+log("Copy bill: a new bill with", number, "'s two lines (Parle-G 10 + 1 free) for Gupta Stores");
+// Copying again over the copy not saved yet asks first.
+await page.waitForTimeout(600);
+await page.goto(billUrl);
+await page.getByRole("heading", { name: number }).waitFor({ timeout: 15000 });
+await page.getByRole("button", { name: "Copy bill" }).click();
+const replace = page.getByRole("dialog", { name: "Replace the unfinished bill?" });
+await replace.waitFor({ timeout: 10000 });
+await replace.getByRole("button", { name: "Copy bill" }).click();
+await page.getByText(`Copied from ${number}`).first().waitFor({ timeout: 10000 });
+await page.getByRole("button", { name: "Save invoice" }).click();
+await page.getByRole("dialog", { name: "Invoice added successfully" }).waitFor({ timeout: 20000 });
+const copies = (await api("GET", "/invoices", token)).data.filter((b) => Number(b.grandTotal) === 282);
+check(copies.length === 2, `bills of 282 after the copy: ${copies.length}`);
+log("over an unfinished bill it asks first; the copy saved for the same total");
 
 console.log("errors:", errors.length ? errors : "none");
 await browser.close();
