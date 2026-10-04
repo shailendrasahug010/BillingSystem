@@ -425,6 +425,16 @@
     "whatsAppWithPdf": "The invoice PDF goes with the message.",
     "whatsAppPdfLater": "The message goes now; the PDF can be sent once the bill reaches the server."
   },
+  "bills": {
+    "title": "Sales bills",
+    "search": "Search by bill number or customer",
+    "onlyHeld": "Held for review",
+    "payment": "Payment",
+    "openOnly": "To collect",
+    "empty": "No bills found",
+    "emptyHint": "Change the filters, or make a new bill.",
+    "keptBills": "No connection: sales bills kept on this device. Open one to print or share it."
+  },
   "suggestions": {
     "title": "Smart suggestions",
     "subtitle": "Based on {{name}}'s purchase history. Nothing is added automatically.",

@@ -10,6 +10,8 @@ export type Route =
   | { name: "login" }
   | { name: "dashboard" }
   | { name: "invoice-new"; customerId?: string }
+  /** Every sales bill, with filters (date, payment, status, search). */
+  | { name: "invoices" }
   /** print: open the print dialog once the bill is shown (Save & print). */
   | { name: "invoice-view"; invoiceId: string; print?: boolean }
   | { name: "customers" }
@@ -61,6 +63,7 @@ const RouterContext = createContext<RouterValue | null>(null);
 const HASH_ROUTES: Record<string, Route> = {
   dashboard: { name: "dashboard" },
   invoice: { name: "invoice-new" },
+  invoices: { name: "invoices" },
   customers: { name: "customers" },
   outstanding: { name: "outstanding" },
   beat: { name: "beat" },

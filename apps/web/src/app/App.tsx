@@ -38,6 +38,7 @@ const GstPage = lazy(() => import("../features/gst/GstPage").then((m) => ({ defa
 const InventoryPage = lazy(() => import("../features/inventory/InventoryPage").then((m) => ({ default: m.InventoryPage })));
 const PaymentsPage = lazy(() => import("../features/payments/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
 const PurchaseEntryPage = lazy(() => import("../features/purchases/PurchaseEntryPage").then((m) => ({ default: m.PurchaseEntryPage })));
+const InvoicesPage = lazy(() => import("../features/invoice/InvoicesPage").then((m) => ({ default: m.InvoicesPage })));
 const PurchasesPage = lazy(() => import("../features/purchases/PurchasesPage").then((m) => ({ default: m.PurchasesPage })));
 const PurchaseViewPage = lazy(() => import("../features/purchases/PurchaseViewPage").then((m) => ({ default: m.PurchaseViewPage })));
 const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
@@ -77,6 +78,8 @@ function Screen({ route }: { route: Route }) {
     case "invoice-new":
       // key: a fresh draft whenever the entry customer changes
       return <CreateInvoicePage key={route.customerId ?? "new"} {...(route.customerId ? { customerId: route.customerId } : {})} />;
+    case "invoices":
+      return <InvoicesPage />;
     case "invoice-view":
       return <InvoiceViewPage invoiceId={route.invoiceId} print={route.print ?? false} />;
     case "customers":
