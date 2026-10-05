@@ -7,7 +7,7 @@ import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
-import type { RequestCtx } from "../../lib/context.js";
+import type { AppDeps, RequestCtx } from "../../lib/context.js";
 import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
@@ -63,8 +63,122 @@ function remaining(i: Pick<typeof schema.salesOrderItems.$inferSelect, "qty" | "
   return left.gt(0) ? left : dec(0);
 }
 
+const workflowOf = async (tx: Tx, businessId: string) => ({ ...DEFAULT_ORDER_WORKFLOW, ...(await getSetting(tx, businessId, "orders.workflow")) });
+
 async function recordStatus(tx: Tx, ctx: RequestCtx, id: string, from: string | null, to: string, note?: string) {
   await tx.insert(schema.statusHistory).values({ businessId: ctx.businessId, entityType: "sales_order", entityId: id, fromStatus: from, toStatus: to, note: note ?? null, createdBy: ctx.userId });
+}
+
+/**
+ * Books a sales order (or a quotation) priced like an invoice on the order
+ * date. A replay of the same Idempotency-Key returns the order it made.
+ * `status` books it as that instead of what the workflow says (an order from
+ * a shop's order link waits to be confirmed).
+ */
+export async function createSalesOrder(
+  tx: Tx,
+  ctx: RequestCtx,
+  deps: AppDeps,
+  body: z.output<typeof SalesOrderBody>,
+  clientId: string | null,
+  options: { status?: OrderStatus } = {},
+): Promise<{ replay: boolean; detail: Awaited<ReturnType<typeof orderDetail>> }> {
+    const workflow = await workflowOf(tx, ctx.businessId);
+    if (clientId) {
+      await lockIdempotencyKey(tx, clientId);
+      const [existing] = await tx
+        .select({ id: schema.salesOrders.id })
+        .from(schema.salesOrders)
+        .where(and(eq(schema.salesOrders.businessId, ctx.businessId), eq(schema.salesOrders.clientId, clientId)));
+      if (existing) return { replay: true, detail: await orderDetail(tx, ctx, existing.id, workflow) };
+    }
+    const today = deps.clock.today(ctx.timeZone);
+    if (body.expectedDeliveryDate && body.expectedDeliveryDate < (body.orderDate ?? today)) throw badRequest("DELIVERY_BEFORE_ORDER", {}, "expectedDeliveryDate");
+    if (body.validUntil && (!body.quotation || body.validUntil < (body.orderDate ?? today))) throw badRequest("VALID_UNTIL_BEFORE_DATE", {}, "validUntil");
+    // Priced by the same code as an invoice on the order date.
+    const sale = await prepareSale(tx, ctx, { customerId: body.customerId, invoiceDate: body.orderDate, lines: body.lines, charges: [] } as z.output<typeof InvoiceBody>, today, { order: true });
+    const t = sale.totals;
+    const quotation = body.quotation === true;
+    const numbering = quotation
+      ? await nextDocumentNumber(tx, ctx.businessId, "quotation", sale.invoiceDate, sale.business.financialYearStartMonth, QUOTATION_SERIES)
+      : await nextDocumentNumber(tx, ctx.businessId, "sales_order", sale.invoiceDate, sale.business.financialYearStartMonth);
+    const id = uuidv7();
+    // A quotation waits as a draft until the customer accepts it.
+    const status: OrderStatus = quotation ? "draft" : (options.status ?? (workflow.requireConfirmation ? "pending" : "confirmed"));
+    await tx.insert(schema.salesOrders).values({
+      id,
+      businessId: ctx.businessId,
+      orderNumber: numbering.number,
+      seriesId: numbering.seriesId,
+      financialYear: numbering.financialYear,
+      orderDate: sale.invoiceDate,
+      expectedDeliveryDate: body.expectedDeliveryDate ?? null,
+      quotationNumber: quotation ? numbering.number : null,
+      validUntil: quotation ? (body.validUntil ?? null) : null,
+      customerId: sale.customer.id,
+      warehouseId: sale.warehouseId,
+      priceLevelId: sale.priceLevelId,
+      status,
+      source: body.source,
+      placeOfSupply: sale.placeOfSupply,
+      grossTotal: toAmountString(t.grossTotal),
+      discountTotal: toAmountString(t.discountTotal),
+      taxableTotal: toAmountString(t.taxableTotal),
+      cgstTotal: toAmountString(t.cgstTotal),
+      sgstTotal: toAmountString(t.sgstTotal),
+      igstTotal: toAmountString(t.igstTotal),
+      cessTotal: toAmountString(t.cessTotal),
+      roundOff: toAmountString(t.roundOff),
+      grandTotal: toAmountString(t.grandTotal),
+      notes: body.notes ?? null,
+      clientId,
+      createdBy: ctx.userId,
+      updatedBy: ctx.userId,
+    });
+    await tx.insert(schema.salesOrderItems).values(
+      sale.lines.map((p, i) => {
+        const l = t.lines[i]!;
+        return {
+          id: uuidv7(),
+          businessId: ctx.businessId,
+          orderId: id,
+          lineNo: i + 1,
+          productId: p.productId,
+          productName: p.productName,
+          hsnCode: p.hsnCode,
+          uqc: p.uqc,
+          unitId: p.unitId,
+          conversionFactor: p.conversionFactor,
+          qty: toQtyString(l.qty),
+          freeQty: p.freeQty,
+          qtyBase: toQtyString(l.qtyBase),
+          rate: toRateString(l.rate),
+          rateIncludesTax: p.rateIncludesTax,
+          grossAmount: money(l.gross),
+          discountPercent: body.lines[i]!.discountPercent ?? "0",
+          discountAmount: money(l.lineDiscount),
+          documentDiscountShare: money(l.documentDiscountShare),
+          taxableValue: money(l.taxable),
+          taxability: p.taxability,
+          taxCategoryId: p.taxCategoryId,
+          taxRateId: p.taxRateId,
+          gstRate: l.gstRate.toFixed(3),
+          cgstRate: l.cgstRate.toFixed(3),
+          cgstAmount: money(l.cgst),
+          sgstRate: l.sgstRate.toFixed(3),
+          sgstAmount: money(l.sgst),
+          igstRate: l.igstRate.toFixed(3),
+          igstAmount: money(l.igst),
+          cessRate: l.cessRate.toFixed(3),
+          cessAmount: money(l.cess),
+          lineTotal: money(l.total),
+        };
+      }),
+    );
+    await recordStatus(tx, ctx, id, null, status);
+    await audit(tx, ctx, { action: quotation ? "quotation.created" : "sales_order.created", entityType: "sales_order", entityId: id, entityLabel: numbering.number, changes: { customer: sale.customer.name, grandTotal: toAmountString(t.grandTotal) } });
+    if (!quotation) await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id, status } });
+    return { replay: false, detail: await orderDetail(tx, ctx, id, workflow) };
 }
 
 /**
@@ -76,7 +190,6 @@ async function recordStatus(tx: Tx, ctx: RequestCtx, id: string, from: string | 
 export const ordersModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
-  const workflowOf = async (tx: Tx, businessId: string) => ({ ...DEFAULT_ORDER_WORKFLOW, ...(await getSetting(tx, businessId, "orders.workflow")) });
 
   r.post("/sales-orders", { preHandler: guard(deps, "order.create"), schema: { tags: ["orders"], body: SalesOrderBody } }, async (request, reply) => {
     const ctx = request.ctx;
@@ -84,104 +197,7 @@ export const ordersModule: ApiModule = async (app, deps) => {
     const key = request.headers["idempotency-key"];
     const clientId = typeof key === "string" && z.uuid().safeParse(key).success ? key : null;
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
-    const result = await tenant(ctx, async (tx) => {
-      const workflow = await workflowOf(tx, ctx.businessId);
-      if (clientId) {
-        await lockIdempotencyKey(tx, clientId);
-        const [existing] = await tx
-          .select({ id: schema.salesOrders.id })
-          .from(schema.salesOrders)
-          .where(and(eq(schema.salesOrders.businessId, ctx.businessId), eq(schema.salesOrders.clientId, clientId)));
-        if (existing) return { replay: true, detail: await orderDetail(tx, ctx, existing.id, workflow) };
-      }
-      const today = deps.clock.today(ctx.timeZone);
-      if (body.expectedDeliveryDate && body.expectedDeliveryDate < (body.orderDate ?? today)) throw badRequest("DELIVERY_BEFORE_ORDER", {}, "expectedDeliveryDate");
-      if (body.validUntil && (!body.quotation || body.validUntil < (body.orderDate ?? today))) throw badRequest("VALID_UNTIL_BEFORE_DATE", {}, "validUntil");
-      // Priced by the same code as an invoice on the order date.
-      const sale = await prepareSale(tx, ctx, { customerId: body.customerId, invoiceDate: body.orderDate, lines: body.lines, charges: [] } as z.output<typeof InvoiceBody>, today, { order: true });
-      const t = sale.totals;
-      const quotation = body.quotation === true;
-      const numbering = quotation
-        ? await nextDocumentNumber(tx, ctx.businessId, "quotation", sale.invoiceDate, sale.business.financialYearStartMonth, QUOTATION_SERIES)
-        : await nextDocumentNumber(tx, ctx.businessId, "sales_order", sale.invoiceDate, sale.business.financialYearStartMonth);
-      const id = uuidv7();
-      // A quotation waits as a draft until the customer accepts it.
-      const status: OrderStatus = quotation ? "draft" : workflow.requireConfirmation ? "pending" : "confirmed";
-      await tx.insert(schema.salesOrders).values({
-        id,
-        businessId: ctx.businessId,
-        orderNumber: numbering.number,
-        seriesId: numbering.seriesId,
-        financialYear: numbering.financialYear,
-        orderDate: sale.invoiceDate,
-        expectedDeliveryDate: body.expectedDeliveryDate ?? null,
-        quotationNumber: quotation ? numbering.number : null,
-        validUntil: quotation ? (body.validUntil ?? null) : null,
-        customerId: sale.customer.id,
-        warehouseId: sale.warehouseId,
-        priceLevelId: sale.priceLevelId,
-        status,
-        source: body.source,
-        placeOfSupply: sale.placeOfSupply,
-        grossTotal: toAmountString(t.grossTotal),
-        discountTotal: toAmountString(t.discountTotal),
-        taxableTotal: toAmountString(t.taxableTotal),
-        cgstTotal: toAmountString(t.cgstTotal),
-        sgstTotal: toAmountString(t.sgstTotal),
-        igstTotal: toAmountString(t.igstTotal),
-        cessTotal: toAmountString(t.cessTotal),
-        roundOff: toAmountString(t.roundOff),
-        grandTotal: toAmountString(t.grandTotal),
-        notes: body.notes ?? null,
-        clientId,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
-      });
-      await tx.insert(schema.salesOrderItems).values(
-        sale.lines.map((p, i) => {
-          const l = t.lines[i]!;
-          return {
-            id: uuidv7(),
-            businessId: ctx.businessId,
-            orderId: id,
-            lineNo: i + 1,
-            productId: p.productId,
-            productName: p.productName,
-            hsnCode: p.hsnCode,
-            uqc: p.uqc,
-            unitId: p.unitId,
-            conversionFactor: p.conversionFactor,
-            qty: toQtyString(l.qty),
-            freeQty: p.freeQty,
-            qtyBase: toQtyString(l.qtyBase),
-            rate: toRateString(l.rate),
-            rateIncludesTax: p.rateIncludesTax,
-            grossAmount: money(l.gross),
-            discountPercent: body.lines[i]!.discountPercent ?? "0",
-            discountAmount: money(l.lineDiscount),
-            documentDiscountShare: money(l.documentDiscountShare),
-            taxableValue: money(l.taxable),
-            taxability: p.taxability,
-            taxCategoryId: p.taxCategoryId,
-            taxRateId: p.taxRateId,
-            gstRate: l.gstRate.toFixed(3),
-            cgstRate: l.cgstRate.toFixed(3),
-            cgstAmount: money(l.cgst),
-            sgstRate: l.sgstRate.toFixed(3),
-            sgstAmount: money(l.sgst),
-            igstRate: l.igstRate.toFixed(3),
-            igstAmount: money(l.igst),
-            cessRate: l.cessRate.toFixed(3),
-            cessAmount: money(l.cess),
-            lineTotal: money(l.total),
-          };
-        }),
-      );
-      await recordStatus(tx, ctx, id, null, status);
-      await audit(tx, ctx, { action: quotation ? "quotation.created" : "sales_order.created", entityType: "sales_order", entityId: id, entityLabel: numbering.number, changes: { customer: sale.customer.name, grandTotal: toAmountString(t.grandTotal) } });
-      if (!quotation) await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id, status } });
-      return { replay: false, detail: await orderDetail(tx, ctx, id, workflow) };
-    });
+    const result = await tenant(ctx, (tx) => createSalesOrder(tx, ctx, deps, body, clientId));
     if (result.replay) reply.header("idempotent-replay", "true");
     return reply.code(result.replay ? 200 : 201).send(result.detail);
   });

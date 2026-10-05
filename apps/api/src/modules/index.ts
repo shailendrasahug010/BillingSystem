@@ -23,6 +23,7 @@ import { tallyModule } from "./tally/routes.js";
 import { logisticsModule } from "./logistics/routes.js";
 import { invoicesModule } from "./invoices/routes.js";
 import { repeatBillsModule } from "./invoices/repeat.js";
+import { orderLinksModule } from "./orders/links.js";
 import { suggestionsModule } from "./invoices/suggestions.js";
 import { notesModule } from "./notes/routes.js";
 import { notificationsModule } from "./notifications/routes.js";
@@ -64,6 +65,7 @@ export const MODULES: ApiModule[] = [
   tallyModule,
   bankModule,
   repeatBillsModule,
+  orderLinksModule,
   ocrModule,
   invoicesModule,
   devicesModule,

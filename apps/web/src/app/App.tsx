@@ -14,6 +14,7 @@ import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
 import { UnlockPage } from "../features/auth/UnlockPage";
 import { CommandPalette } from "../features/search/CommandPalette";
+import { ShopApp, shopKeyFromHash } from "../features/shop/ShopPage";
 import { homeRoute, LIVE_MODULES, routePermission } from "./modules";
 import { ShieldX } from "lucide-react";
 import { EmptyState } from "../components/ui/misc";
@@ -337,6 +338,14 @@ function Root() {
 export function App() {
   // The Android app first needs its server's address; nothing reaches the API before.
   const needsServer = useNeedsServer();
+  // A shop's order link: its own page, with no sign-in.
+  const [shopKey] = useState(() => shopKeyFromHash(window.location.hash));
+  if (shopKey)
+    return (
+      <I18nProvider>
+        <ShopApp shopKey={shopKey} />
+      </I18nProvider>
+    );
   return (
     <I18nProvider>
       {needsServer ? (
