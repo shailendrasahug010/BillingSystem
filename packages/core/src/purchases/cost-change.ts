@@ -4,7 +4,7 @@ export interface CostLine {
   productId: string;
   /** What the product cost before this bill, per base unit (its last purchase price). */
   oldCost: DecimalInput;
-  /** What it costs on this bill, per base unit, after the line discount and before GST. */
+  /** What it costs on this bill, per base unit, before GST. */
   newCost: DecimalInput;
   /** Its selling rate now, per base unit. */
   rate: DecimalInput;

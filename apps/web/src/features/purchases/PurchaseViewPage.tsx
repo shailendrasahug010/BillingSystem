@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@digitalbahi/core";
-import { Ban, CloudOff, Wallet } from "lucide-react";
+import { formatDate } from "@digitalbahi/i18n";
+import { Ban, CloudOff, PencilLine, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -11,7 +12,8 @@ import { Field, Input } from "../../components/ui/Field";
 import { Skeleton } from "../../components/ui/misc";
 import { BackButton, DataTable, ErrorNote, PageHeader, Stat } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
-import { allowed, WORKSPACE } from "../../data/db";
+import { PdfActions } from "../../components/ui/PdfActions";
+import { allowed, BUSINESS, supplierById, WORKSPACE } from "../../data/db";
 import { refreshCatalog, refreshSupplier } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { serverOrDevice } from "../../offline/documents";
@@ -19,7 +21,7 @@ import { invalidateMoney, PaymentDialog } from "../payments/PaymentDialog";
 import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { PurchaseStatusBadge } from "./PurchasesPage";
 
-interface PurchaseDetail {
+export interface PurchaseDetail {
   id: string;
   purchaseNumber: string;
   supplierId: string;
@@ -33,6 +35,7 @@ interface PurchaseDetail {
   isReverseCharge: boolean;
   itcEligibility: string;
   status: "posted" | "cancelled";
+  warehouseId?: string | null;
   paymentStatus: "unpaid" | "partial" | "paid";
   grossTotal: string;
   discountTotal: string;
@@ -52,6 +55,7 @@ interface PurchaseDetail {
   items: Array<{
     id: string;
     lineNo: number;
+    productId: string;
     productName: string;
     hsnCode: string | null;
     unitId: string;
@@ -65,13 +69,15 @@ interface PurchaseDetail {
     returnedQty: string;
     batchNumber: string | null;
     expiryDate: string | null;
+    mfgDate?: string | null;
+    mrp?: string | null;
   }>;
   returns: ReturnRow[];
   payments: Array<{ paymentId: string; paymentNumber: string; paymentDate: string; method: PaymentMethod; amount: string; reversedAt: string | null }>;
 }
 
 export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
-  const { t, money, number, dateMedium } = useI18n();
+  const { t, locale, money, number, dateMedium } = useI18n();
   const { navigate } = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
@@ -112,6 +118,9 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
   const deviceCopy = Boolean(p.deviceCopyAt);
   const returned = (p.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + Number(r.amountSettled), 0);
   const tax = (v: string) => (Number(v) ? money(v) : null);
+  // Entered wrong: enter it again, prefilled; the wrong one is cancelled when the new one is saved. Not once goods went back.
+  const correctable = posted && !deviceCopy && allowed("purchase.cancel") && allowed("purchase.create") && !(p.returns ?? []).some((r) => r.status === "posted");
+  const shareText = t("share.purchase", { party: p.partyName, number: p.supplierInvoiceNumber, date: formatDate(p.supplierInvoiceDate), amount: money(p.grandTotal), balance: money(p.balanceDue), business: BUSINESS.name });
 
   return (
     <div className="flex flex-col gap-5">
@@ -129,14 +138,20 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
         }
         subtitle={`${p.purchaseNumber} · ${p.partyName}${p.partyGstin ? ` · ${p.partyGstin}` : ""}`}
         actions={
-          posted && !deviceCopy ? (
+          !deviceCopy ? (
             <>
-              {allowed("purchase.cancel") && !cancelling && (
+              <PdfActions path={`/purchases/${p.id}/pdf`} locale={WORKSPACE.printLocale || locale} number={`purchase-${p.supplierInvoiceNumber}`} shareText={shareText} mobile={supplierById.get(p.supplierId)?.mobile} print />
+              {correctable && !cancelling && (
+                <Button icon={<PencilLine size={16} />} onClick={() => navigate({ name: "purchase-new", correctsId: p.id })}>
+                  {t("purchase.correct")}
+                </Button>
+              )}
+              {posted && allowed("purchase.cancel") && !cancelling && (
                 <Button variant="ghost" icon={<Ban size={16} />} onClick={() => setCancelling(true)}>
                   {t("purchase.cancel")}
                 </Button>
               )}
-              {allowed("payment.pay") && Number(p.balanceDue) > 0 && (
+              {posted && allowed("payment.pay") && Number(p.balanceDue) > 0 && (
                 <Button variant="primary" icon={<Wallet size={16} />} onClick={() => setPaying(true)}>
                   {t("payment.pay")}
                 </Button>

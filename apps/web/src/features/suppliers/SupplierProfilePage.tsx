@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { findState, type PaymentMethod } from "@digitalbahi/core";
+import { financialYearOf, findState, type PaymentMethod } from "@digitalbahi/core";
+import { formatDate } from "@digitalbahi/i18n";
 import type { TranslationKey } from "@digitalbahi/i18n";
 import { Landmark, MapPin, Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
@@ -10,7 +11,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Avatar, EmptyState, Skeleton } from "../../components/ui/misc";
 import { BackButton, DataTable, ErrorNote, TAB_TRIGGER, Tile, type Column } from "../../components/ui/Page";
-import { allowed } from "../../data/db";
+import { PdfActions } from "../../components/ui/PdfActions";
+import { allowed, BUSINESS, TODAY, WORKSPACE } from "../../data/db";
 import { api } from "../../lib/api";
 import { PaymentDialog } from "../payments/PaymentDialog";
 import { PurchaseStatusBadge, type PurchaseRow } from "../purchases/PurchasesPage";
@@ -101,6 +103,8 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
   const s = detail.data;
   const state = findState(s.stateCode);
   const title = s.name;
+  // The statement PDF covers this financial year to today (the server's default).
+  const statementFrom = financialYearOf(TODAY).startDate;
 
   return (
     <div className="flex flex-col gap-5">
@@ -208,7 +212,19 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
             ]}
           />
         </Tabs.Content>
-        <Tabs.Content value="ledger">
+        <Tabs.Content value="ledger" className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <p className="mr-auto text-[12.5px] text-ink-3">{t("supplier.statement.period", { from: dateMedium(statementFrom), to: dateMedium(TODAY) })}</p>
+            <PdfActions
+              size="sm"
+              path={`/suppliers/${s.id}/statement/pdf`}
+              locale={WORKSPACE.printLocale || locale}
+              number={`statement-${s.name}-${TODAY}`}
+              shareText={t("share.statement", { party: s.name, from: formatDate(statementFrom), to: formatDate(TODAY), amount: money(s.summary.balance), business: BUSINESS.name })}
+              mobile={s.mobile}
+              print
+            />
+          </div>
           {ledger.error ? <ErrorNote error={ledger.error} onRetry={() => void ledger.refetch()} /> : <LedgerTable entries={ledger.data?.entries ?? []} opening={ledger.data?.opening} closing={ledger.data?.closing} loading={ledger.isPending} />}
         </Tabs.Content>
       </Tabs.Root>

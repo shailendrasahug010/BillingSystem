@@ -25,7 +25,7 @@ export type Route =
   /** The signed-in person's own name, email and password. */
   | { name: "profile" }
   | { name: "design-system" }
-  | { name: "purchase-new"; supplierId?: string; draft?: PurchaseDraft }
+  | { name: "purchase-new"; supplierId?: string; draft?: PurchaseDraft; /** Entering a wrong bill again: the purchase it replaces. */ correctsId?: string }
   | { name: "purchase-view"; purchaseId: string }
   | { name: "supplier"; supplierId: string }
   | { name: "order-view"; orderId: string }
@@ -114,7 +114,7 @@ const RECORD_ROUTES = {
 
 /**
  * The screen a link names: #customers, #invoice/<id>, #payments, #payments/collect/<partyId>,
- * #invoice/new/<customerId>, #purchase-new/<supplierId>. Null for anything else.
+ * #invoice/new/<customerId>, #purchase-new/<supplierId>, #purchase-correct/<purchaseId>. Null for anything else.
  */
 export function routeFromHash(hash: string): Route | null {
   const [token = "", ...rest] = hash
@@ -130,6 +130,7 @@ export function routeFromHash(hash: string): Route | null {
   const [a, b] = rest;
   if (token === "invoice" && a === "new") return b ? { name: "invoice-new", customerId: b } : { name: "invoice-new" };
   if (token === "purchase-new" && a) return { name: "purchase-new", supplierId: a };
+  if (token === "purchase-correct" && a) return { name: "purchase-new", correctsId: a };
   if (!a && token in SIMPLE_ROUTES) return SIMPLE_ROUTES[token]!;
   if (a && token in RECORD_ROUTES) return RECORD_ROUTES[token as keyof typeof RECORD_ROUTES](a);
   const module = PLANNED_MODULES.find((m) => m === token);
@@ -149,6 +150,7 @@ export function hashFor(route: Route): string {
     case "customer":
       return `#customer/${id(route.customerId)}`;
     case "purchase-new":
+      if (route.correctsId) return `#purchase-correct/${id(route.correctsId)}`;
       return route.supplierId ? `#purchase-new/${id(route.supplierId)}` : "#purchase-new";
     case "purchase-view":
       return `#purchase/${id(route.purchaseId)}`;

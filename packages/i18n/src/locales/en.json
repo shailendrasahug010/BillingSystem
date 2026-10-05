@@ -675,7 +675,8 @@
       "paid": "Paid / returned",
       "billed": "Billed",
       "payable": "Payable",
-      "button": "Statement"
+      "button": "Statement",
+      "period": "Statement from {{from}} to {{to}}"
     }
   },
   "product": {
@@ -1387,6 +1388,28 @@
     "print": {
       "title": "Purchase bill",
       "supplier": "Supplier"
+    },
+    "correct": "Correct bill",
+    "correctTitle": "Correct bill {{number}}",
+    "correctHint": "Fix what was entered wrong and save. Bill {{number}} is then cancelled, its stock goes back out, and payments made against it move to this bill.",
+    "correctSave": "Save corrected bill",
+    "corrected": "Bill corrected",
+    "correctNotPosted": "This bill is cancelled, so it cannot be corrected",
+    "openBill": "Open the bill",
+    "priceRise": {
+      "title": "Cost went up",
+      "hint": "These items cost more on this bill than before. Set new selling rates to keep your margin, or keep the old rates.",
+      "cost": "Cost",
+      "perUnit": "per {{unit}}",
+      "margin": "Margin",
+      "rateNow": "selling at",
+      "inclTax": "incl. GST",
+      "newRate": "New selling rate",
+      "update_one": "Update {{count}} rate",
+      "update_other": "Update {{count}} rates",
+      "skip": "Keep old rates",
+      "updated_one": "Selling rate updated for {{count}} item",
+      "updated_other": "Selling rates updated for {{count}} items"
     }
   },
   "inventory": {
@@ -1429,6 +1452,51 @@
       "free_in": "Free goods in",
       "free_out": "Free goods out",
       "consumption": "Own use"
+    },
+    "count": {
+      "button": "Count stock",
+      "title": "Stock count",
+      "hint": "Print the sheet, count the shelves, then type what you counted. Leave blank what you did not count; only the differences are posted.",
+      "progress_one": "{{counted}} of {{count}} counted · {{changes}} differ",
+      "progress_other": "{{counted}} of {{count}} counted · {{changes}} differ",
+      "save_one": "Save count ({{count}} change)",
+      "save_other": "Save count ({{count}} changes)",
+      "saveNoChange": "Save count (no changes)",
+      "print": "Print count sheet",
+      "onlyLeft": "Only not counted yet",
+      "showSystem": "Show stock in system",
+      "more_one": "{{count}} more product: search to find it",
+      "more_other": "{{count}} more products: search to find them",
+      "sheetTitle": "Stock count sheet",
+      "countedBy": "Counted by",
+      "checkedBy": "Checked by",
+      "note": "Stock count: {{counted}} products counted",
+      "saved_one": "Count saved: {{count}} product adjusted",
+      "saved_other": "Count saved: {{count}} products adjusted",
+      "noChanges": "Everything matched the system"
+    },
+    "expiry": {
+      "tab": "Expiring",
+      "soon": "Expiring soon",
+      "expired": "Expired",
+      "soonHint": "Batches expired or expiring in the next {{days}} days, soonest first.",
+      "expiredHint": "Batches past their expiry date that are still in stock.",
+      "expiredAgo_one": "Expired {{count}} day ago",
+      "expiredAgo_other": "Expired {{count}} days ago",
+      "today": "Expires today",
+      "daysLeft_one": "{{count}} day left",
+      "daysLeft_other": "{{count}} days left",
+      "writeOff": "Write off",
+      "writeOffCount_one": "Write off {{count}} expired batch",
+      "writeOffCount_other": "Write off {{count}} expired batches",
+      "writeOffTitle_one": "Write off {{count}} expired batch?",
+      "writeOffTitle_other": "Write off {{count}} expired batches?",
+      "writeOffBody": "{{qty}} items worth {{value}} go out of stock as expired. Do this once they are thrown away or sent back.",
+      "note": "Expired stock written off",
+      "writtenOff_one": "{{count}} expired batch written off",
+      "writtenOff_other": "{{count}} expired batches written off",
+      "none": "Nothing is expiring soon",
+      "noneExpired": "No expired stock"
     }
   },
   "reports": {

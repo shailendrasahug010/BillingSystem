@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   calculateDocument,
   compactName,
@@ -12,7 +12,7 @@ import {
   type ResolvedTax,
 } from "@digitalbahi/core";
 import { translateError } from "@digitalbahi/i18n";
-import { FileSpreadsheet, PackagePlus, Plus, Trash2, X } from "lucide-react";
+import { FileSpreadsheet, PackagePlus, PencilLine, Plus, Save, Trash2, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -20,7 +20,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
-import { EmptyState } from "../../components/ui/misc";
+import { EmptyState, Skeleton } from "../../components/ui/misc";
 import { BackButton, ErrorNote, PageHeader, useFieldError } from "../../components/ui/Page";
 import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useToast } from "../../components/ui/Toast";
@@ -38,6 +38,8 @@ import { SupplierDialog } from "../suppliers/SupplierDialog";
 import { lineFromItem, newProductFrom, type ImportedItem, type PurchaseDraft } from "./billImport";
 import { NewProductsDialog } from "./NewProductsDialog";
 import { uuid } from "../../lib/uuid";
+import { findPriceRises, PriceRiseDialog, type PriceRise } from "./PriceRiseDialog";
+import type { PurchaseDetail } from "./PurchaseViewPage";
 
 interface Line {
   key: string;
@@ -98,7 +100,76 @@ function prefillFrom(item: ImportedItem): ProductPrefill {
  * recorded for ITC. Totals use the same calculator as the server, so what is
  * shown is what gets posted.
  */
-export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supplierId?: string; draft?: PurchaseDraft }) {
+export function PurchaseEntryPage({ supplierId, draft, correctsId }: { supplierId?: string; draft?: PurchaseDraft; correctsId?: string }) {
+  const { t } = useI18n();
+  const { navigate } = useRouter();
+  const old = useQuery({ queryKey: ["purchase", correctsId], queryFn: () => api.get<PurchaseDetail>(`/purchases/${correctsId}`), enabled: Boolean(correctsId) });
+  if (!correctsId) return <PurchaseEntry {...(supplierId ? { supplierId } : {})} {...(draft ? { draft } : {})} />;
+  if (old.isPending) return <Skeleton className="h-60 w-full" />;
+  if (old.error) return <ErrorNote error={old.error} onRetry={() => void old.refetch()} />;
+  // Only a posted bill can be entered again (a cancelled one was corrected or dropped already).
+  if (old.data.status !== "posted")
+    return (
+      <EmptyState
+        title={t("purchase.correctNotPosted")}
+        action={<Button onClick={() => navigate({ name: "purchase-view", purchaseId: old.data.id })}>{t("purchase.openBill")}</Button>}
+      />
+    );
+  return <PurchaseEntry correction={correctionFrom(old.data)} />;
+}
+
+/** A bill being entered again: the wrong one, and what it said (to start from). */
+interface Correction {
+  id: string;
+  purchaseNumber: string;
+  billNumber: string;
+  supplierId: string;
+  head: { billNumber: string; billDate: string; receivedDate: string; itc: string; reverseCharge: boolean; notes: string };
+  lines: Line[];
+  charges: Charge[];
+  warehouseId: string | null;
+}
+
+/** "12.000" → "12", "0.0000" → "" (blank, as the fields start). */
+const plain = (v: string | null | undefined) => (v === null || v === undefined || !Number(v) ? "" : String(Number(v)));
+
+function correctionFrom(p: PurchaseDetail): Correction {
+  // A bill without GST (unregistered or composition supplier) stored 0 %: that is not a rate typed over the product's.
+  const taxed = [p.cgstTotal, p.sgstTotal, p.igstTotal].some((v) => Number(v) !== 0);
+  return {
+    id: p.id,
+    purchaseNumber: p.purchaseNumber,
+    billNumber: p.supplierInvoiceNumber,
+    supplierId: p.supplierId,
+    head: { billNumber: p.supplierInvoiceNumber, billDate: p.supplierInvoiceDate, receivedDate: p.receivedDate, itc: p.itcEligibility, reverseCharge: p.isReverseCharge, notes: p.notes ?? "" },
+    lines: p.items.flatMap((i) => {
+      const product = productById.get(i.productId);
+      if (!product) return [];
+      // The GST rate typed over the product's own, kept; the product's own stays blank (follows the product).
+      const own = resolveTax(product.taxCategory, { date: p.supplierInvoiceDate }).gstRate.toString();
+      return [
+        {
+          key: uuid(),
+          productId: i.productId,
+          unitId: i.unitId,
+          qty: plain(i.qty) || "0",
+          freeQty: plain(i.freeQty),
+          rate: plain(i.rate) || "0",
+          discountPercent: plain(i.discountPercent),
+          gstRate: !taxed || Number(i.gstRate) === Number(own) ? "" : String(Number(i.gstRate)),
+          batchNumber: i.batchNumber ?? "",
+          expiryDate: i.expiryDate ?? "",
+          mfgDate: i.mfgDate ?? "",
+          mrp: plain(i.mrp),
+        },
+      ];
+    }),
+    charges: p.charges.map((c) => ({ key: uuid(), label: c.label, amount: plain(c.taxable), gstRate: plain(c.gstRate) })),
+    warehouseId: p.warehouseId ?? null,
+  };
+}
+
+function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { supplierId?: string; draft?: PurchaseDraft; correction?: Correction }) {
   const i18n = useI18n();
   const { t, money, number } = i18n;
   const { navigate } = useRouter();
@@ -106,8 +177,8 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
   const qc = useQueryClient();
   useStoreVersion();
   const searchable = useSearchableProducts();
-  const [supplierId, setSupplierId] = useState<string | null>(draft?.supplierId ?? initialSupplier ?? null);
-  const [head, setHead] = useState(() => ({
+  const [supplierId, setSupplierId] = useState<string | null>(correction?.supplierId ?? draft?.supplierId ?? initialSupplier ?? null);
+  const [head, setHead] = useState(() => correction?.head ?? ({
     billNumber: draft?.billNumber.slice(0, 30) ?? "",
     billDate: draft?.billDate && draft.billDate <= TODAY ? draft.billDate : TODAY,
     receivedDate: TODAY,
@@ -115,9 +186,10 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
     reverseCharge: false,
     notes: "",
   }));
+  const [rises, setRises] = useState<{ rises: PriceRise[]; purchaseId: string } | null>(null);
   // An imported bill: lines whose product was found go straight in; the rest wait to be matched.
   const [lines, setLines] = useState<Line[]>(() =>
-    (draft?.items ?? []).flatMap((item) => {
+    correction?.lines ?? (draft?.items ?? []).flatMap((item) => {
       const p = item.productId ? productById.get(item.productId) : undefined;
       return p ? [{ key: item.key, ...lineFromItem(item, p) }] : [];
     }),
@@ -129,9 +201,9 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
   const [newProduct, setNewProduct] = useState<string | null>(null);
   const [newSupplier, setNewSupplier] = useState<{ name?: string; gstin?: string } | null>(null);
   const [addingAll, setAddingAll] = useState(false);
-  const [charges, setCharges] = useState<Charge[]>([]);
+  const [charges, setCharges] = useState<Charge[]>(correction?.charges ?? []);
   const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
-  const [warehouseId, setWarehouseId] = useState(() => godowns.find((w) => w.isDefault)?.id ?? "");
+  const [warehouseId, setWarehouseId] = useState(() => (correction?.warehouseId && godowns.some((w) => w.id === correction.warehouseId) ? correction.warehouseId : (godowns.find((w) => w.isDefault)?.id ?? "")));
   const [paid, setPaid] = useState({ amount: "", method: "cash" as PaymentMethod, reference: "" });
   const [key] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
@@ -279,7 +351,15 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
       ...(paid.amount && Number(paid.amount) > 0 ? { payment: { amount: paid.amount, method: paid.method, ...(paid.reference.trim() ? { reference: paid.reference.trim() } : {}) } } : {}),
       ...(head.notes.trim() ? { notes: head.notes.trim() } : {}),
       clientTotals: { grandTotal: calc.totals!.grandTotal.toFixed(2) },
+      ...(correction ? { replacesPurchaseId: correction.id } : {}),
     };
+    // The supplier's rate per stock unit, as the product's purchase price keeps it (read before saving: the save moves it).
+    const costs = lines.map((l) => {
+      const p = productById.get(l.productId)!;
+      const factor = l.unitId && l.unitId !== p.unitId ? (p.packUnits?.find((u) => u.unitId === l.unitId)?.factor ?? 1) : 1;
+      return { productId: l.productId, newCost: Number(l.rate) / factor, ...(l.mrp && RATE.test(l.mrp) ? { mrp: l.mrp } : {}) };
+    });
+    const priceRises = allowed("product.update_price") ? findPriceRises(costs) : [];
     /** Kept on this device with the same key; stock comes in and the supplier is owed at once. */
     const keep = async () => {
       const scope = offlineScope();
@@ -312,6 +392,8 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
       navigate({ name: "planned", module: "purchases" });
     };
     try {
+      // The wrong bill is cancelled in the same step as the new one is saved: that needs the server.
+      if (correction && workingOffline()) throw new ApiError(0, "OFFLINE_NOT_KEPT");
       if (workingOffline()) return await keep();
       const res = await api.post<{ id: string; purchaseNumber: string; grandTotal: string }>(
         "/purchases",
@@ -321,10 +403,11 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
       await Promise.all([refreshCatalog(), refreshSupplier(supplierId!)]).catch(() => undefined);
       invalidateMoney(qc);
       void qc.invalidateQueries({ queryKey: ["stock"] });
-      toast({ tone: "success", title: t("purchase.saved"), body: `${res.purchaseNumber} · ${money(res.grandTotal)}` });
-      navigate({ name: "purchase-view", purchaseId: res.id });
+      toast({ tone: "success", title: correction ? t("purchase.corrected") : t("purchase.saved"), body: `${res.purchaseNumber} · ${money(res.grandTotal)}` });
+      if (priceRises.length) setRises({ rises: priceRises, purchaseId: res.id });
+      else navigate({ name: "purchase-view", purchaseId: res.id });
     } catch (e) {
-      if (unreachable(e)) {
+      if (unreachable(e) && !correction) {
         await keep().catch((err: unknown) => setError(err instanceof ApiError ? err : new ApiError(0, "generic")));
         return;
       }
@@ -340,8 +423,19 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
 
   return (
     <div className="flex flex-col gap-5 pb-24 lg:pb-0">
-      <PageHeader back={<BackButton onClick={() => navigate({ name: "planned", module: "purchases" })} />} title={t("purchase.new")} subtitle={t("purchase.newHint")} />
+      <PageHeader
+        back={<BackButton onClick={() => navigate(correction ? { name: "purchase-view", purchaseId: correction.id } : { name: "planned", module: "purchases" })} />}
+        title={correction ? t("purchase.correctTitle", { number: correction.billNumber }) : t("purchase.new")}
+        subtitle={correction ? correction.purchaseNumber : t("purchase.newHint")}
+      />
       {error instanceof ApiError && !error.field?.startsWith("supplier") ? <ErrorNote error={error} /> : null}
+
+      {correction && (
+        <div className="flex gap-3 rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-[13.5px]" role="status">
+          <PencilLine size={18} className="mt-0.5 shrink-0 text-warn" />
+          <p className="text-ink-2">{t("purchase.correctHint", { number: correction.billNumber })}</p>
+        </div>
+      )}
 
       {draft && (
         <div className="flex gap-3 rounded-xl border border-info/30 bg-info-soft px-4 py-3 text-[13.5px]" role="status">
@@ -735,11 +829,34 @@ export function PurchaseEntryPage({ supplierId: initialSupplier, draft }: { supp
             )}
             {head.reverseCharge && <p className="mt-1 text-[12px] text-warn">{t("purchase.reverseChargeHint")}</p>}
           </dl>
-          <Button variant="primary" size="lg" block className="mt-4" disabled={busy} onClick={() => void save()}>
-            {busy ? t("common.saving") : t("purchase.save")}
+          <Button variant="primary" size="lg" block className="mt-4 max-lg:hidden" disabled={busy} onClick={() => void save()}>
+            {busy ? t("common.saving") : correction ? t("purchase.correctSave") : t("purchase.save")}
           </Button>
         </Card>
       </div>
+
+      {/* On a phone or tablet the total and Save stay at the foot of the screen, where the tab bar was. */}
+      <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:hidden">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12px] text-ink-3">{lines.length ? t("common.items", { count: lines.length }) : t("purchase.noLines")}</p>
+            <p className="num font-display text-[20px] leading-tight font-semibold text-ink">{tot ? money(tot.grandTotal.toNumber()) : money(0)}</p>
+          </div>
+          <Button variant="primary" icon={<Save size={16} />} disabled={busy} onClick={() => void save()}>
+            {busy ? t("common.saving") : t("common.save")}
+          </Button>
+        </div>
+      </div>
+      {rises && (
+        <PriceRiseDialog
+          rises={rises.rises}
+          onDone={() => {
+            const id = rises.purchaseId;
+            setRises(null);
+            navigate({ name: "purchase-view", purchaseId: id });
+          }}
+        />
+      )}
       <NewProductsDialog
         open={addingAll}
         onOpenChange={setAddingAll}

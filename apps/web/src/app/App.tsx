@@ -104,7 +104,7 @@ function Screen({ route }: { route: Route }) {
     case "design-system":
       return <DesignSystemPage />;
     case "purchase-new":
-      return <PurchaseEntryPage key={route.draft?.id ?? route.supplierId ?? "new"} {...(route.supplierId ? { supplierId: route.supplierId } : {})} {...(route.draft ? { draft: route.draft } : {})} />;
+      return <PurchaseEntryPage key={route.draft?.id ?? route.correctsId ?? route.supplierId ?? "new"} {...(route.supplierId ? { supplierId: route.supplierId } : {})} {...(route.correctsId ? { correctsId: route.correctsId } : {})} {...(route.draft ? { draft: route.draft } : {})} />;
     case "purchase-view":
       return <PurchaseViewPage purchaseId={route.purchaseId} />;
     case "supplier":
