@@ -2520,7 +2520,7 @@ Which reminders run and how, one row per business and type (the types and their 
 |---|---|:-:|---|---|
 | `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
 | `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
-| `type` | varchar(40) | ✓ |  | customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due, devices_unsynced, orders_waiting, customer_reminders |
+| `type` | varchar(40) | ✓ |  | customer_payment_due, supplier_payment_due, low_stock, expiring_stock, pending_orders, to_pack, to_dispatch, leave_request, salary_due, devices_unsynced, orders_waiting, customer_reminders, daily_summary |
 | `config` | jsonb | ✓ | `'{}'` | The rule's settings as JSON (days before due, thresholds, time of day ...). |
 | `channels` | varchar(20)[] | ✓ | `'{in_app}'` | Where the reminders go: in_app, push, whatsapp, sms, email. |
 | `is_active` | boolean | ✓ | `true` | Switched off: no daily check and no event notifications of this type. |

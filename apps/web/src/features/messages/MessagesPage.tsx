@@ -103,7 +103,7 @@ function SentList() {
           <option value="">
             {t("messages.kind")}: {t("common.all")}
           </option>
-          {(["invoice", "note", "receipt", "reminder", "test"] as const).map((k) => (
+          {(["invoice", "note", "receipt", "reminder", "summary", "test"] as const).map((k) => (
             <option key={k} value={k}>
               {t(`messages.kinds.${k}`)}
             </option>

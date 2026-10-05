@@ -108,7 +108,7 @@ export const TestMessageBody = z.strictObject({
 export const MessageListQuery = PageQuery.extend({
   channel: ReminderChannel.optional(),
   status: z.enum(["queued", "sent", "delivered", "read", "failed"]).optional(),
-  kind: z.enum(["invoice", "note", "receipt", "reminder", "test", "backup"]).optional(),
+  kind: z.enum(["invoice", "note", "receipt", "reminder", "test", "backup", "summary"]).optional(),
   documentId: z.uuid().optional(),
   partyId: z.uuid().optional(),
 });
