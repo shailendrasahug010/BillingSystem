@@ -88,7 +88,7 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
   });
 
   if (q.isPending) return <Skeleton className="h-60 w-full" />;
-  if (q.error) return <ErrorNote error={q.error} />;
+  if (q.error) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   const p = q.data;
 
   const cancel = async () => {

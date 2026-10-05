@@ -1,5 +1,5 @@
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
-import { ArrowLeft, Ban, CloudOff, Copy, Printer } from "lucide-react";
+import { createTranslator, formatCurrency, formatDate, translateError, type LocaleCode } from "@digitalbahi/i18n";
+import { ArrowLeft, Ban, CloudOff, Copy, Printer, SearchX } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -7,7 +7,7 @@ import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
-import { EmptyState, Segmented } from "../../components/ui/misc";
+import { EmptyState, ErrorState, Segmented } from "../../components/ui/misc";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
 import { PrintPortal } from "../../components/ui/PrintPortal";
@@ -15,7 +15,7 @@ import { allowed, BUSINESS, customerById, INVOICES, WORKSPACE } from "../../data
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { serverOrDevice } from "../../offline/documents";
-import { api } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
 import { shareOnWhatsApp } from "../../lib/share";
 import { printableFromApi, printableFromDemo, type ApiInvoice, type PrintableInvoice } from "./printable";
 import { EMBEDDED } from "../../lib/embedded";
@@ -37,7 +37,8 @@ import { loadKeptDraft, type KeptDraft } from "./keptDraft";
 const printed = new Set<string>();
 
 export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: string; print?: boolean }) {
-  const { t, locale, money } = useI18n();
+  const i18n = useI18n();
+  const { t, locale, money } = i18n;
   const { navigate } = useRouter();
   useStoreVersion();
   const [printLocale, setPrintLocale] = useState<LocaleCode>(LIVE ? (WORKSPACE.printLocale as LocaleCode) || locale : locale);
@@ -79,7 +80,15 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
     };
   }, [print, shown, invoiceId]);
   if (LIVE && !offlineKey && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
-  if (!invoice) return <EmptyState title={t("empty.generic")} />;
+  if (!invoice) {
+    // Not found, or (with no copy on this device) could not be loaded: say which, and how to go on.
+    const missing = !live.error || (live.error instanceof ApiError && live.error.status === 404);
+    return missing ? (
+      <EmptyState icon={<SearchX size={24} />} title={t("invoice.notFound")} hint={t("invoice.notFoundHint")} action={<Button onClick={() => navigate({ name: "invoices" })}>{t("invoice.backToList")}</Button>} />
+    ) : (
+      <ErrorState title={t("empty.error")} hint={translateError(i18n, live.error instanceof ApiError ? live.error : null)} retryLabel={t("common.retry")} onRetry={() => void live.refetch()} />
+    );
+  }
   const status = invoice.status;
   const tr = createTranslator(printLocale).t;
   const m = (v: number) => formatCurrency(v, printLocale);

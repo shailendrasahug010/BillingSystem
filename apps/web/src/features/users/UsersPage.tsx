@@ -96,7 +96,7 @@ export function UsersPage() {
           </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="members">
-          {members.error ? <ErrorNote error={members.error} /> : null}
+          {members.error ? <ErrorNote error={members.error} onRetry={() => void members.refetch()} /> : null}
           <DataTable
             id="users"
             rows={members.data ?? []}
@@ -129,7 +129,7 @@ export function UsersPage() {
           />
         </Tabs.Content>
         <Tabs.Content value="roles">
-          {roles.error ? <ErrorNote error={roles.error} /> : null}
+          {roles.error ? <ErrorNote error={roles.error} onRetry={() => void roles.refetch()} /> : null}
           <DataTable
             id="roles"
             rows={roles.data ?? []}

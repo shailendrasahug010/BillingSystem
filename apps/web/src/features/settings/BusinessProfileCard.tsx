@@ -125,7 +125,7 @@ export function BusinessProfileCard() {
   }, [q.data]);
 
   if (q.isPending) return <Skeleton className="h-48 w-full" />;
-  if (q.error) return <ErrorNote error={q.error} />;
+  if (q.error) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const registered = form.gstRegistration !== "unregistered";

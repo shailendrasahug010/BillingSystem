@@ -170,7 +170,7 @@ export function EmployeeDetailDialog({ employeeId, onClose }: { employeeId: stri
         {detail.isPending ? (
           <Skeleton className="h-32 w-full" />
         ) : detail.error ? (
-          <ErrorNote error={detail.error} />
+          <ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />
         ) : e ? (
           <div className="flex flex-col gap-4">
             {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}

@@ -140,7 +140,7 @@ function SummaryTab({ period }: { period: string }) {
           </Button>
         )}
       </div>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Tile label={t("gstPage.outputTax")} value={money(output)} />
@@ -156,7 +156,7 @@ function SummaryTab({ period }: { period: string }) {
             loading={q.isPending}
             rowKey={(r) => `${r.section}-${r.gstRate}`}
             minWidth={760}
-            empty={<EmptyState title={t("gstPage.noOutward")} />}
+            empty={<EmptyState title={t("gstPage.noOutward")} hint={t("gstPage.noOutwardHint")} />}
             columns={[
               { key: "section", header: t("gstPage.section"), render: (r) => <Badge tone={r.section === "B2B" ? "accent" : "neutral"}>{r.section}</Badge> },
               { key: "rate", header: t("invoice.gstRate"), align: "right", render: (r) => `${number(r.gstRate, 2)}%` },
@@ -175,7 +175,7 @@ function SummaryTab({ period }: { period: string }) {
             loading={q.isPending}
             rowKey={(r) => `${r.itcEligibility}-${r.reverseCharge}-${r.gstRate}`}
             minWidth={760}
-            empty={<EmptyState title={t("gstPage.noInward")} />}
+            empty={<EmptyState title={t("gstPage.noInward")} hint={t("gstPage.noInwardHint")} />}
             columns={[
               {
                 key: "itc",

@@ -98,7 +98,7 @@ function Ready({ onPlanned }: { onPlanned(id: string): void }) {
           </Button>
         )}
       </FilterBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
         id="dispatch-ready"
         rows={rows}
@@ -285,7 +285,7 @@ function Trips({ onOpen }: { onOpen(id: string): void }) {
           ]}
         />
       </FilterBar>
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable
         id="dispatch-trips"
         rows={list.rows}
@@ -293,7 +293,7 @@ function Trips({ onOpen }: { onOpen(id: string): void }) {
         loading={list.loading}
         onRowClick={(r) => onOpen(r.id)}
         minWidth={720}
-        empty={<EmptyState title={t("dispatch.noTrips")} />}
+        empty={<EmptyState title={t("dispatch.noTrips")} hint={t("dispatch.noTripsHint")} />}
         columns={[
           {
             key: "number",
@@ -391,7 +391,7 @@ function TripDialog({ id, onClose }: { id: string | null; onClose(): void }) {
       {q.isPending ? (
         <Skeleton className="h-48 w-full" />
       ) : q.error ? (
-        <ErrorNote error={q.error} />
+        <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
       ) : trip ? (
         <div className="flex flex-col gap-4">
           {error ? <ErrorNote error={error} /> : null}

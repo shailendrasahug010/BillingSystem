@@ -117,7 +117,7 @@ export function AuditLogPage() {
         <Input type="date" aria-label={t("common.from")} value={from} onChange={(e) => setFrom(e.target.value)} className="md:w-40" />
         <Input type="date" aria-label={t("common.to")} value={to} onChange={(e) => setTo(e.target.value)} className="md:w-40" />
       </FilterBar>
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
         {list.loading ? (
           <div className="flex flex-col gap-3 p-4">

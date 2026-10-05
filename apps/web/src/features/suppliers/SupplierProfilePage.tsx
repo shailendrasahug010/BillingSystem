@@ -97,7 +97,7 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
   });
 
   if (detail.isPending) return <Skeleton className="h-40 w-full" />;
-  if (detail.error) return <ErrorNote error={detail.error} />;
+  if (detail.error) return <ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />;
   const s = detail.data;
   const state = findState(s.stateCode);
   const title = s.name;
@@ -183,7 +183,7 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
             loading={purchases.isPending && allowed("purchase.view")}
             rowKey={(p) => p.id}
             onRowClick={(p) => navigate({ name: "purchase-view", purchaseId: p.id })}
-            empty={<EmptyState title={t("purchase.empty")} />}
+            empty={<EmptyState title={t("purchase.empty")} hint={t("supplier.noPurchasesHint")} />}
             columns={[
               { key: "date", header: t("purchase.billDate"), render: (p) => <span className="text-ink-2">{dateMedium(p.supplierInvoiceDate)}</span> },
               { key: "bill", header: t("purchase.billNumber"), render: (p) => <span className="font-medium text-ink">{p.supplierInvoiceNumber}</span> },
@@ -199,7 +199,7 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
             rows={payments.data ?? []}
             loading={payments.isPending && allowed("payment.view")}
             rowKey={(p) => p.id}
-            empty={<EmptyState title={t("payment.empty")} />}
+            empty={<EmptyState title={t("payment.empty")} hint={t("supplier.noPaymentsHint")} />}
             columns={[
               { key: "date", header: t("common.date"), render: (p) => <span className="text-ink-2">{dateMedium(p.paymentDate)}</span> },
               { key: "number", header: t("common.number"), render: (p) => <span className="font-medium text-ink">{p.paymentNumber}</span> },
@@ -209,7 +209,7 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
           />
         </Tabs.Content>
         <Tabs.Content value="ledger">
-          {ledger.error ? <ErrorNote error={ledger.error} /> : <LedgerTable entries={ledger.data?.entries ?? []} opening={ledger.data?.opening} closing={ledger.data?.closing} loading={ledger.isPending} />}
+          {ledger.error ? <ErrorNote error={ledger.error} onRetry={() => void ledger.refetch()} /> : <LedgerTable entries={ledger.data?.entries ?? []} opening={ledger.data?.opening} closing={ledger.data?.closing} loading={ledger.isPending} />}
         </Tabs.Content>
       </Tabs.Root>
 

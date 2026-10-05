@@ -255,7 +255,7 @@ export function RulesCard() {
   };
 
   if (q.isPending) return <Skeleton className="h-48 w-full" />;
-  if (q.error) return <ErrorNote error={q.error} />;
+  if (q.error) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   const s = q.data;
   const policy = (label: string, value: Policy, onChange: (v: Policy) => void) => (
     <Segmented

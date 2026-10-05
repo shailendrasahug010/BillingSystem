@@ -98,7 +98,7 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
       {q.isPending ? (
         <Skeleton className="h-60 w-full" />
       ) : q.error ? (
-        <ErrorNote error={q.error} />
+        <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
       ) : note && printable ? (
         <div className="flex flex-col gap-4">
           {error ? <ErrorNote error={error} /> : null}

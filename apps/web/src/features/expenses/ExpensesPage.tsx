@@ -187,7 +187,7 @@ function ExpenseList() {
           <Stat label={t("common.total")} value={money(totals.data.total)} />
         </div>
       )}
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable
         id="expenses"
         columns={columns}
@@ -263,7 +263,7 @@ function ExpenseDetailDialog({ expenseId, onClose }: { expenseId: string | null;
       {detail.isPending ? (
         <Skeleton className="h-24 w-full" />
       ) : detail.error ? (
-        <ErrorNote error={detail.error} />
+        <ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />
       ) : x ? (
         <div className="flex flex-col gap-4">
           {error ? <ErrorNote error={error} /> : null}
@@ -341,13 +341,13 @@ function ExpenseSummary() {
           <ExportButton path="/reports/expenses" query={query} filename={`expenses-${period.from}-${period.to}.csv`} />
         </div>
       </PeriodBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
         id="expense-summary"
         rows={q.data?.rows ?? []}
         rowKey={(r) => r.key}
         loading={q.isPending}
-        empty={<EmptyState title={t("expenses.empty")} />}
+        empty={<EmptyState title={t("expenses.empty")} hint={t("expenses.emptyHint")} />}
         columns={[
           {
             key: "label",

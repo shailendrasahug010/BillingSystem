@@ -238,7 +238,7 @@ export function InvoicesPage() {
           {t("bills.keptBills")}
         </p>
       ) : LIVE && list.error ? (
-        <ErrorNote error={list.error} />
+        <ErrorNote error={list.error} onRetry={() => void list.refetch()} />
       ) : null}
       <DataTable
         id="sales-bills"

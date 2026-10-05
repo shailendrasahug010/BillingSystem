@@ -40,7 +40,7 @@ export function PayrollStatutoryCard() {
   }, [q.data, form]);
 
   if (q.isPending || (!form && !q.error)) return <Skeleton className="h-48 w-full" />;
-  if (q.error || !form) return <ErrorNote error={q.error} />;
+  if (q.error || !form) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   const ptState = form.pt.stateCode ?? BUSINESS.stateCode;
   const builtIn = PT_RULES[ptState] ?? null;
   const rule = form.pt.rule ?? builtIn;

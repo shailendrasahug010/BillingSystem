@@ -96,7 +96,8 @@
     "noAccess": "Not part of your role",
     "noAccessHint": "Your role does not include this screen. Ask the owner to add it if you need it.",
     "goHome": "Go to my screens",
-    "remove": "Remove"
+    "remove": "Remove",
+    "connectHint": "Connect to the internet and this opens by itself."
   },
   "nav": {
     "groupDaily": "Daily work",
@@ -448,7 +449,10 @@
       "hint": "Same items, quantities and rates, dated today. Change anything before saving.",
       "replaceTitle": "Replace the unfinished bill?",
       "replaceBody": "You have a bill not saved yet ({{bill}}). Copying this bill puts it in its place."
-    }
+    },
+    "notFound": "This bill was not found",
+    "notFoundHint": "It may have been removed, or belong to another business. Look for it in the invoice list.",
+    "backToList": "Back to invoices"
   },
   "bills": {
     "title": "Sales bills",
@@ -571,7 +575,11 @@
     "remindersStoppedBy": {
       "staff": "Stopped on {{date, date}}",
       "reply": "They replied STOP on WhatsApp on {{date, date}}"
-    }
+    },
+    "noPaymentsHint": "Use Receive Payment above when this customer pays.",
+    "notFound": "This customer was not found",
+    "notFoundHint": "They may have been removed, or belong to another business. Search the customer list.",
+    "backToList": "Back to customers"
   },
   "supplier": {
     "title": "Suppliers",
@@ -600,7 +608,9 @@
     "lastPurchase": "Last purchase",
     "lastPayment": "Last payment",
     "displayName": "Supplier name",
-    "companyNameHint": "Only if different, as printed on their GST bills"
+    "companyNameHint": "Only if different, as printed on their GST bills",
+    "noPurchasesHint": "Use New purchase bill under Purchases to enter this supplier's bills.",
+    "noPaymentsHint": "Payments you make to this supplier show here."
   },
   "product": {
     "title": "Products",
@@ -928,7 +938,7 @@
     "nilRated": "Nil rated"
   },
   "errors": {
-    "generic": "Something went wrong. Please try again.",
+    "generic": "Something went wrong. Please try again; if it keeps happening, reload the page.",
     "network": "You appear to be offline. Check the internet connection and try again.",
     "forbidden": "You do not have permission to do this.",
     "TAX_RULE_NOT_FOUND": "No GST rate is set for “{{category}}” on {{date}}. Ask an admin to update the tax category.",
@@ -948,7 +958,7 @@
     "INVALID_STATUS_TRANSITION": "An order cannot move from “{{from}}” to “{{to}}”.",
     "UNAUTHORIZED": "Please sign in again.",
     "TOKEN_INVALID": "Your session has ended. Please sign in again.",
-    "FORBIDDEN": "You do not have permission to do this.",
+    "FORBIDDEN": "You do not have permission to do this. Ask the business owner to allow it for your role in Users & Roles.",
     "NOT_FOUND": "This record was not found. It may have been removed.",
     "ROUTE_NOT_FOUND": "This feature is not available on the server yet.",
     "VALIDATION_FAILED": "Some fields need attention. Please check the highlighted fields.",
@@ -1167,7 +1177,9 @@
     "REPEAT_END_BEFORE_START": "The stop date is before the first repeat.",
     "REPEAT_BILL_NOT_ALLOWED": "Only a posted tax invoice or bill of supply can repeat, not a cancelled, export or SEZ bill.",
     "REPEAT_OWNER_INACTIVE": "The person who set up this repeat bill no longer has access. Set it up again from the bill.",
-    "REPEAT_BILL_FAILED": "The bill could not be made. It will be tried again tomorrow."
+    "REPEAT_BILL_FAILED": "The bill could not be made. It will be tried again tomorrow.",
+    "onLine": "Line {{line}}:",
+    "exportFailed": "The file could not be made"
   },
   "validation": {
     "required": "This field is required",
@@ -1508,7 +1520,9 @@
       "cashHint": "Indicative; interest and late fee not included",
       "zeroRated": "(b) Zero-rated (exports, SEZ)"
     },
-    "downloadCsv": "Download CSV"
+    "downloadCsv": "Download CSV",
+    "noOutwardHint": "Bills made in this month show here. Pick another month to see earlier sales.",
+    "noInwardHint": "Enter supplier bills under Purchases to claim their GST here."
   },
   "users": {
     "title": "Users and roles",
@@ -1851,7 +1865,8 @@
       "short": "challan {{number}}",
       "printNote": "Delivery challan: goods sent before the bill. Not a tax invoice; the tax invoice follows."
     },
-    "computerGenerated": "This is a computer-generated document."
+    "computerGenerated": "This is a computer-generated document.",
+    "noDemandHint": "Products on booked orders that are not billed yet add up here."
   },
   "expenses": {
     "title": "Expenses",
@@ -2042,7 +2057,8 @@
     "appliedDone": "Leave request sent",
     "submit": "Send request",
     "availableHint": "{{days}} days available",
-    "halfDayOption": "Half day only"
+    "halfDayOption": "Half day only",
+    "emptyHint": "Use Apply leave to add one. Requests waiting for approval show here."
   },
   "payroll": {
     "title": "Payroll",
@@ -2126,7 +2142,8 @@
       "ptPayers_one": "{{count}} person pays",
       "ptPayers_other": "{{count}} people pay",
       "ptList": "Download list"
-    }
+    },
+    "noSlipsHint": "Add employees under Employees, then run payroll for this month again."
   },
   "packing": {
     "title": "Packing",
@@ -2163,7 +2180,8 @@
     "shipTo": "Ship to",
     "batch": "Batch",
     "exp": "exp.",
-    "checkedBy": "Checked by"
+    "checkedBy": "Checked by",
+    "noSlipsHint": "A slip is made when you start packing an order under To pack."
   },
   "dispatch": {
     "title": "Dispatch",
@@ -2226,7 +2244,8 @@
     "sheet": "Trip sheet",
     "toCollect": "To collect",
     "signature": "Signature / stamp",
-    "driverSign": "Driver"
+    "driverSign": "Driver",
+    "noTripsHint": "Pick packed bills and choose Plan trip to send them out."
   },
   "analytics": {
     "netSales": "Net sales",
@@ -2253,7 +2272,9 @@
     "stockValue": "Stock value",
     "daysOfCover": "Days of cover",
     "lastSold": "Last sold",
-    "movementHint": "Fast: the products making the first 80% of sales. Not moving: in stock but not sold in the period. Days of cover: how long the stock lasts at this period's pace."
+    "movementHint": "Fast: the products making the first 80% of sales. Not moving: in stock but not sold in the period. Days of cover: how long the stock lasts at this period's pace.",
+    "noSalesHint": "Pick a longer period, or make a bill to see it here.",
+    "noProductsHint": "Add products under Products to see how each one sells."
   },
   "insights": {
     "measures": "Measures",
@@ -2987,7 +3008,9 @@
       "SHIPPING_BILL": "Shipping bill not added yet",
       "VEHICLE_FORMAT": "Vehicle number looks wrong",
       "EXPORT_PORT_STATE": "Export: the port's state is taken as yours; change it on the portal if not"
-    }
+    },
+    "noneHint": "An e-invoice is needed only for bills to GST-registered buyers. Pick another month to check.",
+    "noEwayHint": "An e-way bill is needed when goods worth more than ₹50,000 move. Smaller bills are left out."
   },
   "notifications": {
     "title": "Notifications",

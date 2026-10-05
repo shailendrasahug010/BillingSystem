@@ -218,7 +218,7 @@ function ScheduleCard() {
     <Card>
       <CardHeader title={t("backup.auto.title")} subtitle={t("backup.auto.hint")} />
       <div className="flex flex-col gap-4 p-4 sm:p-5">
-        {q.error ? <ErrorNote error={q.error} /> : null}
+        {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
         {error ? <ErrorNote error={error} /> : null}
         {s && !s.emailReady && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{t("backup.auto.emailNotReady")}</p>}
         {s && (
@@ -298,7 +298,7 @@ function HistoryCard() {
     <Card>
       <CardHeader title={t("backup.historyTitle")} subtitle={t("backup.historyHint")} />
       <div className="p-4 sm:p-5">
-        {q.error ? <ErrorNote error={q.error} /> : null}
+        {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
         <DataTable
           rows={q.data ?? []}
           loading={q.isPending}

@@ -408,7 +408,7 @@ export function ProductEditor({
           ))}
         </div>
       ) : detail.error ? (
-        <ErrorNote error={detail.error} />
+        <ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />
       ) : (
         <form className="flex flex-col gap-5" onSubmit={(e) => (e.preventDefault(), void save())}>
           {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}

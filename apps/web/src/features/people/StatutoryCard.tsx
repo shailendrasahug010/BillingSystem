@@ -44,7 +44,7 @@ export function StatutoryCard({ runId }: { runId: string }) {
   const [error, setError] = useState<unknown>(null);
   const q = useQuery({ queryKey: ["payroll", "statutory", runId], queryFn: () => api.get<StatutorySummary>(`/payroll/runs/${runId}/statutory`) });
   const s = q.data;
-  if (q.error) return <ErrorNote error={q.error} />;
+  if (q.error) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   if (!s) return null;
   const { pf, esi, pt } = s.settings;
   if (!pf.enabled && !esi.enabled && !pt.enabled) return <p className="text-[13px] text-ink-3">{t("payroll.statutory.off")}</p>;

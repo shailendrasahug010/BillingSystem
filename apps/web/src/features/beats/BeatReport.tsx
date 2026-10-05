@@ -41,7 +41,7 @@ export function BeatReport() {
   const called = sum("called");
   const reasons = (r: BeatReportRow) => Object.entries(r.noOrderReasons).sort(([, a], [, b]) => b - a);
 
-  if (!online) return <EmptyState title={t("beat.reportOffline")} />;
+  if (!online) return <EmptyState title={t("beat.reportOffline")} hint={t("common.connectHint")} />;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -67,7 +67,7 @@ export function BeatReport() {
           </div>
         )}
       </div>
-      <ErrorNote error={report.error} />
+      <ErrorNote error={report.error} onRetry={() => void report.refetch()} />
 
       {report.isPending ? (
         <Skeleton className="h-40 w-full rounded-2xl" />
