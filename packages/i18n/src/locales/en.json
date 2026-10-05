@@ -1161,7 +1161,8 @@
     "RANGE_TOO_LONG": "Choose at most {{days}} days.",
     "VALID_UNTIL_BEFORE_DATE": "The valid-until date is for a quotation, on or after its date.",
     "PERIOD_END_BEFORE_START": "The end date is before the start date.",
-    "TALLY_FILE_UNREADABLE": "This is not a Tally XML file, or it could not be read. Export it from Tally again as XML."
+    "TALLY_FILE_UNREADABLE": "This is not a Tally XML file, or it could not be read. Export it from Tally again as XML.",
+    "BANK_STATEMENT_UNREADABLE": "This doesn't look like a bank statement: no Date and Deposit/Withdrawal (or Amount) columns were found."
   },
   "validation": {
     "required": "This field is required",
@@ -3446,5 +3447,28 @@
     "exportHint": "Sales, purchases, credit and debit notes (item by item, with their stock items), receipts, payments and expenses of the period, with their party, sales, purchase, expense and GST ledgers. In Tally: Gateway of Tally → Import → Transactions, and choose this file.",
     "download": "Download for Tally",
     "exported": "Tally file downloaded"
+  },
+  "bank": {
+    "open": "Bank statement",
+    "title": "Match a bank statement",
+    "hint": "Choose the statement from net banking (CSV, Excel or PDF). Each line is matched to the customer who paid or the supplier you paid; tick the ones to record as payments.",
+    "choose": "Choose statement",
+    "lines": "Statement lines",
+    "summary": "{{count}} lines: {{matched}} matched, {{likely}} to check, {{recorded}} already recorded, {{unmatched}} not matched",
+    "pick": "Record line {{row}}",
+    "whoPaid": "Who paid?",
+    "paidTo": "Paid to?",
+    "record_one": "Record {{count}} payment",
+    "record_other": "Record {{count}} payments",
+    "recorded_one": "{{count}} payment recorded",
+    "recorded_other": "{{count}} payments recorded",
+    "note": "Bank statement: {{narration}}",
+    "status": {
+      "matched": "Matched",
+      "likely": "Check",
+      "recorded": "Already recorded",
+      "unmatched": "Not matched",
+      "saved": "Recorded"
+    }
   }
 }

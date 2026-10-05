@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@digitalbahi/core";
 import type { LocaleCode } from "@digitalbahi/i18n";
-import { ArrowDownLeft, ArrowUpRight, Download, Printer, Search } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Download, Landmark, Printer, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -20,6 +20,7 @@ import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
 import { WaitingStrip } from "../../components/offline/OfflineBills";
+import { BankStatementDialog } from "./BankStatementDialog";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
@@ -63,6 +64,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
   const [to, setTo] = useState("");
   const [q, setQ] = useState("");
   const [dialog, setDialog] = useState<{ direction: "in" | "out"; partyId: string | null } | null>(null);
+  const [bank, setBank] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const list = usePaged<PaymentRow>("payments", "/payments", { direction, method, from, to, q: q.trim().length >= 2 ? q.trim() : undefined });
 
@@ -158,6 +160,11 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
                 {t("common.export")}
               </Button>
             )}
+            {(allowed("payment.collect") || allowed("payment.pay")) && (
+              <Button icon={<Landmark size={16} />} onClick={() => setBank(true)}>
+                {t("bank.open")}
+              </Button>
+            )}
             {allowed("payment.pay") && (
               <Button icon={<ArrowUpRight size={16} />} onClick={() => setDialog({ direction: "out", partyId: null })}>
                 {t("payment.pay")}
@@ -218,6 +225,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         />
       )}
       <PaymentDetailDialog paymentId={openId} onClose={() => setOpenId(null)} />
+      <BankStatementDialog open={bank} onOpenChange={setBank} />
     </div>
   );
 }
