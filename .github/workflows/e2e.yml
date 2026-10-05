@@ -85,7 +85,7 @@ jobs:
 
       - name: Start the API
         run: |
-          DATABASE_URL=postgres://digitalbahi_app:devpass@localhost:5432/digitalbahi_dev OTP_DEV_ECHO=true LOG_PRETTY=false nohup pnpm dev:api > api.log 2>&1 &
+          DATABASE_URL=postgres://digitalbahi_app:devpass@localhost:5432/digitalbahi_dev OTP_DEV_ECHO=true AUTH_RATE_LIMIT_MAX=1000 LOG_PRETTY=false nohup pnpm dev:api > api.log 2>&1 &
           for i in $(seq 60); do curl -sf http://localhost:3000/api/v1/health > /dev/null && exit 0; sleep 2; done
           cat api.log; exit 1
 
