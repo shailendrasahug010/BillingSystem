@@ -1,7 +1,7 @@
 import { IsoDate } from "@digitalbahi/contracts";
-import { documentEntries, findState, paymentEntries, TALLY_LEDGERS, tallyImportXml, type TallyLedger, type TallyVoucher } from "@digitalbahi/core";
+import { documentEntries, expenseEntries, findState, paymentEntries, TALLY_LEDGERS, tallyImportXml, type TallyInventoryLine, type TallyLedger, type TallyStockItem, type TallyVoucher } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
-import { and, between, eq, inArray, ne } from "drizzle-orm";
+import { and, between, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { guard } from "../../lib/access.js";
@@ -22,11 +22,78 @@ interface Party {
   address: string[];
 }
 
+interface ItemLine {
+  docId: string;
+  productId: string;
+  qty: string;
+  freeQty: string;
+  conversionFactor: string;
+  taxableValue: string;
+}
+
+/**
+ * The item lines of the period's documents, as Tally stock items in their
+ * base unit (a box sold as 12 pieces is 12 pieces in Tally too), and the
+ * stock item masters they need (a shared product name gets the code).
+ */
+async function itemLines(tx: Tx, businessId: string, ids: { invoices: string[]; purchases: string[]; notes: string[] }) {
+  const ii = schema.invoiceItems;
+  const pi = schema.purchaseItems;
+  const ni = schema.creditDebitNoteItems;
+  const pick = { productId: ii.productId, qty: ii.qty, freeQty: ii.freeQty, conversionFactor: ii.conversionFactor, taxableValue: ii.taxableValue };
+  const [inv, pur, notes] = await Promise.all([
+    ids.invoices.length ? tx.select({ docId: ii.invoiceId, ...pick }).from(ii).where(and(eq(ii.businessId, businessId), inArray(ii.invoiceId, ids.invoices))).orderBy(ii.lineNo) : [],
+    ids.purchases.length
+      ? tx
+          .select({ docId: pi.purchaseId, productId: pi.productId, qty: pi.qty, freeQty: pi.freeQty, conversionFactor: pi.conversionFactor, taxableValue: pi.taxableValue })
+          .from(pi)
+          .where(and(eq(pi.businessId, businessId), inArray(pi.purchaseId, ids.purchases)))
+          .orderBy(pi.lineNo)
+      : [],
+    ids.notes.length
+      ? tx
+          .select({ docId: ni.noteId, productId: ni.productId, qty: ni.qty, freeQty: ni.freeQty, conversionFactor: ni.conversionFactor, taxableValue: ni.taxableValue })
+          .from(ni)
+          .where(and(eq(ni.businessId, businessId), inArray(ni.noteId, ids.notes)))
+          .orderBy(ni.lineNo)
+      : [],
+  ]);
+  const all: ItemLine[] = [...inv, ...pur, ...notes];
+  const productIds = [...new Set(all.map((l) => l.productId))];
+  const items = new Map<string, TallyStockItem>();
+  if (productIds.length) {
+    const p = schema.products;
+    const u = schema.units;
+    const rows = await tx.select({ id: p.id, name: p.name, code: p.code, hsn: p.hsnCode, unit: u.symbol, decimals: u.decimals }).from(p).innerJoin(u, eq(u.id, p.baseUnitId)).where(inArray(p.id, productIds));
+    const count = new Map<string, number>();
+    for (const r of rows) count.set(r.name.toUpperCase(), (count.get(r.name.toUpperCase()) ?? 0) + 1);
+    for (const r of rows) items.set(r.id, { name: count.get(r.name.toUpperCase())! > 1 ? `${r.name} (${r.code})` : r.name, unit: r.unit, unitDecimals: r.decimals, hsn: r.hsn });
+  }
+  const byDoc = new Map<string, ItemLine[]>();
+  for (const l of all) byDoc.set(l.docId, [...(byDoc.get(l.docId) ?? []), l]);
+  /** The document's lines for Tally, `sign` as its counter ledger goes (-1 a sale, +1 a purchase). */
+  const linesOf = (docId: string, sign: 1 | -1): TallyInventoryLine[] | undefined => {
+    const lines = byDoc.get(docId);
+    if (!lines?.length) return undefined;
+    const out: TallyInventoryLine[] = [];
+    for (const l of lines) {
+      const item = items.get(l.productId);
+      const qty = Number(l.qty) * Number(l.conversionFactor);
+      const value = Math.round(Number(l.taxableValue) * 100) / 100;
+      if (!item || qty <= 0) return undefined;
+      out.push({ item: item.name, unit: item.unit, qty, freeQty: Number(l.freeQty) * Number(l.conversionFactor), rate: value / qty, amount: sign * value });
+    }
+    return out;
+  };
+  return { stockItems: [...items.values()], linesOf };
+}
+
 /**
  * The period's books for the business's CA in Tally: sales, purchases,
- * credit and debit notes, receipts and payments, with the party ledgers
- * (under Sundry Debtors / Creditors) and the sales, purchase, GST and
- * round-off ledgers they post to. Cancelled documents are left out.
+ * credit and debit notes (item-wise, with the stock items they move),
+ * receipts, payments and expenses, with the party ledgers (under Sundry
+ * Debtors / Creditors) and the sales, purchase, GST, expense and round-off
+ * ledgers they post to. Cancelled documents are left out.
  */
 async function tallyExport(tx: Tx, ctx: RequestCtx, from: string, to: string) {
   const businessId = ctx.businessId;
@@ -35,12 +102,20 @@ async function tallyExport(tx: Tx, ctx: RequestCtx, from: string, to: string) {
   const pur = schema.purchases;
   const note = schema.creditDebitNotes;
   const pay = schema.payments;
-  const [invoices, purchases, notes, payments] = await Promise.all([
+  const exp = schema.expenses;
+  const cat = schema.expenseCategories;
+  const [invoices, purchases, notes, payments, expenses] = await Promise.all([
     tx.select().from(inv).where(and(eq(inv.businessId, businessId), eq(inv.status, "posted"), between(inv.invoiceDate, from, to))),
     tx.select().from(pur).where(and(eq(pur.businessId, businessId), eq(pur.status, "posted"), between(pur.receivedDate, from, to))),
     tx.select().from(note).where(and(eq(note.businessId, businessId), eq(note.status, "posted"), between(note.noteDate, from, to))),
     tx.select().from(pay).where(and(eq(pay.businessId, businessId), ne(pay.status, "cancelled"), between(pay.paymentDate, from, to), inArray(pay.partyType, ["customer", "supplier"]))),
+    tx
+      .select({ e: exp, category: cat.name })
+      .from(exp)
+      .innerJoin(cat, eq(cat.id, exp.categoryId))
+      .where(and(eq(exp.businessId, businessId), eq(exp.status, "posted"), isNull(exp.deletedAt), between(exp.expenseDate, from, to))),
   ]);
+  const { stockItems, linesOf } = await itemLines(tx, businessId, { invoices: invoices.map((i) => i.id), purchases: purchases.map((p) => p.id), notes: notes.map((n) => n.id) });
 
   // The parties, named as their ledgers will be (a shared name gets the party's code).
   const customerIds = new Set<string>([...invoices.map((i) => i.customerId), ...notes.flatMap((n) => (n.customerId ? [n.customerId] : [])), ...payments.flatMap((p) => (p.customerId ? [p.customerId] : []))]);
@@ -66,7 +141,16 @@ async function tallyExport(tx: Tx, ctx: RequestCtx, from: string, to: string) {
   const vouchers: TallyVoucher[] = [];
   for (const i of invoices) {
     const party = ledgerName(i.customerId);
-    vouchers.push({ type: "Sales", date: i.invoiceDate, number: i.invoiceNumber ?? i.id, party, partyGstin: i.partyGstin, entries: documentEntries(i, party, "sales", 1) });
+    vouchers.push({
+      type: "Sales",
+      date: i.invoiceDate,
+      number: i.invoiceNumber ?? i.id,
+      party,
+      partyGstin: i.partyGstin,
+      entries: documentEntries(i, party, "sales", 1),
+      inventory: linesOf(i.id, -1),
+      counterLedger: TALLY_LEDGERS.sales.name,
+    });
   }
   for (const p of purchases) {
     const party = ledgerName(p.supplierId);
@@ -79,6 +163,8 @@ async function tallyExport(tx: Tx, ctx: RequestCtx, from: string, to: string) {
       reference: p.supplierInvoiceNumber,
       referenceDate: p.supplierInvoiceDate,
       entries: documentEntries(p, party, "purchase", -1),
+      inventory: linesOf(p.id, 1),
+      counterLedger: TALLY_LEDGERS.purchase.name,
     });
   }
   for (const n of notes) {
@@ -97,6 +183,9 @@ async function tallyExport(tx: Tx, ctx: RequestCtx, from: string, to: string) {
       reference: n.partyNoteNumber,
       narration: n.reason,
       entries: documentEntries(n, party, customer ? "sales" : "purchase", sign),
+      // The counter ledger goes against the party.
+      inventory: linesOf(n.id, sign === 1 ? -1 : 1),
+      counterLedger: customer ? TALLY_LEDGERS.sales.name : TALLY_LEDGERS.purchase.name,
     });
   }
   for (const p of payments) {
@@ -114,16 +203,34 @@ async function tallyExport(tx: Tx, ctx: RequestCtx, from: string, to: string) {
     });
   }
 
+  // Expenses: a payment voucher from cash or bank to the expense head (its category).
+  const heads = new Set<string>();
+  for (const { e, category } of expenses) {
+    const claimable = e.itcEligibility !== null && e.itcEligibility !== "ineligible";
+    const cash = e.paymentMethod === "cash";
+    heads.add(category);
+    vouchers.push({
+      type: "Payment",
+      date: e.expenseDate,
+      number: e.expenseNumber ?? e.id,
+      party: cash ? TALLY_LEDGERS.cash.name : TALLY_LEDGERS.bank.name,
+      reference: e.referenceNumber,
+      narration: [category, e.paidTo, e.notes].filter(Boolean).join(" · "),
+      entries: expenseEntries({ ...e, claimable }, category, cash),
+    });
+  }
+
   const ledgers: TallyLedger[] = [
     ...[...parties.keys()].map((id) => {
       const p = parties.get(id)!;
       return { name: ledgerName(id), parent: p.kind === "customer" ? "Sundry Debtors" : "Sundry Creditors", gstin: p.gstin, stateName: findState(p.stateCode)?.name ?? null, address: p.address };
     }),
+    ...[...heads].filter((h) => !Object.values(TALLY_LEDGERS).some((l) => l.name === h)).map((name) => ({ name, parent: "Indirect Expenses" })),
     ...Object.values(TALLY_LEDGERS).filter((l) => vouchers.some((v) => v.entries.some((e) => e.ledger === l.name))),
   ];
   const company = business?.tradeName || business?.legalName || null;
-  await audit(tx, ctx, { action: "tally.exported", entityType: "business", entityLabel: `${from} – ${to}`, changes: { vouchers: vouchers.length, ledgers: ledgers.length } });
-  return { xml: tallyImportXml({ company, ledgers, vouchers }), count: vouchers.length };
+  await audit(tx, ctx, { action: "tally.exported", entityType: "business", entityLabel: `${from} – ${to}`, changes: { vouchers: vouchers.length, ledgers: ledgers.length, stockItems: stockItems.length } });
+  return { xml: tallyImportXml({ company, ledgers, vouchers, stockItems }), count: vouchers.length };
 }
 
 export const tallyModule: ApiModule = async (app, deps) => {
