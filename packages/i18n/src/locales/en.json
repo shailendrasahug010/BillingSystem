@@ -669,7 +669,14 @@
     "displayName": "Supplier name",
     "companyNameHint": "Only if different, as printed on their GST bills",
     "noPurchasesHint": "Use New purchase bill under Purchases to enter this supplier's bills.",
-    "noPaymentsHint": "Payments you make to this supplier show here."
+    "noPaymentsHint": "Payments you make to this supplier show here.",
+    "statement": {
+      "title": "Account statement",
+      "paid": "Paid / returned",
+      "billed": "Billed",
+      "payable": "Payable",
+      "button": "Statement"
+    }
   },
   "product": {
     "title": "Products",
@@ -1376,7 +1383,11 @@
     "cancelHint": "Stock goes back out and the supplier's payable is reduced. Payments made against it stay as an advance.",
     "cancelledDone": "Purchase cancelled",
     "addNewSupplier": "Add “{{name}}” as a new supplier",
-    "addNewProduct": "Add “{{name}}” as a new product"
+    "addNewProduct": "Add “{{name}}” as a new product",
+    "print": {
+      "title": "Purchase bill",
+      "supplier": "Supplier"
+    }
   },
   "inventory": {
     "title": "Inventory",
@@ -1742,7 +1753,10 @@
     "pdfReady": "PDF downloaded: {{name}}",
     "tapAgain": "The PDF is ready. Tap WhatsApp again to send it.",
     "note": "Namaste {{party}}, {{kind}} {{number}} dated {{date}} for {{amount}}. – {{business}}",
-    "attachPdf": "{{name}} is downloaded: attach it in WhatsApp (📎 → Document)."
+    "attachPdf": "{{name}} is downloaded: attach it in WhatsApp (📎 → Document).",
+    "purchase": "Purchase bill {{number}} of {{date}} from {{party}}: {{amount}}, balance {{balance}}. – {{business}}",
+    "purchaseSubject": "Purchase bill {{number}} – {{business}}",
+    "statement": "Account statement of {{party}} from {{from}} to {{to}}: {{amount}} payable. – {{business}}"
   },
   "audit": {
     "title": "Audit log",
@@ -3951,5 +3965,29 @@
     "mismatch": "The two passwords are different",
     "changed": "Password changed. Other devices are signed out.",
     "change": "Change password"
+  },
+  "dates": {
+    "thisWeek": "This week"
+  },
+  "cashBook": {
+    "title": "Cash book",
+    "book": "Book",
+    "cash": "Cash",
+    "bank": "Bank & UPI",
+    "opening": "Opening balance",
+    "in": "Money in",
+    "out": "Money out",
+    "closing": "Closing balance",
+    "expense": "Expense",
+    "cashHint": "Cash received and paid, and expenses paid in cash.",
+    "bankHint": "UPI, bank transfers, cheques and cards. Bounced cheques are left out.",
+    "allHint": "All money in and out, cash and bank together.",
+    "noExpenses": "Expenses are not shown to your role.",
+    "empty": "No money in or out in this period.",
+    "truncated": "Showing the first 5,000 entries. Pick a shorter period to see the rest.",
+    "cashTitle": "Cash book",
+    "bankTitle": "Bank & UPI book",
+    "allTitle": "Cash & bank book",
+    "signature": "Checked by"
   }
 }

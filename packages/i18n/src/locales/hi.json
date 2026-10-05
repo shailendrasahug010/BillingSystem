@@ -669,7 +669,14 @@
     "displayName": "सप्लायर का नाम",
     "companyNameHint": "सिर्फ़ अलग हो तो, जैसा उनके GST बिल पर छपा है",
     "noPurchasesHint": "इस सप्लायर के बिल खरीद में नया खरीद बिल से डालें।",
-    "noPaymentsHint": "इस सप्लायर को किए गए भुगतान यहाँ दिखेंगे।"
+    "noPaymentsHint": "इस सप्लायर को किए गए भुगतान यहाँ दिखेंगे।",
+    "statement": {
+      "title": "खाता विवरण",
+      "paid": "भुगतान / वापसी",
+      "billed": "बिल",
+      "payable": "देय",
+      "button": "खाता विवरण"
+    }
   },
   "product": {
     "title": "प्रोडक्ट",
@@ -1376,7 +1383,11 @@
     "cancelHint": "स्टॉक वापस घटेगा और सप्लायर की देनदारी कम होगी। किया गया भुगतान अग्रिम रहेगा।",
     "cancelledDone": "खरीद रद्द हुई",
     "addNewSupplier": "“{{name}}” को नया सप्लायर जोड़ें",
-    "addNewProduct": "“{{name}}” को नया प्रोडक्ट जोड़ें"
+    "addNewProduct": "“{{name}}” को नया प्रोडक्ट जोड़ें",
+    "print": {
+      "title": "खरीद बिल",
+      "supplier": "सप्लायर"
+    }
   },
   "inventory": {
     "title": "स्टॉक",
@@ -1742,7 +1753,10 @@
     "pdfReady": "PDF डाउनलोड हुआ: {{name}}",
     "tapAgain": "PDF तैयार है। भेजने के लिए व्हाट्सऐप फिर से दबाएँ।",
     "note": "नमस्ते {{party}}, {{kind}} {{number}} दिनांक {{date}}, राशि {{amount}}। – {{business}}",
-    "attachPdf": "{{name}} डाउनलोड हो गई: WhatsApp में इसे जोड़ें (📎 → Document)।"
+    "attachPdf": "{{name}} डाउनलोड हो गई: WhatsApp में इसे जोड़ें (📎 → Document)।",
+    "purchase": "{{party}} का खरीद बिल {{number}} ({{date}}): {{amount}}, बाकी {{balance}}। – {{business}}",
+    "purchaseSubject": "खरीद बिल {{number}} – {{business}}",
+    "statement": "{{party}} का खाता विवरण {{from}} से {{to}} तक: {{amount}} देय। – {{business}}"
   },
   "audit": {
     "title": "ऑडिट लॉग",
@@ -3951,5 +3965,29 @@
     "mismatch": "दोनों पासवर्ड अलग हैं",
     "changed": "पासवर्ड बदल गया। दूसरे डिवाइस साइन आउट हो गए।",
     "change": "पासवर्ड बदलें"
+  },
+  "dates": {
+    "thisWeek": "इस हफ़्ते"
+  },
+  "cashBook": {
+    "title": "कैश बुक",
+    "book": "बही",
+    "cash": "नकद",
+    "bank": "बैंक व UPI",
+    "opening": "शुरुआती बैलेंस",
+    "in": "आया",
+    "out": "गया",
+    "closing": "अंतिम बैलेंस",
+    "expense": "खर्च",
+    "cashHint": "नकद मिला और दिया, और नकद में दिए खर्च।",
+    "bankHint": "UPI, बैंक ट्रांसफ़र, चेक और कार्ड। बाउंस चेक शामिल नहीं।",
+    "allHint": "सारा आया और गया पैसा, नकद और बैंक साथ में।",
+    "noExpenses": "आपकी भूमिका को खर्च नहीं दिखते।",
+    "empty": "इस अवधि में कोई लेन-देन नहीं।",
+    "truncated": "पहली 5,000 एंट्री दिख रही हैं। बाकी देखने के लिए छोटी अवधि चुनें।",
+    "cashTitle": "कैश बुक",
+    "bankTitle": "बैंक व UPI बुक",
+    "allTitle": "नकद व बैंक बुक",
+    "signature": "जाँचकर्ता"
   }
 }

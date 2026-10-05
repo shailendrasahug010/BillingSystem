@@ -10,7 +10,7 @@ import { Button, IconButton } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, RowCard, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, productById, TODAY, WORKSPACE } from "../../data/db";
@@ -18,6 +18,7 @@ import { useSearchableProducts } from "../../data/hooks";
 import { refreshCatalog } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
+import { stockInPacks } from "../../lib/packs";
 import { usePaged } from "../../lib/usePaged";
 import { TransferDialog } from "./TransferDialog";
 
@@ -58,6 +59,8 @@ export function InventoryPage() {
     queryFn: () => api.get<{ data: Array<{ id: string; adjustmentNumber: string; adjustmentDate: string; reason: Reason; notes: string | null }> }>("/stock/adjustments").then((r) => r.data),
   });
   const showValue = list.rows.some((r) => r.value !== undefined);
+  const packs = (r: StockRow) => stockInPacks(r.qty, productById.get(r.productId), (n) => number(n));
+  const qtyTone = (r: StockRow) => (r.level === "out" ? "danger" : r.level === "low" ? "warn" : undefined);
   const totalValue = list.rows.reduce((s, r) => s + Number(r.value ?? 0), 0);
 
   const columns: Column<StockRow>[] = [
@@ -82,9 +85,14 @@ export function InventoryPage() {
       header: t("product.currentStock"),
       align: "right",
       render: (r) => (
-        <span className={r.level === "out" ? "font-semibold text-danger" : r.level === "low" ? "font-semibold text-warn" : "font-semibold text-ink"}>
-          {number(r.qty)} {r.unit}
-        </span>
+        <div>
+          <p className={r.level === "out" ? "font-semibold text-danger" : r.level === "low" ? "font-semibold text-warn" : "font-semibold text-ink"}>{packs(r) ?? `${number(r.qty)} ${r.unit}`}</p>
+          {packs(r) && (
+            <p className="text-[12px] text-ink-3">
+              = {number(r.qty)} {r.unit}
+            </p>
+          )}
+        </div>
       ),
     },
     ...(showValue
@@ -174,7 +182,23 @@ export function InventoryPage() {
             />
           </FilterBar>
           {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
-          <DataTable columns={columns} rows={list.rows} rowKey={(r) => r.productId} loading={list.loading} onRowClick={(r) => setLedgerFor(r)} minWidth={720} />
+          <DataTable
+            columns={columns}
+            rows={list.rows}
+            rowKey={(r) => r.productId}
+            loading={list.loading}
+            onRowClick={(r) => setLedgerFor(r)}
+            minWidth={720}
+            mobile={(r) => (
+              <RowCard
+                title={r.name}
+                sub={[r.code, r.level === "ok" ? null : t(r.level === "out" ? "status.stock.out_of_stock" : "status.stock.low"), showValue && r.value !== undefined ? `${t("product.stockValue")} ${money(r.value)}` : null].filter(Boolean).join(" · ")}
+                value={packs(r) ?? `${number(r.qty)} ${r.unit}`}
+                tone={qtyTone(r)}
+                valueSub={packs(r) ? `= ${number(r.qty)} ${r.unit}` : undefined}
+              />
+            )}
+          />
           <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
         </Tabs.Content>
         <Tabs.Content value="adjustments">

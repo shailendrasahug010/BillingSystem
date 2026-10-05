@@ -217,6 +217,8 @@ export const PurchaseBody = z.strictObject({
   isReverseCharge: z.boolean().default(false),
   payment: PaymentAtDocument.optional(),
   notes: z.string().trim().max(1000).optional(),
+  /** Correcting a bill entered wrong: this posted purchase is cancelled in the same step and its payments move to the new bill. */
+  replacesPurchaseId: z.uuid().optional(),
   clientTotals: ClientTotals.optional(),
 });
 

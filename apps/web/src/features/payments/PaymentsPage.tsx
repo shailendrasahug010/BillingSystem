@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@digitalbahi/core";
 import type { LocaleCode } from "@digitalbahi/i18n";
 import { ArrowDownLeft, ArrowUpRight, Download, Landmark, Printer, Search } from "lucide-react";
+import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -11,7 +12,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
 import { createTranslator, formatCurrency, formatDate } from "@digitalbahi/i18n";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, Stat, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, QuickDates, RowCard, Stat, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { PrintPortal } from "../../components/ui/PrintPortal";
 import { allowed, BUSINESS, customerById, supplierById, WORKSPACE } from "../../data/db";
@@ -21,6 +22,7 @@ import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
 import { WaitingStrip } from "../../components/offline/OfflineBills";
 import { BankStatementDialog } from "./BankStatementDialog";
+import { CashBook } from "./CashBook";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
@@ -179,37 +181,72 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         }
       />
 
-      <WaitingStrip kinds={["payment"]} />
-      <FilterBar>
-        <Input className="flex-1" leading={<Search size={16} />} placeholder={t("payment.search")} aria-label={t("payment.search")} value={q} onChange={(e) => setQ(e.target.value)} />
-        <Segmented
-          size="sm"
-          label={t("common.type")}
-          value={direction}
-          onChange={setDirection}
-          options={[
-            { value: "all", label: t("common.all") },
-            { value: "in", label: t("payment.in") },
-            { value: "out", label: t("payment.out") },
-          ]}
-        />
-        <Select aria-label={t("common.method")} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod | "")} className="md:w-40">
-          <option value="">
-            {t("common.method")}: {t("common.all")}
-          </option>
-          {METHODS.map((m) => (
-            <option key={m} value={m}>
-              {t(`paymentMethod.${m}`)}
-            </option>
-          ))}
-        </Select>
-        <Input type="date" aria-label={t("common.from")} value={from} onChange={(e) => setFrom(e.target.value)} className="md:w-40" />
-        <Input type="date" aria-label={t("common.to")} value={to} onChange={(e) => setTo(e.target.value)} className="md:w-40" />
-      </FilterBar>
+      <Tabs.Root defaultValue="payments" className="flex flex-col gap-4">
+        <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={t("payment.title")}>
+          <Tabs.Trigger value="payments" className={TAB_TRIGGER}>
+            {t("payment.title")}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="cashbook" className={TAB_TRIGGER}>
+            {t("cashBook.title")}
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="payments" className="flex flex-col gap-4">
+          <WaitingStrip kinds={["payment"]} />
+          <FilterBar quick={<QuickDates from={from} to={to} onChange={(f, x) => (setFrom(f), setTo(x))} />}>
+            <Input className="flex-1" leading={<Search size={16} />} placeholder={t("payment.search")} aria-label={t("payment.search")} value={q} onChange={(e) => setQ(e.target.value)} />
+            <Segmented
+              size="sm"
+              label={t("common.type")}
+              value={direction}
+              onChange={setDirection}
+              options={[
+                { value: "all", label: t("common.all") },
+                { value: "in", label: t("payment.in") },
+                { value: "out", label: t("payment.out") },
+              ]}
+            />
+            <Select aria-label={t("common.method")} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod | "")} className="md:w-40">
+              <option value="">
+                {t("common.method")}: {t("common.all")}
+              </option>
+              {METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {t(`paymentMethod.${m}`)}
+                </option>
+              ))}
+            </Select>
+            <Input type="date" aria-label={t("common.from")} value={from} onChange={(e) => setFrom(e.target.value)} className="md:w-40" />
+            <Input type="date" aria-label={t("common.to")} value={to} onChange={(e) => setTo(e.target.value)} className="md:w-40" />
+          </FilterBar>
 
-      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
-      <DataTable id="payments" columns={columns} rows={list.rows} rowKey={(p) => p.id} loading={list.loading} onRowClick={(p) => setOpenId(p.id)} minWidth={760} />
-      <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
+          {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
+          <DataTable
+            id="payments"
+            columns={columns}
+            rows={list.rows}
+            rowKey={(p) => p.id}
+            loading={list.loading}
+            onRowClick={(p) => setOpenId(p.id)}
+            minWidth={760}
+            mobile={(p) => (
+              <>
+                {p.direction === "in" ? <ArrowDownLeft size={16} className="shrink-0 text-good" aria-label={t("payment.in")} /> : <ArrowUpRight size={16} className="shrink-0 text-warn" aria-label={t("payment.out")} />}
+                <RowCard
+                  title={p.partyName}
+                  sub={`${p.paymentNumber ?? ""} · ${dateMedium(p.paymentDate)} · ${t(`paymentMethod.${p.method}`)}`}
+                  value={money(p.amount)}
+                  tone={p.status === "cancelled" ? "muted" : p.direction === "in" ? "good" : undefined}
+                  valueSub={p.chequeStatus ? t(`payment.chequeStatus.${p.chequeStatus}`) : undefined}
+                />
+              </>
+            )}
+          />
+          <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
+        </Tabs.Content>
+        <Tabs.Content value="cashbook">
+          <CashBook />
+        </Tabs.Content>
+      </Tabs.Root>
 
       {dialog && (
         <PaymentDialog

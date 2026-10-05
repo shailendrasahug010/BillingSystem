@@ -6,7 +6,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Field";
 import { EmptyState, Segmented } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, QuickDates, RowCard, type Column } from "../../components/ui/Page";
 import { allowed } from "../../data/db";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
@@ -126,7 +126,7 @@ export function PurchasesPage() {
           </>
         }
       />
-      <FilterBar>
+      <FilterBar quick={<QuickDates from={from} to={to} onChange={(f, x) => (setFrom(f), setTo(x))} />}>
         <Input className="flex-1" leading={<Search size={16} />} placeholder={t("purchase.search")} aria-label={t("purchase.search")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Segmented
           size="sm"
@@ -158,6 +158,15 @@ export function PurchasesPage() {
         rowKey={(p) => p.id}
         loading={!noServer && list.loading}
         onRowClick={(p) => navigate({ name: "purchase-view", purchaseId: p.id })}
+        mobile={(p) => (
+          <RowCard
+            title={p.partyName}
+            sub={`${p.supplierInvoiceNumber} · ${dateMedium(p.supplierInvoiceDate)}`}
+            value={money(p.grandTotal)}
+            tone={p.status === "cancelled" ? "muted" : undefined}
+            valueSub={p.status === "posted" && Number(p.balanceDue) > 0 ? `${t("common.balance")} ${money(p.balanceDue)}` : <PurchaseStatusBadge row={p} />}
+          />
+        )}
         empty={
           <EmptyState
             title={t("purchase.empty")}

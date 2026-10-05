@@ -1,9 +1,10 @@
 import { AdjustmentBody, StockLedgerQuery, StockQuery, TransferBody } from "@digitalbahi/contracts";
-import { dec, toQtyString, type StockMovementType } from "@digitalbahi/core";
+import { addDays, dec, toQtyString, type StockMovementType } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
+import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
@@ -17,6 +18,12 @@ import { likeContains } from "../catalog/products.js";
 import type { ApiModule } from "../types.js";
 
 /** Removal reasons map to their own movement types so reports can tell damage from theft. */
+const BatchQuery = z.object({
+  /** Expiring: past expiry or within the warning days; expired: past expiry only; all: every batch in stock with an expiry date. */
+  status: z.enum(["expiring", "expired", "all"]).default("expiring"),
+  warehouseId: z.uuid().optional(),
+});
+
 const OUT_TYPE: Record<string, StockMovementType> = { damage: "damaged", expiry: "expired", internal_use: "consumption", sample: "free_out" };
 
 export const inventoryModule: ApiModule = async (app, deps) => {
@@ -59,6 +66,58 @@ export const inventoryModule: ApiModule = async (app, deps) => {
       ...(showValue ? { avgCost: x.avg_cost, value: dec(x.qty).gt(0) ? dec(x.qty).times(x.avg_cost).toFixed(2) : "0.00" } : {}),
     }));
     return page(data, q.limit, (x) => ({ v: x.name, id: x.productId }));
+  });
+
+  /**
+   * Batches in stock with an expiry date, soonest first, per godown: what is
+   * expired or about to (the business's expiry warning days), with its value
+   * for roles allowed to see it. Expired stock is written off from here as an
+   * expiry adjustment on the batch.
+   */
+  r.get("/stock/batches", { preHandler: guard(deps, "inventory.view"), schema: { tags: ["inventory"], querystring: BatchQuery } }, async (request) => {
+    const ctx = request.ctx;
+    const q = request.query;
+    const showValue = can(ctx, "inventory.view_value");
+    const today = deps.clock.today(ctx.timeZone);
+    return tenant(ctx, async (tx) => {
+      const days = await getSetting(tx, ctx.businessId, "stock.expiry_warning_days");
+      const until = addDays(today, days);
+      const where: SQL[] = [sql`sb.business_id = ${ctx.businessId}`, sql`sb.qty > 0`, sql`bt.expiry_date is not null`, sql`p.deleted_at is null`];
+      if (q.status === "expired") where.push(sql`bt.expiry_date < ${today}`);
+      if (q.status === "expiring") where.push(sql`bt.expiry_date <= ${until}`);
+      if (q.warehouseId) where.push(sql`sb.warehouse_id = ${q.warehouseId}`);
+      const rows = (
+        await tx.execute<{ batch_id: string; product_id: string; code: string; name: string; unit: string; batch_number: string; expiry_date: string; warehouse_id: string; warehouse: string; qty: string; avg_cost: string }>(sql`
+          select bt.id as batch_id, p.id as product_id, p.code, p.name, u.symbol as unit, bt.batch_number, bt.expiry_date::text,
+                 sb.warehouse_id, w.name as warehouse, sb.qty::text, p.avg_cost::text
+          from stock_balances sb
+          join batches bt on bt.id = sb.batch_id
+          join products p on p.id = sb.product_id
+          join units u on u.id = p.base_unit_id
+          join warehouses w on w.id = sb.warehouse_id
+          where ${sql.join(where, sql` and `)}
+          order by bt.expiry_date, p.name, bt.batch_number
+          limit 500`)
+      ).rows;
+      return {
+        today,
+        warningDays: days,
+        data: rows.map((x) => ({
+          batchId: x.batch_id,
+          productId: x.product_id,
+          code: x.code,
+          name: x.name,
+          unit: x.unit,
+          batchNumber: x.batch_number,
+          expiryDate: x.expiry_date,
+          expired: x.expiry_date < today,
+          warehouseId: x.warehouse_id,
+          warehouse: x.warehouse,
+          qty: x.qty,
+          ...(showValue ? { value: dec(x.qty).times(x.avg_cost).toFixed(2) } : {}),
+        })),
+      };
+    });
   });
 
   /** Every movement of a product: date | document | in | out | balance. */

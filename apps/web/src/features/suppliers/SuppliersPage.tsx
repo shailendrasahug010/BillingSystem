@@ -5,7 +5,7 @@ import { useRouter } from "../../app/router";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Field";
 import { EmptyState, Segmented } from "../../components/ui/misc";
-import { DataTable, FilterBar, PageHeader, type Column } from "../../components/ui/Page";
+import { DataTable, FilterBar, PageHeader, RowCard, type Column } from "../../components/ui/Page";
 import { allowed, SUPPLIERS, type Supplier } from "../../data/db";
 import { useStoreVersion } from "../../data/store";
 import { downloadCsv } from "../../lib/download";
@@ -107,6 +107,14 @@ export function SuppliersPage() {
         rows={rows}
         rowKey={(s) => s.id}
         onRowClick={(s) => navigate({ name: "supplier", supplierId: s.id })}
+        mobile={(s) => (
+          <RowCard
+            title={supplierLabel(s)}
+            sub={[s.code, s.city, s.mobile].filter(Boolean).join(" · ")}
+            value={money(s.balance)}
+            valueSub={s.balance > 0 ? t("supplier.outstandingPayable") : undefined}
+          />
+        )}
         empty={
           <EmptyState
             icon={<Factory size={20} />}

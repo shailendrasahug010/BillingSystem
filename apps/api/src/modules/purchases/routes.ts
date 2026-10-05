@@ -13,6 +13,7 @@ import {
   toQtyString,
   toRateString,
   type DocumentLineInput,
+  type NegativeStockPolicy,
   type PartyGstRegistration,
   type ResolvedTax,
   type TaxCategory,
@@ -23,15 +24,15 @@ import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
-import { guard } from "../../lib/access.js";
+import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { inSequence, lockIdempotencyKey, withTenant } from "../../lib/db.js";
-import { ApiError, badRequest, conflict, notFound } from "../../lib/errors.js";
+import { ApiError, badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
-import { recordPayment, releaseAllocations } from "../../services/payments.js";
+import { applyToDocument, recordPayment, releaseAllocationRows } from "../../services/payments.js";
 import { getSettings } from "../../services/settings.js";
 import { postStockMovement } from "../../services/stock.js";
 import { likeContains } from "../catalog/products.js";
@@ -66,6 +67,92 @@ export async function purchaseDetail(tx: Tx, ctx: RequestCtx, id: string) {
   return { ...rest, items: items.map(({ businessId: _ib, ...i }) => i), payments, returns };
 }
 
+/**
+ * Cancels a posted purchase: stock goes back out, the supplier's payable is
+ * reversed, its GST is left out of returns and its payments become an
+ * advance (returned, so a bill that replaces it can take them).
+ */
+async function cancelPostedPurchase(
+  tx: Tx,
+  ctx: RequestCtx,
+  p: typeof schema.purchases.$inferSelect,
+  reason: string,
+  at: { now: string; today: string; policy: NegativeStockPolicy },
+) {
+  if (p.status !== "posted") throw conflict("INVOICE_NOT_POSTED", { status: p.status });
+  await assertNoPostedReturns(tx, { purchaseId: p.id });
+  const [locked] = await tx
+    .select({ id: schema.gstReturnPeriods.id })
+    .from(schema.gstReturnPeriods)
+    .where(
+      and(
+        eq(schema.gstReturnPeriods.businessId, ctx.businessId),
+        eq(schema.gstReturnPeriods.period, p.supplierInvoiceDate.slice(0, 7)),
+        sql`${schema.gstReturnPeriods.status} in ('locked', 'filed')`,
+      ),
+    );
+  if (locked) throw conflict("GST_PERIOD_LOCKED");
+  const { now, today, policy } = at;
+  const items = await tx.select().from(schema.purchaseItems).where(eq(schema.purchaseItems.purchaseId, p.id));
+  const warnings: Array<{ code: string; params: Record<string, string> }> = [];
+  for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
+    const qty = dec(item.qtyBase).plus(dec(item.freeQty).times(item.conversionFactor));
+    const moved = await postStockMovement(
+      tx,
+      {
+        businessId: ctx.businessId,
+        productId: item.productId,
+        productName: item.productName,
+        warehouseId: p.warehouseId,
+        batchId: item.batchId,
+        date: today,
+        type: "purchase_return",
+        qty: toQtyString(qty),
+        unitCost: item.landedUnitCost,
+        refType: "purchase_cancel",
+        refId: p.id,
+        refLineId: item.id,
+        refNumber: p.supplierInvoiceNumber,
+        reason,
+        userId: ctx.userId,
+      },
+      policy,
+    );
+    if (moved.warning) warnings.push({ code: "insufficient_stock", params: { product: item.productName, available: moved.warning.available.toString() } });
+  }
+  const releasedRows = await releaseAllocationRows(tx, { purchaseId: p.id }, now);
+  const released = releasedRows.reduce((acc, x) => acc.plus(x.amount), dec(0)).toFixed(2);
+  await tx
+    .update(schema.purchases)
+    .set({ status: "cancelled", cancelledAt: now, cancelledBy: ctx.userId, cancelReason: reason, amountPaid: "0", balanceDue: "0", paymentStatus: "unpaid", version: p.version + 1 })
+    .where(eq(schema.purchases.id, p.id));
+  await postPartyEntry(tx, {
+    businessId: ctx.businessId,
+    party: { type: "supplier", id: p.supplierId },
+    date: today,
+    docType: "purchase_cancel",
+    docId: p.id,
+    docNumber: p.supplierInvoiceNumber,
+    debit: p.grandTotal,
+    narration: `Cancelled: ${reason}`,
+    userId: ctx.userId,
+  });
+  await tx
+    .update(schema.gstTransactions)
+    .set({ isCancelled: true })
+    .where(and(eq(schema.gstTransactions.docType, "purchase"), eq(schema.gstTransactions.docId, p.id), eq(schema.gstTransactions.businessId, ctx.businessId)));
+  await audit(tx, ctx, {
+    action: "purchase.cancelled",
+    entityType: "purchase",
+    entityId: p.id,
+    entityLabel: p.purchaseNumber ?? p.supplierInvoiceNumber,
+    changes: { reason, grandTotal: p.grandTotal, releasedToAdvance: released },
+  });
+  // The daily summaries count what was bought in on its day.
+  await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "purchase.cancelled", aggregateType: "purchase", aggregateId: p.id, payload: {} });
+  return { warnings, releasedRows };
+}
+
 export const purchasesModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
@@ -95,6 +182,21 @@ export const purchasesModule: ApiModule = async (app, deps) => {
       const receivedDate = body.receivedDate ?? today;
       if (receivedDate > today || body.supplierInvoiceDate > today) throw badRequest("FUTURE_DATE_NOT_ALLOWED", {}, "supplierInvoiceDate");
       if (body.supplierInvoiceDate > receivedDate) throw badRequest("BILL_AFTER_RECEIPT", {}, "supplierInvoiceDate");
+
+      // Correcting a bill: the wrong one is cancelled first (so its bill number is free again) in this same step.
+      let replaced: { purchase: typeof schema.purchases.$inferSelect; releasedRows: Array<{ paymentId: string; amount: string }> } | null = null;
+      if (body.replacesPurchaseId) {
+        if (!can(ctx, "purchase.cancel")) throw forbidden("purchase.cancel");
+        const [old] = await tx
+          .select()
+          .from(schema.purchases)
+          .where(and(eq(schema.purchases.id, body.replacesPurchaseId), eq(schema.purchases.businessId, ctx.businessId)))
+          .for("update");
+        if (!old) throw badRequest("REFERENCE_NOT_FOUND", {}, "replacesPurchaseId");
+        // The same goods come straight back in, so taking them out first never blocks on stock.
+        const out = await cancelPostedPurchase(tx, ctx, old, "Corrected: entered again", { now: deps.clock.now().toISOString(), today, policy: "allow" });
+        replaced = { purchase: old, releasedRows: out.releasedRows };
+      }
 
       const [business] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
       const [supplier] = await tx
@@ -466,12 +568,35 @@ export const purchasesModule: ApiModule = async (app, deps) => {
         });
       }
 
+      // What was paid on the bill it replaces moves to this one (same supplier), as far as this bill goes.
+      const moved: Array<{ paymentId: string; amount: string }> = [];
+      if (replaced && replaced.purchase.supplierId === supplier.id) {
+        const [now] = await tx.select({ balance: schema.purchases.balanceDue }).from(schema.purchases).where(eq(schema.purchases.id, id));
+        let balance = dec(now!.balance);
+        for (const r of replaced.releasedRows) {
+          if (balance.lte(0)) break;
+          const amount = dec(r.amount).gt(balance) ? balance : dec(r.amount);
+          await tx.insert(schema.paymentAllocations).values({ id: uuidv7(), businessId: ctx.businessId, paymentId: r.paymentId, purchaseId: id, amount: amount.toFixed(2), allocatedBy: ctx.userId });
+          await tx
+            .update(schema.payments)
+            .set({ unallocatedAmount: sql`${schema.payments.unallocatedAmount} - ${amount.toFixed(2)}` })
+            .where(eq(schema.payments.id, r.paymentId));
+          balance = balance.minus(amount);
+          await applyToDocument(tx, "supplier", id, amount.toFixed(2), balance.toFixed(2));
+          moved.push({ paymentId: r.paymentId, amount: amount.toFixed(2) });
+        }
+      }
+
       await audit(tx, ctx, {
         action: "purchase.posted",
         entityType: "purchase",
         entityId: id,
         entityLabel: `${numbering.number} (${body.supplierInvoiceNumber})`,
-        changes: { supplier: supplier.name, grandTotal: toAmountString(t.grandTotal) },
+        changes: {
+          supplier: supplier.name,
+          grandTotal: toAmountString(t.grandTotal),
+          ...(replaced ? { replaces: replaced.purchase.purchaseNumber ?? replaced.purchase.supplierInvoiceNumber, paymentsMoved: moved.map((m) => m.amount) } : {}),
+        },
       });
       await tx.insert(schema.outboxEvents).values({
         businessId: ctx.businessId,
@@ -536,78 +661,8 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           .where(and(eq(schema.purchases.id, request.params.id), eq(schema.purchases.businessId, ctx.businessId)))
           .for("update");
         if (!p) throw notFound("purchase");
-        if (p.status !== "posted") throw conflict("INVOICE_NOT_POSTED", { status: p.status });
-        await assertNoPostedReturns(tx, { purchaseId: p.id });
-        const [locked] = await tx
-          .select({ id: schema.gstReturnPeriods.id })
-          .from(schema.gstReturnPeriods)
-          .where(
-            and(
-              eq(schema.gstReturnPeriods.businessId, ctx.businessId),
-              eq(schema.gstReturnPeriods.period, p.supplierInvoiceDate.slice(0, 7)),
-              sql`${schema.gstReturnPeriods.status} in ('locked', 'filed')`,
-            ),
-          );
-        if (locked) throw conflict("GST_PERIOD_LOCKED");
-        const now = deps.clock.now().toISOString();
-        const today = deps.clock.today(ctx.timeZone);
         const policy = (await getSettings(tx, ctx.businessId, ["stock.negative_policy"] as const))["stock.negative_policy"];
-        const items = await tx.select().from(schema.purchaseItems).where(eq(schema.purchaseItems.purchaseId, p.id));
-        const warnings: Array<{ code: string; params: Record<string, string> }> = [];
-        for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
-          const qty = dec(item.qtyBase).plus(dec(item.freeQty).times(item.conversionFactor));
-          const moved = await postStockMovement(
-            tx,
-            {
-              businessId: ctx.businessId,
-              productId: item.productId,
-              productName: item.productName,
-              warehouseId: p.warehouseId,
-              batchId: item.batchId,
-              date: today,
-              type: "purchase_return",
-              qty: toQtyString(qty),
-              unitCost: item.landedUnitCost,
-              refType: "purchase_cancel",
-              refId: p.id,
-              refLineId: item.id,
-              refNumber: p.supplierInvoiceNumber,
-              reason: request.body.reason,
-              userId: ctx.userId,
-            },
-            policy,
-          );
-          if (moved.warning) warnings.push({ code: "insufficient_stock", params: { product: item.productName, available: moved.warning.available.toString() } });
-        }
-        const released = await releaseAllocations(tx, { purchaseId: p.id }, now);
-        await tx
-          .update(schema.purchases)
-          .set({ status: "cancelled", cancelledAt: now, cancelledBy: ctx.userId, cancelReason: request.body.reason, amountPaid: "0", balanceDue: "0", paymentStatus: "unpaid", version: p.version + 1 })
-          .where(eq(schema.purchases.id, p.id));
-        await postPartyEntry(tx, {
-          businessId: ctx.businessId,
-          party: { type: "supplier", id: p.supplierId },
-          date: today,
-          docType: "purchase_cancel",
-          docId: p.id,
-          docNumber: p.supplierInvoiceNumber,
-          debit: p.grandTotal,
-          narration: `Cancelled: ${request.body.reason}`,
-          userId: ctx.userId,
-        });
-        await tx
-          .update(schema.gstTransactions)
-          .set({ isCancelled: true })
-          .where(and(eq(schema.gstTransactions.docType, "purchase"), eq(schema.gstTransactions.docId, p.id), eq(schema.gstTransactions.businessId, ctx.businessId)));
-        await audit(tx, ctx, {
-          action: "purchase.cancelled",
-          entityType: "purchase",
-          entityId: p.id,
-          entityLabel: p.purchaseNumber ?? p.supplierInvoiceNumber,
-          changes: { reason: request.body.reason, grandTotal: p.grandTotal, releasedToAdvance: released },
-        });
-        // The daily summaries count what was bought in on its day.
-        await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "purchase.cancelled", aggregateType: "purchase", aggregateId: p.id, payload: {} });
+        const { warnings } = await cancelPostedPurchase(tx, ctx, p, request.body.reason, { now: deps.clock.now().toISOString(), today: deps.clock.today(ctx.timeZone), policy });
         return { ...(await purchaseDetail(tx, ctx, p.id)), warnings };
       });
     },

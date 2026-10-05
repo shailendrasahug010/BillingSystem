@@ -1,7 +1,9 @@
 import { translateError } from "@digitalbahi/i18n";
-import { ArrowLeft, RotateCw, TriangleAlert } from "lucide-react";
-import type { ReactNode } from "react";
+import { addDays } from "@digitalbahi/core";
+import { ArrowLeft, RotateCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { Children, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
+import { TODAY } from "../../data/db";
 import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { Button } from "./Button";
@@ -21,7 +23,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   );
 }
 
-export { DataTable, type Column } from "./DataTable";
+export { DataTable, RowCard, type Column } from "./DataTable";
 
 /** An API error in the user's language (field-level errors are shown by their fields). */
 export function ErrorNote({ error, className, onRetry }: { error: unknown; className?: string; onRetry?(): void }) {
@@ -76,9 +78,63 @@ export function LoadMore({ hasMore, loading, onClick }: { hasMore: boolean; load
   );
 }
 
-/** The filter strip above a list. */
-export function FilterBar({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card md:flex-row md:flex-wrap md:items-center">{children}</div>;
+/**
+ * The filter strip above a list. On a phone only the first filter (the
+ * search) shows, with a Filters button for the rest, so the list starts
+ * near the top; `quick` (date chips) stays in sight on every screen.
+ */
+export function FilterBar({ children, quick }: { children: ReactNode; quick?: ReactNode }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [first, ...rest] = Children.toArray(children).filter(Boolean);
+  return (
+    <div className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card md:flex-row md:flex-wrap md:items-center">
+      <div className="flex items-center gap-2 md:contents">
+        {first}
+        {rest.length > 0 && (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className={cn(
+              "press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium md:hidden",
+              open ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2",
+            )}
+          >
+            <SlidersHorizontal size={15} aria-hidden />
+            {t("common.filters")}
+          </button>
+        )}
+      </div>
+      {quick}
+      {rest.length > 0 && <div className={cn("flex-col gap-2 md:contents", open ? "flex" : "hidden")}>{rest}</div>}
+    </div>
+  );
+}
+
+const CHIP = "press h-8 shrink-0 rounded-full border px-3 text-[12.5px] font-medium";
+
+/** Today, this week, this month in one tap for a list's from / to dates; tapping the chosen one again clears them. */
+export function QuickDates({ from, to, onChange }: { from: string; to: string; onChange(from: string, to: string): void }) {
+  const { t } = useI18n();
+  const weekday = (new Date(`${TODAY}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const options = [
+    { key: "today", label: t("common.today"), from: TODAY },
+    { key: "week", label: t("dates.thisWeek"), from: addDays(TODAY, -weekday) },
+    { key: "month", label: t("dashboard.range.thisMonth"), from: `${TODAY.slice(0, 8)}01` },
+  ];
+  return (
+    <div className="scroll-x flex gap-1.5" role="group" aria-label={t("common.period")}>
+      {options.map((o) => {
+        const on = from === o.from && to === TODAY;
+        return (
+          <button key={o.key} type="button" aria-pressed={on} onClick={() => (on ? onChange("", "") : onChange(o.from, TODAY))} className={cn(CHIP, on ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong")}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 /** Small label / value pair for detail views. */
