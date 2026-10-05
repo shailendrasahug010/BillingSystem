@@ -1,6 +1,7 @@
 import { CollectionReportQuery, OutstandingQuery, PurchaseReportQuery, SalesReportQuery } from "@digitalbahi/contracts";
 import { ageDocuments, dec, type OpenDocument, type Permission } from "@digitalbahi/core";
 import type { Tx } from "@digitalbahi/db";
+import { formatDateTime } from "@digitalbahi/i18n";
 import { sql, type SQL } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -81,7 +82,7 @@ export async function sendReport(
       letterhead: await loadLetterhead(deps, ctx),
       title: meta.title,
       period,
-      generatedAt: new Intl.DateTimeFormat("en-IN", { timeZone: ctx.timeZone, day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(deps.clock.now()),
+      generatedAt: formatDateTime(deps.clock.now(), ctx.timeZone),
       columns,
       rows: body.rows,
       totals: body.totals ?? null,

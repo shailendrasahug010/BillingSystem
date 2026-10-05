@@ -7,6 +7,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { DataTable } from "../../components/ui/DataTable";
+import { FilterBar, HeaderActions } from "../../components/ui/Page";
 import { Avatar, EmptyState, Segmented, useDelayedReady } from "../../components/ui/misc";
 import { allowed, CUSTOMERS, ROUTES, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";
@@ -69,7 +70,7 @@ export function CustomersPage() {
             {t("common.showingCount", { shown: rows.length, total: CUSTOMERS.length })} · {t("customer.outstanding")} {money(totalOutstanding, 0)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <HeaderActions>
           {LIVE && allowed("customer.create") && (
             <Button icon={<FileUp size={16} />} onClick={() => setImporting(true)}>
               {t("imports.import")}
@@ -100,11 +101,10 @@ export function CustomersPage() {
           <Button variant="primary" icon={<UserPlus size={16} />} onClick={() => setAdding(true)}>
             {t("customer.add")}
           </Button>
-        </div>
+        </HeaderActions>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card">
-        <div className="flex flex-col gap-2 md:flex-row">
+      <FilterBar>
           <Input id="customer-filter" className="flex-1" leading={<Search size={16} />} placeholder={t("customer.search")} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t("customer.search")} />
           <Select aria-label={t("customer.route")} value={route} onChange={(e) => setRoute(e.target.value)} className="md:w-56">
             <option value="">
@@ -121,8 +121,6 @@ export function CustomersPage() {
             <option value="last">↓ {t("customer.lastPurchase")}</option>
             <option value="name">A–Z {t("common.name")}</option>
           </Select>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
           <Segmented
             size="sm"
             label={t("customer.type")}
@@ -136,8 +134,7 @@ export function CustomersPage() {
           />
           {chip(onlyOutstanding, t("customer.filters.withOutstanding"), () => setOnlyOutstanding((v) => !v))}
           {chip(onlyOverdue, t("customer.filters.overdue"), () => setOnlyOverdue((v) => !v))}
-        </div>
-      </div>
+      </FilterBar>
 
       <DataTable<Row>
         id="customers"
@@ -180,9 +177,7 @@ export function CustomersPage() {
                 <Avatar name={c.businessName} />
                 <div className="min-w-0">
                   <p className="font-medium text-ink">{c.businessName}</p>
-                  <p className="text-[12.5px] text-ink-3">
-                    {c.name} · {c.city} · <span className="num">{c.mobile}</span>
-                  </p>
+                  <p className="text-[12.5px] text-ink-3">{[c.name !== c.businessName && c.name, c.city, c.mobile].filter(Boolean).join(" · ")}</p>
                 </div>
               </div>
             ),
@@ -193,7 +188,8 @@ export function CustomersPage() {
             sortValue: (r) => r.c.gstin,
             render: ({ c }) => (c.gstin ? <span className="font-mono text-[12px] text-ink-2">{c.gstin}</span> : <Badge tone={customerKind(c) === "export" ? "accent" : "neutral"}>{t(kindLabel(c))}</Badge>),
           },
-          { key: "route", header: t("customer.route"), sortValue: (r) => r.c.route, className: "text-ink-2", render: ({ c }) => c.route },
+          // Columns nobody has anything in yet (no routes made, payment habits not known) stay out of the way.
+          ...(rows.some((r) => r.c.route) ? [{ key: "route", header: t("customer.route"), sortValue: (r: Row) => r.c.route, className: "text-ink-2", render: ({ c }: Row) => c.route }] : []),
           {
             key: "last",
             header: t("customer.lastPurchase"),
@@ -209,16 +205,20 @@ export function CustomersPage() {
                 "—"
               ),
           },
-          {
-            key: "behaviour",
-            header: t("customer.paymentBehaviour"),
-            render: ({ ins }) =>
-              (!LIVE || ins.behaviour.rating !== "new") && (
-                <Badge tone={BEHAVIOUR_TONE[ins.behaviour.rating]} dot>
-                  {t(`behaviour.${ins.behaviour.rating}`)}
-                </Badge>
-              ),
-          },
+          ...(rows.some((r) => !LIVE || r.ins.behaviour.rating !== "new")
+            ? [
+                {
+                  key: "behaviour",
+                  header: t("customer.paymentBehaviour"),
+                  render: ({ ins }: Row) =>
+                    (!LIVE || ins.behaviour.rating !== "new") && (
+                      <Badge tone={BEHAVIOUR_TONE[ins.behaviour.rating]} dot>
+                        {t(`behaviour.${ins.behaviour.rating}`)}
+                      </Badge>
+                    ),
+                },
+              ]
+            : []),
           {
             key: "outstanding",
             header: t("customer.outstanding"),

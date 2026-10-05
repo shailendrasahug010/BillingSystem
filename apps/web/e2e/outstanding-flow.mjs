@@ -138,7 +138,7 @@ await page.fill("#pay-amount", "1000");
 // A part payment: the customer says when the rest will come.
 await page.getByText("Left to pay after this: ₹570.00").waitFor();
 await page.getByRole("dialog").getByRole("button", { name: "Tomorrow" }).click();
-const tomorrow = daysAgo(-1);
+const tomorrow = daysAgo(-1).split("-").reverse().join("/"); // shown as dd/mm/yyyy
 if ((await page.inputValue("#pay-promise")) !== tomorrow) errors.push(`promise date ${await page.inputValue("#pay-promise")}`);
 await page.locator("#pay-promise").scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${OUT}/outstanding-3-part-payment.png` });

@@ -72,7 +72,7 @@ function Changes({ value }: { value: unknown }) {
  * Read-only; the table rejects updates and deletes.
  */
 export function AuditLogPage() {
-  const { t, locale } = useI18n();
+  const { t, dateTime } = useI18n();
   const [entityType, setEntityType] = useState("");
   const [userId, setUserId] = useState("");
   const [from, setFrom] = useState("");
@@ -84,8 +84,7 @@ export function AuditLogPage() {
     queryFn: () => api.get<{ data: Array<{ userId: string; name: string }> }>("/members").then((r) => r.data),
     enabled: allowed("user.view"),
   });
-  const time = (iso: string) =>
-    new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }).format(new Date(iso));
+  const time = (iso: string) => dateTime(iso);
   const entityLabel = (e: string | null) => (e && (ENTITIES as readonly string[]).includes(e) ? t(`audit.entities.${e}` as TranslationKey) : (e ?? "—"));
 
   return (

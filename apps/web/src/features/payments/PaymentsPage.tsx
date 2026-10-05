@@ -58,7 +58,7 @@ interface PaymentDetail extends PaymentRow {
 const CHEQUE_TONE: Record<string, Tone> = { pending: "warn", deposited: "accent", cleared: "good", bounced: "danger" };
 
 export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; partyId?: string }) {
-  const { t, money, dateMedium } = useI18n();
+  const { t, money, amount, dateMedium } = useI18n();
   const { navigate } = useRouter();
   const [direction, setDirection] = useState<"all" | "in" | "out">("all");
   const [method, setMethod] = useState<"" | PaymentMethod>("");
@@ -120,7 +120,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
       header: t("common.amount"),
       align: "right",
       sortValue: (p) => Number(p.amount),
-      render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : p.direction === "in" ? "font-semibold text-good" : "font-semibold text-ink"}>{money(p.amount)}</span>,
+      render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : p.direction === "in" ? "font-semibold text-good" : "font-semibold text-ink"}>{amount(p.amount)}</span>,
     },
   ];
 
@@ -234,7 +234,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
                 <RowCard
                   title={p.partyName}
                   sub={`${p.paymentNumber ?? ""} · ${dateMedium(p.paymentDate)} · ${t(`paymentMethod.${p.method}`)}`}
-                  value={money(p.amount)}
+                  value={amount(p.amount)}
                   tone={p.status === "cancelled" ? "muted" : p.direction === "in" ? "good" : undefined}
                   valueSub={p.chequeStatus ? t(`payment.chequeStatus.${p.chequeStatus}`) : undefined}
                 />

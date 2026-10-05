@@ -102,7 +102,7 @@ await nav("Settings");
 const arn = `AD23032600${run}`;
 await page.locator("#lut-arn").waitFor({ timeout: 15000 });
 await page.fill("#lut-arn", arn);
-check((await page.inputValue("#lut-until")).endsWith("-03-31"), "LUT valid until defaults to the financial year's end");
+check(/^31\/03\/\d{4}$/.test(await page.inputValue("#lut-until")), "LUT valid until defaults to the financial year's end");
 await page.locator("#lut-arn").locator("xpath=ancestor::div[contains(@class,'border-b')][1]").getByRole("button", { name: "Save", exact: true }).click();
 await toast("Settings saved");
 check((await api("GET", "/settings", token))["gst.lut"]?.arn === arn, "LUT stored");

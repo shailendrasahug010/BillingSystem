@@ -6,7 +6,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { DataTable, RowCard } from "../../components/ui/DataTable";
-import { FilterBar } from "../../components/ui/Page";
+import { FilterBar, HeaderActions } from "../../components/ui/Page";
 import { EmptyState, Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BRANDS, PRODUCTS } from "../../data/db";
@@ -32,6 +32,7 @@ export function ProductsPage() {
   const [importing, setImporting] = useState(false);
   const canEdit = LIVE && allowed("product.update");
   const showMargin = !LIVE || allowed("product.view_cost");
+  const costOf = (p: Product) => p.avgCost || p.purchasePrice;
 
   const rows = useMemo(() => {
     const base = query.trim() ? searchProducts(query, searchable, { limit: 100 }).map((h) => h.product) : searchable;
@@ -53,7 +54,7 @@ export function ProductsPage() {
             {t("common.showingCount", { shown: rows.length, total: PRODUCTS.length })} · {t("product.stockValue")} {money(stockValue, 0)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <HeaderActions>
           {LIVE && allowed("product.import") && (
             <Button icon={<FileUp size={16} />} onClick={() => setImporting(true)}>
               {t("imports.import")}
@@ -92,7 +93,7 @@ export function ProductsPage() {
               {t("product.add")}
             </Button>
           )}
-        </div>
+        </HeaderActions>
       </div>
 
       <FilterBar>
@@ -162,24 +163,24 @@ export function ProductsPage() {
             render: (p) => (
               <>
                 <p className="font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
-                <p className="text-[12px] text-ink-3">
-                  <span className="font-mono">{p.code}</span> · {p.packSize} · <span className="font-mono">{p.barcode}</span>
-                </p>
+                <p className="text-[12px] text-ink-3">{[p.code, p.packSize, p.barcode].filter(Boolean).join(" · ")}</p>
               </>
             ),
           },
-          { key: "brand", header: t("product.brand"), sortValue: (p) => p.brand, className: "text-ink-2", render: (p) => p.brand },
+          // A column nobody has filled yet stays out of the way.
+          ...(rows.some((p) => p.brand) ? [{ key: "brand", header: t("product.brand"), sortValue: (p: Product) => p.brand, className: "text-ink-2", render: (p: Product) => p.brand }] : []),
           { key: "hsn", header: t("product.hsn"), sortValue: (p) => p.hsn, className: "font-mono text-[12.5px] text-ink-2", render: (p) => p.hsn },
           { key: "gst", header: t("product.gstRate"), align: "right", sortValue: (p) => p.gstRate, render: (p) => (p.taxCategory.kind === "taxable" ? `${p.gstRate}%` : t("gst.nilRated")) },
-          { key: "mrp", header: t("product.mrp"), align: "right", sortValue: (p) => p.mrp, className: "text-ink-2", render: (p) => money(p.mrp) },
+          { key: "mrp", header: t("product.mrp"), align: "right", sortValue: (p) => p.mrp, className: "text-ink-2", render: (p) => (p.mrp > 0 ? money(p.mrp) : "—") },
           { key: "rate", header: t("product.sellingPrice"), align: "right", sortValue: (p) => p.rate, className: "text-ink", render: (p) => money(p.rate) },
           {
             key: "margin",
             header: t("product.margin"),
             align: "right",
             className: "text-ink-2",
-            ...(showMargin ? { sortValue: (p: Product) => (p.rate > 0 ? (p.rate - p.purchasePrice) / p.rate : null) } : {}),
-            render: (p) => (p.rate > 0 && showMargin ? `${(((p.rate - p.purchasePrice) / p.rate) * 100).toFixed(1)}%` : "—"),
+            // No purchase cost known yet: no margin to show (not 100%).
+            ...(showMargin ? { sortValue: (p: Product) => (p.rate > 0 && costOf(p) > 0 ? (p.rate - costOf(p)) / p.rate : null) } : {}),
+            render: (p) => (p.rate > 0 && costOf(p) > 0 && showMargin ? `${(((p.rate - costOf(p)) / p.rate) * 100).toFixed(1)}%` : "—"),
           },
           {
             key: "stock",

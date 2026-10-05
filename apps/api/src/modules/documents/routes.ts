@@ -1,6 +1,6 @@
 import { financialYearOf, zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
-import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@digitalbahi/i18n";
+import { createTranslator, formatCurrency, formatDate, formatDateTime, isLocaleCode, type LocaleCode } from "@digitalbahi/i18n";
 import { and, inArray, eq } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -358,7 +358,7 @@ async function supplierStatementPdf(deps: AppDeps, ctx: RequestCtx, id: string, 
     letterhead,
     title: `${t("supplier.statement.title")}: ${supplier.name}${supplier.gstin ? ` (${supplier.gstin})` : ""}`,
     period: `${pdfDate(from)} – ${pdfDate(to)}`,
-    generatedAt: new Intl.DateTimeFormat("en-IN", { timeZone: ctx.timeZone, day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(deps.clock.now()),
+    generatedAt: formatDateTime(deps.clock.now(), ctx.timeZone),
     columns: [
       { key: "date", label: t("common.date") },
       { key: "particulars", label: t("customer.ledger.particulars") },

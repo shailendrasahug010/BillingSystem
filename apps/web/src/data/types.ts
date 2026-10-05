@@ -96,6 +96,8 @@ export interface Customer {
   remindersOptOutAt?: string | null;
   remindersOptOutBy?: "staff" | "reply" | null;
   version?: number;
+  /** The day of their last bill, as the server knows it (live mode). */
+  lastInvoiceOn?: string | null;
 }
 
 export interface InvoiceLine {

@@ -76,7 +76,7 @@ const STATUS_PERMISSION: Record<string, string> = {
 const INVOICEABLE = new Set<OrderStatus>(["confirmed", "packing", "packed", "dispatched", "delivered"]);
 
 export function OrderViewPage({ orderId }: { orderId: string }) {
-  const { t, money, number, dateMedium } = useI18n();
+  const { t, money, number, dateMedium, dateTime } = useI18n();
   const { navigate } = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
@@ -277,7 +277,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                   {t(`status.order.${h.toStatus as OrderStatus}`)}
                   {h.note && <span className="block text-[12px] text-ink-3">{h.note}</span>}
                 </span>
-                <span className="num shrink-0 text-[12px] text-ink-3">{new Date(h.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}</span>
+                <span className="num shrink-0 text-[12px] text-ink-3">{dateTime(h.createdAt)}</span>
               </li>
             ))}
             {o.notes && <li className="border-t border-line pt-2 text-ink-2">{o.notes}</li>}

@@ -163,7 +163,7 @@ function NavItem({ mod, active, pinned, onPin, onClick }: { mod: ModuleDef; acti
         onClick={onClick}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "press flex h-10 w-full items-center gap-3 rounded-xl px-3 pr-9 text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
+          "press flex h-10 w-full items-center gap-3 rounded-xl px-3 pr-9 text-left text-[13.5px] lg:h-[34px] transition-[background-color,color,box-shadow] duration-200",
           active ? "animate-pill bg-accent bg-accent-grad font-semibold text-ink-inverse shadow-glow" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
         )}
       >
@@ -512,8 +512,12 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           >
             <Menu size={20} />
           </button>
-          <div className="lg:hidden">
+          {/* On a phone: the mark and whose books these are. */}
+          <div className="flex min-w-0 items-center gap-1.5 lg:hidden">
             <BrandMark compact />
+            <span className="truncate text-[14px] font-semibold text-ink sm:hidden" title={BUSINESS.name}>
+              {BUSINESS.name}
+            </span>
           </div>
           <button
             type="button"

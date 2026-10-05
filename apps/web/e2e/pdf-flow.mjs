@@ -86,7 +86,7 @@ await dialog().getByRole("button", { name: "Match and review" }).click();
 await page.getByText("Imported from supplier-bill.pdf").waitFor({ timeout: 15000 });
 await page.getByText("3 of 4 items matched").waitFor();
 if ((await page.locator("#pu-bill").inputValue()) !== "SG/1044") errors.push("bill number not read from the PDF");
-if ((await page.locator("#pu-date").inputValue()) !== "2026-09-24") errors.push("bill date not read from the PDF");
+if ((await page.locator("#pu-date").inputValue()) !== "24/09/2026") errors.push("bill date not read from the PDF");
 await page.getByText("Shree Ganesh Agencies").first().waitFor();
 // The wrapped "SURF EXCEL EASY WASH / 1KG" matched by name; "2 CS" came in cartons.
 const surf = page.getByRole("row", { name: /Surf Excel Easy Wash 1kg/ });

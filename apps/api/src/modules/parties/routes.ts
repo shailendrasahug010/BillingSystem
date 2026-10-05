@@ -210,6 +210,7 @@ type CustomerRowDb = {
   version: number;
   created_at: string;
   overdue: string;
+  last_invoice_on: string | null;
   gst_registration: string;
   message_locale: string | null;
   reminders_opt_out: boolean;
@@ -227,13 +228,16 @@ export async function customerRows(tx: Tx, today: string, rest: SQL) {
     await tx.execute<CustomerRowDb>(sql`
       select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
              c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
-             c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue,
+             c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue, li.on::text as last_invoice_on,
              c.message_locale, c.reminders_opt_out, c.reminders_opt_out_at, c.reminders_opt_out_by
       from customers c
       left join lateral (
         select sum(i.balance_due) as amount from invoices i
         where i.customer_id = c.id and i.status = 'posted' and i.balance_due > 0 and i.due_date < ${today}
       ) od on true
+      left join lateral (
+        select max(i.invoice_date) as on from invoices i where i.business_id = c.business_id and i.customer_id = c.id and i.status = 'posted'
+      ) li on true
       where ${rest}`)
   ).rows;
   return rows.map((c) => ({
@@ -249,6 +253,8 @@ export async function customerRows(tx: Tx, today: string, rest: SQL) {
     gstin: c.gstin,
     balance: c.balance,
     overdue: c.overdue,
+    /** The day of their last bill (null: never billed). */
+    lastInvoiceOn: c.last_invoice_on,
     creditLimit: c.credit_limit,
     creditDays: c.credit_days,
     routeId: c.route_id,

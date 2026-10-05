@@ -148,7 +148,7 @@ function quickInsight(customerId: string): CustomerInsight {
     overdue: c?.overdue ?? 0,
     overdueCount: 0,
     oldestOverdueDays: 0,
-    lastPurchase: null,
+    lastPurchase: c?.lastInvoiceOn ?? null,
     behaviour: { avgDaysToPay: null, onTimeRatio: null, rating: "new" },
     openInvoices: [],
     customerAssociations: [],

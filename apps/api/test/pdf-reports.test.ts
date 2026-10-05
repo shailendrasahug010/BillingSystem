@@ -23,7 +23,7 @@ describe("PDF cells", () => {
     expect(pdfCell("12.500").text).toBe("12.5");
     expect(pdfCell("30.0").text).toBe("30.0");
     expect(pdfCell(42).text).toBe("42");
-    expect(pdfCell("2026-09-05")).toEqual({ text: "5 Sep 2026", numeric: false });
+    expect(pdfCell("2026-09-05")).toEqual({ text: "05/09/2026", numeric: false });
     expect(pdfCell("Parle-G")).toEqual({ text: "Parle-G", numeric: false });
     expect(pdfCell(null).text).toBe("");
   });
@@ -75,7 +75,7 @@ describe.skipIf(!hasDatabase)("reports as PDF and Excel", () => {
     expect(res.headers["content-disposition"]).toBe('attachment; filename="sales-2026-09-01-2026-09-30.pdf"');
     expect(res.rawPayload.subarray(0, 5).toString()).toBe("%PDF-");
     const [page] = await pdfText(res.rawPayload);
-    for (const text of ["Laxmi Traders", "12 Siyaganj Main Road", "Indore 452007", "9826012345 · accounts@laxmitraders.in", "Sales by product", "1 Sep 2026 – 30 Sep 2026", "Washing Powder", "1,20,000.00", "Total", "Page 1 of 1", "Made with", "Digital", "Bahi"]) {
+    for (const text of ["Laxmi Traders", "12 Siyaganj Main Road", "Indore 452007", "9826012345 · accounts@laxmitraders.in", "Sales by product", "01/09/2026 – 30/09/2026", "Washing Powder", "1,20,000.00", "Total", "Page 1 of 1", "Made with", "Digital", "Bahi"]) {
       expect(page).toContain(text);
     }
     // 10 soaps + 1 powder + 1..45 soaps: taxable 1,000 + 1,20,000 + 1,03,500.
@@ -106,7 +106,7 @@ describe.skipIf(!hasDatabase)("reports as PDF and Excel", () => {
     }
     const outstanding = (await pdfText((await pdf("/reports/outstanding?party=customer&format=pdf")).rawPayload))[0]!;
     expect(outstanding).toContain("Customer outstanding");
-    expect(outstanding).toMatch(/As of \d{1,2} \w{3} \d{4}/);
+    expect(outstanding).toMatch(/As of \d{2}\/\d{2}\/\d{4}/);
     expect((await pdf(`/reports/sales?${RANGE}&format=pdf`, salesToken)).statusCode).toBe(403);
   });
 
@@ -117,7 +117,7 @@ describe.skipIf(!hasDatabase)("reports as PDF and Excel", () => {
     expect(res.headers["content-disposition"]).toBe('attachment; filename="sales-2026-09-01-2026-09-30.xlsx"');
     const rows = await readSheet(res.rawPayload);
     expect(rows[0]![0]).toBe("Sales by product");
-    expect(rows[1]![0]).toBe("Laxmi Traders · 1 Sep 2026 – 30 Sep 2026");
+    expect(rows[1]![0]).toBe("Laxmi Traders · 01/09/2026 – 30/09/2026");
     const header = rows[3]!;
     expect(header).toContain("Taxable");
     const powder = rows.find((r) => r[0] === "Washing Powder" || r.includes("Washing Powder"))!;

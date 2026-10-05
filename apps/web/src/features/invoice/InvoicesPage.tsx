@@ -1,3 +1,4 @@
+import { addDays } from "@digitalbahi/core";
 import { CloudOff, Download, Plus, Repeat, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -37,12 +38,15 @@ type Payment = "all" | "open" | "unpaid" | "partial" | "paid";
 type Status = "all" | "posted" | "cancelled";
 
 const isOverdue = (r: InvoiceRow) => r.status === "posted" && Number(r.balanceDue) > 0.5 && Boolean(r.dueDate) && r.dueDate! < TODAY;
+const isDueSoon = (r: InvoiceRow) => r.status === "posted" && Number(r.balanceDue) > 0.5 && Boolean(r.dueDate) && r.dueDate! >= TODAY && r.dueDate! <= addDays(TODAY, 3);
 
 export function InvoiceStatusBadge({ row }: { row: InvoiceRow }) {
   const { t } = useI18n();
   if (row.status === "cancelled") return <Badge tone="neutral">{t("common.cancelled")}</Badge>;
   if (isOverdue(row)) return <Badge tone="danger" dot>{t("status.payment.overdue")}</Badge>;
-  const tone = row.paymentStatus === "paid" ? "good" : row.paymentStatus === "partial" ? "warn" : "neutral";
+  // Read at a glance: grey while there is time, amber in the last 3 days, red once late.
+  if (isDueSoon(row)) return <Badge tone="warn" dot>{t("status.payment.dueSoon")}</Badge>;
+  const tone = row.paymentStatus === "paid" ? "good" : row.paymentStatus === "partial" ? "accent" : "neutral";
   return (
     <Badge tone={tone} dot>
       {t(`status.payment.${row.paymentStatus}`)}
@@ -88,7 +92,7 @@ function filterHere(rows: InvoiceRow[], f: { q: string; payment: Payment; status
 
 /** Every sales bill: search, filter by date, payment and status, export, open one. */
 export function InvoicesPage() {
-  const { t, money, dateMedium } = useI18n();
+  const { t, money, amount, dateMedium } = useI18n();
   const { navigate } = useRouter();
   const version = useStoreVersion();
   const [q, setQ] = useState("");
@@ -138,13 +142,13 @@ export function InvoicesPage() {
       render: (r) => (r.dueDate ? <span className={isOverdue(r) ? "text-danger" : "text-ink-2"}>{dateMedium(r.dueDate)}</span> : <span className="text-ink-3">—</span>),
     },
     { key: "status", header: t("common.status"), render: (r) => <InvoiceStatusBadge row={r} /> },
-    { key: "total", header: t("common.total"), align: "right", sortValue: (r) => Number(r.grandTotal), render: (r) => <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(r.grandTotal)}</span> },
+    { key: "total", header: t("common.total"), align: "right", sortValue: (r) => Number(r.grandTotal), render: (r) => <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{amount(r.grandTotal)}</span> },
     {
       key: "balance",
       header: t("invoice.balance"),
       align: "right",
       sortValue: (r) => (r.status === "posted" ? Number(r.balanceDue) : null),
-      render: (r) => (r.status === "posted" && Number(r.balanceDue) > 0.5 ? <span className="font-semibold text-ink">{money(r.balanceDue)}</span> : <span className="text-ink-3">—</span>),
+      render: (r) => (r.status === "posted" && Number(r.balanceDue) > 0.5 ? <span className="font-semibold text-ink">{amount(r.balanceDue)}</span> : <span className="text-ink-3">—</span>),
     },
   ];
 
@@ -252,9 +256,9 @@ export function InvoicesPage() {
           <RowCard
             title={r.partyName}
             sub={`${r.invoiceNumber} · ${dateMedium(r.invoiceDate)}`}
-            value={money(r.grandTotal)}
+            value={amount(r.grandTotal)}
             tone={r.status === "cancelled" ? "muted" : undefined}
-            valueSub={r.status === "posted" && Number(r.balanceDue) > 0.5 ? <span className={isOverdue(r) ? "text-danger" : undefined}>{t("invoice.balance")} {money(r.balanceDue)}</span> : <InvoiceStatusBadge row={r} />}
+            valueSub={r.status === "posted" && Number(r.balanceDue) > 0.5 ? <span className={isOverdue(r) ? "text-danger" : undefined}>{t("invoice.balance")} {amount(r.balanceDue)}</span> : <InvoiceStatusBadge row={r} />}
           />
         )}
         empty={

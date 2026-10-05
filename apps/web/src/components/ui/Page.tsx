@@ -1,7 +1,8 @@
 import { translateError } from "@digitalbahi/i18n";
 import { addDays } from "@digitalbahi/core";
-import { ArrowLeft, RotateCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
-import { Children, useState, type ReactNode } from "react";
+import { ArrowLeft, Ellipsis, RotateCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { Popover } from "radix-ui";
+import { Children, Fragment, isValidElement, useState, type ReactElement, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { TODAY } from "../../data/db";
 import { ApiError } from "../../lib/api";
@@ -18,8 +19,53 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
           {subtitle && <div className="num text-[13px] text-ink-3">{subtitle}</div>}
         </div>
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <HeaderActions>{actions}</HeaderActions>}
     </div>
+  );
+}
+
+/** The buttons of a fragment (or a list) one by one, the empty ones (a `false` from a permission check) left out. */
+function flatButtons(children: ReactNode): ReactElement[] {
+  return Children.toArray(children).flatMap((c) =>
+    isValidElement<{ children?: ReactNode }>(c) && c.type === Fragment ? flatButtons(c.props.children) : isValidElement(c) ? [c] : [],
+  );
+}
+
+/**
+ * A page's buttons at the top right. On a computer all of them; on a phone the main one
+ * (the primary button, else the last) with the rest under "⋯", so the list starts near the top.
+ */
+export function HeaderActions({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const buttons = flatButtons(children);
+  const all = <div className="flex flex-wrap gap-2">{children}</div>;
+  if (buttons.length <= 2) return all;
+  const main = buttons.find((b) => (b.props as { variant?: string }).variant === "primary") ?? buttons[buttons.length - 1]!;
+  const rest = buttons.filter((b) => b !== main);
+  return (
+    <>
+      <div className="hidden md:block">{all}</div>
+      <div className="flex w-full items-center gap-2 md:hidden">
+        <div className="min-w-0 flex-1 [&>*]:w-full">{main}</div>
+        <Popover.Root open={open} onOpenChange={setOpen}>
+          <Popover.Trigger className="press flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-line bg-surface text-ink-2 shadow-card" aria-label={t("common.more")} title={t("common.more")}>
+            <Ellipsis size={18} />
+          </Popover.Trigger>
+          <Popover.Portal>
+            {/* A tap on any of them closes the list (the dialog it opens belongs to the page). */}
+            <Popover.Content
+              align="end"
+              sideOffset={6}
+              onClick={() => setOpen(false)}
+              className="z-50 flex w-60 flex-col gap-1.5 rounded-xl border border-line bg-surface p-2 shadow-pop [&>*]:w-full [&>*]:justify-start"
+            >
+              {rest}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+    </>
   );
 }
 
@@ -83,31 +129,36 @@ export function LoadMore({ hasMore, loading, onClick }: { hasMore: boolean; load
  * search) shows, with a Filters button for the rest, so the list starts
  * near the top; `quick` (date chips) stays in sight on every screen.
  */
+/**
+ * Search first, then a "Filters" button for the rest. On a computer the rest are open
+ * from the start, on their own row, so the search box always keeps its width; on a
+ * phone they open on a tap. Quick chips (today, this week) sit beside the search.
+ */
 export function FilterBar({ children, quick }: { children: ReactNode; quick?: ReactNode }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(min-width: 1024px)").matches);
   const [first, ...rest] = Children.toArray(children).filter(Boolean);
   return (
-    <div className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card md:flex-row md:flex-wrap md:items-center">
-      <div className="flex items-center gap-2 md:contents">
-        {first}
+    <div className="flex flex-col gap-2.5 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-[12rem] flex-1 [&>*]:w-full">{first}</div>
         {rest.length > 0 && (
           <button
             type="button"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
             className={cn(
-              "press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium md:hidden",
-              open ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2",
+              "press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium md:order-last",
+              open ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong",
             )}
           >
             <SlidersHorizontal size={15} aria-hidden />
             {t("common.filters")}
           </button>
         )}
+        {quick && <div className="w-full min-w-0 md:w-auto">{quick}</div>}
       </div>
-      {quick}
-      {rest.length > 0 && <div className={cn("flex-col gap-2 md:contents", open ? "flex" : "hidden")}>{rest}</div>}
+      {rest.length > 0 && open && <div className="flex flex-col gap-2 border-t border-line pt-2.5 md:flex-row md:flex-wrap md:items-center">{rest}</div>}
     </div>
   );
 }

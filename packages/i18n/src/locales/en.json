@@ -767,7 +767,8 @@
       "unpaid": "Unpaid",
       "partial": "Partly paid",
       "paid": "Paid",
-      "overdue": "Overdue"
+      "overdue": "Overdue",
+      "dueSoon": "Due soon"
     },
     "stock": {
       "out_of_stock": "Out of stock",
@@ -2457,6 +2458,7 @@
     "was": "was {{value}}",
     "points": "{{value}} pts",
     "noComparison": "nothing before",
+    "moreNumbers": "{{count}} more numbers",
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",
     "times": "{{value}}×",
@@ -3681,6 +3683,7 @@
     "hide": "Hide this checklist",
     "done": "Done",
     "todo": "Not done yet",
+    "continue": "Continue",
     "steps": {
       "business": {
         "title": "Add firm address and mobile",

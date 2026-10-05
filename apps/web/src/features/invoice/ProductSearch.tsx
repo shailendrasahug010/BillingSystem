@@ -218,7 +218,7 @@ export const ProductSearch = forwardRef<
                     {inCart && <span className="ml-2 text-[12px] font-normal text-accent">✓ {t("invoice.alreadyAdded")}</span>}
                   </p>
                   <p className="truncate text-[12.5px] text-ink-3">
-                    <span className="font-mono">{p.code}</span> · {p.brand} · {p.packSize} · HSN <span className="font-mono">{p.hsn}</span> · GST {p.gstRate}%
+                    {[p.code, p.brand, p.packSize, p.hsn && `HSN ${p.hsn}`, `GST ${p.gstRate}%`].filter(Boolean).join(" · ")}
                   </p>
                   {last && stats && (
                     <p className="num truncate text-[12px] font-medium text-ink-2">

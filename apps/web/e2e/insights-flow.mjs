@@ -116,13 +116,15 @@ try {
   await nav("Business Reports");
   if ((await page.getByRole("tab", { name: "Insights", exact: true }).getAttribute("aria-selected")) !== "true") errors.push("Reports did not open on Insights");
   await panel().getByLabel("Period", { exact: true }).selectOption("lastMonth");
-  await panel().getByText("Compared with 2 Aug 2026 – 31 Aug 2026").waitFor();
+  await panel().getByText("Compared with 02/08/2026 – 31/08/2026").waitFor();
   const sales = await tile("Net sales");
   if (!/₹3,000/.test(sales) || !/\+50%/.test(sales) || !/was ₹2,000/.test(sales)) errors.push(`net sales tile: ${sales}`);
   const margin = await tile("Margin %");
   if (!/37%/.test(margin) || !/-3 pts/.test(margin) || !/was 40%/.test(margin)) errors.push(`margin tile: ${margin}`);
   const owe = await tile("Customers owe");
   if (!/₹4,432/.test(owe)) errors.push(`receivables tile: ${owe}`);
+  // The first four measures show; the rest open with "More numbers".
+  await panel().getByRole("button", { name: /more numbers/ }).click();
   const stock = await tile("Stock value");
   if (!/₹7,910/.test(stock) || !/was ₹9,800/.test(stock)) errors.push(`stock tile: ${stock}`);
   const days = await tile("Days of stock");
@@ -154,7 +156,7 @@ try {
 
   // 6. Against the same dates a year earlier: nothing to compare.
   await panel().getByLabel("Compared with", { exact: true }).selectOption("last_year");
-  await panel().getByText("Compared with 1 Sept 2025 – 30 Sept 2025").waitFor();
+  await panel().getByText("Compared with 01/09/2025 – 30/09/2025").waitFor();
   const yearAgo = await tile("Net sales");
   if (!/nothing before/.test(yearAgo)) errors.push(`year-ago tile: ${yearAgo}`);
   log("against September 2025: nothing before");
@@ -179,7 +181,7 @@ try {
 
   // 8. The customers table as a file.
   await panel().getByLabel("Compared with", { exact: true }).selectOption("previous");
-  await page.getByText("Compared with 2 Aug 2026 – 31 Aug 2026").waitFor();
+  await page.getByText("Compared with 02/08/2026 – 31/08/2026").waitFor();
   const download = page.waitForEvent("download");
   await page.getByRole("radio", { name: "Customers" }).click();
   const card = page.getByRole("heading", { name: "Where sales come from" }).locator("xpath=ancestor::div[contains(@class,'shadow-card')][1]");
