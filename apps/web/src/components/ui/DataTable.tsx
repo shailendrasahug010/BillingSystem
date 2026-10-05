@@ -243,3 +243,27 @@ export function DataTable<T>({
     </div>
   );
 }
+
+/**
+ * One row of a list as a phone card: what it is on the left (a title and a
+ * line under it), the figure that matters on the right (amount, stock) with
+ * a note or badge under it.
+ */
+export function RowCard({ title, sub, value, valueSub, tone }: { title: ReactNode; sub?: ReactNode; value?: ReactNode; valueSub?: ReactNode; tone?: "danger" | "warn" | "good" | "muted" }) {
+  return (
+    <>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[14.5px] font-medium text-ink">{title}</div>
+        {sub && <div className="num mt-0.5 truncate text-[12.5px] text-ink-3">{sub}</div>}
+      </div>
+      {(value !== undefined || valueSub) && (
+        <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+          {value !== undefined && (
+            <span className={cn("num text-[14.5px] font-semibold text-ink", tone === "danger" && "text-danger", tone === "warn" && "text-warn", tone === "good" && "text-good", tone === "muted" && "text-ink-3 line-through")}>{value}</span>
+          )}
+          {valueSub && <div className="num text-[12px] text-ink-3">{valueSub}</div>}
+        </div>
+      )}
+    </>
+  );
+}

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { searchProducts } from "@digitalbahi/core";
 import type { TranslationKey } from "@digitalbahi/i18n";
-import { ArrowLeftRight, ClipboardCheck, Download, Search, Trash2 } from "lucide-react";
+import { ArrowLeftRight, ClipboardCheck, ClipboardList, Download, Search, Trash2 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -10,7 +10,7 @@ import { Button, IconButton } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, RowCard, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, productById, TODAY, WORKSPACE } from "../../data/db";
@@ -18,7 +18,10 @@ import { useSearchableProducts } from "../../data/hooks";
 import { refreshCatalog } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
+import { stockInPacks } from "../../lib/packs";
 import { usePaged } from "../../lib/usePaged";
+import { ExpiringStock } from "./ExpiringStock";
+import { StockCountDialog } from "./StockCount";
 import { TransferDialog } from "./TransferDialog";
 
 interface StockRow {
@@ -45,6 +48,7 @@ export function InventoryPage() {
   const [ledgerFor, setLedgerFor] = useState<StockRow | null>(null);
   const [adjusting, setAdjusting] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [counting, setCounting] = useState(false);
   const [warehouseId, setWarehouseId] = useState("");
   const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
   const list = usePaged<StockRow>("stock", "/stock", { level, warehouseId, q: q.trim() || undefined }, { pageSize: 100 });
@@ -58,6 +62,8 @@ export function InventoryPage() {
     queryFn: () => api.get<{ data: Array<{ id: string; adjustmentNumber: string; adjustmentDate: string; reason: Reason; notes: string | null }> }>("/stock/adjustments").then((r) => r.data),
   });
   const showValue = list.rows.some((r) => r.value !== undefined);
+  const packs = (r: StockRow) => stockInPacks(r.qty, productById.get(r.productId), (n) => number(n));
+  const qtyTone = (r: StockRow) => (r.level === "out" ? "danger" : r.level === "low" ? "warn" : undefined);
   const totalValue = list.rows.reduce((s, r) => s + Number(r.value ?? 0), 0);
 
   const columns: Column<StockRow>[] = [
@@ -82,9 +88,14 @@ export function InventoryPage() {
       header: t("product.currentStock"),
       align: "right",
       render: (r) => (
-        <span className={r.level === "out" ? "font-semibold text-danger" : r.level === "low" ? "font-semibold text-warn" : "font-semibold text-ink"}>
-          {number(r.qty)} {r.unit}
-        </span>
+        <div>
+          <p className={r.level === "out" ? "font-semibold text-danger" : r.level === "low" ? "font-semibold text-warn" : "font-semibold text-ink"}>{packs(r) ?? `${number(r.qty)} ${r.unit}`}</p>
+          {packs(r) && (
+            <p className="text-[12px] text-ink-3">
+              = {number(r.qty)} {r.unit}
+            </p>
+          )}
+        </div>
       ),
     },
     ...(showValue
@@ -127,6 +138,11 @@ export function InventoryPage() {
               </Button>
             )}
             {allowed("inventory.adjust") && (
+              <Button icon={<ClipboardList size={16} />} onClick={() => setCounting(true)}>
+                {t("inventory.count.button")}
+              </Button>
+            )}
+            {allowed("inventory.adjust") && (
               <Button variant="primary" icon={<ClipboardCheck size={16} />} onClick={() => setAdjusting(true)}>
                 {t("inventory.adjust")}
               </Button>
@@ -138,6 +154,9 @@ export function InventoryPage() {
         <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={t("inventory.title")}>
           <Tabs.Trigger value="stock" className={TAB_TRIGGER}>
             {t("inventory.stock")}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="expiring" className={TAB_TRIGGER}>
+            {t("inventory.expiry.tab")}
           </Tabs.Trigger>
           <Tabs.Trigger value="adjustments" className={TAB_TRIGGER}>
             {t("inventory.adjustments")}
@@ -174,8 +193,27 @@ export function InventoryPage() {
             />
           </FilterBar>
           {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
-          <DataTable columns={columns} rows={list.rows} rowKey={(r) => r.productId} loading={list.loading} onRowClick={(r) => setLedgerFor(r)} minWidth={720} />
+          <DataTable
+            columns={columns}
+            rows={list.rows}
+            rowKey={(r) => r.productId}
+            loading={list.loading}
+            onRowClick={(r) => setLedgerFor(r)}
+            minWidth={720}
+            mobile={(r) => (
+              <RowCard
+                title={r.name}
+                sub={[r.code, r.level === "ok" ? null : t(r.level === "out" ? "status.stock.out_of_stock" : "status.stock.low"), showValue && r.value !== undefined ? `${t("product.stockValue")} ${money(r.value)}` : null].filter(Boolean).join(" · ")}
+                value={packs(r) ?? `${number(r.qty)} ${r.unit}`}
+                tone={qtyTone(r)}
+                valueSub={packs(r) ? `= ${number(r.qty)} ${r.unit}` : undefined}
+              />
+            )}
+          />
           <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
+        </Tabs.Content>
+        <Tabs.Content value="expiring">
+          <ExpiringStock />
         </Tabs.Content>
         <Tabs.Content value="adjustments">
           <DataTable
@@ -210,6 +248,7 @@ export function InventoryPage() {
       <StockLedgerDialog row={ledgerFor} onClose={() => setLedgerFor(null)} />
       <TransferDialog open={transferring} onOpenChange={setTransferring} />
       <AdjustmentDialog open={adjusting} onOpenChange={setAdjusting} />
+      {counting && <StockCountDialog open onOpenChange={setCounting} />}
     </div>
   );
 }

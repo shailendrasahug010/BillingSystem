@@ -5,7 +5,8 @@ import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
-import { DataTable } from "../../components/ui/DataTable";
+import { DataTable, RowCard } from "../../components/ui/DataTable";
+import { FilterBar } from "../../components/ui/Page";
 import { EmptyState, Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BRANDS, PRODUCTS } from "../../data/db";
@@ -13,6 +14,7 @@ import { useSearchableProducts } from "../../data/hooks";
 import { LIVE } from "../../data/source";
 import { cn } from "../../lib/cn";
 import { downloadCsv } from "../../lib/download";
+import { stockInPacks } from "../../lib/packs";
 import { searchProducts } from "@digitalbahi/core";
 import { ImportDialog } from "../imports/ImportDialog";
 import { ProductEditor } from "./ProductEditor";
@@ -20,7 +22,7 @@ import { ProductEditor } from "./ProductEditor";
 type Product = ReturnType<typeof useSearchableProducts>[number];
 
 export function ProductsPage() {
-  const { t, money, locale } = useI18n();
+  const { t, money, number, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("");
   const [stock, setStock] = useState<"all" | "low" | "out">("all");
@@ -39,7 +41,8 @@ export function ProductsPage() {
     });
   }, [query, brand, stock, searchable]);
 
-  const stockValue = rows.reduce((s, p) => s + p.stock * p.purchasePrice, 0);
+  // Valued at average cost like Inventory and Reports; stock below zero counts as none.
+  const stockValue = rows.reduce((s, p) => s + Math.max(p.stock, 0) * (p.avgCost ?? p.purchasePrice), 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -92,7 +95,7 @@ export function ProductsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card md:flex-row md:items-center">
+      <FilterBar>
         <Input id="product-filter" className="flex-1" leading={<Search size={16} />} placeholder={t("product.search")} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t("product.search")} />
         <Select aria-label={t("product.brand")} value={brand} onChange={(e) => setBrand(e.target.value)} className="md:w-56">
           <option value="">
@@ -115,7 +118,7 @@ export function ProductsPage() {
             { value: "out", label: t("product.filters.outOfStock") },
           ]}
         />
-      </div>
+      </FilterBar>
 
       <DataTable<Product>
         id="products"
@@ -124,6 +127,18 @@ export function ProductsPage() {
         {...(canEdit ? { onRowClick: (p: Product) => setEditing({ id: p.id }) } : {})}
         pageSize={50}
         minWidth={860}
+        mobile={(p) => {
+          const level = stockLevel(p.stock, p.minStock);
+          return (
+            <RowCard
+              title={locale === "hi" ? p.nameHi : p.name}
+              sub={[p.code, p.brand, money(p.rate)].filter(Boolean).join(" · ")}
+              value={stockInPacks(p.stock, p, (n) => number(n)) ?? `${number(p.stock)} ${p.unit}`}
+              tone={level === "out_of_stock" ? "danger" : level === "low" ? "warn" : undefined}
+              valueSub={level !== "ok" ? t(`status.stock.${level}`) : stockInPacks(p.stock, p, (n) => number(n)) ? `= ${number(p.stock)} ${p.unit}` : undefined}
+            />
+          );
+        }}
         empty={
           <EmptyState
             title={PRODUCTS.length === 0 ? t("product.noneYet") : t("empty.products")}
@@ -175,9 +190,12 @@ export function ProductsPage() {
               const level = stockLevel(p.stock, p.minStock);
               return (
                 <>
-                  <p className={cn("font-semibold", level === "out_of_stock" ? "text-danger" : level === "low" ? "text-warn" : "text-ink")}>
-                    {p.stock} {p.unit}
-                  </p>
+                  <p className={cn("font-semibold", level === "out_of_stock" ? "text-danger" : level === "low" ? "text-warn" : "text-ink")}>{stockInPacks(p.stock, p, (n) => number(n)) ?? `${number(p.stock)} ${p.unit}`}</p>
+                  {stockInPacks(p.stock, p, (n) => number(n)) && (
+                    <p className="text-[12px] text-ink-3">
+                      = {number(p.stock)} {p.unit}
+                    </p>
+                  )}
                   {level !== "ok" && (
                     <Badge tone={level === "out_of_stock" ? "danger" : "warn"} className="mt-0.5 h-5 text-[11px]">
                       {t(`status.stock.${level}`)}

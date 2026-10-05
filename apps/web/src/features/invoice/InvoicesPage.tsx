@@ -6,7 +6,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { EmptyState, Segmented } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, QuickDates, RowCard, type Column } from "../../components/ui/Page";
 import { allowed, customerById, INVOICES, TODAY } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
@@ -192,7 +192,7 @@ export function InvoicesPage() {
           </>
         }
       />
-      <FilterBar>
+      <FilterBar quick={<QuickDates from={from} to={to} onChange={(f, x) => (setFrom(f), setTo(x))} />}>
         <Input className="flex-1" leading={<Search size={16} />} placeholder={t("bills.search")} aria-label={t("bills.search")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Select aria-label={t("bills.payment")} value={payment} onChange={(e) => setPayment(e.target.value as Payment)} className="md:w-44">
           <option value="all">
@@ -248,6 +248,15 @@ export function InvoicesPage() {
         loading={LIVE && !noServer && list.loading}
         minWidth={760}
         onRowClick={(r) => navigate({ name: "invoice-view", invoiceId: r.id })}
+        mobile={(r) => (
+          <RowCard
+            title={r.partyName}
+            sub={`${r.invoiceNumber} · ${dateMedium(r.invoiceDate)}`}
+            value={money(r.grandTotal)}
+            tone={r.status === "cancelled" ? "muted" : undefined}
+            valueSub={r.status === "posted" && Number(r.balanceDue) > 0.5 ? <span className={isOverdue(r) ? "text-danger" : undefined}>{t("invoice.balance")} {money(r.balanceDue)}</span> : <InvoiceStatusBadge row={r} />}
+          />
+        )}
         empty={
           <EmptyState
             title={t("bills.empty")}

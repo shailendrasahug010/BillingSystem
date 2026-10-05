@@ -100,7 +100,7 @@ async function codeFor(tx: Tx, deps: AppDeps, ctx: RequestCtx, kind: PartyKind, 
 }
 
 /** Statement for a period: opening balance, entries with running balance, closing balance. */
-async function partyLedger(tx: Tx, ctx: RequestCtx, kind: PartyKind, id: string, from: string, to: string) {
+export async function partyLedger(tx: Tx, ctx: RequestCtx, kind: PartyKind, id: string, from: string, to: string) {
   const col = kind === "customer" ? sql`customer_id` : sql`supplier_id`;
   // Customers: receivable (debit - credit). Suppliers: payable (credit - debit).
   const sign = kind === "customer" ? sql`debit - credit` : sql`credit - debit`;

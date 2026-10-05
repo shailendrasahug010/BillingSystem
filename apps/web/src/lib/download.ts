@@ -50,3 +50,35 @@ export async function downloadReport(path: string, query: Record<string, string>
   const text = await api.get<string>(path, { ...query, format: "csv" });
   downloadText(name, text);
 }
+
+/**
+ * Prints a PDF the app has in memory (a purchase bill, a statement) through
+ * the browser's print dialog, from a hidden frame so the page stays as it is.
+ * In the Android app, which has no print dialog, it goes to the share sheet
+ * like a download (print from there).
+ */
+export function printBlob(filename: string, blob: Blob): void {
+  if (isNative()) {
+    downloadBlob(filename, blob);
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  frame.onload = () => {
+    try {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+    } catch {
+      // Some browsers will not print a PDF from a frame: open it instead.
+      window.open(url, "_blank", "noopener");
+    }
+    setTimeout(() => {
+      frame.remove();
+      URL.revokeObjectURL(url);
+    }, 60_000);
+  };
+  frame.src = url;
+  document.body.append(frame);
+}

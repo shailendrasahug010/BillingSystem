@@ -180,6 +180,12 @@ export async function applyToDocument(tx: Tx, partyType: "customer" | "supplier"
  * with the party as an advance (payment.unallocated_amount grows).
  */
 export async function releaseAllocations(tx: Tx, target: { invoiceId: string } | { purchaseId: string }, now: string): Promise<string> {
+  const rows = await releaseAllocationRows(tx, target, now);
+  return rows.reduce((s, r) => s.plus(r.amount), dec(0)).toFixed(2);
+}
+
+/** The same, returning each payment's amount set free (to apply to a bill that replaces the document). */
+export async function releaseAllocationRows(tx: Tx, target: { invoiceId: string } | { purchaseId: string }, now: string): Promise<Array<{ paymentId: string; amount: string }>> {
   const a = schema.paymentAllocations;
   const where = "invoiceId" in target ? eq(a.invoiceId, target.invoiceId) : eq(a.purchaseId, target.purchaseId);
   const rows = await tx
@@ -187,15 +193,13 @@ export async function releaseAllocations(tx: Tx, target: { invoiceId: string } |
     .set({ reversedAt: now })
     .where(and(where, isNull(a.reversedAt)))
     .returning({ paymentId: a.paymentId, amount: a.amount });
-  let released = dec(0);
   for (const r of rows) {
-    released = released.plus(r.amount);
     await tx
       .update(schema.payments)
       .set({ unallocatedAmount: sql`${schema.payments.unallocatedAmount} + ${r.amount}` })
       .where(eq(schema.payments.id, r.paymentId));
   }
-  return released.toFixed(2);
+  return rows;
 }
 
 /**

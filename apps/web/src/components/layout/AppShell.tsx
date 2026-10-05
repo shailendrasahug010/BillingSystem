@@ -349,7 +349,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const { t } = useI18n();
   const { route, navigate } = useRouter();
   // The bill screen on a phone has its own bar (total, Next, Save) where the tab bar would be.
-  const billing = route.name === "invoice-new";
+  const billing = route.name === "invoice-new" || route.name === "purchase-new";
   const [moreOpen, setMoreOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const pendingOrders = ORDERS.filter((o) => o.status === "pending").length;

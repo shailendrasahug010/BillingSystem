@@ -1,19 +1,23 @@
-import { zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@digitalbahi/core";
+import { financialYearOf, zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { createTranslator, formatCurrency, formatDate, isLocaleCode, type LocaleCode } from "@digitalbahi/i18n";
-import { inArray, eq } from "drizzle-orm";
+import { and, inArray, eq } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { guard } from "../../lib/access.js";
+import { badRequest, notFound } from "../../lib/errors.js";
 import type { AppDeps, RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
 import { loadLetterhead } from "../../services/letterhead.js";
 import { renderDocumentPdf, renderReceiptPdf, type DocumentPdfLine } from "../../services/pdf-document.js";
+import { pdfDate, renderReportPdf } from "../../services/pdf-report.js";
 import { getSettings } from "../../services/settings.js";
 import { invoiceDetail } from "../invoices/routes.js";
 import { noteDetail } from "../notes/routes.js";
+import { partyLedger } from "../parties/routes.js";
 import { paymentDetail } from "../payments/routes.js";
+import { purchaseDetail } from "../purchases/routes.js";
 import type { ApiModule } from "../types.js";
 
 /** A document as a PDF file, with who it is for (for WhatsApp and email). */
@@ -32,6 +36,7 @@ export interface PdfFile {
 
 const IdParams = z.object({ id: z.uuid() });
 const PdfQuery = z.object({ locale: z.enum(["en", "hi"]).optional() });
+const StatementQuery = PdfQuery.extend({ from: z.iso.date().optional(), to: z.iso.date().optional() });
 
 const fileName = (number: string) => `${number.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "document"}.pdf`;
 
@@ -270,7 +275,104 @@ export async function receiptPdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
   return { pdf, filename: fileName(number), number, date: p.paymentDate, amount: p.amount, balance: null, locale, party: data.party, message };
 }
 
-function sendPdf(reply: FastifyReply, file: PdfFile) {
+/** Our copy of a supplier's bill: their number and date, the supplier, the lines, charges, what is paid and owed. */
+export async function purchasePdfFile(deps: AppDeps, ctx: RequestCtx, id: string, asked?: string): Promise<PdfFile> {
+  const letterhead = await loadLetterhead(deps, ctx);
+  const data = await withTenant(deps.db, ctx, async (tx) => {
+    const p = await purchaseDetail(tx, ctx, id);
+    const settings = await getSettings(tx, ctx.businessId, ["invoice.default_print_locale"]);
+    const locale = pickLocale(asked, null, settings["invoice.default_print_locale"]);
+    const extras = await lineExtras(tx, p.items);
+    const party = await partyContact(tx, "supplier", p.supplierId);
+    return { p, locale, extras, party };
+  });
+  const { p, locale } = data;
+  const returned = (p.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + Number(r.amountSettled), 0);
+  const charges = (p.charges as Array<{ label: string; total: string }> | null) ?? [];
+  const pdf = await renderDocumentPdf({
+    letterhead,
+    locale,
+    kind: "purchase",
+    billOfSupply: false,
+    cancelled: p.status === "cancelled",
+    number: p.supplierInvoiceNumber,
+    ourNumber: p.purchaseNumber,
+    date: p.supplierInvoiceDate,
+    dueDate: p.dueDate,
+    against: null,
+    placeOfSupply: p.placeOfSupply,
+    reverseCharge: p.isReverseCharge,
+    intraState: p.supplyType === "intra_state",
+    buyer: { businessName: p.partyName, name: data.party?.name ?? null, address: addressText(p.billingAddress as Address), stateCode: p.partyStateCode ?? p.placeOfSupply, gstin: p.partyGstin },
+    lines: pdfLines(p.items, data.extras, locale),
+    charges: charges.map((c) => ({ label: c.label, total: c.total })),
+    totals: { taxable: p.taxableTotal, cgst: p.cgstTotal, sgst: p.sgstTotal, igst: p.igstTotal, cess: p.cessTotal, roundOff: p.roundOff, grandTotal: p.grandTotal },
+    paid: (Number(p.amountPaid) - returned).toFixed(2),
+    credited: returned.toFixed(2),
+    balance: p.balanceDue,
+    reason: p.notes ?? null,
+    terms: null,
+  });
+  const { t } = createTranslator(locale);
+  const money = (v: string) => formatCurrency(v, locale);
+  const number = p.supplierInvoiceNumber;
+  const text = t("share.purchase", { party: p.partyName, number, date: formatDate(p.supplierInvoiceDate), amount: money(p.grandTotal), balance: money(p.balanceDue), business: letterhead.name });
+  const message = { text, subject: t("share.purchaseSubject", { number, business: letterhead.name }), params: [p.partyName, number, money(p.grandTotal), letterhead.name] };
+  return { pdf, filename: fileName(`purchase-${number}`), number, date: p.supplierInvoiceDate, amount: p.grandTotal, balance: p.status === "cancelled" ? null : p.balanceDue, locale, party: data.party, message };
+}
+
+/** A supplier's account for a period as a PDF: opening balance, every bill, payment and return, closing balance. */
+async function supplierStatementPdf(deps: AppDeps, ctx: RequestCtx, id: string, q: { from?: string | undefined; to?: string | undefined; locale?: string | undefined }) {
+  const today = deps.clock.today(ctx.timeZone);
+  const from = q.from ?? financialYearOf(today).startDate;
+  const to = q.to ?? today;
+  if (to < from) throw badRequest("INVALID_PERIOD", {}, "to");
+  const letterhead = await loadLetterhead(deps, ctx);
+  const data = await withTenant(deps.db, ctx, async (tx) => {
+    const [s] = await tx
+      .select({ id: schema.suppliers.id, name: schema.suppliers.name, gstin: schema.suppliers.gstin })
+      .from(schema.suppliers)
+      .where(and(eq(schema.suppliers.id, id), eq(schema.suppliers.businessId, ctx.businessId)));
+    if (!s) throw notFound("supplier");
+    return { supplier: s, ledger: await partyLedger(tx, ctx, "supplier", s.id, from, to) };
+  });
+  const locale: LocaleCode = isLocaleCode(q.locale) ? q.locale : "en";
+  const { t } = createTranslator(locale);
+  const label = (type: string) => {
+    const key = `ledger.${type}`;
+    const text = t(key as "ledger.opening");
+    return text === key ? type : text;
+  };
+  const { supplier, ledger } = data;
+  const rows = [
+    { date: pdfDate(from), particulars: t("ledger.openingBalance"), debit: "", credit: "", balance: ledger.opening },
+    ...ledger.entries.map((e) => ({
+      date: pdfDate(e.date),
+      particulars: [label(e.docType), e.docNumber].filter(Boolean).join(" · "),
+      debit: Number(e.debit) ? e.debit : "",
+      credit: Number(e.credit) ? e.credit : "",
+      balance: e.balance,
+    })),
+  ];
+  const pdf = await renderReportPdf({
+    letterhead,
+    title: `${t("supplier.statement.title")}: ${supplier.name}${supplier.gstin ? ` (${supplier.gstin})` : ""}`,
+    period: `${pdfDate(from)} – ${pdfDate(to)}`,
+    generatedAt: new Intl.DateTimeFormat("en-IN", { timeZone: ctx.timeZone, day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(deps.clock.now()),
+    columns: [
+      { key: "date", label: t("common.date") },
+      { key: "particulars", label: t("customer.ledger.particulars") },
+      { key: "debit", label: t("supplier.statement.paid") },
+      { key: "credit", label: t("supplier.statement.billed") },
+      { key: "balance", label: t("supplier.statement.payable") },
+    ],
+    rows,
+    totals: { particulars: t("ledger.closingBalance"), debit: ledger.totalDebit, credit: ledger.totalCredit, balance: ledger.closing },
+  });
+  return { pdf, filename: fileName(`statement-${supplier.name}-${to}`) };
+}
+
+function sendPdf(reply: FastifyReply, file: Pick<PdfFile, "pdf" | "filename">) {
   reply.header("content-type", "application/pdf");
   reply.header("content-disposition", `attachment; filename="${file.filename}"`);
   reply.header("cache-control", "private, no-store");
@@ -285,4 +387,10 @@ export const documentsModule: ApiModule = async (app, deps) => {
   r.get("/invoices/:id/pdf", opts("invoice.view", "invoices"), async (request, reply) => sendPdf(reply, await invoicePdfFile(deps, request.ctx, request.params.id, request.query.locale)));
   r.get("/notes/:id/pdf", opts("note.view", "notes"), async (request, reply) => sendPdf(reply, await notePdfFile(deps, request.ctx, request.params.id, request.query.locale)));
   r.get("/payments/:id/pdf", opts("payment.view", "payments"), async (request, reply) => sendPdf(reply, await receiptPdfFile(deps, request.ctx, request.params.id, request.query.locale)));
+  r.get("/purchases/:id/pdf", opts("purchase.view", "purchases"), async (request, reply) => sendPdf(reply, await purchasePdfFile(deps, request.ctx, request.params.id, request.query.locale)));
+  r.get(
+    "/suppliers/:id/statement/pdf",
+    { preHandler: guard(deps, "supplier.view_ledger"), schema: { tags: ["suppliers"], params: IdParams, querystring: StatementQuery } },
+    async (request, reply) => sendPdf(reply, await supplierStatementPdf(deps, request.ctx, request.params.id, request.query)),
+  );
 };

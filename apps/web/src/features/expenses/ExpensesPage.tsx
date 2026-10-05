@@ -9,7 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { EmptyState, ProgressBar, Segmented, Skeleton } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, Stat, TAB_TRIGGER, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, QuickDates, RowCard, Stat, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { allowed } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
@@ -153,7 +153,7 @@ function ExpenseList() {
   return (
     <div className="flex flex-col gap-4">
       <WaitingStrip kinds={["expense"]} />
-      <FilterBar>
+      <FilterBar quick={<QuickDates from={from} to={to} onChange={(f, x) => (setFrom(f), setTo(x))} />}>
         <Input className="flex-1" leading={<Search size={16} />} placeholder={t("expenses.search")} aria-label={t("expenses.search")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Select aria-label={t("expenses.category")} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="md:w-44">
           <option value="">
@@ -196,6 +196,15 @@ function ExpenseList() {
         loading={list.loading}
         onRowClick={(x) => setOpenId(x.id)}
         minWidth={760}
+        mobile={(x) => (
+          <RowCard
+            title={label(x)}
+            sub={[dateMedium(x.expenseDate), x.paidTo, t(`paymentMethod.${x.paymentMethod}`)].filter(Boolean).join(" · ")}
+            value={money(x.totalAmount)}
+            tone={x.status === "cancelled" ? "muted" : undefined}
+            valueSub={Number(x.gst) > 0 ? `GST ${money(x.gst)}` : undefined}
+          />
+        )}
         empty={<EmptyState title={t("expenses.empty")} hint={t("expenses.emptyHint")} />}
       />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />

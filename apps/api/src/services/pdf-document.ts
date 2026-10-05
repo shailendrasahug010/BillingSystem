@@ -31,12 +31,17 @@ export interface DocumentPdfLine {
 export interface DocumentPdfInput {
   letterhead: Letterhead;
   locale: LocaleCode;
-  kind: "invoice" | "credit_note" | "debit_note";
+  /** A purchase is our copy of a supplier's bill: their number and date, the supplier in the party box. */
+  kind: "invoice" | "credit_note" | "debit_note" | "purchase";
   billOfSupply: boolean;
   cancelled: boolean;
   number: string;
   date: string;
   dueDate: string | null;
+  /** Purchases: our own reference number for the supplier's bill. */
+  ourNumber?: string | null;
+  /** Freight and other charges on the bill (purchases), each with its GST. */
+  charges?: Array<{ label: string; total: string }>;
   /** The invoice or bill a note is issued against. */
   against: { number: string; date: string } | null;
   placeOfSupply: string;
@@ -180,8 +185,9 @@ function titleBlock(doc: Pdf, title: string, sub: string | null, rows: Array<[st
 export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer> {
   const { t } = createTranslator(input.locale);
   const locale = input.locale;
-  const isNote = input.kind !== "invoice";
-  const title = (isNote ? t(input.kind === "credit_note" ? "notes.creditNote" : "notes.debitNote") : input.billOfSupply ? t("invoice.billOfSupply") : t("invoice.taxInvoice")).toUpperCase();
+  const isNote = input.kind === "credit_note" || input.kind === "debit_note";
+  const isPurchase = input.kind === "purchase";
+  const title = (isPurchase ? t("purchase.print.title") : isNote ? t(input.kind === "credit_note" ? "notes.creditNote" : "notes.debitNote") : input.billOfSupply ? t("invoice.billOfSupply") : t("invoice.taxInvoice")).toUpperCase();
   const { doc, done } = newPdf(`${title} ${input.number}`, { lang: locale === "hi" ? "hi-IN" : "en-IN" });
   const left = doc.page.margins.left;
   const width = doc.page.width - left - doc.page.margins.right;
@@ -197,13 +203,14 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
   const right = 215;
   const firmEnd = drawFirm(doc, lh, left, y, width - right - 14);
   const meta: Array<[string, string]> = [
-    [isNote ? t("notes.number") : t("invoice.number"), input.number],
-    [isNote ? t("notes.date") : t("invoice.date"), formatDate(input.date)],
+    [isPurchase ? t("purchase.billNumber") : isNote ? t("notes.number") : t("invoice.number"), input.number],
+    [isPurchase ? t("purchase.billDate") : isNote ? t("notes.date") : t("invoice.date"), formatDate(input.date)],
+    ...(isPurchase && input.ourNumber ? [[t("purchase.number"), input.ourNumber] as [string, string]] : []),
     ...(isNote ? (input.against ? [[t("notes.against"), `${input.against.number} · ${formatDate(input.against.date)}`] as [string, string]] : []) : input.dueDate ? [[t("invoice.dueDate"), formatDate(input.dueDate)] as [string, string]] : []),
     [t("invoice.placeOfSupply"), stateName(input.placeOfSupply, locale)],
     [t("invoice.print.reverseCharge"), input.reverseCharge ? t("common.yes") : t("invoice.print.no")],
   ];
-  const titleEnd = titleBlock(doc, title, t("invoice.print.original"), meta, left + width - right, y, right, input.cancelled ? t("status.document.cancelled").toUpperCase() : null);
+  const titleEnd = titleBlock(doc, title, isPurchase ? null : t("invoice.print.original"), meta, left + width - right, y, right, input.cancelled ? t("status.document.cancelled").toUpperCase() : null);
   y = Math.max(firmEnd, titleEnd) + 6;
   doc.moveTo(left, y).lineTo(left + width, y).lineWidth(1.5).strokeColor(BLUE).stroke();
   y += 8;
@@ -244,7 +251,7 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
   // ---- bill to / ship to
   const half = (width - 16) / 2;
   let partyEnd = y;
-  [t("invoice.print.billTo"), t("invoice.print.shipTo")].forEach((label, i) => {
+  (isPurchase ? [t("purchase.print.supplier")] : [t("invoice.print.billTo"), t("invoice.print.shipTo")]).forEach((label, i) => {
     const x = left + i * (half + 16);
     const b = input.buyer;
     doc.font("b").fontSize(7.5).fillColor(INK_2).text(label.toUpperCase(), x, y, { width: half, characterSpacing: 0.4 });
@@ -298,6 +305,7 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
         ]
       : [["IGST", m(input.totals.igst)]]) as Array<[string, string]>),
     ...(num(input.totals.cess) > 0 ? [[t("invoice.cess"), m(input.totals.cess)] as [string, string]] : []),
+    ...(input.charges ?? []).map((c) => [c.label, m(c.total)] as [string, string]),
     [t("invoice.roundOff"), m(input.totals.roundOff)],
   ];
   const blockHeight = 60 + hsnRows.length * 15 + 40;
@@ -387,7 +395,7 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
     doc.font("r").fontSize(7.5).fillColor(INK_2).text(input.terms, { width: termsW });
     doc.moveDown(0.4);
   }
-  doc.font("r").fontSize(7.5).fillColor(INK_2).text(isNote ? t("notes.computerGenerated") : t("invoice.print.computerGenerated"), left, input.terms && !isNote ? doc.y : y, { width: termsW });
+  doc.font("r").fontSize(7.5).fillColor(INK_2).text(isNote || isPurchase ? t("notes.computerGenerated") : t("invoice.print.computerGenerated"), left, input.terms && !isNote ? doc.y : y, { width: termsW });
   doc.font("b").fontSize(9).fillColor(INK).text(t("invoice.print.for", { business: lh.name }), left + width - 200, y, { width: 200, align: "right" });
   doc.font("r").fontSize(8).fillColor(INK_2).text(t("invoice.print.signatory"), left + width - 200, y + 44, { width: 200, align: "right" });
 

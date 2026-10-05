@@ -46,6 +46,8 @@ export interface CatalogProduct {
   baseUnitId: string;
   packSize: string | null;
   purchasePrice?: string;
+  /** Weighted average cost of the stock (roles that may see cost). */
+  avgCost?: string;
   mrp: string | null;
   sellingPrice: string;
   pricesIncludeTax: boolean;
@@ -177,6 +179,7 @@ function mapProduct(p: CatalogProduct, cat: Catalog, taxById: Map<string, TaxCat
     rate: Number(p.sellingPrice),
     wholesaleRate: (wholesale && prices[wholesale.id]) || Number(p.sellingPrice),
     purchasePrice: Number(p.purchasePrice ?? 0),
+    ...(p.avgCost !== undefined ? { avgCost: Number(p.avgCost) } : {}),
     stock: Number(p.stock),
     minStock: Number(p.minStock ?? 0),
     aliases: p.aliases ?? [],

@@ -1,8 +1,8 @@
-import { FileDown } from "lucide-react";
+import { FileDown, Printer } from "lucide-react";
 import { useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { api } from "../../lib/api";
-import { downloadBlob } from "../../lib/download";
+import { downloadBlob, printBlob } from "../../lib/download";
 import { pdfFileName } from "../../lib/share";
 import { whatsAppWithPdf } from "../../lib/sendPdf";
 import { Button, type ButtonSize } from "./Button";
@@ -16,10 +16,29 @@ import { WhatsAppIcon } from "../brand/WhatsAppIcon";
  * the Android app, Chrome and Edge on a computer); elsewhere it opens WhatsApp
  * with the message and downloads the PDF to attach there.
  */
-export function PdfActions({ path, locale, number, shareText, mobile, size = "md", primaryShare = false }: { path: string; locale: string; number: string; shareText: string; mobile?: string | null; size?: ButtonSize; primaryShare?: boolean }) {
+export function PdfActions({
+  path,
+  locale,
+  number,
+  shareText,
+  mobile,
+  size = "md",
+  primaryShare = false,
+  print = false,
+}: {
+  path: string;
+  locale: string;
+  number: string;
+  shareText: string;
+  mobile?: string | null;
+  size?: ButtonSize;
+  primaryShare?: boolean;
+  /** Also a Print button, which prints the same PDF (for papers without a print layout of their own). */
+  print?: boolean;
+}) {
   const { t } = useI18n();
   const toast = useToast();
-  const [busy, setBusy] = useState<"download" | "share" | null>(null);
+  const [busy, setBusy] = useState<"download" | "share" | "print" | null>(null);
   const cached = useRef<{ key: string; blob: Blob } | null>(null);
   const filename = pdfFileName(number);
   const iconSize = size === "sm" ? 14 : 16;
@@ -44,6 +63,17 @@ export function PdfActions({ path, locale, number, shareText, mobile, size = "md
     }
   };
 
+  const printPdf = async () => {
+    setBusy("print");
+    try {
+      printBlob(filename, await load());
+    } catch {
+      toast({ tone: "danger", title: t("share.pdfFailed") });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const share = async () => {
     setBusy("share");
     try {
@@ -59,6 +89,11 @@ export function PdfActions({ path, locale, number, shareText, mobile, size = "md
 
   return (
     <>
+      {print && (
+        <Button size={size} icon={<Printer size={iconSize} />} disabled={busy !== null} onClick={() => void printPdf()}>
+          {t("common.print")}
+        </Button>
+      )}
       <Button size={size} icon={<FileDown size={iconSize} />} disabled={busy !== null} onClick={() => void download()}>
         {t("share.downloadPdf")}
       </Button>

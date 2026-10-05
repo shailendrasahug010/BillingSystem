@@ -41,6 +41,8 @@ export interface Product {
   rate: number;
   wholesaleRate: number;
   purchasePrice: number;
+  /** Live data: average cost of the stock held, which values it (as on Inventory and Reports). */
+  avgCost?: number;
   stock: number;
   minStock: number;
   aliases: string[];

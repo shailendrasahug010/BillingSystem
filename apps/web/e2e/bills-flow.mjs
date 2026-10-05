@@ -108,17 +108,17 @@ await page.screenshot({ path: `${OUT}/bills-2-bill-free.png`, fullPage: true });
 await page.goto(`${WEB}/#invoices`);
 await page.reload();
 await page.getByRole("heading", { name: "Sales bills" }).waitFor({ timeout: 15000 });
-await page.getByText(number).waitFor({ timeout: 15000 });
+await page.getByText(number, { exact: true }).waitFor({ timeout: 15000 });
 await page.screenshot({ path: `${OUT}/bills-3-list.png` });
 await page.getByRole("combobox", { name: "Payment" }).selectOption("paid");
 await page.waitForTimeout(800);
-check((await page.getByText(number).count()) === 0, "an unpaid bill stays listed under Paid");
+check((await page.getByText(number, { exact: true }).count()) === 0, "an unpaid bill stays listed under Paid");
 await page.getByRole("combobox", { name: "Payment" }).selectOption("open");
-await page.getByText(number).waitFor({ timeout: 10000 });
+await page.getByText(number, { exact: true }).waitFor({ timeout: 10000 });
 await page.getByPlaceholder("Search by bill number or customer").fill("Gupta");
-await page.getByText(number).waitFor({ timeout: 10000 });
+await page.getByText(number, { exact: true }).waitFor({ timeout: 10000 });
 log("Invoices lists", number, "and filters by payment and customer");
-await page.getByText(number).click();
+await page.getByText(number, { exact: true }).click();
 await page.getByRole("heading", { name: number }).waitFor({ timeout: 15000 });
 
 // 4. Each screen has its own link: a reload keeps it, Back and Forward move between screens in the app.
