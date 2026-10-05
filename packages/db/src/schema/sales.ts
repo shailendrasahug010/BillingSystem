@@ -558,3 +558,34 @@ export const recurringInvoices = pgTable(
     check("recurring_invoices_day_chk", sql`${t.anchorDay} between 1 and 31`),
   ],
 );
+
+/**
+ * Order links: a private web address for one customer (a shop), sent to them
+ * on WhatsApp, where they see their own rates and place orders without
+ * signing in. The orders land in Sales orders, waiting to be confirmed. Only
+ * the key's hash is looked up; a new link replaces the old one.
+ */
+export const orderLinks = pgTable(
+  "order_links",
+  {
+    id: pk(),
+    businessId: businessId(),
+    customerId: uuid()
+      .notNull()
+      .references(() => customers.id),
+    /** SHA-256 of the key in the link (hex), to find the link by. */
+    keyHash: char({ length: 64 }).notNull(),
+    /** The key itself, encrypted, so the link can be copied again. */
+    keySealed: text().notNull(),
+    /** Whose name the orders are booked in. */
+    ownerId: uuid()
+      .notNull()
+      .references(() => users.id),
+    /** Turned off: the link no longer opens. */
+    revokedAt: tstz(),
+    lastUsedAt: tstz(),
+    ordersPlaced: integer().notNull().default(0),
+    ...auditColumns,
+  },
+  (t) => [uniqueIndex("order_links_key_idx").on(t.keyHash), index("order_links_customer_idx").on(t.businessId, t.customerId)],
+);
