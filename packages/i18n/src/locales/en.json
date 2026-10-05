@@ -3443,7 +3443,7 @@
       "products_other": "{{count}} products"
     },
     "exportTitle": "Export vouchers for Tally",
-    "exportHint": "Sales, purchases, credit and debit notes, receipts and payments of the period, with their party, sales, purchase and GST ledgers. In Tally: Gateway of Tally → Import → Transactions, and choose this file.",
+    "exportHint": "Sales, purchases, credit and debit notes (item by item, with their stock items), receipts, payments and expenses of the period, with their party, sales, purchase, expense and GST ledgers. In Tally: Gateway of Tally → Import → Transactions, and choose this file.",
     "download": "Download for Tally",
     "exported": "Tally file downloaded"
   }
