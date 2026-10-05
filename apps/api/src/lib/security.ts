@@ -34,6 +34,13 @@ export function newOpaqueToken(): { token: string; hash: string } {
   return { token, hash: sha256(token) };
 }
 
+/** True for a connection from this computer itself (127.0.0.0/8 or ::1, also as an IPv4-mapped IPv6 address). */
+export function isLoopback(address: string | undefined): boolean {
+  if (!address) return false;
+  const ip = address.startsWith("::ffff:") ? address.slice(7) : address;
+  return ip === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip);
+}
+
 export function newOtpCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, "0");
 }

@@ -7,6 +7,8 @@ import { Segmented } from "../../components/ui/misc";
 import { BUSINESS } from "../../data/db";
 import { LIVE } from "../../data/source";
 import { LiveSettings } from "./LiveSettings";
+import { ComfortControls } from "../../components/layout/Comfort";
+import { useSession } from "../../app/session";
 import { getSyncState, setOnline, useStoreVersion } from "../../data/store";
 import { cn } from "../../lib/cn";
 
@@ -14,6 +16,7 @@ export function SettingsPage() {
   const { t, locale, setLocale } = useI18n();
   useStoreVersion();
   const { theme, accent } = useAppearance();
+  const userId = useSession().user?.id;
   const [stockPolicy, setStockPolicy] = useState<"allow" | "warn" | "block">("warn");
   const { online } = getSyncState();
 
@@ -78,6 +81,9 @@ export function SettingsPage() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="border-t border-line pt-5">
+            <ComfortControls userId={userId} />
           </div>
         </div>
       </Card>

@@ -8,6 +8,7 @@ import { DevicesCard } from "./DevicesCard";
 import { PrinterCard } from "./PrinterCard";
 import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
 import { TallyCard } from "./TallyCard";
+import { PhoneAccessCard } from "./PhoneAccessCard";
 
 /**
  * Settings in the live app: one card per concern, each in its own file.
@@ -16,6 +17,7 @@ export function LiveSettings() {
   return (
     <>
       <BusinessProfileCard />
+      <PhoneAccessCard />
       <RulesCard />
       <PayrollStatutoryCard />
       <WarehousesCard />

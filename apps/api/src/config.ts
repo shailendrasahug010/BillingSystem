@@ -32,6 +32,19 @@ const Env = z.object({
   COOKIE_SECURE: bool.optional(),
   /** Development only: include OTP codes in API responses instead of sending an SMS. */
   OTP_DEV_ECHO: bool.default(false),
+  /**
+   * With OTP_DEV_ECHO: show the codes only to this computer (a request from
+   * 127.0.0.1 / ::1). The launcher's phone mode sets it, so that phones on
+   * the Wi-Fi can use the app but nobody on it can read a sign-up or
+   * password-reset code off the screen.
+   */
+  OTP_DEV_ECHO_LOCAL_ONLY: bool.default(false),
+  /**
+   * A folder on this computer (a pen drive, or a Google Drive / OneDrive
+   * folder that syncs itself) where automatic backups are saved, besides or
+   * instead of email. Set by the one-computer launcher; empty: email only.
+   */
+  BACKUP_FOLDER: z.string().optional(),
   /** Where OTPs are delivered: an SMS/WhatsApp gateway adapter that accepts {mobile, code, purpose}. */
   OTP_WEBHOOK_URL: z.url().optional(),
   OTP_WEBHOOK_TOKEN: z.string().optional(),
@@ -99,6 +112,8 @@ export interface Config {
   corsOrigins: string[];
   cookieSecure: boolean;
   otpDevEcho: boolean;
+  otpDevEchoLocalOnly: boolean;
+  backupFolder: string | null;
   dataEncryptionKey?: string;
   otpWebhook?: { url: string; token?: string };
   messaging: { driver: "live" | "log"; smtpUrl?: string; mailFrom?: string; whatsappApiBase: string };
@@ -175,6 +190,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     corsOrigins: [...new Set([...e.CORS_ORIGINS.split(","), ...e.APP_ORIGINS.split(",")].map((s) => s.trim()).filter(Boolean))],
     cookieSecure: e.COOKIE_SECURE ?? e.NODE_ENV === "production",
     otpDevEcho: e.OTP_DEV_ECHO,
+    otpDevEchoLocalOnly: e.OTP_DEV_ECHO_LOCAL_ONLY,
+    backupFolder: e.BACKUP_FOLDER?.trim() ? path.resolve(e.BACKUP_FOLDER.trim()) : null,
     ...(e.DATA_ENCRYPTION_KEY ? { dataEncryptionKey: e.DATA_ENCRYPTION_KEY } : {}),
     ...(e.OTP_WEBHOOK_URL ? { otpWebhook: { url: e.OTP_WEBHOOK_URL, ...(e.OTP_WEBHOOK_TOKEN ? { token: e.OTP_WEBHOOK_TOKEN } : {}) } } : {}),
     messaging: {

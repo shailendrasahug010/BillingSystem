@@ -1183,7 +1183,8 @@
     "ORDER_LINK_OFF": "This order link has been turned off. Ask the business for a new one.",
     "GSTR2B_NOT_RECOGNISED": "This is not a GSTR-2B file. Download GSTR-2B as JSON from the GST portal and choose that file.",
     "GSTR2B_NOT_JSON": "This file is not a JSON file. On the GST portal, download GSTR-2B with the JSON button (not Excel or PDF).",
-    "GSTR2B_NO_PERIOD": "The file does not say its month. Pick the month above and choose the file again."
+    "GSTR2B_NO_PERIOD": "The file does not say its month. Pick the month above and choose the file again.",
+    "BACKUP_FOLDER_FAILED": "The backup could not be saved in the backup folder (is the pen drive in?): {{reason}}"
   },
   "validation": {
     "required": "This field is required",
@@ -2695,7 +2696,8 @@
       "download": "Downloaded",
       "email": "Emailed",
       "restore": "Restored from a file",
-      "auto": "Emailed automatically"
+      "auto": "Emailed automatically",
+      "folder": "Saved to the backup folder"
     },
     "restoreTitle": "Restore from a backup",
     "restoreHint": "A backup is always restored as a NEW business next to this one. Nothing in the current business is changed or deleted.",
@@ -3729,5 +3731,142 @@
     "emptyHint": "Choose the month's GSTR-2B file to see which purchase bills match.",
     "notes_one": "{{count}} credit or debit note in the statement is not matched here.",
     "notes_other": "{{count}} credit or debit notes in the statement are not matched here."
+  },
+  "comfort": {
+    "open": "Text size and simple menu",
+    "title": "Easier to use",
+    "textSize": "Text size",
+    "textSizeHint": "Makes everything bigger on this device.",
+    "simpleMenu": "Simple menu",
+    "simpleMenuHint": "Only the everyday screens: bills, payments, customers and stock. Search (Ctrl+K) still finds everything. Just for you, on this device.",
+    "showFullMenu": "Show full menu",
+    "help": "Help for this screen"
+  },
+  "help": {
+    "title": "How to use: {{screen}}",
+    "generalTitle": "How to use Digital Bahi",
+    "shortcuts": "All keyboard shortcuts",
+    "general": {
+      "s1": "The menu on the left (on a phone, the Menu button) opens every screen your role allows.",
+      "s2": "Search at the top (Ctrl+K) finds any customer, product or bill by name, mobile or number.",
+      "s3": "The + button (Ctrl+I on a computer) starts a new bill from anywhere.",
+      "s4": "The Aa button makes the text bigger or the menu simpler."
+    },
+    "dashboard": {
+      "s1": "The top cards show today's sales, money to collect and stock to reorder.",
+      "s2": "Tap a card to open the list behind it.",
+      "s3": "Quick actions start a bill, a payment or a new customer in one tap.",
+      "s4": "Each role sees its own work here: a salesman sees his beat, the accountant sees dues."
+    },
+    "invoices": {
+      "s1": "Choose the customer (F3) by name or mobile. A new shop can be added right from the search.",
+      "s2": "Type a product (F2), press Enter, type the quantity, Enter, check the rate, Enter for the next item.",
+      "s3": "Save with Ctrl+S. The popup offers Send on WhatsApp, Print and New invoice.",
+      "s4": "Ctrl+P saves and prints in one step."
+    },
+    "bills": {
+      "s1": "All sales bills, newest first. Filter by date, customer or status (paid, part paid, due).",
+      "s2": "Open a bill to print it, send it on WhatsApp, copy it or cancel it.",
+      "s3": "Totals of the filtered bills are at the top; the download button saves the list as CSV."
+    },
+    "customers": {
+      "s1": "Add customer saves the shop's name, mobile, GSTIN, credit limit and price list.",
+      "s2": "Open a customer for their bills, payments and ledger.",
+      "s3": "Import brings a whole customer list in from Excel or CSV."
+    },
+    "payments": {
+      "s1": "Receive payment (Alt+C): pick the customer, the amount and how they paid (cash, UPI, cheque).",
+      "s2": "The payment is set against their oldest bills on its own; you can change that.",
+      "s3": "Send the receipt on WhatsApp from the payment."
+    },
+    "outstanding": {
+      "s1": "Every customer who owes money, with how long it has been due.",
+      "s2": "Open a customer to send them a reminder on WhatsApp.",
+      "s3": "Their unpaid bills and the oldest due date are shown there too."
+    },
+    "products": {
+      "s1": "Add product: name, HSN, GST rate, unit, selling price and MRP.",
+      "s2": "Import brings a whole price list in from Excel, CSV or PDF.",
+      "s3": "Price B and Price C are rates for wholesale and other customer lists."
+    },
+    "inventory": {
+      "s1": "Stock of every product in every godown.",
+      "s2": "Stock adjustment corrects stock after counting or damage.",
+      "s3": "Low stock shows what to order again."
+    },
+    "purchases": {
+      "s1": "New purchase bill brings stock in from a supplier.",
+      "s2": "Import bill reads the supplier's Excel, CSV or PDF bill for you.",
+      "s3": "Items not in your product list can be added in one go from the bill."
+    },
+    "suppliers": {
+      "s1": "Add a supplier with GSTIN and mobile.",
+      "s2": "Open a supplier for their purchase bills and what you owe them."
+    },
+    "orders": {
+      "s1": "A sales order records what a shop wants before you bill it.",
+      "s2": "Turn an order into a bill in one click when the goods go out."
+    },
+    "gst": {
+      "s1": "GSTR-1 and GSTR-3B are made from your bills and purchases.",
+      "s2": "Download the files for the GST portal, or give them to your CA.",
+      "s3": "Check the warnings first: a missing GSTIN or HSN shows there."
+    },
+    "expenses": {
+      "s1": "Record shop expenses: rent, electricity, fuel, salaries paid in cash.",
+      "s2": "They show in profit and in the day's cash."
+    },
+    "reports": {
+      "s1": "Sales, profit, stock and collections by day, week or month.",
+      "s2": "Every report downloads as PDF or Excel."
+    },
+    "settings": {
+      "s1": "Business profile: your firm's name, address, GSTIN and logo for every bill.",
+      "s2": "Open on phone shows a QR code to open Digital Bahi on a phone on the same Wi-Fi.",
+      "s3": "Bill numbers, price lists, godowns and WhatsApp are set up here too."
+    },
+    "users": {
+      "s1": "Add member: name, mobile, role, and a user ID and password if they should sign in straight away.",
+      "s2": "After adding, Send invite on WhatsApp sends them the link and their user ID.",
+      "s3": "A role decides which screens a person sees."
+    },
+    "backup": {
+      "s1": "Download backup saves your whole book in one file. Give it a password and write it down.",
+      "s2": "Automatic backups make a copy every day by themselves.",
+      "s3": "Restore always makes a new business: your current one is never touched."
+    }
+  },
+  "phone": {
+    "title": "Open on phone",
+    "hint": "Scan with the phone's camera to open Digital Bahi there.",
+    "sameWifi": "The phone must be on the same Wi-Fi as this computer.",
+    "signIn": "On the phone, sign in with a user ID and password (Users & Roles → Add member). Sign-up and OTP codes are only shown on this computer.",
+    "notOpen": "Phones cannot open Digital Bahi on this computer yet. Close it and start it again with “Start Digital Bahi” (Start Digital Bahi.bat on Windows, Start Digital Bahi.command on a Mac): then phones on the same Wi-Fi can open it.",
+    "copy": "Copy link",
+    "copied": "Link copied",
+    "httpNote": "At this address the phone uses Digital Bahi in the browser. Installing it as an app and billing without internet need an https address."
+  },
+  "invite": {
+    "whatsapp": "Send invite on WhatsApp",
+    "whatsappHint": "Sends {{name}} the link and how to sign in. You tap send in WhatsApp.",
+    "hello": "Namaste {{name}}, you have been added to {{business}} on Digital Bahi.",
+    "open": "Open: {{link}}",
+    "noLink": "I will tell you the address to open.",
+    "loginPassword": "Sign in with {{login}} and the password I gave you.",
+    "loginOtp": "Sign in with your mobile number {{mobile}}: a code (OTP) will come to it.",
+    "done": "Done"
+  },
+  "backupFolder": {
+    "saved": "Copies are saved on this computer in: {{folder}}",
+    "tip": "For a copy away from this computer, use a pen drive or a Google Drive folder: see “Backups on a pen drive or Google Drive” in HOW-TO-RUN.md.",
+    "emailOptional": "Email is optional: when it is set up, a copy is emailed too.",
+    "lastSaved": "Last backup saved {{when}}.",
+    "kind": "Saved to the backup folder"
+  },
+  "backupNote": {
+    "last": "Last backup: {{when}}",
+    "none": "No backup yet. Keep a copy of your books safe.",
+    "old": "Last backup {{when}}, more than a week ago.",
+    "action": "Backup & Restore"
   }
 }

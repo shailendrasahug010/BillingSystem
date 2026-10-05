@@ -1,3 +1,6 @@
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { nextBackupAt, runDueBackups } from "../src/services/backup-schedule.js";
 import { call, createTestApp, hasDatabase, nextMobile, signup, type Session, type TestApp } from "./helpers.js";
@@ -163,5 +166,51 @@ describe.skipIf(!hasDatabase)("automatic backups", () => {
     token = await login(owner.mobile, owner.password);
     const audit = (await get("/audit-logs?action=backup.schedule_stopped", token)).body.data;
     expect(audit).toHaveLength(1);
+  });
+});
+
+describe.skipIf(!hasDatabase)("automatic backups into a folder (one computer)", () => {
+  let t: TestApp;
+  let owner: Session;
+  let folder: string;
+
+  beforeAll(async () => {
+    folder = mkdtempSync(path.join(os.tmpdir(), "db-backups-"));
+    t = await createTestApp({ env: { BACKUP_FOLDER: folder } });
+    owner = await signup(t, { legalName: "Kamal Stores", stateCode: "23" });
+  });
+  afterAll(async () => {
+    await t?.close();
+    rmSync(folder, { recursive: true, force: true });
+  });
+
+  it("saves each day's copy in the folder, needs no email, and keeps the last 30 of this firm only", async () => {
+    // Older copies of this firm, another firm whose name starts the same, and a file of the person's own.
+    for (let d = 1; d <= 31; d++) writeFileSync(path.join(folder, `digital-bahi-kamal-stores-2020-01-${String(d).padStart(2, "0")}.dbbackup`), "old");
+    writeFileSync(path.join(folder, "digital-bahi-kamal-stores-annex-2020-01-01.dbbackup"), "other firm");
+    writeFileSync(path.join(folder, "notes.txt"), "mine");
+
+    // The firm has no email: with a folder that is fine.
+    const on = await call(t.app, "PUT", "/backups/schedule", { token: owner.token, body: { frequency: "daily", hour: 21, passphrase: "kirana-2026!" } });
+    expect(on.status).toBe(200);
+    expect(on.body).toMatchObject({ frequency: "daily", folder });
+    const [s] = (await t.owner.query("select next_run_at from backup_schedules where business_id = $1", [owner.businessId])).rows;
+    t.advance(Math.max(0, Date.parse(s.next_run_at) - Date.now()) + 60_000);
+
+    expect(await runDueBackups(t.app.deps)).toEqual({ sent: 1, failed: 0 });
+    const files = readdirSync(folder).sort();
+    const ours = files.filter((f) => /^digital-bahi-kamal-stores-\d{4}-\d{2}-\d{2}\.dbbackup$/.test(f));
+    expect(ours).toHaveLength(30);
+    expect(ours).not.toContain("digital-bahi-kamal-stores-2020-01-01.dbbackup");
+    expect(ours).not.toContain("digital-bahi-kamal-stores-2020-01-02.dbbackup");
+    const today = ours.at(-1)!;
+    expect(today).not.toMatch(/2020-01/);
+    expect(readFileSync(path.join(folder, today))[5]).toBe(1); // password-protected
+    expect(files).toContain("digital-bahi-kamal-stores-annex-2020-01-01.dbbackup");
+    expect(files).toContain("notes.txt");
+    expect(files.some((f) => f.endsWith(".part"))).toBe(false);
+
+    const history = (await t.owner.query("select kind, status from backups where business_id = $1", [owner.businessId])).rows;
+    expect(history).toEqual([{ kind: "folder", status: "completed" }]);
   });
 });

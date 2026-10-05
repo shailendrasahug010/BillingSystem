@@ -1,5 +1,7 @@
 import { schema } from "@digitalbahi/db";
 import { eq, sql } from "drizzle-orm";
+import { mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { uuidv7 } from "uuidv7";
 import { audit, type AuditActor } from "../lib/audit.js";
 import type { AppDeps } from "../lib/context.js";
@@ -10,7 +12,7 @@ import { makeBackup } from "./backup.js";
 
 /** Who a backup is made for: a person on the Backup screen, or the scheduler on their behalf. */
 export type BackupActor = AuditActor & { timeZone: string };
-export type BackupKind = "download" | "email" | "auto";
+export type BackupKind = "download" | "email" | "auto" | "folder";
 type Made = Awaited<ReturnType<typeof buildBackup>>;
 
 const MAX_EMAIL_BYTES = 20 * 1024 * 1024;
@@ -49,9 +51,43 @@ export const recordBackup = (deps: AppDeps, actor: BackupActor, kind: BackupKind
       requestedBy: actor.userId,
     });
     const records = Object.values(made.manifest.counts).reduce((a, b) => a + b, 0);
-    const action = kind === "download" ? "backup.downloaded" : kind === "email" ? "backup.emailed" : "backup.auto_emailed";
+    const action = kind === "download" ? "backup.downloaded" : kind === "email" ? "backup.emailed" : kind === "folder" ? "backup.saved_to_folder" : "backup.auto_emailed";
     await audit(tx, actor, { action, entityType: "backup", entityLabel: made.sha256.slice(0, 12), changes: { records, bytes: made.file.length, encrypted, ...(error ? { error } : {}) } });
   });
+
+/** Automatic copies of each firm kept in the backup folder; older ones are removed. */
+const FOLDER_KEEP = 30;
+
+/**
+ * Saves a password-protected copy in the backup folder (BACKUP_FOLDER: a pen
+ * drive, or a Google Drive / OneDrive folder that syncs itself), one file a
+ * day, keeping the last FOLDER_KEEP of this firm's and never touching other
+ * files there. Throws BACKUP_FOLDER_FAILED when the folder cannot be written
+ * (the pen drive is out, the disk is full).
+ */
+export async function folderBackup(deps: AppDeps, actor: BackupActor, passphrase: string) {
+  const folder = deps.config.backupFolder;
+  if (!folder) throw conflict("BACKUP_FOLDER_FAILED", { reason: "no folder" });
+  const made = await buildBackup(deps, actor, passphrase);
+  const firm = made.filename.replace(/-\d{4}-\d{2}-\d{2}\.dbbackup$/, "");
+  // The firm part is a slug (a-z, 0-9, -): safe in a pattern as it is.
+  const ours = new RegExp(`^${firm}-\\d{4}-\\d{2}-\\d{2}\\.dbbackup$`);
+  let error: string | null = null;
+  try {
+    await mkdir(folder, { recursive: true });
+    const target = path.join(folder, made.filename);
+    // Written next to it first: a pen drive pulled out half-way never leaves a broken file under the real name.
+    await writeFile(`${target}.part`, made.file);
+    await rename(`${target}.part`, target);
+    const old = (await readdir(folder)).filter((f) => ours.test(f)).sort().slice(0, -FOLDER_KEEP);
+    for (const f of old) await rm(path.join(folder, f), { force: true });
+  } catch (e) {
+    error = (e as Error).message.slice(0, 300);
+  }
+  await recordBackup(deps, actor, "folder", made, true, error);
+  if (error) throw new ApiError(500, "BACKUP_FOLDER_FAILED", { reason: error });
+  return { folder, filename: made.filename, sizeBytes: made.file.length, sha256: made.sha256 };
+}
 
 /**
  * Emails a password-protected copy (to the firm's own email unless `to` is

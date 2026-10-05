@@ -127,6 +127,15 @@ export function visibleModules(): ModuleDef[] {
   });
 }
 
+/** The everyday screens the simple menu keeps (Settings → "Aa" → Simple menu). */
+export const SIMPLE_MENU_KEYS: ReadonlySet<string> = new Set(["dashboard", "invoices", "bills", "customers", "payments", "outstanding", "products", "inventory"]);
+
+/** The menu as shown: everything this role opens, or with the simple menu on, only the everyday screens. */
+export function menuModules(simple: boolean): ModuleDef[] {
+  const all = visibleModules();
+  return simple ? all.filter((m) => SIMPLE_MENU_KEYS.has(m.key)) : all;
+}
+
 /** The permission a screen needs: what it shows, or for a create screen, what it saves. */
 export function routePermission(route: Route): Permission | null {
   switch (route.name) {

@@ -63,7 +63,7 @@ export interface TestApp {
  * connected as a non-owner role so row-level security is really enforced.
  */
 /** Options for tests that need them: folders for the error log and web source maps, routes of their own. */
-export async function createTestApp(options: { logDir?: string; webSourceMapsDir?: string; extraModules?: ApiModule[] } = {}): Promise<TestApp> {
+export async function createTestApp(options: { logDir?: string; webSourceMapsDir?: string; extraModules?: ApiModule[]; env?: Record<string, string> } = {}): Promise<TestApp> {
   if (!ADMIN_URL) throw new Error("DATABASE_URL is required for API tests");
   const dbName = `digitalbahi_api_${Date.now()}_${randomBytes(3).toString("hex")}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
@@ -86,6 +86,7 @@ export async function createTestApp(options: { logDir?: string; webSourceMapsDir
     AUTH_RATE_LIMIT_MAX: "100000",
     LOG_LEVEL: "silent",
     DOCS_ENABLED: "false",
+    ...options.env,
   });
   const { db, pool } = createDb(config.databaseUrl, { max: 8 });
   const otp = new MemoryOtpSender();

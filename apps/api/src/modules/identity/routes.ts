@@ -23,7 +23,7 @@ import { authenticate, loadAccess } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import { withTenant, withUser } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, unauthorized } from "../../lib/errors.js";
-import { hashPassword, sha256, verifyPassword } from "../../lib/security.js";
+import { hashPassword, isLoopback, sha256, verifyPassword } from "../../lib/security.js";
 import type { ApiModule } from "../types.js";
 import { createBusiness, MAX_OWNED_BUSINESSES, validateBusinessInput } from "./businesses.js";
 import { issueOtp, requireOtp } from "./otp.js";
@@ -96,7 +96,9 @@ export const identityModule: ApiModule = async (app, deps) => {
     // For login / reset, an unknown number gets the same answer but no SMS (no account discovery).
     const deliver = request.body.purpose === "signup" || Boolean(existing?.isActive);
     const { expiresIn, code } = await issueOtp(deps, mobile, request.body.purpose, { deliver });
-    const body: OtpRequestResponse = { sent: true, expiresIn, ...(deps.config.otpDevEcho && deliver ? { devCode: code } : {}) };
+    // The socket's own address, not request.ip: a forwarded-for header cannot make a phone look local.
+    const echo = deps.config.otpDevEcho && (!deps.config.otpDevEchoLocalOnly || isLoopback(request.socket.remoteAddress));
+    const body: OtpRequestResponse = { sent: true, expiresIn, ...(echo && deliver ? { devCode: code } : {}) };
     return reply.code(202).send(body);
   });
 
