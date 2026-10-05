@@ -96,10 +96,19 @@ export function SearchSelect({
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
-          if (e.key === "ArrowDown") (e.preventDefault(), setActive((a) => Math.min(a + 1, results.length - 1)));
-          else if (e.key === "ArrowUp") (e.preventDefault(), setActive((a) => Math.max(a - 1, 0)));
-          else if (e.key === "Enter" && results[active]) (e.preventDefault(), pick(results[active]));
-          else if (e.key === "Escape" && open) (e.stopPropagation(), setOpen(false));
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive((a) => Math.min(a + 1, results.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive((a) => Math.max(a - 1, 0));
+          } else if (e.key === "Enter" && results[active]) {
+            e.preventDefault();
+            pick(results[active]);
+          } else if (e.key === "Escape" && open) {
+            e.stopPropagation();
+            setOpen(false);
+          }
         }}
         className={cn(
           "h-10 w-full rounded-[var(--radius-control)] border border-line bg-surface pr-3 pl-9 text-sm text-ink placeholder:text-ink-3",

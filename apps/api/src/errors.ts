@@ -40,7 +40,7 @@ export function groupErrors(entries: ErrorEntry[]): ErrorGroup[] {
 
 export async function readEntries(dir: string, days: number, today = new Date()): Promise<ErrorEntry[]> {
   const from = new Date(today.getTime() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
-  let names: string[] = [];
+  let names: string[];
   try {
     names = await readdir(dir);
   } catch {

@@ -214,7 +214,7 @@ export class WebSourceMaps {
   private async consumer(script: string): Promise<SourceMapConsumer | null> {
     if (!this.dir || !/^[\w.-]+\.js$/.test(script)) return null;
     if (this.cache.has(script)) return this.cache.get(script)!;
-    let consumer: SourceMapConsumer | null = null;
+    let consumer: SourceMapConsumer | null;
     try {
       consumer = new SourceMapConsumer(JSON.parse(await readFile(path.join(this.dir, `${script}.map`), "utf8")) as RawSourceMap);
     } catch {

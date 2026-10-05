@@ -41,7 +41,6 @@ export function AuthHero() {
 }
 
 export function AuthLayout({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
   return (
     <div className="grid min-h-full grid-cols-1 bg-bg lg:grid-cols-[1.05fr_1fr]">
       <AuthHero />

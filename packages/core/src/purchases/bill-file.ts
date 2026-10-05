@@ -370,8 +370,8 @@ export function compactName(name: string): string {
 
 const GSTIN_IN_TEXT = /\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/g;
 const HAS_GSTIN = new RegExp(GSTIN_IN_TEXT.source);
-const BILL_NO_IN_TEXT = /\b(?:tax\s+)?(?:invoice|bill|inv|voucher|vch)\s*(?:no|number|#)\.?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9/\-]{0,29})/i;
-const DATE_IN_TEXT = /\b(?:invoice|bill|inv|voucher|vch)?\s*date[d]?\s*[:.\-]?\s*(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{1,2}[\s\-]+[A-Za-z]{3,9}[\s\-,]+\d{2,4}|\d{4}-\d{2}-\d{2})/i;
+const BILL_NO_IN_TEXT = /\b(?:tax\s+)?(?:invoice|bill|inv|voucher|vch)\s*(?:no|number|#)\.?\s*[:.-]?\s*([A-Z0-9][A-Z0-9/-]{0,29})/i;
+const DATE_IN_TEXT = /\b(?:invoice|bill|inv|voucher|vch)?\s*date[d]?\s*[:.-]?\s*(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{1,2}[\s-]+[A-Za-z]{3,9}[\s,-]+\d{2,4}|\d{4}-\d{2}-\d{2})/i;
 
 export interface BillHeaderFields {
   billNumber: string | null;

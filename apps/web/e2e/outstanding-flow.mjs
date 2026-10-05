@@ -76,7 +76,7 @@ const gupta = await api("POST", "/customers", token, { name: "Gupta Kirana", mob
 await api("POST", "/invoices", token, { customerId: gupta.id, invoiceDate: daysAgo(40), lines: [{ productId: soap.id, qty: "10" }] }); // 1,180, due 25 days ago
 await api("POST", "/invoices", token, { customerId: gupta.id, lines: [{ productId: soap.id, qty: "5" }] }); // 590, not due
 await api("POST", "/payments", token, { direction: "in", customerId: gupta.id, amount: "200", method: "cash" });
-const sharma = await api("POST", "/customers", token, { name: "Sharma Stores", mobile: "9826033333", city: "DEWAS", stateCode: "23", openingBalance: "750" });
+await api("POST", "/customers", token, { name: "Sharma Stores", mobile: "9826033333", city: "DEWAS", stateCode: "23", openingBalance: "750" });
 const verma = await api("POST", "/customers", token, { name: "Verma Traders", mobile: "9826044444", city: "Ujjain", stateCode: "23" });
 await api("POST", "/invoices", token, { customerId: verma.id, invoiceDate: daysAgo(10), lines: [{ productId: soap.id, qty: "20" }] }); // 2,360, overdue
 const corner = await api("POST", "/customers", token, { name: "Corner Shop", stateCode: "23" });

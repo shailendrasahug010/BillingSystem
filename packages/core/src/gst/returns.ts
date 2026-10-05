@@ -425,6 +425,7 @@ export type Gstr1CsvSection = "b2b" | "b2cl" | "b2cs" | "exp" | "cdnr" | "cdnur"
 
 /** The offline tool's names for B2B invoice types. */
 const INVOICE_TYPE: Record<string, string> = { R: "Regular B2B", SEWP: "SEZ supplies with payment", SEWOP: "SEZ supplies without payment", DE: "Deemed Exp" };
+/* eslint-disable @typescript-eslint/no-explicit-any -- the portal JSON built above, read back field by field in the offline tool's layout */
 
 /** Rows for one GSTR-1 section in the offline tool's CSV layout (header row first). */
 export function gstr1Csv(result: Gstr1Result, section: Gstr1CsvSection, names: ReadonlyMap<string, string> = new Map()): string[][] {
@@ -475,6 +476,7 @@ export function gstr1Csv(result: Gstr1Result, section: Gstr1CsvSection, names: R
       return [["Nature of Document", "Sr. No. From", "Sr. No. To", "Total Number", "Cancelled"], ...result.documents.map((d) => [d.label, d.from, d.to, d.total, d.cancelled])].map(strings);
   }
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const strings = (row: unknown[]) => row.map((v) => (v === null || v === undefined ? "" : String(v)));
 const isoFromPortal = (d: string) => `${d.slice(6, 10)}-${d.slice(3, 5)}-${d.slice(0, 2)}`;

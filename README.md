@@ -60,6 +60,7 @@ Requirements: Node.js 22+, pnpm 10, PostgreSQL 16+.
 
 ```bash
 pnpm install
+pnpm lint        # ESLint: hooks rules, unused code, stray escapes
 pnpm typecheck
 # unit tests, plus database and API integration tests (each test file creates and drops its own database)
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm test

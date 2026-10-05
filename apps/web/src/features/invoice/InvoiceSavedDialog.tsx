@@ -58,6 +58,8 @@ export function InvoiceSavedDialog({ notice, onClose, onNext }: { notice: SavedN
   // Saved with the WhatsApp button: the PDF is fetched at once, so the share sheet opens on the tap.
   useEffect(() => {
     if (withPdf && notice?.share) loadPdf().catch(() => undefined);
+    // Once per bill: loadPdf is a new function each render and keeps its own cache.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notice?.id, withPdf]);
   const sendOnWhatsApp = async () => {
     if (!notice) return;

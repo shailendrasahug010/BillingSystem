@@ -108,7 +108,7 @@ function Queue() {
             key: "action",
             header: "",
             align: "right",
-            render: (o) =>
+            render: () =>
               allowed("packing.pack") ? (
                 <Button size="sm" variant="primary" icon={<PackageCheck size={14} />}>
                   {t("packing.pack")}
