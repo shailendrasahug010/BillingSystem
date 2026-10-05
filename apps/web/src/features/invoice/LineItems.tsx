@@ -1,9 +1,10 @@
 import type { DocumentTotals } from "@digitalbahi/core";
-import { Minus, Plus, ShoppingBasket, Trash, TriangleAlert } from "lucide-react";
+import { Copy, Minus, Plus, Replace, ShoppingBasket, Trash, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useI18n } from "../../app/i18n";
 import { EmptyState } from "../../components/ui/misc";
-import { allowed, productById } from "../../data/db";
+import { allowed, PRODUCTS, productById } from "../../data/db";
+import { inStockAlternative } from "./alternatives";
 import { cn } from "../../lib/cn";
 import type { Product } from "../../data/types";
 import { saleUnits, unitByLetter, type SaleUnit } from "./units";
@@ -19,6 +20,7 @@ function NumberCell({
   onEnter,
   onTab,
   onLetter,
+  onFocusChange,
   decimals = 2,
 }: {
   value: number;
@@ -32,6 +34,8 @@ function NumberCell({
   onTab?(): void;
   /** A letter typed in it (a unit's letter after the quantity); true when it was taken. */
   onLetter?(letter: string): boolean;
+  /** The field gained (true) or lost (false) the cursor. */
+  onFocusChange?(focused: boolean): void;
   decimals?: number;
 }) {
   const [text, setText] = useState(String(value));
@@ -48,10 +52,12 @@ function NumberCell({
       onFocus={(e) => {
         focused.current = true;
         e.currentTarget.select();
+        onFocusChange?.(true);
       }}
       onBlur={() => {
         focused.current = false;
         setText(String(value));
+        onFocusChange?.(false);
       }}
       onChange={(e) => {
         const raw = e.target.value.replace(/[^0-9.]/g, "");
@@ -143,28 +149,76 @@ function UnitSelect({
   );
 }
 
-function LineWarnings({ line }: { line: DraftLine }) {
-  const { t } = useI18n();
+/**
+ * Under a line: too little stock (with an in-stock product of the same kind
+ * to swap in), a price below cost, and the product on another line of the
+ * bill too (in another unit), so it is not billed twice by mistake.
+ */
+function LineWarnings({ line, lines, onReplace }: { line: DraftLine; lines: DraftLine[]; onReplace?(productId: string): void }) {
+  const { t, locale } = useI18n();
   const p = productById.get(line.productId)!;
   const factor = factorOf(p, line.unitId);
-  const short = (line.qty + (line.freeQty || 0)) * factor > p.stock;
+  const need = (line.qty + (line.freeQty || 0)) * factor;
+  const short = need > p.stock;
   const belowCost = line.rate * (1 - line.discountPercent / 100) < p.purchasePrice * factor;
-  if (!short && !belowCost) return null;
+  const twin = lines.findIndex((l) => l.key !== line.key && l.productId === line.productId);
+  const instead = short && onReplace ? inStockAlternative(p, need, PRODUCTS, new Set(lines.map((l) => l.productId))) : null;
+  if (!short && !belowCost && twin < 0) return null;
   return (
-    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
       {short && (
         <span className="inline-flex items-center gap-1 text-warn">
           <TriangleAlert size={12} /> {p.stock <= 0 ? t("status.stock.out_of_stock") : t("invoice.stockShort", { qty: `${p.stock} ${p.unit}` })}
         </span>
+      )}
+      {instead && (
+        <button type="button" onClick={() => onReplace!(instead.id)} className="inline-flex items-center gap-1 rounded-md px-1 text-accent hover:underline" title={t("invoice.swapHint")}>
+          <Replace size={12} /> {t("invoice.swapFor", { name: locale === "hi" ? instead.nameHi : instead.name, qty: instead.stock })}
+        </button>
       )}
       {belowCost && (
         <span className="inline-flex items-center gap-1 text-danger">
           <TriangleAlert size={12} /> {t("invoice.belowCost")}
         </span>
       )}
+      {twin >= 0 && (
+        <span className="inline-flex items-center gap-1 text-warn">
+          <Copy size={12} /> {t("invoice.alsoOnLine", { line: twin + 1, qty: lines[twin]!.qty, unit: unitSymbolOf(p, lines[twin]!.unitId) })}
+        </span>
+      )}
     </div>
   );
 }
+
+/** One-tap counts under a line on a phone while its quantity is typed: in its unit, then one or two of each bigger pack. */
+function QuickQty({ product, line, units, onPick }: { product: Product; line: DraftLine; units: SaleUnit[]; onPick(qty: number, unitId?: string | null): void }) {
+  const { t } = useI18n();
+  const symbol = unitSymbolOf(product, line.unitId);
+  const factor = factorOf(product, line.unitId);
+  const packs = units.filter((u) => u.factor > factor).slice(0, 2);
+  // Tapped, a count keeps the quantity field focused (else the field's blur would hide the counts before the tap lands).
+  const keep = (e: { preventDefault(): void }) => e.preventDefault();
+  const chip = "num h-9 min-w-10 shrink-0 rounded-lg border border-line bg-surface px-2.5 text-[13.5px] font-semibold text-ink active:bg-accent-soft";
+  return (
+    <div className="-mx-1 mt-1.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5" role="group" aria-label={`${t("invoice.quickQty")}: ${product.name}`}>
+      {QUICK_COUNTS.map((n) => (
+        <button key={n} type="button" onPointerDown={keep} onMouseDown={keep} onClick={() => onPick(n)} aria-pressed={line.qty === n} className={cn(chip, line.qty === n && "border-accent bg-accent-soft text-accent")}>
+          {n}
+          {n === 1 && <span className="ml-1 text-[11px] font-medium text-ink-3">{symbol}</span>}
+        </button>
+      ))}
+      {packs.flatMap((u) =>
+        [1, 2].map((n) => (
+          <button key={`${u.symbol}-${n}`} type="button" onPointerDown={keep} onMouseDown={keep} onClick={() => onPick(n, u.unitId)} className={cn(chip, "text-accent")}>
+            {n} {u.symbol}
+          </button>
+        )),
+      )}
+    </div>
+  );
+}
+
+const QUICK_COUNTS = [1, 2, 3, 5, 10, 12, 24];
 
 /**
  * Scrolls an element into view clear of what stays on screen over the page:
@@ -190,6 +244,7 @@ export function LineItems({
   onUpdate,
   onUnit,
   onRemove,
+  onReplace,
   onBackToSearch,
   variant = "desktop",
 }: {
@@ -200,6 +255,8 @@ export function LineItems({
   onUpdate(key: string, patch: Partial<Pick<DraftLine, "qty" | "freeQty" | "rate" | "discountPercent">>): void;
   onUnit(key: string, unitId: string | null): void;
   onRemove(key: string): void;
+  /** An out-of-stock line swapped for an in-stock product. */
+  onReplace?(key: string, productId: string): void;
   onBackToSearch(): void;
   variant?: "desktop" | "mobile";
 }) {
@@ -215,6 +272,8 @@ export function LineItems({
   // On a phone, the line whose free quantity was asked for (its field shows while it is 0).
   const [freeOpen, setFreeOpen] = useState<string | null>(null);
   const focusFree = useRef<string | null>(null);
+  // On a phone, the line whose one-tap counts show: the one whose quantity is being typed.
+  const [picking, setPicking] = useState<string | null>(null);
   // Keyboard billing: product search -> Enter -> qty -> Enter -> rate -> Enter -> product search.
   // Without the price-override permission the rate is fixed, so qty goes straight back.
   const toRate = (key: string) => {
@@ -295,6 +354,7 @@ export function LineItems({
                     onCommit={(v) => onUpdate(line.key, { qty: v })}
                     onEnter={onBackToSearch}
                     onLetter={(letter) => byLetter(units, line, letter)}
+                    onFocusChange={(on) => setPicking(on ? line.key : null)}
                     className="h-10 px-1 text-center text-[16px] font-semibold"
                   />
                   <button type="button" className="flex size-10 shrink-0 items-center justify-center text-ink-2" aria-label={`+1 ${p.name}`} onClick={() => onUpdate(line.key, { qty: line.qty + 1 })}>
@@ -347,7 +407,20 @@ export function LineItems({
                   <Trash size={16} />
                 </button>
               </div>
-              <LineWarnings line={line} />
+              {picking === line.key && (
+                <QuickQty
+                  product={p}
+                  line={line}
+                  units={units}
+                  onPick={(qty, unitId) => {
+                    if (unitId !== undefined) onUnit(line.key, unitId);
+                    onUpdate(line.key, { qty });
+                    // Picked: the keypad closes with the field.
+                    (document.activeElement as HTMLElement | null)?.blur();
+                  }}
+                />
+              )}
+              <LineWarnings line={line} lines={lines} {...(onReplace ? { onReplace: (id: string) => onReplace(line.key, id) } : {})} />
             </li>
           );
         })}
@@ -407,7 +480,7 @@ export function LineItems({
                   <span aria-hidden>·</span>
                   <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} onEnter={() => toRate(line.key)} onTab={() => afterUnit(line.key)} selectRef={keep(unitRefs, line.key)} className="h-5 text-[11px]" />
                 </div>
-                <LineWarnings line={line} />
+                <LineWarnings line={line} lines={lines} {...(onReplace ? { onReplace: (id: string) => onReplace(line.key, id) } : {})} />
               </td>
               <td className="py-1 align-middle">
                 <div className="flex items-center justify-center">

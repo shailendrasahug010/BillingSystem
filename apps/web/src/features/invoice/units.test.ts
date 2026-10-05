@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WORKSPACE } from "../../data/db";
-import { saleUnits, startUnit, unitByLetter } from "./units";
+import { dec } from "@digitalbahi/core";
+import { saleUnits, startUnit, unitByLetter, usualPick } from "./units";
 
 const soap = { unit: "PCS", unitId: "u-pcs", packUnits: [{ unitId: "u-ctn", symbol: "CTN", factor: 144 }, { unitId: "u-box", symbol: "BOX", factor: 24 }] };
 const tablets = { unit: "PCS", unitId: "u-pcs", packUnits: [{ unitId: "u-strip", symbol: "STRIP", factor: 10 }, { unitId: "u-box", symbol: "BOX", factor: 100 }] };
@@ -55,5 +56,22 @@ describe("the units of a bill's line", () => {
     expect(startUnit(tablets)).toMatchObject({ unitId: "u-box", factor: 100 });
     WORKSPACE.defaultUnit = "own";
     expect(startUnit(tablets)).toBeNull();
+  });
+});
+
+describe("the unit and count a shop usually takes", () => {
+  const bought = (...qtys: number[]) => ({ orderCount: qtys.length, recentQtys: qtys.map((q) => dec(q)) });
+
+  it("is the middle of its last bills, in the biggest pack that holds it whole", () => {
+    expect(usualPick(soap, bought(120, 96, 120))).toEqual({ unitId: "u-box", qty: 5, symbol: "BOX", factor: 24 });
+    expect(usualPick(soap, bought(288, 288))).toEqual({ unitId: "u-ctn", qty: 2, symbol: "CTN", factor: 144 });
+    expect(usualPick(tablets, bought(20, 30, 20))).toEqual({ unitId: "u-strip", qty: 2, symbol: "STRIP", factor: 10 });
+    expect(usualPick(oil, bought(5, 7))).toEqual({ unitId: null, qty: 6, symbol: "BTL", factor: 1 });
+    expect(usualPick({ unit: "KG" }, bought(2.5, 2.5))).toEqual({ unitId: null, qty: 2.5, symbol: "KG", factor: 1 });
+  });
+
+  it("waits for two bills", () => {
+    expect(usualPick(soap, bought(120))).toBeNull();
+    expect(usualPick(soap, undefined)).toBeNull();
   });
 });

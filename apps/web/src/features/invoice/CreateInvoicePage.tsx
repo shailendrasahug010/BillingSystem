@@ -30,6 +30,8 @@ import { saleUnits } from "./units";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
 import { dropKeptDraft } from "./keptDraft";
+import { recordBilled } from "./topItems";
+import { HeldBillsBar, HoldButton, useHeldBills } from "./HeldBills";
 import { KeptDraftOffer, useKeptDraft, type KeptDraftState } from "./KeptDraftNotice";
 import { BarcodeCamera } from "../../components/scan/BarcodeCamera";
 import { nativeScanner, scanWithPhone } from "../../components/scan/barcode";
@@ -174,6 +176,8 @@ function useSave(view: DraftView) {
       // Feedback on the suggestions goes with a bill saved online (the server knows that bill).
       if (offline) view.feedback.reset();
       else view.feedback.send(invoice.id, view.draft.lines.map((l) => l.productId));
+      // Offered first in the product search for the next bills.
+      recordBilled(view.draft.lines.map((l) => l.productId), invoice.date);
       // Saved: not kept as unfinished any more (before Save & print leaves the screen).
       void dropKeptDraft();
       view.dispatch({ type: "reset" });
@@ -290,6 +294,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
   // null: the suggestions fold into one row once the bill has lines; true / false once the user chose.
   const [suggestionsOpen, setSuggestionsOpen] = useState<boolean | null>(null);
   const { save, saved, closeSaved } = useSave(view);
+  const held = useHeldBills(view);
   const { draft, dispatch, customer, insight, totals, error, credit } = view;
   const numberLabel = useNextNumberLabel(draft.date);
   const blocked = isBlocked(view);
@@ -348,6 +353,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-[22px] font-semibold text-ink">{t("invoice.new")}</h1>
+          <HoldButton state={held} hasLines={draft.lines.length > 0} />
         </div>
         <div className="hidden items-center gap-4 text-[12px] text-ink-3 xl:flex">
           {hint(INVOICE_SHORTCUTS.focusCustomer, t("shortcuts.focusCustomer"), true)}
@@ -359,6 +365,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
       </div>
 
       <KeptDraftOffer state={kept} />
+      <HeldBillsBar state={held} />
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-3">
@@ -384,7 +391,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
 
           {/* Stays under the top bar while the lines scroll: the search, and the suggestions once folded into a row. */}
           <div data-overlay="top" className="sticky top-14 z-20 -mx-2 flex flex-col gap-2 bg-bg/85 px-2 py-2 backdrop-blur-md lg:top-16">
-            <ProductSearch ref={productRef} customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, spoken) => dispatch({ type: "add", productId: id, ...(spoken ? { spoken } : {}) })} onScan={() => setScanOpen(true)} />
+            <ProductSearch ref={productRef} customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, how) => dispatch({ type: "add", productId: id, ...how })} onScan={() => setScanOpen(true)} />
             {strip && suggestions(true)}
           </div>
           {!strip && suggestions(false)}
@@ -415,6 +422,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
               onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
               onUnit={(key, unitId) => dispatch({ type: "unit", key, unitId })}
               onRemove={(key) => dispatch({ type: "remove", key })}
+              onReplace={(key, productId) => dispatch({ type: "replace", key, productId })}
               onBackToSearch={() => productRef.current?.focus()}
             />
           </section>
@@ -473,6 +481,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
   const productRef = useRef<HTMLInputElement>(null);
   const customerRef = useRef<HTMLInputElement>(null);
   const { draft, dispatch, customer, insight, totals, credit } = view;
+  const held = useHeldBills(view, (hasCustomer) => setStep(hasCustomer ? 1 : 0));
   const numberLabel = useNextNumberLabel(draft.date);
   const onFocused = useCallback(() => dispatch({ type: "focused" }), [dispatch]);
   const toProducts = () => {
@@ -529,9 +538,13 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
-        <span className="font-mono text-[12.5px] text-ink-3">{numberLabel}</span>
+        <div className="flex items-center gap-2">
+          <HoldButton state={held} hasLines={draft.lines.length > 0} />
+          <span className="font-mono text-[12.5px] text-ink-3">{numberLabel}</span>
+        </div>
       </div>
       <KeptDraftOffer state={kept} />
+      <HeldBillsBar state={held} />
       <ol className="grid grid-cols-3 gap-2" aria-label={t("invoice.quick")}>
         {steps.map((s, i) => (
           <li key={s}>
@@ -600,7 +613,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
             <span className="text-[13px] font-medium text-accent">{t("invoice.changeCustomer")}</span>
           </button>
           <div data-overlay="top" className="sticky top-14 z-20 -mx-4 bg-bg/85 px-4 py-2 backdrop-blur-md">
-            <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, spoken) => dispatch({ type: "add", productId: id, ...(spoken ? { spoken } : {}) })} onScan={() => setScanOpen(true)} />
+            <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, how) => dispatch({ type: "add", productId: id, ...how })} onScan={() => setScanOpen(true)} />
           </div>
           <SuggestionsPanel
             variant="mobile"
@@ -629,6 +642,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
               onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
               onUnit={(key, unitId) => dispatch({ type: "unit", key, unitId })}
               onRemove={(key) => dispatch({ type: "remove", key })}
+              onReplace={(key, productId) => dispatch({ type: "replace", key, productId })}
               onBackToSearch={() => productRef.current?.focus()}
             />
           </section>

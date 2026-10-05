@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildReorderList,
   computeCustomerStats,
+  editDistance,
   mineAssociations,
   searchProducts,
   suggestProducts,
@@ -169,6 +170,24 @@ describe("searchProducts", () => {
   it("searches Hindi and transliterated aliases", () => {
     expect(searchProducts("नमक", items)[0]!.product.id).toBe("salt");
     expect(searchProducts("namak", items)[0]!.product.id).toBe("salt");
+  });
+
+  it("forgives a letter or two spelt wrong, below exact matches", () => {
+    const more = [...items, { id: "britannia", name: "Britannia Good Day 100g", brand: "Britannia" }, { id: "colgate", name: "Colgate Strong Teeth 200g", brand: "Colgate" }];
+    expect(searchProducts("britania", more)[0]!.product.id).toBe("britannia");
+    expect(searchProducts("colget", more)[0]!.product.id).toBe("colgate");
+    expect(searchProducts("parley", more).map((h) => h.product.id)).toEqual(expect.arrayContaining(["parle", "monaco"]));
+    expect(searchProducts("tata slat", more)[0]!.product.id).toBe("salt");
+    // Numbers and short words must match as typed.
+    expect(searchProducts("monaco 76", more).map((h) => h.product.id)).not.toContain("parle");
+    expect(searchProducts("xyzq", more)).toEqual([]);
+  });
+
+  it("counts edits, with a swap of two letters as one", () => {
+    expect(editDistance("parle", "parle")).toBe(0);
+    expect(editDistance("prale", "parle")).toBe(1);
+    expect(editDistance("colget", "colgate")).toBe(2);
+    expect(editDistance("abcdef", "uvwxyz", 2)).toBe(3);
   });
 
   it("boosts what this customer usually buys and hides inactive products", () => {

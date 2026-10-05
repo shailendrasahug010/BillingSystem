@@ -1,4 +1,5 @@
 import { WORKSPACE } from "../../data/db";
+import { median, type CustomerProductStats } from "@digitalbahi/core";
 import type { Product } from "../../data/types";
 
 /**
@@ -57,4 +58,24 @@ export function startUnit(product: Sellable): SaleUnit | null {
   const is = (unitId: string | null | undefined, symbol: string) => (chosen ? unitId === chosen : symbol === DEFAULT_START_SYMBOL);
   if (is(product.unitId, product.unit)) return null;
   return saleUnits(product).find((u) => u.unitId !== null && is(u.unitId, u.symbol)) ?? null;
+}
+
+/**
+ * The unit and count a shop usually takes of the product, from what it bought
+ * (counted in the product's own unit): the middle of its last few bills, in
+ * the biggest pack that holds it whole (120 pieces: 5 boxes of 24). Only once
+ * it has bought the product at least twice; null otherwise.
+ */
+export function usualPick(product: Sellable, stats: Pick<CustomerProductStats, "orderCount" | "recentQtys"> | undefined): { unitId: string | null; qty: number; symbol: string; factor: number } | null {
+  if (!stats || stats.orderCount < 2 || stats.recentQtys.length === 0) return null;
+  const base = median(stats.recentQtys.map((q) => q.toNumber()));
+  return base === null || base <= 0 ? null : wholeUnit(product, base);
+}
+
+/** A count of the product's own unit in the biggest of its units that holds it whole (120 pieces: 5 BOX of 24). */
+export function wholeUnit(product: Sellable, base: number): { unitId: string | null; qty: number; symbol: string; factor: number } {
+  const units = saleUnits(product);
+  const round = (v: number) => Math.round(v * 1000) / 1000;
+  const unit = units.filter((u) => Number.isInteger(round(base / u.factor))).sort((a, b) => b.factor - a.factor)[0] ?? units[0]!;
+  return { unitId: unit.unitId, qty: round(base / unit.factor), symbol: unit.symbol, factor: unit.factor };
 }

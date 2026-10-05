@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSpokenItem, unitForWord } from "./spoken";
+import { parseSpokenItem, parseTypedItem, unitForWord } from "./spoken";
 
 describe("spoken items", () => {
   it("takes the quantity and unit from the end or the start", () => {
@@ -20,5 +20,22 @@ describe("spoken items", () => {
     expect(unitForWord(units, "BOX")).toEqual({ symbol: "BOX" });
     expect(unitForWord(units, "KG")).toBeUndefined();
     expect(unitForWord(units, null)).toBeUndefined();
+  });
+
+  it("reads the quantity and unit typed with a name", () => {
+    expect(parseTypedItem("parle 10b")).toEqual({ name: "parle", qty: 10, unit: null, letter: "B" });
+    expect(parseTypedItem("parle 10 box")).toEqual({ name: "parle", qty: 10, unit: "BOX", letter: null });
+    expect(parseTypedItem("parle 10 b")).toEqual({ name: "parle", qty: 10, unit: null, letter: "B" });
+    expect(parseTypedItem("10b parle")).toEqual({ name: "parle", qty: 10, unit: null, letter: "B" });
+    expect(parseTypedItem("10 b parle g")).toEqual({ name: "parle g", qty: 10, unit: null, letter: "B" });
+    expect(parseTypedItem("3 surf excel")).toEqual({ name: "surf excel", qty: 3, unit: null, letter: null });
+    expect(parseTypedItem("surf 2.5")).toEqual({ name: "surf", qty: 2.5, unit: null, letter: null });
+  });
+
+  it("leaves typed names alone", () => {
+    expect(parseTypedItem("parle g")).toEqual({ name: "parle g", qty: null, unit: null, letter: null });
+    expect(parseTypedItem("parle g 10")).toEqual({ name: "parle g", qty: 10, unit: null, letter: null });
+    expect(parseTypedItem("maggi")).toEqual({ name: "maggi", qty: null, unit: null, letter: null });
+    expect(parseTypedItem("10")).toEqual({ name: "10", qty: null, unit: null, letter: null });
   });
 });
