@@ -139,7 +139,7 @@ export async function productDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .from(schema.products)
     .where(and(eq(schema.products.id, id), eq(schema.products.businessId, ctx.businessId), isNull(schema.products.deletedAt)));
   if (!p) throw notFound("product");
-  const [units, barcodes, prices, stock] = await inSequence([
+  const [units, barcodes, prices, stock, opening] = await inSequence([
     () => tx
       .select({
         unitId: schema.productUnits.unitId,
@@ -167,6 +167,7 @@ export async function productDetail(tx: Tx, ctx: RequestCtx, id: string) {
       .innerJoin(schema.warehouses, eq(schema.warehouses.id, schema.stockBalances.warehouseId))
       .where(eq(schema.stockBalances.productId, id))
       .groupBy(schema.stockBalances.warehouseId, schema.warehouses.name),
+    () => openingQty(tx, ctx.businessId, id),
   ]);
   const total = stock.reduce((acc, s) => acc.plus(s.qty), dec(0));
   return {
@@ -174,8 +175,17 @@ export async function productDetail(tx: Tx, ctx: RequestCtx, id: string) {
     units,
     barcodes,
     prices,
-    stock: { total: total.toFixed(3), byWarehouse: stock },
+    stock: { total: total.toFixed(3), byWarehouse: stock, opening: opening.toFixed(3) },
   };
+}
+
+/** The opening stock entered for a product (at creation, by import, or corrected later on the product). */
+async function openingQty(tx: Tx, businessId: string, productId: string) {
+  const [row] = await tx
+    .select({ qty: sql<string>`coalesce(sum(${schema.stockLedger.qtyIn} - ${schema.stockLedger.qtyOut}), 0)::text` })
+    .from(schema.stockLedger)
+    .where(and(eq(schema.stockLedger.businessId, businessId), eq(schema.stockLedger.productId, productId), eq(schema.stockLedger.refType, "opening"), eq(schema.stockLedger.refId, productId)));
+  return dec(row?.qty ?? 0);
 }
 
 async function defaultWarehouseId(tx: Tx, businessId: string): Promise<string> {
@@ -375,7 +385,7 @@ export const productsModule: ApiModule = async (app, deps) => {
       } else {
         await validateRefs(tx, ctx.businessId, body, baseUnitId);
       }
-      const { barcodes: _bc, units: _u, prices: _p, ...fields } = body;
+      const { barcodes: _bc, units: _u, prices: _p, openingStock, openingStockCost, ...fields } = body;
       if (fields.code) fields.code = fields.code.toUpperCase();
       const changes = diff(p, fields);
       await tx
@@ -384,6 +394,34 @@ export const productsModule: ApiModule = async (app, deps) => {
         .where(eq(schema.products.id, p.id));
       await writeChildren(tx, ctx, p.id, body, true);
       for (const key of ["barcodes", "units", "prices"] as const) if (body[key]) changes[key] = ["(replaced)", body[key]];
+      if (openingStock !== undefined) {
+        // A corrected opening stock moves the stock on hand by the difference, as an opening entry.
+        const before = await openingQty(tx, ctx.businessId, p.id);
+        const delta = dec(openingStock).minus(before);
+        if (!delta.isZero()) {
+          if (!can(ctx, "inventory.adjust")) throw forbidden("inventory.adjust");
+          await postStockMovement(
+            tx,
+            {
+              businessId: ctx.businessId,
+              productId: p.id,
+              productName: fields.name ?? p.name,
+              warehouseId: await defaultWarehouseId(tx, ctx.businessId),
+              date: deps.clock.today(ctx.timeZone),
+              type: delta.gt(0) ? "opening" : "adjustment_out",
+              qty: delta.abs().toFixed(3),
+              unitCost: openingStockCost ?? fields.purchasePrice ?? p.purchasePrice ?? undefined,
+              refType: "opening",
+              refId: p.id,
+              refNumber: p.code,
+              reason: "Opening stock corrected",
+              userId: ctx.userId,
+            },
+            "allow",
+          );
+          changes.openingStock = [before.toFixed(3), dec(openingStock).toFixed(3)];
+        }
+      }
       await audit(tx, ctx, { action: "product.updated", entityType: "product", entityId: p.id, entityLabel: `${p.code} ${fields.name ?? p.name}`, changes });
       return productDetail(tx, ctx, p.id);
     });

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
@@ -7,7 +8,7 @@ import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Skeleton } from "../../components/ui/misc";
 import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
-import { allowed, BRANDS, WORKSPACE } from "../../data/db";
+import { allowed, BRANDS, PRODUCTS, WORKSPACE } from "../../data/db";
 import { refreshCatalog } from "../../data/live";
 import { api, ApiError } from "../../lib/api";
 
@@ -36,10 +37,12 @@ interface ProductDetail {
   units: Array<{ unitId: string; conversionFactor: string; isDefaultSale: boolean; isDefaultPurchase: boolean }>;
   barcodes: Array<{ barcode: string; unitId: string | null }>;
   prices: Array<{ priceLevelId: string; unitId: string; price: string; discountPercent: string }>;
-  stock: { total: string };
+  stock: { total: string; opening?: string };
 }
 
 const NEW = "__new";
+/** The fields always on the form; the rest sit under "More details". */
+const BASIC_FIELDS = new Set(["name", "taxCategoryId", "hsnCode", "baseUnitId", "sellingPrice", "purchasePrice", "mrp", "openingStock", "openingCost"]);
 const num = (v: string | null | undefined) => (v === null || v === undefined || v === "" ? "" : String(Number(v)));
 const RATE = /^\d{1,11}(\.\d{1,4})?$/;
 const QTY = /^\d{1,12}(\.\d{1,3})?$/;
@@ -157,6 +160,21 @@ function PackPrices({ form, canPrice, error, onChange }: { form: Form; canPrice:
   );
 }
 
+/**
+ * The GST category your other products with this HSN use (the most common one),
+ * with one of their names, so a new product gets the same rate.
+ */
+export function taxFromHsn(hsn: string, exceptId: string | null): { taxCategoryId: string; example: string } | null {
+  if (!HSN.test(hsn)) return null;
+  const same = PRODUCTS.filter((p) => p.id !== exceptId && p.hsn && p.hsn === hsn);
+  const pool = same.length ? same : PRODUCTS.filter((p) => p.id !== exceptId && p.hsn && hsn.length >= 4 && p.hsn.slice(0, 4) === hsn.slice(0, 4));
+  if (!pool.length) return null;
+  const count = new Map<string, number>();
+  for (const p of pool) count.set(p.taxCategory.id, (count.get(p.taxCategory.id) ?? 0) + 1);
+  const [taxCategoryId] = [...count.entries()].sort((a, b) => b[1] - a[1])[0]!;
+  return { taxCategoryId, example: pool.find((p) => p.taxCategory.id === taxCategoryId)!.name };
+}
+
 /** Details known before the form opens (a new product from a supplier's bill line). */
 export type ProductPrefill = Partial<Pick<Form, "name" | "hsnCode" | "taxCategoryId" | "baseUnitId" | "purchasePrice" | "mrp" | "barcodes" | "trackBatches" | "trackExpiry">>;
 
@@ -190,6 +208,7 @@ function formFrom(p: ProductDetail): Form {
     innerFactor: num(inner?.conversionFactor),
     levelPrices: Object.fromEntries(p.prices.filter((x) => x.unitId === p.baseUnitId).map((x) => [x.priceLevelId, num(x.price)])),
     packPrices: Object.fromEntries(p.prices.filter((x) => x.unitId !== p.baseUnitId).map((x) => [`${x.priceLevelId}|${x.unitId}`, num(x.price)])),
+    openingStock: num(p.stock.opening ?? "0"),
     isActive: p.isActive,
     trackBatches: p.trackBatches,
     trackExpiry: p.trackExpiry,
@@ -221,6 +240,10 @@ export function ProductEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [touched, setTouched] = useState(false);
+  /** Everything past the basics (brand, packs, other rate lists, barcodes...): shut for a new product, open on edit. */
+  const [more, setMore] = useState(false);
+  /** The GST category was set from another product with the same HSN (said under the field). */
+  const [hsnMatch, setHsnMatch] = useState<string | null>(null);
   const fieldError = useFieldError(error);
   const canPrice = allowed("product.update_price") || !productId;
   const canCost = allowed("product.view_cost");
@@ -240,6 +263,8 @@ export function ProductEditor({
     if (!open) return;
     setError(null);
     setTouched(false);
+    setHsnMatch(null);
+    setMore(Boolean(productId) || Boolean(prefillRef.current?.barcodes) || Boolean(prefillRef.current?.trackBatches));
     if (!productId) setForm({ ...emptyForm(), ...prefillRef.current });
     else if (detail.data) setForm(formFrom(detail.data));
   }, [open, productId, detail.data]);
@@ -334,7 +359,10 @@ export function ProductEditor({
 
   const save = async () => {
     setTouched(true);
-    if (Object.keys(problems).length) return;
+    if (Object.keys(problems).length) {
+      if (Object.keys(problems).some((k) => !BASIC_FIELDS.has(k))) setMore(true);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -367,6 +395,10 @@ export function ProductEditor({
         };
         const patch = Object.fromEntries(Object.entries(body).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(before[k])));
         if (form.code.trim() && form.code.trim().toUpperCase() !== loaded.code) patch.code = form.code.trim();
+        if (num(form.openingStock || "0") !== num(loaded.stock.opening ?? "0")) {
+          patch.openingStock = form.openingStock || "0";
+          if (form.openingCost) patch.openingStockCost = form.openingCost;
+        }
         if (!canPrice) for (const k of ["purchasePrice", "sellingPrice", "mrp", "prices"]) delete patch[k];
         saved = Object.keys(patch).length ? await api.patch<ProductDetail>(`/products/${productId}`, patch) : loaded;
       }
@@ -418,40 +450,28 @@ export function ProductEditor({
                 <Input id="p-name" autoFocus value={form.name} onChange={(e) => set("name", e.target.value)} invalid={Boolean(show("name"))} />
               </Field>
             </div>
-            <Field label={t("product.nameLocal")} htmlFor="p-local" hint={t("common.optional")}>
-              <Input id="p-local" lang="hi" value={form.nameLocal} onChange={(e) => set("nameLocal", e.target.value)} />
+            <Field label={t("product.hsn")} htmlFor="p-hsn" error={show("hsnCode")} hint={t("product.hsnHint")}>
+              <Input
+                id="p-hsn"
+                inputMode="numeric"
+                maxLength={8}
+                className="[&_input]:font-mono"
+                value={form.hsnCode}
+                onChange={(e) => {
+                  const hsn = e.target.value.replace(/\D/g, "");
+                  const match = taxFromHsn(hsn, productId);
+                  setForm((f) => ({ ...f, hsnCode: hsn, ...(match ? { taxCategoryId: match.taxCategoryId } : {}) }));
+                  setHsnMatch(match ? match.example : null);
+                }}
+              />
             </Field>
-            <Field label={t("product.brand")} htmlFor="p-brand" error={show("brandId")}>
-              <Select id="p-brand" value={form.brandId} onChange={(e) => set("brandId", e.target.value)}>
-                <option value="">{t("common.none")}</option>
-                {BRANDS.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-                <option value={NEW}>+ {t("product.newBrand")}</option>
-              </Select>
-              {form.brandId === NEW && <Input aria-label={t("product.newBrand")} placeholder={t("product.newBrand")} value={form.newBrand} onChange={(e) => set("newBrand", e.target.value)} />}
-            </Field>
-            <Field label={t("product.category")} htmlFor="p-cat" error={show("categoryId")}>
-              <Select id="p-cat" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
-                <option value="">{t("common.none")}</option>
-                {WORKSPACE.categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-                <option value={NEW}>+ {t("product.newCategory")}</option>
-              </Select>
-              {form.categoryId === NEW && (
-                <Input aria-label={t("product.newCategory")} placeholder={t("product.newCategory")} value={form.newCategory} onChange={(e) => set("newCategory", e.target.value)} />
-              )}
-            </Field>
-            <Field label={t("product.packSize")} htmlFor="p-pack" hint={t("product.packSizeHint")}>
-              <Input id="p-pack" value={form.packSize} onChange={(e) => set("packSize", e.target.value)} />
-            </Field>
-            <Field label={t("product.taxCategory")} htmlFor="p-tax" error={show("taxCategoryId")} hint={t("product.taxCategoryHint")}>
-              <Select id="p-tax" value={form.taxCategoryId} onChange={(e) => set("taxCategoryId", e.target.value)}>
+            <Field
+              label={t("product.taxCategory")}
+              htmlFor="p-tax"
+              error={show("taxCategoryId")}
+              hint={hsnMatch ? t("product.taxFromHsn", { product: hsnMatch }) : t("product.taxCategoryHint")}
+            >
+              <Select id="p-tax" value={form.taxCategoryId} onChange={(e) => (set("taxCategoryId", e.target.value), setHsnMatch(null))}>
                 {WORKSPACE.taxCategories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -459,121 +479,172 @@ export function ProductEditor({
                 ))}
               </Select>
             </Field>
-            <Field label={t("product.hsn")} htmlFor="p-hsn" error={show("hsnCode")} hint={t("product.hsnHint")}>
-              <Input id="p-hsn" inputMode="numeric" maxLength={8} className="[&_input]:font-mono" value={form.hsnCode} onChange={(e) => set("hsnCode", e.target.value.replace(/\D/g, ""))} />
+            <Field label={t("product.baseUnit")} htmlFor="p-unit" error={show("baseUnitId")}>
+              <Select id="p-unit" value={form.baseUnitId} onChange={(e) => set("baseUnitId", e.target.value)}>
+                {WORKSPACE.unitList.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.symbol} – {u.name}
+                  </option>
+                ))}
+              </Select>
             </Field>
-            <Field label={t("product.barcode")} htmlFor="p-barcode" hint={t("product.barcodeHint")} error={fieldError("barcodes")}>
-              <Input id="p-barcode" className="[&_input]:font-mono" value={form.barcodes} onChange={(e) => set("barcodes", e.target.value)} />
+            <Field label={defaultList && levels.length > 0 ? `${t("product.sellingPrice")} · ${defaultList.name}` : t("product.sellingPrice")} htmlFor="p-rate" error={show("sellingPrice")}>
+              <Input id="p-rate" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.sellingPrice} onChange={(e) => set("sellingPrice", e.target.value.trim())} />
             </Field>
-            <Field label={t("product.aliases")} htmlFor="p-alias" hint={t("product.aliasesHint")}>
-              <Input id="p-alias" value={form.aliases} onChange={(e) => set("aliases", e.target.value)} />
+            {canCost && (
+              <Field label={t("product.purchasePrice")} htmlFor="p-cost" error={show("purchasePrice")}>
+                <Input id="p-cost" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.purchasePrice} onChange={(e) => set("purchasePrice", e.target.value.trim())} />
+              </Field>
+            )}
+            <Field label={t("product.mrp")} htmlFor="p-mrp" error={show("mrp")}>
+              <Input id="p-mrp" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.mrp} onChange={(e) => set("mrp", e.target.value.trim())} />
             </Field>
-            <Field label={t("product.code")} htmlFor="p-code" hint={productId ? undefined : t("product.codeHint")} error={fieldError("code")}>
-              <Input id="p-code" className="[&_input]:font-mono [&_input]:uppercase" maxLength={20} value={form.code} onChange={(e) => set("code", e.target.value)} />
+            <Field
+              label={t("product.openingStock")}
+              htmlFor="p-open"
+              error={show("openingStock")}
+              hint={productId ? t("product.openingStockEditHint", { stock: String(stock) }) : t("product.openingStockHint")}
+            >
+              <Input id="p-open" inputMode="decimal" disabled={Boolean(productId) && !allowed("inventory.adjust")} value={form.openingStock} onChange={(e) => set("openingStock", e.target.value.trim())} />
             </Field>
+            {canCost && (!productId || num(form.openingStock || "0") !== num(detail.data?.stock.opening ?? "0")) && (
+              <Field label={t("product.openingCost")} htmlFor="p-open-cost" error={show("openingCost")} hint={t("product.openingCostHint")}>
+                <Input id="p-open-cost" inputMode="decimal" leading={<span className="text-[13px]">₹</span>} value={form.openingCost} onChange={(e) => set("openingCost", e.target.value.trim())} />
+              </Field>
+            )}
+            <div className="flex items-end sm:col-span-2 lg:col-span-3">
+              <Checkbox label={t("product.pricesIncludeTax")} disabled={!canPrice} checked={form.pricesIncludeTax} onChange={(v) => set("pricesIncludeTax", v)} />
+            </div>
           </section>
 
-          <section className="flex flex-col gap-3">
-            <h3 className="text-[13px] font-semibold tracking-wide text-ink-3 uppercase">{t("product.unitsAndStock")}</h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label={t("product.baseUnit")} htmlFor="p-unit" error={show("baseUnitId")}>
-                <Select id="p-unit" value={form.baseUnitId} onChange={(e) => set("baseUnitId", e.target.value)}>
-                  {WORKSPACE.unitList.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.symbol} – {u.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label={t("product.caseUnit")} htmlFor="p-case" error={show("caseUnitId")} hint={t("common.optional")}>
-                <Select id="p-case" value={form.caseUnitId} onChange={(e) => set("caseUnitId", e.target.value)}>
-                  <option value="">{t("common.none")}</option>
-                  {WORKSPACE.unitList
-                    .filter((u) => u.id !== form.baseUnitId)
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.symbol} – {u.name}
+          <button
+            type="button"
+            className="flex items-center gap-2 self-start rounded-lg py-1 text-[13.5px] font-medium text-brand hover:underline"
+            aria-expanded={more}
+            onClick={() => setMore((v) => !v)}
+          >
+            <ChevronDown size={16} className={more ? "rotate-180 transition-transform" : "transition-transform"} />
+            {more ? t("product.lessDetails") : t("product.moreDetails")}
+          </button>
+
+          {more && (
+            <>
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Field label={t("product.nameLocal")} htmlFor="p-local" hint={t("common.optional")}>
+                  <Input id="p-local" lang="hi" value={form.nameLocal} onChange={(e) => set("nameLocal", e.target.value)} />
+                </Field>
+                <Field label={t("product.brand")} htmlFor="p-brand" error={show("brandId")}>
+                  <Select id="p-brand" value={form.brandId} onChange={(e) => set("brandId", e.target.value)}>
+                    <option value="">{t("common.none")}</option>
+                    {BRANDS.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
                       </option>
                     ))}
-                </Select>
-              </Field>
-              <Field label={t("product.caseFactor", { unit: WORKSPACE.units.get(form.baseUnitId) ?? "" })} htmlFor="p-factor" error={show("caseFactor")}>
-                <Input id="p-factor" inputMode="decimal" disabled={!form.caseUnitId} value={form.caseFactor} onChange={(e) => set("caseFactor", e.target.value.trim())} />
-              </Field>
-              <Field label={t("product.innerUnit")} htmlFor="p-inner" error={show("innerUnitId")} hint={t("product.innerUnitHint")}>
-                <Select id="p-inner" value={form.innerUnitId} onChange={(e) => set("innerUnitId", e.target.value)}>
-                  <option value="">{t("common.none")}</option>
-                  {WORKSPACE.unitList
-                    .filter((u) => u.id !== form.baseUnitId && u.id !== form.caseUnitId)
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.symbol} – {u.name}
+                    <option value={NEW}>+ {t("product.newBrand")}</option>
+                  </Select>
+                  {form.brandId === NEW && <Input aria-label={t("product.newBrand")} placeholder={t("product.newBrand")} value={form.newBrand} onChange={(e) => set("newBrand", e.target.value)} />}
+                </Field>
+                <Field label={t("product.category")} htmlFor="p-cat" error={show("categoryId")}>
+                  <Select id="p-cat" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
+                    <option value="">{t("common.none")}</option>
+                    {WORKSPACE.categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
                       </option>
                     ))}
-                </Select>
-              </Field>
-              <Field label={t("product.innerFactor", { unit: WORKSPACE.units.get(form.baseUnitId) ?? "", pack: WORKSPACE.units.get(form.innerUnitId) ?? t("product.innerPack") })} htmlFor="p-inner-factor" error={show("innerFactor")}>
-                <Input id="p-inner-factor" inputMode="decimal" disabled={!form.innerUnitId} value={form.innerFactor} onChange={(e) => set("innerFactor", e.target.value.trim())} />
-              </Field>
-              <Field label={t("product.minStock")} htmlFor="p-min" error={show("minStock")} hint={t("product.minStockHint")}>
-                <Input id="p-min" inputMode="decimal" value={form.minStock} onChange={(e) => set("minStock", e.target.value.trim())} />
-              </Field>
-              {!productId && (
-                <>
-                  <Field label={t("product.openingStock")} htmlFor="p-open" error={show("openingStock")} hint={t("product.openingStockHint")}>
-                    <Input id="p-open" inputMode="decimal" value={form.openingStock} onChange={(e) => set("openingStock", e.target.value.trim())} />
-                  </Field>
-                  {canCost && (
-                    <Field label={t("product.openingCost")} htmlFor="p-open-cost" error={show("openingCost")} hint={t("product.openingCostHint")}>
-                      <Input id="p-open-cost" inputMode="decimal" leading={<span className="text-[13px]">₹</span>} value={form.openingCost} onChange={(e) => set("openingCost", e.target.value.trim())} />
-                    </Field>
+                    <option value={NEW}>+ {t("product.newCategory")}</option>
+                  </Select>
+                  {form.categoryId === NEW && (
+                    <Input aria-label={t("product.newCategory")} placeholder={t("product.newCategory")} value={form.newCategory} onChange={(e) => set("newCategory", e.target.value)} />
                   )}
-                </>
-              )}
-              <Field label={t("product.reorderQty")} htmlFor="p-reorder" error={show("reorderQty")} hint={t("common.optional")}>
-                <Input id="p-reorder" inputMode="decimal" value={form.reorderQty} onChange={(e) => set("reorderQty", e.target.value.trim())} />
-              </Field>
-            </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <Checkbox label={t("product.batchTracking")} checked={form.trackBatches} onChange={(v) => set("trackBatches", v)} />
-              <Checkbox label={t("product.expiryTracking")} checked={form.trackExpiry} onChange={(v) => set("trackExpiry", v)} />
-              {productId && (
-                <Checkbox label={t("product.activeHint")} checked={form.isActive} onChange={(v) => set("isActive", v)} />
-              )}
-            </div>
-          </section>
+                </Field>
+                <Field label={t("product.packSize")} htmlFor="p-pack" hint={t("product.packSizeHint")}>
+                  <Input id="p-pack" value={form.packSize} onChange={(e) => set("packSize", e.target.value)} />
+                </Field>
+                <Field label={t("product.barcode")} htmlFor="p-barcode" hint={t("product.barcodeHint")} error={fieldError("barcodes")}>
+                  <Input id="p-barcode" className="[&_input]:font-mono" value={form.barcodes} onChange={(e) => set("barcodes", e.target.value)} />
+                </Field>
+                <Field label={t("product.aliases")} htmlFor="p-alias" hint={t("product.aliasesHint")}>
+                  <Input id="p-alias" value={form.aliases} onChange={(e) => set("aliases", e.target.value)} />
+                </Field>
+                <Field label={t("product.code")} htmlFor="p-code" hint={productId ? undefined : t("product.codeHint")} error={fieldError("code")}>
+                  <Input id="p-code" className="[&_input]:font-mono [&_input]:uppercase" maxLength={20} value={form.code} onChange={(e) => set("code", e.target.value)} />
+                </Field>
+              </section>
 
-          <section className="flex flex-col gap-3">
-            <h3 className="text-[13px] font-semibold tracking-wide text-ink-3 uppercase">{t("product.pricing")}</h3>
-            {!canPrice && <p className="text-[13px] text-ink-3">{t("product.pricesLocked")}</p>}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {canCost && (
-                <Field label={t("product.purchasePrice")} htmlFor="p-cost" error={show("purchasePrice")}>
-                  <Input id="p-cost" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.purchasePrice} onChange={(e) => set("purchasePrice", e.target.value.trim())} />
-                </Field>
+              <section className="flex flex-col gap-3">
+                <h3 className="text-[13px] font-semibold tracking-wide text-ink-3 uppercase">{t("product.unitsAndStock")}</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Field label={t("product.caseUnit")} htmlFor="p-case" error={show("caseUnitId")} hint={t("common.optional")}>
+                    <Select id="p-case" value={form.caseUnitId} onChange={(e) => set("caseUnitId", e.target.value)}>
+                      <option value="">{t("common.none")}</option>
+                      {WORKSPACE.unitList
+                        .filter((u) => u.id !== form.baseUnitId)
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.symbol} – {u.name}
+                          </option>
+                        ))}
+                    </Select>
+                  </Field>
+                  <Field label={t("product.caseFactor", { unit: WORKSPACE.units.get(form.baseUnitId) ?? "" })} htmlFor="p-factor" error={show("caseFactor")}>
+                    <Input id="p-factor" inputMode="decimal" disabled={!form.caseUnitId} value={form.caseFactor} onChange={(e) => set("caseFactor", e.target.value.trim())} />
+                  </Field>
+                  <Field label={t("product.innerUnit")} htmlFor="p-inner" error={show("innerUnitId")} hint={t("product.innerUnitHint")}>
+                    <Select id="p-inner" value={form.innerUnitId} onChange={(e) => set("innerUnitId", e.target.value)}>
+                      <option value="">{t("common.none")}</option>
+                      {WORKSPACE.unitList
+                        .filter((u) => u.id !== form.baseUnitId && u.id !== form.caseUnitId)
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.symbol} – {u.name}
+                          </option>
+                        ))}
+                    </Select>
+                  </Field>
+                  <Field label={t("product.innerFactor", { unit: WORKSPACE.units.get(form.baseUnitId) ?? "", pack: WORKSPACE.units.get(form.innerUnitId) ?? t("product.innerPack") })} htmlFor="p-inner-factor" error={show("innerFactor")}>
+                    <Input id="p-inner-factor" inputMode="decimal" disabled={!form.innerUnitId} value={form.innerFactor} onChange={(e) => set("innerFactor", e.target.value.trim())} />
+                  </Field>
+                  <Field label={t("product.minStock")} htmlFor="p-min" error={show("minStock")} hint={t("product.minStockHint")}>
+                    <Input id="p-min" inputMode="decimal" value={form.minStock} onChange={(e) => set("minStock", e.target.value.trim())} />
+                  </Field>
+                  <Field label={t("product.reorderQty")} htmlFor="p-reorder" error={show("reorderQty")} hint={t("common.optional")}>
+                    <Input id="p-reorder" inputMode="decimal" value={form.reorderQty} onChange={(e) => set("reorderQty", e.target.value.trim())} />
+                  </Field>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <Checkbox label={t("product.batchTracking")} checked={form.trackBatches} onChange={(v) => set("trackBatches", v)} />
+                  <Checkbox label={t("product.expiryTracking")} checked={form.trackExpiry} onChange={(v) => set("trackExpiry", v)} />
+                  {productId && <Checkbox label={t("product.activeHint")} checked={form.isActive} onChange={(v) => set("isActive", v)} />}
+                </div>
+              </section>
+
+              {(levels.length > 0 || form.caseUnitId || form.innerUnitId) && (
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-[13px] font-semibold tracking-wide text-ink-3 uppercase">{t("product.pricing")}</h3>
+                  {!canPrice && <p className="text-[13px] text-ink-3">{t("product.pricesLocked")}</p>}
+                  {levels.length > 0 && (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {levels.map((l) => (
+                        <Field key={l.id} label={t("product.levelPrice", { level: l.name })} htmlFor={`p-level-${l.id}`} error={touched ? problems.levelPrices : undefined} hint={t("common.optional")}>
+                          <Input
+                            id={`p-level-${l.id}`}
+                            inputMode="decimal"
+                            disabled={!canPrice}
+                            leading={<span className="text-[13px]">₹</span>}
+                            value={form.levelPrices[l.id] ?? ""}
+                            onChange={(e) => set("levelPrices", { ...form.levelPrices, [l.id]: e.target.value.trim() })}
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  )}
+                  <PackPrices form={form} canPrice={canPrice} error={touched ? problems.packPrices : undefined} onChange={(key, value) => set("packPrices", { ...form.packPrices, [key]: value })} />
+                </section>
               )}
-              <Field label={defaultList && levels.length > 0 ? `${t("product.sellingPrice")} · ${defaultList.name}` : t("product.sellingPrice")} htmlFor="p-rate" error={show("sellingPrice")}>
-                <Input id="p-rate" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.sellingPrice} onChange={(e) => set("sellingPrice", e.target.value.trim())} />
-              </Field>
-              <Field label={t("product.mrp")} htmlFor="p-mrp" error={show("mrp")}>
-                <Input id="p-mrp" inputMode="decimal" disabled={!canPrice} leading={<span className="text-[13px]">₹</span>} value={form.mrp} onChange={(e) => set("mrp", e.target.value.trim())} />
-              </Field>
-              {levels.map((l) => (
-                <Field key={l.id} label={t("product.levelPrice", { level: l.name })} htmlFor={`p-level-${l.id}`} error={touched ? problems.levelPrices : undefined} hint={t("common.optional")}>
-                  <Input
-                    id={`p-level-${l.id}`}
-                    inputMode="decimal"
-                    disabled={!canPrice}
-                    leading={<span className="text-[13px]">₹</span>}
-                    value={form.levelPrices[l.id] ?? ""}
-                    onChange={(e) => set("levelPrices", { ...form.levelPrices, [l.id]: e.target.value.trim() })}
-                  />
-                </Field>
-              ))}
-            </div>
-            <Checkbox label={t("product.pricesIncludeTax")} disabled={!canPrice} checked={form.pricesIncludeTax} onChange={(v) => set("pricesIncludeTax", v)} />
-            <PackPrices form={form} canPrice={canPrice} error={touched ? problems.packPrices : undefined} onChange={(key, value) => set("packPrices", { ...form.packPrices, [key]: value })} />
-          </section>
+            </>
+          )}
         </form>
       )}
     </Dialog>

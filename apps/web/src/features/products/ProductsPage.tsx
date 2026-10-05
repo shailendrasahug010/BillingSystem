@@ -126,7 +126,7 @@ export function ProductsPage() {
         minWidth={860}
         empty={
           <EmptyState
-            title={t("empty.products")}
+            title={PRODUCTS.length === 0 ? t("product.noneYet") : t("empty.products")}
             {...(LIVE && allowed("product.create") && PRODUCTS.length === 0
               ? {
                   hint: t("product.emptyHint"),

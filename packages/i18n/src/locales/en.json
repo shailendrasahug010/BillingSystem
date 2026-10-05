@@ -156,8 +156,8 @@
     "secureNote": "Your data is encrypted in transit and at rest.",
     "demoHint": "Prototype: any value signs you in.",
     "signUp": "Create account",
-    "signUpTitle": "Start your free trial",
-    "signUpSubtitle": "Set up your business in two minutes. No card needed.",
+    "signUpTitle": "Create your business",
+    "signUpSubtitle": "Two minutes: your name, mobile and the business name. You become its owner.",
     "haveAccount": "Already have an account?",
     "noAccount": "New to Digital Bahi?",
     "yourName": "Your name",
@@ -273,7 +273,13 @@
       "dispatch": "Send out",
       "collect": "Collect dues"
     },
-    "needsAttention": "Needs attention"
+    "needsAttention": "Needs attention",
+    "empty": {
+      "topProducts": "Your best-selling products show here once bills are made.",
+      "topCustomers": "The customers who buy the most show here.",
+      "companySales": "Sales by company or brand show here.",
+      "attention": "No customer is overdue."
+    }
   },
   "invoice": {
     "new": "New Invoice",
@@ -468,7 +474,9 @@
       "title": "On hold",
       "resume": "Pick this bill up again",
       "noCustomer": "No customer"
-    }
+    },
+    "cashSale": "Cash sale",
+    "cashSaleHint": "A walk-in customer: bill to the counter customer \"Cash sale\""
   },
   "bills": {
     "title": "Sales bills",
@@ -595,7 +603,10 @@
     "noPaymentsHint": "Use Receive Payment above when this customer pays.",
     "notFound": "This customer was not found",
     "notFoundHint": "They may have been removed, or belong to another business. Search the customer list.",
-    "backToList": "Back to customers"
+    "backToList": "Back to customers",
+    "noneYet": "No customers yet",
+    "noneYetHint": "Add the shops you sell to, or bring them in from Excel or Tally.",
+    "importButton": "Import from Excel or Tally"
   },
   "supplier": {
     "title": "Suppliers",
@@ -694,7 +705,12 @@
     "innerSmaller": "An inner pack holds fewer than the case",
     "innerSameAsCase": "Pick a unit other than the case unit",
     "packPrices": "Box / strip prices by price list",
-    "packPricesHint": "Optional. Blank: the list's piece price × the pack (shown in grey). Fill in a figure for a special box rate."
+    "packPricesHint": "Optional. Blank: the list's piece price × the pack (shown in grey). Fill in a figure for a special box rate.",
+    "moreDetails": "More details: brand, packs, barcode, other rates",
+    "lessDetails": "Fewer details",
+    "taxFromHsn": "Same as {{product}}, which has this HSN",
+    "openingStockEditHint": "Stock now: {{stock}}. Changing this moves the stock by the difference.",
+    "noneYet": "No products yet"
   },
   "status": {
     "order": {

@@ -147,7 +147,29 @@ export function CustomersPage() {
         onRowClick={(r) => navigate({ name: "customer", customerId: r.c.id })}
         pageSize={50}
         minWidth={760}
-        empty={<EmptyState title={t("empty.customers")} action={<Button size="sm" onClick={() => { setQuery(""); setType("all"); setRoute(""); setOnlyOutstanding(false); setOnlyOverdue(false); }}>{t("common.reset")}</Button>} />}
+        empty={
+          CUSTOMERS.length === 0 ? (
+            // A new business: nothing is filtered away, there is nobody yet.
+            <EmptyState
+              title={t("customer.noneYet")}
+              hint={t("customer.noneYetHint")}
+              action={
+                LIVE && allowed("customer.create") ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button variant="primary" size="sm" icon={<UserPlus size={16} />} onClick={() => setAdding(true)}>
+                      {t("customer.add")}
+                    </Button>
+                    <Button size="sm" icon={<FileUp size={16} />} onClick={() => setImporting(true)}>
+                      {t("customer.importButton")}
+                    </Button>
+                  </div>
+                ) : undefined
+              }
+            />
+          ) : (
+            <EmptyState title={t("empty.customers")} action={<Button size="sm" onClick={() => { setQuery(""); setType("all"); setRoute(""); setOnlyOutstanding(false); setOnlyOverdue(false); }}>{t("common.reset")}</Button>} />
+          )
+        }
         columns={[
           {
             key: "name",

@@ -91,6 +91,7 @@ export function PaymentDialog({
   direction,
   partyId: initialParty,
   initialAmount,
+  documentId,
   open,
   onOpenChange,
   onSaved,
@@ -99,6 +100,8 @@ export function PaymentDialog({
   partyId?: string | null;
   /** The amount to start with (e.g. what is overdue); editable. */
   initialAmount?: string;
+  /** Taken against this bill first (paying from the bill itself), then the oldest. */
+  documentId?: string;
   open: boolean;
   onOpenChange(v: boolean): void;
   /** Called once the payment is saved, before the dialog closes (to show its receipt). */
@@ -138,7 +141,11 @@ export function PaymentDialog({
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const amount = MONEY.test(form.amount) ? Number(form.amount) : 0;
-  const auto = useMemo(() => oldestFirst(amount, docs.data ?? []), [amount, docs.data]);
+  const auto = useMemo(() => {
+    const openDocs = docs.data ?? [];
+    const first = documentId ? openDocs.filter((d) => d.id === documentId) : [];
+    return oldestFirst(amount, [...first, ...openDocs.filter((d) => d.id !== documentId)]);
+  }, [amount, docs.data, documentId]);
   const applied = keepHere ? {} : manual ? Object.fromEntries(Object.entries(manual).map(([k, v]) => [k, Number(v) || 0])) : auto;
   const allocated = Object.values(applied).reduce((s, v) => s + v, 0);
   const advance = Math.round((amount - allocated) * 100) / 100;

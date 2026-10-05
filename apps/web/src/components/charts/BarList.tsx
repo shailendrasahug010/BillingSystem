@@ -12,16 +12,20 @@ export function BarList({
   onSelect,
   color = "var(--series-1)",
   ariaLabel,
+  empty,
 }: {
   items: Array<{ id: string; label: string; amount: number; sub?: string }>;
   format(v: number): string;
   onSelect?(id: string): void;
   color?: string;
   ariaLabel: string;
+  /** Said instead of an empty list (nothing sold yet in the period). */
+  empty?: string;
 }) {
   const [hover, setHover] = useState<string | null>(null);
   const max = Math.max(1, ...items.map((i) => i.amount));
   const total = items.reduce((s, i) => s + i.amount, 0);
+  if (items.length === 0 && empty) return <p className="text-[13px] text-ink-3">{empty}</p>;
   return (
     <ul className="flex flex-col gap-2.5" aria-label={ariaLabel}>
       {items.map((item) => {

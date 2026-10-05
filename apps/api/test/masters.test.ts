@@ -231,6 +231,34 @@ describe.skipIf(!hasDatabase)("masters: settings, catalog, customers, suppliers"
       expect(audit.body.data.map((a: { action: string }) => a.action)).toEqual(["product.updated", "product.created"]);
     });
 
+    it("corrects the opening stock on edit by the difference", async () => {
+      expect((await get(`/products/${productId}`)).body.stock).toMatchObject({ total: "100.000", opening: "100.000" });
+      const lower = await patch(`/products/${productId}`, { openingStock: "90" });
+      expect(lower.status).toBe(200);
+      expect(lower.body.stock).toMatchObject({ total: "90.000", opening: "90.000" });
+      const higher = await patch(`/products/${productId}`, { openingStock: "130", openingStockCost: "9" });
+      expect(higher.body.stock).toMatchObject({ total: "130.000", opening: "130.000" });
+      // The same figure again moves nothing.
+      await patch(`/products/${productId}`, { openingStock: "130" });
+      const ledger = await t.owner.query(`select movement_type, qty_in, qty_out, balance_after from stock_ledger where product_id = $1 order by id`, [productId]);
+      expect(ledger.rows).toEqual([
+        { movement_type: "opening", qty_in: "100.000", qty_out: "0.000", balance_after: "100.000" },
+        { movement_type: "adjustment_out", qty_in: "0.000", qty_out: "10.000", balance_after: "90.000" },
+        { movement_type: "opening", qty_in: "40.000", qty_out: "0.000", balance_after: "130.000" },
+      ]);
+      // Changing stock needs inventory.adjust, not only product.update.
+      const mobile = nextMobile();
+      const editor = (await get("/roles")).body.data.find((r: { key: string }) => r.key === "catalog_editor");
+      await post("/members", { name: "Editor Ena", mobile, roleId: editor.id });
+      await call(t.app, "POST", "/auth/otp", { body: { mobile, purpose: "login" } });
+      const ena = (await call(t.app, "POST", "/auth/login/otp", { body: { mobile, otp: t.otp.last(mobile) } })).body.accessToken;
+      const denied = await patch(`/products/${productId}`, { openingStock: "10" }, ena);
+      expect(denied.status).toBe(403);
+      expect((await get(`/products/${productId}`)).body.stock.total).toBe("130.000");
+      // Back to 100 for the tests after this one.
+      expect((await patch(`/products/${productId}`, { openingStock: "100" })).body.stock.total).toBe("100.000");
+    });
+
     it("serves an offline catalogue snapshot", async () => {
       const snap = await get("/catalog");
       const p = snap.body.products.find((x: { id: string }) => x.id === productId);

@@ -90,7 +90,8 @@ export const ProductBody = z.strictObject({
   openingStockCost: Rate.optional(),
 });
 
-export const ProductPatch = patchOf(ProductBody.omit({ openingStock: true, openingStockCost: true }));
+/** On edit, openingStock sets the opening quantity: the stock moves by the difference. */
+export const ProductPatch = patchOf(ProductBody);
 
 export const ProductListQuery = PageQuery.extend({
   brandId: z.uuid().optional(),
