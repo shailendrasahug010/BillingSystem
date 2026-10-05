@@ -310,8 +310,9 @@ export function DashboardPage() {
 
       {/* The person's own work today, from what their role covers. */}
       {LIVE && home && (() => {
-        // Attendance, leave and salary wait for the first employee (a new business has none).
-        const staff = home.people === undefined || home.people.employees > 0;
+        // On the owner's dashboard, attendance, leave and salary wait for the first employee (a new business has none);
+        // an HR person's home is these cards, so it keeps them.
+        const staff = !full || home.people === undefined || home.people.employees > 0;
         const cards = [
           home.review && <ReviewCard key="review" data={home.review} />,
           !full && home.orders?.packNext && <QueueCard key="pack" stage="pack" rows={home.orders.packNext} count={home.orders.toPack ?? 0} />,
