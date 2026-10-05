@@ -161,7 +161,7 @@ export function InsightsReport({ settings, onChange }: ReportProps) {
           ))}
         </Select>
       </PeriodBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       {d && <p className="text-[12.5px] text-ink-3">{t("insights.comparedPeriod", { from: dateMedium(d.compare.from), to: dateMedium(d.compare.to) })}</p>}
 
       <section aria-label={t("insights.measures")} className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
@@ -253,7 +253,7 @@ function Contribution({ data, query }: { data: InsightsData; query: Record<strin
           rows={section.rows}
           rowKey={(r) => r.key}
           minWidth={820}
-          empty={<EmptyState title={t("analytics.noSales")} />}
+          empty={<EmptyState title={t("analytics.noSales")} hint={t("analytics.noSalesHint")} />}
           columns={[
             {
               key: "name",

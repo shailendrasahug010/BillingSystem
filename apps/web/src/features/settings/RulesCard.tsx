@@ -106,7 +106,7 @@ function PaymentDetailsRow({ value, canEdit, onSave }: { value: PaymentDetails |
     </Field>
   );
   return (
-    <div className="flex flex-col gap-2 border-b border-line py-3">
+    <div id="settings-payment" className="flex scroll-mt-20 flex-col gap-2 border-b border-line py-3">
       <div>
         <p className="text-[14px] font-medium text-ink">{t("settings.paymentDetails")}</p>
         <p className="text-[12.5px] text-ink-3">{t("settings.paymentDetailsHint")}</p>
@@ -255,7 +255,7 @@ export function RulesCard() {
   };
 
   if (q.isPending) return <Skeleton className="h-48 w-full" />;
-  if (q.error) return <ErrorNote error={q.error} />;
+  if (q.error) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   const s = q.data;
   const policy = (label: string, value: Policy, onChange: (v: Policy) => void) => (
     <Segmented

@@ -98,7 +98,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
   }, [printing]);
 
   if (q.isPending) return <Skeleton className="h-60 w-full" />;
-  if (q.error) return <ErrorNote error={q.error} />;
+  if (q.error) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   const o = q.data;
 
   const move = async (status: OrderStatus, note?: string) => {

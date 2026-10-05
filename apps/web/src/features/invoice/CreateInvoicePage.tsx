@@ -384,7 +384,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
 
           {/* Stays under the top bar while the lines scroll: the search, and the suggestions once folded into a row. */}
           <div data-overlay="top" className="sticky top-14 z-20 -mx-2 flex flex-col gap-2 bg-bg/85 px-2 py-2 backdrop-blur-md lg:top-16">
-            <ProductSearch ref={productRef} customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
+            <ProductSearch ref={productRef} customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, spoken) => dispatch({ type: "add", productId: id, ...(spoken ? { spoken } : {}) })} onScan={() => setScanOpen(true)} />
             {strip && suggestions(true)}
           </div>
           {!strip && suggestions(false)}
@@ -600,7 +600,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
             <span className="text-[13px] font-medium text-accent">{t("invoice.changeCustomer")}</span>
           </button>
           <div data-overlay="top" className="sticky top-14 z-20 -mx-4 bg-bg/85 px-4 py-2 backdrop-blur-md">
-            <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id) => dispatch({ type: "add", productId: id })} onScan={() => setScanOpen(true)} />
+            <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, spoken) => dispatch({ type: "add", productId: id, ...(spoken ? { spoken } : {}) })} onScan={() => setScanOpen(true)} />
           </div>
           <SuggestionsPanel
             variant="mobile"

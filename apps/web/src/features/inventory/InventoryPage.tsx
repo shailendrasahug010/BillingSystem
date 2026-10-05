@@ -173,7 +173,7 @@ export function InventoryPage() {
               ]}
             />
           </FilterBar>
-          {list.error ? <ErrorNote error={list.error} /> : null}
+          {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
           <DataTable columns={columns} rows={list.rows} rowKey={(r) => r.productId} loading={list.loading} onRowClick={(r) => setLedgerFor(r)} minWidth={720} />
           <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
         </Tabs.Content>
@@ -231,7 +231,7 @@ function StockLedgerDialog({ row, onClose }: { row: StockRow | null; onClose(): 
       {q.isPending ? (
         <Skeleton className="h-40 w-full" />
       ) : q.error ? (
-        <ErrorNote error={q.error} />
+        <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
       ) : (
         <DataTable
           rows={[...q.data.entries].reverse()}

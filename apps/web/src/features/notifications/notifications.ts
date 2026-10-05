@@ -167,6 +167,9 @@ export function targetRoute(n: Pick<NotificationRow, "type" | "entityType" | "en
       return { name: "settings" };
     case "orders_waiting":
       return { name: "planned", module: "orders" };
+    case "repeat_bills_made":
+    case "repeat_bill_failed":
+      return { name: "invoices" };
     case "customer_reminders":
     case "daily_summary":
       return { name: "planned", module: "messages" };

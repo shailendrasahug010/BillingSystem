@@ -1,3 +1,4 @@
+import { translateError } from "@digitalbahi/i18n";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, FileJson, FileSpreadsheet } from "lucide-react";
 import { useState } from "react";
@@ -45,7 +46,8 @@ interface Gstr1Preview {
 const CSV_SECTIONS = ["b2b", "b2cl", "b2cs", "exp", "cdnr", "cdnur", "hsn", "docs"] as const;
 
 export function Gstr1Tab({ period }: { period: string }) {
-  const { t, money, dateTime } = useI18n();
+  const i18n = useI18n();
+  const { t, money, dateTime } = i18n;
   const toast = useToast();
   const qc = useQueryClient();
   const [section, setSection] = useState<(typeof CSV_SECTIONS)[number]>("b2b");
@@ -71,7 +73,7 @@ export function Gstr1Tab({ period }: { period: string }) {
       else downloadText(`${section}_${mmyyyy}.csv`, `﻿${String(body)}`);
       void qc.invalidateQueries({ queryKey: ["gst", "exports", period] });
     } catch (e) {
-      toast({ tone: "danger", title: t("errors.generic"), body: e instanceof ApiError ? t(`errors.${e.code as "generic"}`) : undefined });
+      toast({ tone: "danger", title: t("errors.exportFailed"), body: translateError(i18n, e instanceof ApiError ? e : null) });
     } finally {
       setBusy(false);
     }
@@ -79,7 +81,7 @@ export function Gstr1Tab({ period }: { period: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       {d && d.warnings.length > 0 && (
         <div className="rounded-lg border border-warn/40 bg-warn-soft px-4 py-3 text-[13px] text-ink">
           <p className="mb-1.5 flex items-center gap-2 font-semibold text-warn">
@@ -153,7 +155,7 @@ export function Gstr1Tab({ period }: { period: string }) {
             rows={d?.documents ?? []}
             loading={q.isPending}
             rowKey={(r) => `${r.docNum}-${r.from}`}
-            empty={<EmptyState title={t("gstPage.noOutward")} />}
+            empty={<EmptyState title={t("gstPage.noOutward")} hint={t("gstPage.noOutwardHint")} />}
             columns={[
               { key: "nature", header: t("gstPage.nature"), render: (r) => <span className="font-medium text-ink">{t(`gstPage.docKinds.${r.docNum as 1}`)}</span> },
               { key: "from", header: t("common.from"), render: (r) => <span className="font-mono text-[12.5px]">{r.from}</span> },

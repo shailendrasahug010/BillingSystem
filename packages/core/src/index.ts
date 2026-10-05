@@ -12,6 +12,7 @@ export * from "./qr.js";
 export * from "./escpos.js";
 
 export * from "./invoice/calculate.js";
+export * from "./invoice/repeat.js";
 export * from "./numbering/series.js";
 export * from "./inventory/stock.js";
 export * from "./payments/receivables.js";

@@ -38,11 +38,13 @@ export interface HomeData {
   };
   expenses?: { month: string; total: string; count: number };
   /** Bills made offline held for review (for invoice.review), oldest first; absent when none. */
+  /** For settings.update: whether the business has its first product, customer and bill. */
+  setup?: { products: boolean; customers: boolean; invoices: boolean };
   review?: { count: number; bills: Array<{ id: string; number: string; date: string; customer: string; total: string; reasons: ReviewReason[] }> };
 }
 
 export function useHome() {
-  return useQuery({ queryKey: ["home"], queryFn: () => api.get<HomeData>("/home"), enabled: LIVE, staleTime: 30_000 });
+  return useQuery({ queryKey: ["home"], queryFn: () => api.get<HomeData>("/home"), enabled: LIVE, staleTime: 30_000, refetchOnMount: "always" });
 }
 
 const canOpen = (r: Route) => {

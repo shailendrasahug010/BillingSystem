@@ -39,6 +39,7 @@ import { useStoreVersion, type RangeKey } from "../../data/store";
 import { useSession } from "../../app/session";
 import { useDashboardView, type Grain } from "./data";
 import { LIVE } from "../../data/source";
+import { SetupGuide } from "./SetupGuide";
 import { ExpensesCard, LeaveCard, PayrollCard, PeopleCard, PromisesCard, QueueCard, ReviewCard, roleHeroFigures, useHome } from "./RoleHome";
 import { cn } from "../../lib/cn";
 
@@ -274,6 +275,8 @@ export function DashboardPage() {
           )}
         </div>
       </section>
+
+      {home?.setup && <SetupGuide setup={home.setup} />}
 
       {/* Quick actions: a grid of icons on phones, a row of tiles on bigger screens. */}
       {actions.length > 0 && <section aria-label={t("dashboard.quickActions")}>

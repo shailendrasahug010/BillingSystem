@@ -120,7 +120,7 @@ function SentList() {
           ))}
         </Select>
       </FilterBar>
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
         {list.loading ? (
           <div className="flex flex-col gap-3 p-4">

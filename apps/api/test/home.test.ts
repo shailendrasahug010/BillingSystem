@@ -44,7 +44,8 @@ describe.skipIf(!hasDatabase)("home screen by role", () => {
 
   it("gives each role only its own parts", async () => {
     const all = (await get("/home")).body;
-    expect(Object.keys(all).sort()).toEqual(["asOf", "collections", "expenses", "leave", "orders", "payroll", "people"]);
+    expect(Object.keys(all).sort()).toEqual(["asOf", "collections", "expenses", "leave", "orders", "payroll", "people", "setup"]);
+    expect(all.setup).toEqual({ products: true, customers: true, invoices: true });
     expect(all.orders).toMatchObject({ pending: 2, toPack: 1, toDispatch: 0 });
     expect(all.orders.packNext).toHaveLength(1);
     expect(all.orders.packNext[0]).toMatchObject({ customer: "Gupta Kirana", city: "Dewas", status: "confirmed" });
@@ -73,6 +74,11 @@ describe.skipIf(!hasDatabase)("home screen by role", () => {
     // The sales dashboard stays with dashboard.view.
     expect((await get("/dashboard", tokens.warehouse)).status).toBe(403);
     expect((await get("/dashboard", tokens.hr)).status).toBe(403);
+  });
+
+  it("shows a new business what is left to set up", async () => {
+    const fresh = await signup(t, { legalName: "New Traders", stateCode: "23" });
+    expect((await get("/home", fresh.token)).body.setup).toEqual({ products: false, customers: false, invoices: false });
   });
 
   it("drops a promise from the day's list once the customer pays", async () => {

@@ -75,7 +75,7 @@ export function Gstr3bTab({ period }: { period: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       {d && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Tile label={t("gstPage.r3b.liability")} value={money(total(d.payment.liability))} />

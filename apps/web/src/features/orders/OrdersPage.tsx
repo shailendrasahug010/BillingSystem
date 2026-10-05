@@ -140,7 +140,7 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
               ]}
             />
           </FilterBar>
-          {list.error ? <ErrorNote error={list.error} /> : null}
+          {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
           <DataTable
             id="orders"
             columns={columns}
@@ -155,7 +155,7 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
         </Tabs.Content>
         <Tabs.Content value="quotes" className="flex flex-col gap-4">
           <p className="text-[13px] text-ink-3">{t("orders.quotation.listHint")}</p>
-          {quotes.error ? <ErrorNote error={quotes.error} /> : null}
+          {quotes.error ? <ErrorNote error={quotes.error} onRetry={() => void quotes.refetch()} /> : null}
           <DataTable
             id="quotations"
             columns={[
@@ -186,7 +186,7 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
             rows={demand.data ?? []}
             loading={demand.isPending}
             rowKey={(d) => d.productId}
-            empty={<EmptyState title={t("orders.noDemand")} />}
+            empty={<EmptyState title={t("orders.noDemand")} hint={t("orders.noDemandHint")} />}
             columns={[
               { key: "name", header: t("product.name"), sortValue: (d) => d.name, render: (d) => <span className="font-medium text-ink">{d.name}</span> },
               { key: "orders", header: t("orders.title"), align: "right", sortValue: (d) => d.orders, render: (d) => d.orders },

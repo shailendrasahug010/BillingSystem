@@ -207,7 +207,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         <Input type="date" aria-label={t("common.to")} value={to} onChange={(e) => setTo(e.target.value)} className="md:w-40" />
       </FilterBar>
 
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable id="payments" columns={columns} rows={list.rows} rowKey={(p) => p.id} loading={list.loading} onRowClick={(p) => setOpenId(p.id)} minWidth={760} />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
 
@@ -342,7 +342,7 @@ export function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string 
           <Skeleton className="h-20 w-full" />
         </div>
       ) : detail.error ? (
-        <ErrorNote error={detail.error} />
+        <ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />
       ) : p ? (
         <div className="flex flex-col gap-4">
           {error ? <ErrorNote error={error} /> : null}

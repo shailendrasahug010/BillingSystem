@@ -114,7 +114,7 @@ function EmployeeList() {
           ]}
         />
       </FilterBar>
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable id="employees" columns={columns} rows={list.rows} rowKey={(e) => e.id} loading={list.loading} onRowClick={(e) => setOpenId(e.id)} minWidth={760} empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />} />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
       <EmployeeDetailDialog employeeId={openId} onClose={() => setOpenId(null)} />
@@ -201,7 +201,7 @@ function AttendanceDay() {
         rowKey={(r) => r.employeeId}
         loading={day.isPending}
         minWidth={640}
-        empty={<EmptyState title={t("people.empty")} />}
+        empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />}
         columns={[
           {
             key: "name",
@@ -289,13 +289,13 @@ function AttendanceRegister() {
       <FilterBar>
         <Input type="month" aria-label={t("common.period")} value={month} max={TODAY.slice(0, 7)} onChange={(e) => setMonth(e.target.value)} className="md:w-48" />
       </FilterBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
         rows={q.data?.data ?? []}
         rowKey={(r) => r.id}
         loading={q.isPending}
         minWidth={900}
-        empty={<EmptyState title={t("people.empty")} />}
+        empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />}
         columns={[
           { key: "name", header: t("common.name"), render: (r) => <span className="font-medium text-ink">{r.name}</span> },
           {

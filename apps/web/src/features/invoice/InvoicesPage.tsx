@@ -1,4 +1,4 @@
-import { CloudOff, Download, Plus, Search } from "lucide-react";
+import { CloudOff, Download, Plus, Repeat, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -15,6 +15,7 @@ import { usePaged } from "../../lib/usePaged";
 import { WaitingStrip } from "../../components/offline/OfflineBills";
 import { deviceDocuments, useDeviceDocuments } from "../../offline/documents";
 import { unreachable, useOffline } from "../../offline/sync";
+import { RepeatBillsDialog } from "./RepeatBill";
 
 /** One sales bill on the list, as `GET /invoices` gives it. */
 export interface InvoiceRow {
@@ -96,6 +97,7 @@ export function InvoicesPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [held, setHeld] = useState(false);
+  const [repeats, setRepeats] = useState(false);
   const filters = { q, payment, status, from, to, held };
 
   const list = usePaged<InvoiceRow>(
@@ -172,6 +174,11 @@ export function InvoicesPage() {
         }
         actions={
           <>
+            {LIVE && (
+              <Button icon={<Repeat size={16} />} onClick={() => setRepeats(true)}>
+                {t("repeat.listButton")}
+              </Button>
+            )}
             {allowed("invoice.export") && (
               <Button icon={<Download size={16} />} onClick={exportCsv} disabled={rows.length === 0}>
                 {t("common.export")}
@@ -231,7 +238,7 @@ export function InvoicesPage() {
           {t("bills.keptBills")}
         </p>
       ) : LIVE && list.error ? (
-        <ErrorNote error={list.error} />
+        <ErrorNote error={list.error} onRetry={() => void list.refetch()} />
       ) : null}
       <DataTable
         id="sales-bills"
@@ -258,6 +265,7 @@ export function InvoicesPage() {
         }
       />
       {LIVE && !noServer && <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />}
+      {LIVE && <RepeatBillsDialog open={repeats} onOpenChange={setRepeats} />}
     </div>
   );
 }

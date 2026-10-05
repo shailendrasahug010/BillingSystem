@@ -1,5 +1,5 @@
 import { translateError } from "@digitalbahi/i18n";
-import { ArrowLeft, TriangleAlert } from "lucide-react";
+import { ArrowLeft, RotateCw, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { ApiError } from "../../lib/api";
@@ -24,21 +24,36 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
 export { DataTable, type Column } from "./DataTable";
 
 /** An API error in the user's language (field-level errors are shown by their fields). */
-export function ErrorNote({ error, className }: { error: unknown; className?: string }) {
+export function ErrorNote({ error, className, onRetry }: { error: unknown; className?: string; onRetry?(): void }) {
   const i18n = useI18n();
   if (!error) return null;
   const e = error instanceof ApiError ? error : new ApiError(0, "generic");
+  // Worth trying again: no connection, too many requests, or the server failed (not a rule the request broke).
+  const passing = e.status === 0 || e.status === 429 || e.status >= 500;
+  const line = lineOf(e.field);
   return (
-    <p className={cn("flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger", className)} role="alert">
+    <div className={cn("flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger", className)} role="alert">
       <TriangleAlert size={15} className="mt-0.5 shrink-0" />
-      <span>
+      <span className="min-w-0 flex-1">
+        {line !== null && <span className="font-medium">{i18n.t("errors.onLine", { line })} </span>}
         {translateError(i18n, e)}
-        {e.field && <span className="ml-1 font-mono text-[12px] opacity-80">({e.field})</span>}
         {/* A server failure is in the error log under this reference. */}
         {e.status >= 500 && e.requestId && <span className="mt-0.5 block font-mono text-[11.5px] opacity-80">{i18n.t("errors.reference", { ref: e.requestId })}</span>}
       </span>
-    </p>
+      {onRetry && passing && (
+        <button type="button" onClick={onRetry} className="press -my-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-medium underline-offset-2 hover:underline">
+          <RotateCw size={13} aria-hidden />
+          {i18n.t("common.retry")}
+        </button>
+      )}
+    </div>
   );
+}
+
+/** The bill line an error is about ("lines.2.qty" is line 3), or null; other field names are not shown, as they mean nothing to the reader. */
+function lineOf(field: string | undefined): number | null {
+  const m = field ? /(?:^|\.)(?:lines|items)\.(\d+)(?:\.|$)/.exec(field) : null;
+  return m ? Number(m[1]) + 1 : null;
 }
 
 /** Field error text for an ApiError that names this field. */

@@ -147,7 +147,7 @@ function TodayBeat() {
         </p>
       )}
 
-      <ErrorNote error={data.error} />
+      <ErrorNote error={data.error} onRetry={() => void data.refetch()} />
 
       {data.loading ? (
         <div className="flex flex-col gap-3" role="status" aria-label={t("common.loading")}>

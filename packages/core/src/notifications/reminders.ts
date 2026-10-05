@@ -145,5 +145,5 @@ export function customerReminderDue(input: { today: string; oldestDue: string; s
   return { due: true, reason: "due", daysOverdue };
 }
 
-/** Every permission a notification can be addressed to (to find which of them a person holds): the reminder rules', and invoice.review for bills made offline that are held. */
-export const NOTIFICATION_PERMISSIONS: readonly Permission[] = [...new Set([...Object.values(REMINDERS).map((r) => r.permission), "invoice.review" as const])];
+/** Every permission a notification can be addressed to (to find which of them a person holds): the reminder rules', invoice.review for bills made offline that are held, and invoice.create for repeat bills. */
+export const NOTIFICATION_PERMISSIONS: readonly Permission[] = [...new Set([...Object.values(REMINDERS).map((r) => r.permission), "invoice.review" as const, "invoice.create" as const])];

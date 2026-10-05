@@ -149,7 +149,7 @@ export function PurchasesPage() {
           {t("offline.keptPurchases")}
         </p>
       ) : list.error ? (
-        <ErrorNote error={list.error} />
+        <ErrorNote error={list.error} onRetry={() => void list.refetch()} />
       ) : null}
       <DataTable
         id="purchases"

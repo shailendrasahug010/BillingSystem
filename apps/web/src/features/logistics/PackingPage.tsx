@@ -71,7 +71,7 @@ function Queue() {
   const q = useQuery({ queryKey: ["packing", "queue"], queryFn: () => api.get<{ data: QueueOrder[] }>("/packing/queue").then((r) => r.data) });
   return (
     <div className="flex flex-col gap-4">
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
         id="packing-queue"
         rows={q.data ?? []}
@@ -357,7 +357,7 @@ function Slips() {
   const list = usePaged<SlipRow>("packing", "/packing", {});
   return (
     <div className="flex flex-col gap-4">
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable
         id="packing-slips"
         rows={list.rows}
@@ -365,7 +365,7 @@ function Slips() {
         loading={list.loading}
         onRowClick={(r) => setOpenId(r.id)}
         minWidth={680}
-        empty={<EmptyState title={t("packing.noSlips")} />}
+        empty={<EmptyState title={t("packing.noSlips")} hint={t("packing.noSlipsHint")} />}
         columns={[
           { key: "number", header: t("common.number"), sortValue: (r) => r.packingNumber, render: (r) => <span className="font-medium text-ink">{r.packingNumber}</span> },
           { key: "when", header: t("common.date"), sortValue: (r) => r.packedAt, render: (r) => <span className="text-ink-2">{r.packedAt ? dateTime(r.packedAt) : "—"}</span> },
@@ -424,7 +424,7 @@ function SlipDialog({ id, onClose }: { id: string | null; onClose(): void }) {
       {q.isPending ? (
         <Skeleton className="h-48 w-full" />
       ) : q.error ? (
-        <ErrorNote error={q.error} />
+        <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
       ) : p ? (
         <div className="flex flex-col gap-3">
           {error ? <ErrorNote error={error} /> : null}

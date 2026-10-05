@@ -1,4 +1,4 @@
-import { amountInWords, findState, qrMatrix, zeroRatedDeclaration } from "@digitalbahi/core";
+import { amountInWords, findState, qrMatrix, UPI_ID, upiPayLink, zeroRatedDeclaration } from "@digitalbahi/core";
 import { createTranslator, formatAmount, formatCurrency, formatDate, formatDateTimeIst, type LocaleCode } from "@digitalbahi/i18n";
 import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import { BUSINESS, WORKSPACE } from "../../data/db";
@@ -10,12 +10,12 @@ import type { PrintableInvoice, ZeroRatedPrint } from "./printable";
  * can print English invoices and vice versa). In production the same template
  * renders to PDF on the server (headless Chromium, correct Devanagari shaping).
  */
-/** The e-invoice's signed QR code as an SVG (no image files, sharp in print). */
-function QrCode({ text, size = 96 }: { text: string; size?: number }) {
+/** A QR code as an SVG (no image files, sharp in print). */
+function QrCode({ text, size = 96, label = "E-invoice QR code" }: { text: string; size?: number; label?: string }) {
   const m = qrMatrix(text);
   const path = m.flatMap((row, r) => row.flatMap((dark, c) => (dark ? [`M${c} ${r}h1v1h-1z`] : []))).join("");
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${m.length} ${m.length}`} role="img" aria-label="E-invoice QR code" shapeRendering="crispEdges">
+    <svg width={size} height={size} viewBox={`0 0 ${m.length} ${m.length}`} role="img" aria-label={label} shapeRendering="crispEdges">
       <rect width={m.length} height={m.length} fill="#fff" />
       <path d={path} fill="#000" />
     </svg>
@@ -82,6 +82,12 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
   const isChallan = invoice.kind === "delivery_challan";
   // Nothing is paid or owed on a note, a quotation or a challan.
   const noPayment = isNote || isQuote || isChallan;
+  // Customers scan it to pay what is still owed, for the exact amount.
+  const upi = BUSINESS.bank.upi?.trim();
+  const upiLink =
+    !noPayment && invoice.status !== "cancelled" && invoice.balance >= 1 && upi && UPI_ID.test(upi)
+      ? upiPayLink({ upiId: upi, name: BUSINESS.name, amount: invoice.balance, note: invoice.number })
+      : null;
   const title = isNote
     ? t(invoice.kind === "credit_note" ? "notes.creditNote" : "notes.debitNote")
     : isQuote
@@ -294,13 +300,24 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
             <p className="text-[10.5px] font-semibold tracking-wider text-[#4a5570] uppercase">{t("invoice.amountInWords")}</p>
             <p className="font-medium">{amountInWords(totals.grandTotal.toFixed(2), locale)}</p>
           </div>
+          {upiLink && (
+            <div className="flex items-center gap-3" data-upi-qr>
+              <QrCode text={upiLink} size={88} label={t("thermal.scanToPay", { amount: m(invoice.balance) })} />
+              <div>
+                <p className="font-semibold">{t("thermal.scanToPay", { amount: m(invoice.balance) })}</p>
+                <p className="text-[#4a5570]">
+                  UPI: <span className="font-mono">{BUSINESS.bank.upi}</span>
+                </p>
+              </div>
+            </div>
+          )}
           {BUSINESS.bank.name && (
             <div>
               <p className="text-[10.5px] font-semibold tracking-wider text-[#4a5570] uppercase">{t("invoice.print.bankDetails")}</p>
               <p>
                 {BUSINESS.bank.name} · A/c {BUSINESS.bank.account} · IFSC <span className="font-mono">{BUSINESS.bank.ifsc}</span>
               </p>
-              {BUSINESS.bank.upi && (
+              {BUSINESS.bank.upi && !upiLink && (
                 <p>
                   UPI: <span className="font-mono">{BUSINESS.bank.upi}</span>
                 </p>

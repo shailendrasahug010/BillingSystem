@@ -214,7 +214,7 @@ export function OutstandingPage() {
         </div>
       </div>
 
-      <ErrorNote error={data.error} />
+      <ErrorNote error={data.error} onRetry={() => void data.refetch()} />
 
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
         {data.loading ? (

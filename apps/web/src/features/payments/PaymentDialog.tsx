@@ -402,7 +402,7 @@ export function PaymentDialog({
             {docs.isPending ? (
               <Skeleton className="h-16 w-full" />
             ) : docs.error ? (
-              <ErrorNote error={docs.error} />
+              <ErrorNote error={docs.error} onRetry={() => void docs.refetch()} />
             ) : (docs.data ?? []).length === 0 ? (
               <p className="rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-3">{t("payment.noOpenBills")}</p>
             ) : (

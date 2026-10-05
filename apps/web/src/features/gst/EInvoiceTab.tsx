@@ -132,7 +132,7 @@ export function EInvoiceTab({ period }: { period: string }) {
           }
         />
         <div className="px-4 pt-3 pb-4 sm:px-5">
-          {einv.error ? <ErrorNote error={einv.error} /> : null}
+          {einv.error ? <ErrorNote error={einv.error} onRetry={() => void einv.refetch()} /> : null}
           {einv.data && !einv.data.enabled ? (
             <p className="text-[13px] text-ink-3">{t("einvoice.off")}</p>
           ) : (
@@ -154,7 +154,7 @@ export function EInvoiceTab({ period }: { period: string }) {
                 rowKey={(d) => d.id}
                 loading={einv.isPending}
                 minWidth={760}
-                empty={<EmptyState title={t("einvoice.none")} />}
+                empty={<EmptyState title={t("einvoice.none")} hint={t("einvoice.noneHint")} />}
                 columns={[
                   { key: "pick", header: "", render: (d) => pickBox(picked.has(d.id), Boolean(d.irn) || hasErrors(d.issues), () => setPicked((s) => toggle(s, d.id)), `${t("einvoice.pick")} ${d.number}`) },
                   {
@@ -243,7 +243,7 @@ export function EInvoiceTab({ period }: { period: string }) {
           }
         />
         <div className="flex flex-col gap-3 px-4 pt-3 pb-4 sm:px-5">
-          {eway.error ? <ErrorNote error={eway.error} /> : null}
+          {eway.error ? <ErrorNote error={eway.error} onRetry={() => void eway.refetch()} /> : null}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={t("einvoice.vehicle")} htmlFor="ewb-vehicle" hint={t("einvoice.vehicleHint")}>
               <Input id="ewb-vehicle" maxLength={15} className="[&_input]:font-mono [&_input]:uppercase" placeholder="MP09AB1234" value={transport.vehicleNo} onChange={(e) => setTransport((x) => ({ ...x, vehicleNo: e.target.value.toUpperCase() }))} />
@@ -269,7 +269,7 @@ export function EInvoiceTab({ period }: { period: string }) {
             rowKey={(d) => d.id}
             loading={eway.isPending}
             minWidth={720}
-            empty={<EmptyState title={t("einvoice.noEway")} />}
+            empty={<EmptyState title={t("einvoice.noEway")} hint={t("einvoice.noEwayHint")} />}
             columns={[
               { key: "pick", header: "", render: (d) => pickBox(pickedEway.has(d.id), Boolean(d.ewayBillNumber) || hasErrors(d.issues), () => setPickedEway((s) => toggle(s, d.id)), `${t("einvoice.pick")} ${d.number}`) },
               {

@@ -100,7 +100,7 @@ function Inbox() {
           ]}
         />
       </div>
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <Card className="overflow-hidden">
         {list.loading ? (
           <div className="flex flex-col gap-3 p-4">
@@ -204,7 +204,7 @@ function Rules() {
     }
   };
 
-  if (rules.error) return <ErrorNote error={rules.error} />;
+  if (rules.error) return <ErrorNote error={rules.error} onRetry={() => void rules.refetch()} />;
   return (
     <div className="flex flex-col gap-4">
       <p className="max-w-3xl text-[13.5px] text-ink-2">{t("notifications.rules.intro")}</p>
@@ -377,7 +377,7 @@ const DUE_KEY = [...RULES_KEY, "customer_reminders", "due"];
 function DueToday() {
   const { t } = useI18n();
   const due = useQuery({ queryKey: DUE_KEY, queryFn: ({ signal }) => api.get<{ data: DueCustomer[] }>("/reminder-rules/customer_reminders/due", undefined, signal) });
-  if (due.error) return <ErrorNote error={due.error} />;
+  if (due.error) return <ErrorNote error={due.error} onRetry={() => void due.refetch()} />;
   const rows = due.data?.data ?? [];
   return (
     <section className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2 p-3" aria-label={t("notifications.rules.dueToday")}>

@@ -125,7 +125,7 @@ export function BusinessProfileCard() {
   }, [q.data]);
 
   if (q.isPending) return <Skeleton className="h-48 w-full" />;
-  if (q.error) return <ErrorNote error={q.error} />;
+  if (q.error) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const registered = form.gstRegistration !== "unregistered";
@@ -179,7 +179,7 @@ export function BusinessProfileCard() {
   );
 
   return (
-    <Card>
+    <Card id="settings-business" className="scroll-mt-20">
       <CardHeader title={t("settings.business")} subtitle={t("settings.businessHint")} />
       <div className="flex flex-col gap-4 p-4 sm:p-5">
         <LogoField canEdit={canEdit} />

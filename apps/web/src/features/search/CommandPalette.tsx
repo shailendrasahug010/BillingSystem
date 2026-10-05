@@ -11,6 +11,7 @@ import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { api } from "../../lib/api";
 import { cn } from "../../lib/cn";
+import { VoiceButton } from "../../components/voice/VoiceButton";
 import { searchCustomers } from "../invoice/CustomerPicker";
 
 interface Item {
@@ -147,7 +148,16 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               }}
               placeholder={t("search.placeholder")}
               aria-label={t("search.placeholder")}
-              className="h-14 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-3 focus:outline-none"
+              className="h-14 min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-3 focus:outline-none"
+            />
+            <VoiceButton
+              onText={(text) => {
+                setQuery(text);
+                setActive(0);
+              }}
+              label={t("voice.search")}
+              className="size-9"
+              size={18}
             />
           </div>
           <div className="max-h-[60vh] overflow-y-auto p-2">
