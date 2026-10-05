@@ -54,6 +54,24 @@ On the phone it works in the browser as on the computer. Installing it as an app
 
 **Phone mode** is what these files add to the installer below: `--phone` on its start command (`installer/unix/digitalbahi.sh start --phone`, `installer\windows\DigitalBahi.cmd start --phone`). It is remembered, so the desktop icon starts Digital Bahi for phones too, until `start --no-phone` turns it off again.
 
+### Backups on a pen drive or Google Drive
+
+Turn on **Backup & Restore → Automatic backups** (every day or week, with a password). On a computer started with the start files or the installer, each copy is saved in the data folder's `backups` folder, and emailed too when email is set up. The last 30 copies are kept.
+
+For a copy away from the computer, save them on a pen drive or in Google Drive instead. Install **Google Drive for desktop** (or OneDrive), which keeps a folder on the computer in step with your Drive. Then start Digital Bahi once with that folder (Windows: in PowerShell, in the `BillingSystem` folder):
+
+```powershell
+installer\windows\DigitalBahi.cmd start --backup-folder "G:\My Drive\Digital Bahi backups"
+```
+
+macOS / Linux:
+
+```bash
+installer/unix/digitalbahi.sh start --backup-folder "$HOME/Google Drive/My Drive/Digital Bahi backups"
+```
+
+The folder is remembered. For a pen drive, use its drive letter (for example `E:\Digital Bahi backups`) and keep it plugged in at backup time: if it is out, the Backup screen says the copy could not be saved. `--backup-folder ""` goes back to the data folder.
+
 ### The quick way: the installer
 
 **Windows 10 / 11**

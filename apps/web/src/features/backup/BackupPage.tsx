@@ -42,6 +42,8 @@ interface Schedule {
   lastStatus: "sent" | "failed" | null;
   lastError: { code: string; params: Record<string, string | number> } | null;
   emailReady: boolean;
+  /** Where each automatic copy is also saved on this computer (the one-computer install); null: email only. */
+  folder: string | null;
   setUpBy: string | null;
 }
 
@@ -220,7 +222,15 @@ function ScheduleCard() {
       <div className="flex flex-col gap-4 p-4 sm:p-5">
         {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
         {error ? <ErrorNote error={error} /> : null}
-        {s && !s.emailReady && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{t("backup.auto.emailNotReady")}</p>}
+        {s?.folder ? (
+          <div className="flex flex-col gap-1 rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">
+            <p>{t("backupFolder.saved", { folder: s.folder })}</p>
+            {!s.emailReady && <p>{t("backupFolder.emailOptional")}</p>}
+            <p className="text-ink-3">{t("backupFolder.tip")}</p>
+          </div>
+        ) : (
+          s && !s.emailReady && <p className="rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn">{t("backup.auto.emailNotReady")}</p>
+        )}
         {s && (
           <>
             <Segmented
@@ -255,9 +265,11 @@ function ScheduleCard() {
                     ))}
                   </Select>
                 </Field>
-                <Field label={t("messages.to")} htmlFor="auto-to" hint={s.defaultTo ? t("backup.auto.toHint", { email: s.defaultTo }) : t("backup.auto.toNeeded")}>
-                  <Input id="auto-to" type="email" value={to} placeholder={s.defaultTo ?? "accounts@…"} onChange={(e) => setTo(e.target.value)} />
-                </Field>
+                {(s.emailReady || !s.folder) && (
+                  <Field label={t("messages.to")} htmlFor="auto-to" hint={s.defaultTo ? t("backup.auto.toHint", { email: s.defaultTo }) : t("backup.auto.toNeeded")}>
+                    <Input id="auto-to" type="email" value={to} placeholder={s.defaultTo ?? "accounts@…"} onChange={(e) => setTo(e.target.value)} />
+                  </Field>
+                )}
                 <Secret
                   id="auto-password"
                   label={t("backup.password")}
@@ -271,7 +283,7 @@ function ScheduleCard() {
               <Button
                 variant="primary"
                 icon={<CalendarClock size={16} />}
-                disabled={busy || (frequency !== "off" && (!s.emailReady || (password.length > 0 && password.length < 8) || (needsPassword && !password) || (!to.trim() && !s.defaultTo)))}
+                disabled={busy || (frequency !== "off" && ((!s.emailReady && !s.folder) || (password.length > 0 && password.length < 8) || (needsPassword && !password) || (!s.folder && !to.trim() && !s.defaultTo)))}
                 onClick={() => void save()}
               >
                 {t("backup.auto.save")}
@@ -280,7 +292,7 @@ function ScheduleCard() {
             </div>
             {s.lastRunAt && (
               <p className={s.lastStatus === "failed" ? "rounded-lg bg-danger-soft px-3 py-2 text-[12.5px] text-danger" : "text-[12.5px] text-ink-3"} role={s.lastStatus === "failed" ? "alert" : undefined}>
-                {s.lastStatus === "failed" ? t("backup.auto.lastFailed", { when: dateTime(s.lastRunAt), reason: translateError(i18n, s.lastError) }) : t("backup.auto.lastSent", { when: dateTime(s.lastRunAt) })}
+                {s.lastStatus === "failed" ? t("backup.auto.lastFailed", { when: dateTime(s.lastRunAt), reason: translateError(i18n, s.lastError) }) : s.folder ? t("backupFolder.lastSaved", { when: dateTime(s.lastRunAt) }) : t("backup.auto.lastSent", { when: dateTime(s.lastRunAt) })}
               </p>
             )}
             {s.setUpBy && s.frequency !== "off" && <p className="text-[12px] text-ink-3">{t("backup.auto.setUpBy", { name: s.setUpBy })}</p>}

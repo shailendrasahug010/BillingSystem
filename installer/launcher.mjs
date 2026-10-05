@@ -3,7 +3,7 @@
  * Digital Bahi on one computer (Windows, macOS, Linux). The first start sets
  * everything up; later starts take a few seconds.
  *
- *   node launcher.mjs start [--no-browser] [--phone | --no-phone]
+ *   node launcher.mjs start [--no-browser] [--phone | --no-phone] [--backup-folder <folder>]
  *                                             set up if needed, start, open the app
  *   node launcher.mjs stop                    stop the server and the database
  *   node launcher.mjs restart [--no-browser] [--phone | --no-phone]
@@ -32,6 +32,10 @@
  *   code to scan. Sign-up and OTP codes are then still shown only on this
  *   computer (OTP_DEV_ECHO_LOCAL_ONLY): on a phone, staff sign in with a
  *   user ID and password. The database stays open to this computer only.
+ * - Automatic backups (Backup & Restore → Automatic backups) are saved in
+ *   the data folder's "backups" folder, or the one --backup-folder names
+ *   (remembered as "backupFolder"): a pen drive, or a Google Drive /
+ *   OneDrive folder on this computer, which copies them online by itself.
  * - The data folder: %LOCALAPPDATA%\DigitalBahi (Windows),
  *   ~/Library/Application Support/DigitalBahi (macOS),
  *   ~/.local/share/digitalbahi (Linux), or DIGITALBAHI_HOME. It holds the
@@ -605,6 +609,7 @@ function apiEnv(cfg) {
     // Phone mode: phones on the Wi-Fi too, but codes on screen only for this computer.
     HOST: cfg.phone ? "0.0.0.0" : "127.0.0.1",
     ...(cfg.phone ? { OTP_DEV_ECHO_LOCAL_ONLY: "true" } : {}),
+    BACKUP_FOLDER: cfg.backupFolder || path.join(HOME, "backups"),
     PORT: String(cfg.apiPort),
     DATABASE_URL: `postgres://${APP_ROLE}:${cfg.appPassword}@127.0.0.1:${cfg.pgPort}/${DB_NAME}`,
     JWT_PRIVATE_KEY: cfg.jwtPrivateKey,
@@ -707,20 +712,27 @@ function checkBundle() {
   }
 }
 
-async function start({ browser, phone }) {
+async function start({ browser, phone, backupFolder }) {
   checkBundle();
   if (!IS_WIN && process.getuid?.() === 0) fail("Start Digital Bahi as your normal user, not as root (PostgreSQL does not run as root).");
   await mkdir(FILES.logs, { recursive: true });
   await mkdir(FILES.runtime, { recursive: true });
   if (!IS_WIN) await chmod(HOME, 0o700);
   const cfg = await loadConfig();
+  let changed = false;
   if (phone !== undefined && Boolean(cfg.phone) !== phone) {
     cfg.phone = phone;
-    await saveConfig(cfg);
+    changed = true;
     say(phone ? "Phone mode is on: phones on the same Wi-Fi can open Digital Bahi too." : "Phone mode is off: only this computer can open Digital Bahi.");
   }
-  if ((await healthy(cfg)) && (await answersNetwork(cfg)) !== Boolean(cfg.phone)) {
-    // Running, but started with the other phone setting: the server (not the database) starts again.
+  if (backupFolder !== undefined && cfg.backupFolder !== backupFolder) {
+    cfg.backupFolder = backupFolder;
+    changed = true;
+    say(`Automatic backups will be saved in ${backupFolder || path.join(HOME, "backups")}`);
+  }
+  if (changed) await saveConfig(cfg);
+  if ((await healthy(cfg)) && (changed || (await answersNetwork(cfg)) !== Boolean(cfg.phone))) {
+    // Running, but started with other settings: the server (not the database) starts again.
     await stopApi();
     await startApi(cfg);
     say(`Digital Bahi is running: ${appUrl(cfg)}`);
@@ -761,6 +773,7 @@ async function status() {
   if (cfg.phone) say(`Phones:    ${phoneUrls(cfg).join(", ") || "phone mode is on, but this computer is not on a network"}`);
   say(`Database:  ${cfg.pgBin && (await pgRunning(cfg)) ? `running, port ${cfg.pgPort}` : "stopped"}${cfg.pgMajor ? ` (PostgreSQL ${cfg.pgMajor}, ${cfg.pgBin})` : ""}`);
   say(`Data:      ${HOME}`);
+  say(`Backups:   ${cfg.backupFolder || path.join(HOME, "backups")}`);
   say(`Logs:      ${FILES.logs}`);
   return up;
 }
@@ -768,14 +781,18 @@ async function status() {
 const [command = "start", ...flags] = process.argv.slice(2);
 const browser = !flags.includes("--no-browser") && process.env.DIGITALBAHI_NO_BROWSER !== "1";
 const phone = flags.includes("--phone") ? true : flags.includes("--no-phone") ? false : undefined;
+// --backup-folder "E:\Digital Bahi backups"; an empty value goes back to the data folder's own.
+const folderAt = flags.indexOf("--backup-folder");
+const folderArg = folderAt < 0 ? undefined : (flags[folderAt + 1] ?? "");
+const backupFolder = folderArg === undefined || folderArg.startsWith("--") ? undefined : folderArg ? path.resolve(folderArg) : "";
 console.log(`Digital Bahi (${command})`);
 try {
-  if (command === "start") await withLock(() => start({ browser, phone }));
+  if (command === "start") await withLock(() => start({ browser, phone, backupFolder }));
   else if (command === "stop") await withLock(stop);
-  else if (command === "restart") await withLock(async () => (await stop(), await start({ browser, phone })));
+  else if (command === "restart") await withLock(async () => (await stop(), await start({ browser, phone, backupFolder })));
   else if (command === "status") process.exitCode = (await status()) ? 0 : 3;
   else {
-    console.log("Commands: start [--no-browser] [--phone | --no-phone], stop, restart [--no-browser] [--phone | --no-phone], status");
+    console.log("Commands: start [--no-browser] [--phone | --no-phone] [--backup-folder <folder>], stop, restart (as start), status");
     process.exitCode = 2;
   }
 } catch (e) {

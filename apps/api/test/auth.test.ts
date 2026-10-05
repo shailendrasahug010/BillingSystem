@@ -359,6 +359,14 @@ describe.skipIf(!hasDatabase)("OTP codes on screen for this computer only (phone
     }
   });
 
+  it("tells a signed-in person where phones open the app (nothing when the server does not serve the app)", async () => {
+    expect((await call(t.app, "GET", "/phone-address")).status).toBe(401);
+    const owner = await signup(t);
+    const res = await call(t.app, "GET", "/phone-address", { token: owner.token });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ urls: [] });
+  });
+
   it("never shows it to a phone on the Wi-Fi, even one claiming to be local", async () => {
     for (const res of [await ask("192.168.1.42"), await ask("192.168.1.42", { "x-forwarded-for": "127.0.0.1" })]) {
       expect(res.statusCode).toBe(202);

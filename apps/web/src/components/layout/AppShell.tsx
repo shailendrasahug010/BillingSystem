@@ -28,7 +28,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { GROUP_LABELS, homeRoute, moduleForRoute, phaseBadge, visibleModules, type ModuleDef } from "../../app/modules";
+import { GROUP_LABELS, homeRoute, menuModules, moduleForRoute, phaseBadge, type ModuleDef } from "../../app/modules";
+import { setSimpleMenu, useSimpleMenu } from "../../app/comfort";
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
 import { ACCENTS, applyAccent, applyTheme, useAppearance } from "../../app/theme";
@@ -47,6 +48,7 @@ import { getOfflineState } from "../../offline/sync";
 import { useToast } from "../ui/Toast";
 import { useConfirm } from "../ui/Confirm";
 import { BrandMark, FirmLogo } from "../brand/Brand";
+import { ComfortButton, ComfortControls, HelpButton } from "./Comfort";
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
@@ -216,13 +218,25 @@ function useMenuPrefs(): [MenuPrefs, (change: (p: MenuPrefs) => MenuPrefs) => vo
 }
 const toggle = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
 
+/** With the simple menu on: the way back to everything. */
+function FullMenuButton({ userId }: { userId: string | null | undefined }) {
+  const { t } = useI18n();
+  return (
+    <button type="button" onClick={() => setSimpleMenu(userId, false)} className="press mt-1 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-accent-ink hover:bg-surface-2">
+      {t("comfort.showFullMenu")}
+    </button>
+  );
+}
+
 function NavList({ onNavigate }: { onNavigate?(): void }) {
   const { route, navigate } = useRouter();
   const { t } = useI18n();
   const current = moduleForRoute(route);
   const [prefs, setPrefs] = useMenuPrefs();
-  // Only what this person's role opens; a group with nothing left is not shown.
-  const modules = visibleModules();
+  const userId = useSession().user?.id;
+  const simple = useSimpleMenu(userId);
+  // Only what this person's role opens (the everyday screens with the simple menu); a group with nothing left is not shown.
+  const modules = menuModules(simple);
   const pinned = prefs.pinned.map((k) => modules.find((m) => m.key === k)).filter((m): m is ModuleDef => Boolean(m));
   const unpinned = modules.filter((m) => !prefs.pinned.includes(m.key));
   const groups = (Object.keys(GROUP_LABELS) as ModuleDef["group"][]).filter((g) => unpinned.some((m) => m.group === g));
@@ -270,6 +284,7 @@ function NavList({ onNavigate }: { onNavigate?(): void }) {
           </div>
         );
       })}
+      {simple && <FullMenuButton userId={userId} />}
     </nav>
   );
 }
@@ -289,7 +304,9 @@ function NavGrid({ onNavigate }: { onNavigate(): void }) {
   const { route, navigate } = useRouter();
   const { t } = useI18n();
   const current = moduleForRoute(route);
-  const modules = visibleModules();
+  const userId = useSession().user?.id;
+  const simple = useSimpleMenu(userId);
+  const modules = menuModules(simple);
   const groups = (Object.keys(GROUP_LABELS) as ModuleDef["group"][]).filter((g) => modules.some((m) => m.group === g));
   return (
     <nav className="flex flex-col gap-5" aria-label="Main">
@@ -321,6 +338,7 @@ function NavGrid({ onNavigate }: { onNavigate(): void }) {
           </div>
         </div>
       ))}
+      {simple && <FullMenuButton userId={userId} />}
     </nav>
   );
 }
@@ -411,7 +429,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
 
   // The phone's bottom bar: Customers and Outstanding for the roles that have
   // them, otherwise that role's own main screens (Products, Packing, Leave…).
-  const navModules = visibleModules();
+  const simple = useSimpleMenu(session.user?.id);
+  const navModules = menuModules(simple);
   const used = new Set<string>();
   const slot = (prefs: string[]) => {
     const m = prefs.map((k) => navModules.find((x) => x.key === k)).find((x) => x && !used.has(x.key));
@@ -503,6 +522,10 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             {LIVE ? <OfflineChip /> : <SyncChip />}
             <LanguageToggle className="hidden sm:inline-flex" />
             <ThemeToggle className="hidden sm:inline-flex" />
+            <span className="hidden sm:inline-flex">
+              <ComfortButton userId={session.user?.id} />
+            </span>
+            <HelpButton onOpenShortcuts={onOpenShortcuts} />
             {LIVE && allowed("notification.view") && <NotificationBell />}
             {!LIVE && allowed("notification.view") && <button
               type="button"
@@ -588,6 +611,9 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             <ThemeToggle className="bg-surface shadow-card" />
           </div>
           <AccentPicker className="justify-between" />
+          <div className="border-t border-line/70 pt-3">
+            <ComfortControls userId={session.user?.id} />
+          </div>
         </div>
         <div className="lg:hidden">
           <NavGrid onNavigate={() => setMoreOpen(false)} />

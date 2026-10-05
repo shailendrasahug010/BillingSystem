@@ -7,7 +7,7 @@ import { audit } from "../lib/audit.js";
 import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
 import { ApiError, rootMessage } from "../lib/errors.js";
-import { emailBackup, type BackupActor } from "./backup-delivery.js";
+import { emailBackup, folderBackup, type BackupActor } from "./backup-delivery.js";
 
 export type BackupFrequency = "off" | "daily" | "weekly";
 export interface ScheduleTiming {
@@ -86,8 +86,17 @@ export async function runDueBackups(deps: AppDeps): Promise<{ sent: number; fail
       error = JSON.stringify({ code: "BACKUP_SCHEDULE_NO_PASSWORD", params: {} });
       stop = true;
     } else {
+      const passphrase = deps.cipher.decrypt(claimed.passphrase);
+      const folder = deps.config.backupFolder;
       try {
-        await emailBackup(deps, actor, { passphrase: deps.cipher.decrypt(claimed.passphrase), to: claimed.emailTo, kind: "auto" });
+        // With a backup folder (one computer), the copy goes there; email too when it is set up.
+        if (folder) await folderBackup(deps, actor, passphrase);
+        try {
+          await emailBackup(deps, actor, { passphrase, to: claimed.emailTo, kind: "auto" });
+        } catch (e) {
+          const noEmail = e instanceof ApiError && (e.code === "MESSAGING_NOT_CONFIGURED" || e.code === "MESSAGE_NO_RECIPIENT");
+          if (!(folder && noEmail)) throw e;
+        }
       } catch (e) {
         error = failure(e);
         // Not a refusal the Backup screen explains (mail server down, a bug): into the error log too.

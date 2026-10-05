@@ -211,6 +211,9 @@ await page.fill("#inv-name", "Raju Salesman");
 await page.fill("#inv-mobile", "9111122222");
 await page.getByRole("dialog").getByRole("button", { name: "Add member" }).click();
 await toast("Member added");
+// The dialog then offers a WhatsApp invite; Done closes it.
+await page.getByRole("dialog").getByRole("button", { name: "Send invite on WhatsApp" }).waitFor();
+await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
 await page.getByRole("cell", { name: /Raju Salesman/ }).waitFor();
 await page.getByRole("button", { name: "New role" }).click();
 await page.fill("#r-name", "Delivery boy");

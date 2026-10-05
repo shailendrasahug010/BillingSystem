@@ -100,6 +100,8 @@ await owner.locator("#inv-role").selectOption({ label: "Sales Employee" });
 await owner.screenshot({ path: `${OUT}/team-1-add.png` });
 await dialog.getByRole("button", { name: "Add member" }).click();
 await owner.getByText(`Raju Salesman can sign in now as ${staffId} with the password you set`).waitFor({ timeout: 15000 });
+await dialog.getByRole("button", { name: "Send invite on WhatsApp" }).waitFor();
+await dialog.getByRole("button", { name: "Done" }).click();
 await owner.getByRole("cell", { name: new RegExp(staffId) }).waitFor();
 await owner.getByRole("cell", { name: new RegExp(staffId) }).click();
 await dialog.getByText(`Signs in with: ${staffId}`).waitFor();
