@@ -22,6 +22,7 @@ export const REMINDER_TYPES = [
   "devices_unsynced",
   "orders_waiting",
   "customer_reminders",
+  "daily_summary",
 ] as const;
 
 export type ReminderType = (typeof REMINDER_TYPES)[number];
@@ -46,7 +47,13 @@ export interface ReminderConfig {
   minAmount?: number;
   /** ... by WhatsApp, SMS, email, or WhatsApp and SMS where WhatsApp cannot reach. */
   channel?: ReminderChannel;
+  /** Daily summary: the mobile numbers it goes to (none: the business's own phone). */
+  recipients?: string[];
 }
+
+/** Numbers a daily summary can go to. */
+export const MAX_SUMMARY_RECIPIENTS = 5;
+const INDIAN_MOBILE = /^[6-9]\d{9}$/;
 
 export const REMINDER_CHANNELS = ["whatsapp_or_sms", "whatsapp", "sms", "email"] as const;
 export type ReminderChannel = (typeof REMINDER_CHANNELS)[number];
@@ -86,6 +93,14 @@ export const REMINDERS: Record<ReminderType, ReminderDefinition> = {
     events: false,
     offByDefault: true,
   },
+  // The day in figures (sales, collections, payments, expenses, what is owed) sent to the owner's phone in the evening.
+  daily_summary: {
+    type: "daily_summary",
+    permission: "report.view_sales",
+    defaults: { hour: 20, channel: "whatsapp_or_sms", recipients: [] },
+    events: false,
+    offByDefault: true,
+  },
 };
 
 export const isReminderType = (value: string): value is ReminderType => (REMINDER_TYPES as readonly string[]).includes(value);
@@ -104,6 +119,13 @@ export function reminderConfig(type: ReminderType, stored: unknown): ReminderCon
     ...(d.repeatDays !== undefined ? { repeatDays: int(s.repeatDays, 1, 60, d.repeatDays) } : {}),
     ...(d.maxCount !== undefined ? { maxCount: int(s.maxCount, 1, 10, d.maxCount) } : {}),
     ...(d.minAmount !== undefined ? { minAmount: int(s.minAmount, 0, 10_000_000, d.minAmount) } : {}),
+    ...(d.recipients !== undefined
+      ? {
+          recipients: Array.isArray(s.recipients)
+            ? [...new Set(s.recipients.filter((m): m is string => typeof m === "string").map((m) => m.replace(/\D/g, "").slice(-10)).filter((m) => INDIAN_MOBILE.test(m)))].slice(0, MAX_SUMMARY_RECIPIENTS)
+            : d.recipients,
+        }
+      : {}),
     ...(d.channel !== undefined ? { channel: (REMINDER_CHANNELS as readonly unknown[]).includes(s.channel) ? (s.channel as ReminderChannel) : d.channel } : {}),
   };
 }
@@ -123,5 +145,5 @@ export function customerReminderDue(input: { today: string; oldestDue: string; s
   return { due: true, reason: "due", daysOverdue };
 }
 
-/** Every permission a notification can be addressed to (to find which of them a person holds): the reminder rules', and invoice.review for bills made offline that are held. */
-export const NOTIFICATION_PERMISSIONS: readonly Permission[] = [...new Set([...Object.values(REMINDERS).map((r) => r.permission), "invoice.review" as const])];
+/** Every permission a notification can be addressed to (to find which of them a person holds): the reminder rules', invoice.review for bills made offline that are held, and invoice.create for repeat bills. */
+export const NOTIFICATION_PERMISSIONS: readonly Permission[] = [...new Set([...Object.values(REMINDERS).map((r) => r.permission), "invoice.review" as const, "invoice.create" as const])];

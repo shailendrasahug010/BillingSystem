@@ -1,5 +1,5 @@
 import { buildReorderList, daysBetween, findState } from "@digitalbahi/core";
-import { ArrowLeft, ClipboardPlus, MapPin, Pencil, Phone, Receipt, Wallet } from "lucide-react";
+import { ArrowLeft, ClipboardPlus, MapPin, Pencil, Phone, Receipt, SearchX, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -19,6 +19,7 @@ import { shareOnWhatsApp } from "../../lib/share";
 import { ApiError } from "../../lib/api";
 import { useToast } from "../../components/ui/Toast";
 import { AddCustomerDialog } from "./AddCustomerDialog";
+import { OrderLinkButton } from "../orders/OrderLink";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
 import { translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
@@ -97,7 +98,9 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
     return p ? (locale === "hi" ? p.nameHi : p.name) : "—";
   };
 
-  if (!customer || !insight) return <EmptyState title={t("empty.generic")} />;
+  if (!customer)
+    return <EmptyState icon={<SearchX size={24} />} title={t("customer.notFound")} hint={t("customer.notFoundHint")} action={<Button onClick={() => navigate({ name: "customers" })}>{t("customer.backToList")}</Button>} />;
+  if (!insight) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
   const state = findState(customer.stateCode);
   const top = [...insight.stats.values()]
     .map((s) => ({ id: s.productId, label: productName(s.productId), amount: s.totalQty.toNumber() * (s.lastRate?.toNumber() ?? 0) }))
@@ -177,6 +180,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               {t("dashboard.actions.receivePayment")}
             </Button>
           )}
+          {LIVE && allowed("order.create") && <OrderLinkButton customerId={customer.id} customerName={customer.name} mobile={customer.mobile ?? null} />}
           {LIVE && allowed("order.create") && (
             <Button icon={<ClipboardPlus size={16} />} onClick={() => navigate({ name: "planned", module: "orders", action: "new", partyId: customer.id })}>
               {t("orders.new")}
@@ -295,7 +299,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
         <Tabs.Content value="payments">
           <Card className="scroll-x">
             {payments.length === 0 ? (
-              <EmptyState title={t("empty.generic")} />
+              <EmptyState title={t("payment.empty")} hint={t("customer.noPaymentsHint")} />
             ) : (
               <table className="w-full min-w-[520px] text-[13.5px]">
                 <thead>

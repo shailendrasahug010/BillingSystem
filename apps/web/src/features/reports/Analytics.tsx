@@ -50,7 +50,7 @@ export function ProfitReport({ settings, onChange }: ReportProps) {
           <ExportButton path="/reports/profit" query={query} filename={`profit-${groupBy}-${period.from}-${period.to}.csv`} />
         </div>
       </PeriodBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       {totals && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Tile label={t("analytics.netSales")} value={money(totals.sales)} />
@@ -63,7 +63,7 @@ export function ProfitReport({ settings, onChange }: ReportProps) {
         rowKey={(r) => r.key}
         loading={q.isPending}
         minWidth={760}
-        empty={<EmptyState title={t("analytics.noSales")} />}
+        empty={<EmptyState title={t("analytics.noSales")} hint={t("analytics.noSalesHint")} />}
         columns={[
           { key: "label", header: t(`reports.groups.${groupBy}`), render: (r) => <span className="font-medium text-ink">{r.label}</span> },
           ...(groupBy === "product" ? [{ key: "qty", header: t("invoice.qty"), align: "right" as const, render: (r: ProfitRow) => number(r.qty) }] : []),
@@ -123,7 +123,7 @@ export function PnlReport({ settings, onChange }: ReportProps) {
   return (
     <div className="flex flex-col gap-4">
       <PeriodBar period={period} />
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       {d && (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -202,13 +202,13 @@ export function ProductsReport({ settings, onChange }: ReportProps) {
           <ExportButton path="/reports/products" query={query} filename={`products-${period.from}-${period.to}.csv`} />
         </div>
       </PeriodBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
         rows={rows}
         rowKey={(r) => r.productId}
         loading={q.isPending}
         minWidth={900}
-        empty={<EmptyState title={t("analytics.noProducts")} />}
+        empty={<EmptyState title={t("analytics.noProducts")} hint={t("analytics.noProductsHint")} />}
         columns={[
           {
             key: "name",

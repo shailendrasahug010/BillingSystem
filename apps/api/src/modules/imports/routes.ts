@@ -1,11 +1,11 @@
-import { ImportBody } from "@digitalbahi/contracts";
+import { ImportBody, TallyImportBody } from "@digitalbahi/contracts";
 import { GST_STATES, normalizeGstin, normalizeIndianMobile, resolveTax, stateCodeFromGstin, validateGstin, validatePincode, type TaxCategory } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, isNull } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
-import { guard } from "../../lib/access.js";
+import { guard, requirePermission } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
@@ -429,6 +429,153 @@ async function importCustomers(tx: Tx, ctx: RequestCtx, today: string, rows: Row
   return { ...summary, created: customers.length, errors };
 }
 
+// ---------------------------------------------------------------- suppliers
+
+/** Suppliers (from Tally's Sundry Creditors): name, GSTIN, state, contact and the payable opening balance. */
+async function importSuppliers(tx: Tx, ctx: RequestCtx, today: string, rows: Rows, dryRun: boolean) {
+  const errors: RowError[] = [];
+  const businessId = ctx.businessId;
+  const [business] = await tx.select({ stateCode: schema.businesses.stateCode }).from(schema.businesses).where(eq(schema.businesses.id, businessId));
+  const existing = await tx
+    .select({ code: schema.suppliers.code, gstin: schema.suppliers.gstin })
+    .from(schema.suppliers)
+    .where(and(eq(schema.suppliers.businessId, businessId), isNull(schema.suppliers.deletedAt)));
+  const takenCodes = new Set(existing.map((c) => c.code.toUpperCase()));
+  const takenGstins = new Set(existing.map((c) => c.gstin).filter(Boolean) as string[]);
+  const stateBy = new Map<string, string>();
+  for (const s of GST_STATES) {
+    stateBy.set(s.code, s.code);
+    stateBy.set(s.name.toUpperCase(), s.code);
+  }
+  const fileGstins = new Set<string>();
+  const valid = rows.map((row, i) => {
+    const err = (column: string, code: string, params?: Record<string, string>) => errors.push({ row: i + 1, column, code, ...(params ? { params } : {}) });
+    const name = cell(row, "name");
+    if (!name) err("name", "IMPORT_REQUIRED");
+    else if (name.length > 150) err("name", "IMPORT_TOO_LONG");
+    const mobile = cell(row, "mobile") ? normalizeIndianMobile(cell(row, "mobile")) : null;
+    if (cell(row, "mobile") && !mobile) err("mobile", "INVALID_MOBILE");
+    const gstin = cell(row, "gstin") ? normalizeGstin(cell(row, "gstin")) : null;
+    if (gstin) {
+      const issues = validateGstin(gstin);
+      if (issues.length) err("gstin", "INVALID_GSTIN", { issue: issues[0]! });
+      else if (takenGstins.has(gstin) || fileGstins.has(gstin)) err("gstin", "IMPORT_DUPLICATE_PARTY", { value: gstin });
+      fileGstins.add(gstin);
+    }
+    const stateRaw = cell(row, "state");
+    let stateCode = stateRaw ? (stateBy.get(stateRaw.padStart(2, "0")) ?? stateBy.get(stateRaw.toUpperCase())) : undefined;
+    if (stateRaw && !stateCode) err("state", "INVALID_STATE_CODE");
+    if (gstin && !validateGstin(gstin).length) stateCode = stateCodeFromGstin(gstin);
+    stateCode ??= business!.stateCode;
+    const pincode = cell(row, "pincode");
+    if (pincode && validatePincode(pincode).length) err("pincode", "IMPORT_INVALID");
+    const openingRaw = cell(row, "opening_balance");
+    const opening = openingRaw ? amount(openingRaw, 2, true) : null;
+    if (openingRaw && opening === null) err("opening_balance", "IMPORT_INVALID");
+    const email = cell(row, "email");
+    if (email && !z.email().safeParse(email).success) err("email", "IMPORT_INVALID");
+    return { name, contact: cell(row, "contact_person"), mobile, gstin, stateCode: stateCode!, addressLine1: cell(row, "address") || null, pincode: pincode || null, email: email ? email.toLowerCase() : null, opening };
+  });
+  const summary = { total: rows.length, withOpeningBalance: valid.filter((v) => v.opening && Number(v.opening) !== 0).length };
+  if (errors.length || dryRun) return { ...summary, created: 0, errors };
+
+  const codes = await nextMasterCodes(tx, businessId, "supplier", today, valid.length, takenCodes);
+  const suppliers = valid.map((v, i) => ({ ...v, id: uuidv7(), code: codes[i]! }));
+  await inChunks(suppliers, (chunk) =>
+    tx.insert(schema.suppliers).values(
+      chunk.map((s) => {
+        // Payable: a positive opening is owed to the supplier (credit), a negative one an advance paid.
+        const opening = Number(s.opening ?? 0);
+        return {
+          id: s.id,
+          businessId,
+          code: s.code,
+          name: s.name,
+          companyName: s.contact || null,
+          gstRegistration: s.gstin ? ("regular" as const) : ("unregistered" as const),
+          mobile: s.mobile,
+          email: s.email,
+          gstin: s.gstin,
+          pan: s.gstin ? s.gstin.slice(2, 12) : null,
+          addressLine1: s.addressLine1,
+          stateCode: s.stateCode,
+          pincode: s.pincode,
+          openingBalance: Math.abs(opening).toFixed(2),
+          openingBalanceSide: opening < 0 ? ("debit" as const) : ("credit" as const),
+          openingBalanceDate: today,
+          balance: opening.toFixed(2),
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        };
+      }),
+    ),
+  );
+  const openings = suppliers.filter((s) => s.opening && Number(s.opening) !== 0);
+  if (openings.length) {
+    await inChunks(openings, (chunk) =>
+      tx.insert(schema.partyLedgerEntries).values(
+        chunk.map((s) => {
+          const v = Number(s.opening);
+          return {
+            businessId,
+            partyType: "supplier" as const,
+            supplierId: s.id,
+            entryDate: today,
+            docType: "opening",
+            docId: s.id,
+            docNumber: s.code,
+            debit: v < 0 ? (-v).toFixed(2) : "0",
+            credit: v > 0 ? v.toFixed(2) : "0",
+            narration: "Opening balance (import)",
+            createdBy: ctx.userId,
+          };
+        }),
+      ),
+    );
+  }
+  await audit(tx, ctx, { action: "supplier.imported", entityType: "supplier", changes: { rows: suppliers.length } });
+  return { ...summary, created: suppliers.length, errors };
+}
+
+/**
+ * Masters from Tally (read from its XML by the client): customers,
+ * suppliers and products together, all or nothing. Names already on file
+ * are left as they are (so the same file can be sent again).
+ */
+async function importTally(tx: Tx, ctx: RequestCtx, today: string, body: z.output<typeof TallyImportBody>) {
+  const businessId = ctx.businessId;
+  const lower = (rows: { n: string | null }[]) => new Set(rows.map((r) => (r.n ?? "").trim().toUpperCase()));
+  const [customers, suppliers, products] = await Promise.all([
+    tx.select({ n: schema.customers.businessName }).from(schema.customers).where(and(eq(schema.customers.businessId, businessId), isNull(schema.customers.deletedAt))),
+    tx.select({ n: schema.suppliers.name }).from(schema.suppliers).where(and(eq(schema.suppliers.businessId, businessId), isNull(schema.suppliers.deletedAt))),
+    tx.select({ n: schema.products.name }).from(schema.products).where(and(eq(schema.products.businessId, businessId), isNull(schema.products.deletedAt))),
+  ]);
+  // Rows whose name is new, with where each sat in the file (errors name the file's row).
+  const fresh = (rows: Rows, known: Set<string>) => {
+    const at: number[] = [];
+    const kept = rows.filter((r, i) => !known.has(cell(r, "name").toUpperCase()) && at.push(i) > 0);
+    return { rows: kept, at };
+  };
+  const parts = {
+    customers: fresh(body.customers, lower(customers)),
+    suppliers: fresh(body.suppliers, lower(suppliers)),
+    products: fresh(body.products, lower(products)),
+  };
+  const skipped = { customers: body.customers.length - parts.customers.rows.length, suppliers: body.suppliers.length - parts.suppliers.rows.length, products: body.products.length - parts.products.rows.length };
+  type Result = { total: number; created: number; errors: RowError[] } | null;
+  const inFile = <R extends Result>(r: R, at: number[]): R => (r ? { ...r, errors: r.errors.map((e) => ({ ...e, row: at[e.row - 1]! + 1 })) } : r);
+  // Everything is checked first; nothing is written unless all three are clean.
+  const check = async (dryRun: boolean) => ({
+    customers: inFile(parts.customers.rows.length ? await importCustomers(tx, ctx, today, parts.customers.rows, dryRun) : null, parts.customers.at),
+    suppliers: inFile(parts.suppliers.rows.length ? await importSuppliers(tx, ctx, today, parts.suppliers.rows, dryRun) : null, parts.suppliers.at),
+    products: inFile(parts.products.rows.length ? await importProducts(tx, ctx, today, parts.products.rows, dryRun) : null, parts.products.at),
+  });
+  const checked = await check(true);
+  const clean = Object.values(checked).every((r) => !r || r.errors.length === 0);
+  if (!clean || body.dryRun) return { ...checked, skipped, imported: false };
+  return { ...(await check(false)), skipped, imported: true };
+}
+
 /**
  * Bulk import from a spreadsheet: every row is checked first, and nothing is
  * written unless all rows are valid (so a file can simply be fixed and sent
@@ -445,5 +592,10 @@ export const importsModule: ApiModule = async (app, deps) => {
   r.post("/customers/import", { preHandler: guard(deps, "customer.create"), schema: { tags: ["customers"], body: ImportBody } }, async (request) => {
     const ctx = request.ctx;
     return withTenant(deps.db, ctx, (tx) => importCustomers(tx, ctx, deps.clock.today(ctx.timeZone), request.body.rows, request.body.dryRun));
+  });
+
+  r.post("/tally/import", { preHandler: [...guard(deps, "customer.create"), requirePermission("supplier.create"), requirePermission("product.import")], schema: { tags: ["imports"], body: TallyImportBody } }, async (request) => {
+    const ctx = request.ctx;
+    return withTenant(deps.db, ctx, (tx) => importTally(tx, ctx, deps.clock.today(ctx.timeZone), request.body));
   });
 };

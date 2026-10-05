@@ -131,9 +131,22 @@ export const SalesOrderBody = z.strictObject({
   customerId: Id,
   orderDate: IsoDate.optional(),
   expectedDeliveryDate: IsoDate.optional(),
-  source: z.enum(["counter", "salesperson", "phone", "whatsapp", "app"]).default("app"),
+  source: z.enum(["counter", "salesperson", "phone", "whatsapp", "app", "link"]).default("app"),
   lines: z.array(DocumentLineInput).min(1).max(300),
   notes: z.string().trim().max(1000).optional(),
+  /** A quotation (estimate): priced like an order, numbered on its own, nothing to pack until the customer accepts it. */
+  quotation: z.boolean().optional(),
+  /** Until when a quotation's prices hold. */
+  validUntil: IsoDate.optional(),
+});
+
+/** An order from a shop's order link: what and how many; rates come from the shop's rate list. */
+export const ShopOrderBody = z.strictObject({
+  lines: z
+    .array(z.strictObject({ productId: Id, unitId: Id.optional(), qty: Qty.refine((q) => Number(q) > 0, "QTY_MUST_BE_POSITIVE") }))
+    .min(1)
+    .max(200),
+  notes: z.string().trim().max(500).optional(),
 });
 
 export const OrderListQuery = PageQuery.extend({

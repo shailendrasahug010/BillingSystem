@@ -40,8 +40,8 @@ const REAUTH_LOCK_MINUTES = 15;
 
 type ScheduleRow = typeof schema.backupSchedules.$inferSelect;
 
-function scheduleView(row: ScheduleRow | null, extra: { defaultTo: string | null; emailReady: boolean; by: string | null }) {
-  let lastError: { code: string; params: Record<string, string | number> } | null = null;
+function scheduleView(row: ScheduleRow | null, extra: { defaultTo: string | null; emailReady: boolean; by: string | null; folder: string | null }) {
+  let lastError: { code: string; params: Record<string, string | number> } | null;
   try {
     lastError = row?.lastError ? JSON.parse(row.lastError) : null;
   } catch {
@@ -59,6 +59,8 @@ function scheduleView(row: ScheduleRow | null, extra: { defaultTo: string | null
     lastStatus: (row?.lastStatus ?? null) as "sent" | "failed" | null,
     lastError,
     emailReady: extra.emailReady,
+    /** Where automatic backups are also saved on this computer (the one-computer install); null: email only. */
+    folder: extra.folder,
     setUpBy: row?.configuredBy ? extra.by : null,
   };
 }
@@ -123,7 +125,7 @@ export const backupsModule: ApiModule = async (app, deps) => {
       const [by] = row?.configuredBy ? await tx.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, row.configuredBy)) : [];
       return { row, business: business!, channels: await channelsFor(deps, tx, ctx.businessId), by };
     });
-    return scheduleView(row ?? null, { defaultTo: business.email, emailReady: ready(deps, channels, "email"), by: by?.name ?? null });
+    return scheduleView(row ?? null, { defaultTo: business.email, emailReady: ready(deps, channels, "email"), by: by?.name ?? null, folder: deps.config.backupFolder });
   });
 
   /**
@@ -140,8 +142,10 @@ export const backupsModule: ApiModule = async (app, deps) => {
       const [before] = await tx.select().from(schema.backupSchedules).where(eq(schema.backupSchedules.businessId, ctx.businessId));
       const [business] = await tx.select({ email: schema.businesses.email, name: sql<string>`coalesce(${schema.businesses.tradeName}, ${schema.businesses.legalName})` }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
       if (body.frequency !== "off") {
-        if (!ready(deps, await channelsFor(deps, tx, ctx.businessId), "email")) throw conflict("MESSAGING_NOT_CONFIGURED", { channel: "email" });
-        if (!to && !business!.email) throw badRequest("MESSAGE_NO_RECIPIENT", { channel: "email", party: business!.name }, "to");
+        // With a backup folder, email is optional: the copy is saved there either way.
+        const emailReady = ready(deps, await channelsFor(deps, tx, ctx.businessId), "email");
+        if (!deps.config.backupFolder && !emailReady) throw conflict("MESSAGING_NOT_CONFIGURED", { channel: "email" });
+        if (!deps.config.backupFolder && !to && !business!.email) throw badRequest("MESSAGE_NO_RECIPIENT", { channel: "email", party: business!.name }, "to");
         if (!body.passphrase && !before?.passphrase) throw badRequest("BACKUP_SCHEDULE_NO_PASSWORD", {}, "passphrase");
       }
       const now = deps.clock.now();
@@ -162,9 +166,9 @@ export const backupsModule: ApiModule = async (app, deps) => {
         .returning();
       const changes = diff({ frequency: before?.frequency ?? "off", hour: before?.hour ?? 21, weekday: before?.weekday ?? 0, emailTo: before?.emailTo ?? null }, { frequency: row!.frequency, hour: row!.hour, weekday: row!.weekday, emailTo: row!.emailTo });
       await audit(tx, ctx, { action: "backup.schedule_changed", entityType: "backup", changes: { ...changes, ...(body.passphrase ? { password: "changed" } : {}) } });
-      return { row: row!, defaultTo: business!.email };
+      return { row: row!, defaultTo: business!.email, emailReady: ready(deps, await channelsFor(deps, tx, ctx.businessId), "email") };
     });
-    return scheduleView(saved.row, { defaultTo: saved.defaultTo, emailReady: true, by: ctx.userName });
+    return scheduleView(saved.row, { defaultTo: saved.defaultTo, emailReady: saved.emailReady, by: ctx.userName, folder: deps.config.backupFolder });
   });
 
   /**

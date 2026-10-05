@@ -338,3 +338,39 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
     });
   });
 });
+
+describe.skipIf(!hasDatabase)("OTP codes on screen for this computer only (phone mode)", () => {
+  let t: TestApp;
+  beforeAll(async () => {
+    t = await createTestApp({ env: { OTP_DEV_ECHO: "true", OTP_DEV_ECHO_LOCAL_ONLY: "true" } });
+  });
+  afterAll(async () => {
+    await t?.close();
+  });
+
+  const ask = (remoteAddress: string, headers: Record<string, string> = {}) =>
+    t.app.inject({ method: "POST", url: "/api/v1/auth/otp", remoteAddress, headers, payload: { mobile: nextMobile(), purpose: "signup" } });
+
+  it("shows the code to this computer", async () => {
+    for (const address of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
+      const res = await ask(address);
+      expect(res.statusCode).toBe(202);
+      expect(res.json().devCode).toMatch(/^\d{6}$/);
+    }
+  });
+
+  it("tells a signed-in person where phones open the app (nothing when the server does not serve the app)", async () => {
+    expect((await call(t.app, "GET", "/phone-address")).status).toBe(401);
+    const owner = await signup(t);
+    const res = await call(t.app, "GET", "/phone-address", { token: owner.token });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ urls: [] });
+  });
+
+  it("never shows it to a phone on the Wi-Fi, even one claiming to be local", async () => {
+    for (const res of [await ask("192.168.1.42"), await ask("192.168.1.42", { "x-forwarded-for": "127.0.0.1" })]) {
+      expect(res.statusCode).toBe(202);
+      expect(res.json()).not.toHaveProperty("devCode");
+    }
+  });
+});

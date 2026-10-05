@@ -4,6 +4,7 @@ import {
   Boxes,
   CalendarCheck,
   CalendarPlus,
+  ChevronDown,
   ClipboardList,
   Cloud,
   CloudOff,
@@ -15,6 +16,8 @@ import {
   Menu,
   Moon,
   Package,
+  Pin,
+  PinOff,
   Plus,
   Receipt,
   RefreshCw,
@@ -25,7 +28,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { GROUP_LABELS, homeRoute, moduleForRoute, phaseBadge, visibleModules, type ModuleDef } from "../../app/modules";
+import { GROUP_LABELS, homeRoute, menuModules, moduleForRoute, phaseBadge, type ModuleDef } from "../../app/modules";
+import { setSimpleMenu, useSimpleMenu } from "../../app/comfort";
 import { useI18n } from "../../app/i18n";
 import { useRouter, type Route } from "../../app/router";
 import { ACCENTS, applyAccent, applyTheme, useAppearance } from "../../app/theme";
@@ -42,7 +46,9 @@ import { NotificationBell } from "./NotificationBell";
 import { OfflineBanner, OfflineChip } from "../offline/OfflineBills";
 import { getOfflineState } from "../../offline/sync";
 import { useToast } from "../ui/Toast";
+import { useConfirm } from "../ui/Confirm";
 import { BrandMark, FirmLogo } from "../brand/Brand";
+import { ComfortButton, ComfortControls, HelpButton } from "./Comfort";
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
@@ -144,22 +150,80 @@ export function SyncChip() {
   );
 }
 
-function NavItem({ mod, active, onClick }: { mod: ModuleDef; active: boolean; onClick(): void }) {
+function NavItem({ mod, active, pinned, onPin, onClick }: { mod: ModuleDef; active: boolean; pinned: boolean; onPin(): void; onClick(): void }) {
   const { t } = useI18n();
   const Icon = mod.icon;
+  const name = t(mod.label);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "press group flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
-        active ? "bg-accent bg-accent-grad font-semibold text-ink-inverse shadow-glow" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
-      )}
-    >
-      <Icon size={17} className={cn("shrink-0 transition-transform duration-200", active ? "text-ink-inverse" : "text-ink-3 group-hover:scale-110 group-hover:text-ink")} />
-      <span className="min-w-0 flex-1 truncate">{t(mod.label)}</span>
-      {phaseBadge(mod) && <span className="rounded-full bg-surface-2 px-1.5 text-[10.5px] font-medium text-ink-3">P{phaseBadge(mod)}</span>}
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "press flex h-10 w-full items-center gap-3 rounded-xl px-3 pr-9 text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
+          active ? "animate-pill bg-accent bg-accent-grad font-semibold text-ink-inverse shadow-glow" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
+        )}
+      >
+        <Icon size={17} className={cn("shrink-0 transition-transform duration-200", active ? "text-ink-inverse" : "text-ink-3 group-hover:scale-110 group-hover:text-ink")} />
+        <span className="min-w-0 flex-1 truncate">{name}</span>
+        {phaseBadge(mod) && <span className="rounded-full bg-surface-2 px-1.5 text-[10.5px] font-medium text-ink-3 group-hover:hidden">P{phaseBadge(mod)}</span>}
+      </button>
+      {/* Pin to the top of the menu (shown on hover, or always once pinned). */}
+      <button
+        type="button"
+        onClick={onPin}
+        aria-label={pinned ? t("nav.unpin", { name }) : t("nav.pin", { name })}
+        title={pinned ? t("nav.unpin", { name }) : t("nav.pin", { name })}
+        aria-pressed={pinned}
+        className={cn(
+          "absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg transition-opacity focus-visible:opacity-100",
+          active ? "text-ink-inverse/80 hover:text-ink-inverse" : "text-ink-3 hover:bg-surface-3 hover:text-ink",
+          pinned ? "opacity-70 hover:opacity-100" : "opacity-0 group-hover:opacity-100",
+        )}
+      >
+        {pinned ? <PinOff size={14} /> : <Pin size={14} />}
+      </button>
+    </div>
+  );
+}
+
+/** The menu's layout on this device: groups folded away, and entries pinned to the top. */
+const MENU_KEY = "digitalbahi:menu";
+interface MenuPrefs {
+  collapsed: string[];
+  pinned: string[];
+}
+function readMenu(): MenuPrefs {
+  try {
+    const v = JSON.parse(localStorage.getItem(MENU_KEY) ?? "null") as Partial<MenuPrefs> | null;
+    return { collapsed: Array.isArray(v?.collapsed) ? v.collapsed : [], pinned: Array.isArray(v?.pinned) ? v.pinned : [] };
+  } catch {
+    return { collapsed: [], pinned: [] };
+  }
+}
+function useMenuPrefs(): [MenuPrefs, (change: (p: MenuPrefs) => MenuPrefs) => void] {
+  const [prefs, setPrefs] = useState(readMenu);
+  const update = (change: (p: MenuPrefs) => MenuPrefs) =>
+    setPrefs((p) => {
+      const next = change(p);
+      try {
+        localStorage.setItem(MENU_KEY, JSON.stringify(next));
+      } catch {
+        // A private window: kept until the page closes.
+      }
+      return next;
+    });
+  return [prefs, update];
+}
+const toggle = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
+
+/** With the simple menu on: the way back to everything. */
+function FullMenuButton({ userId }: { userId: string | null | undefined }) {
+  const { t } = useI18n();
+  return (
+    <button type="button" onClick={() => setSimpleMenu(userId, false)} className="press mt-1 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-accent-ink hover:bg-surface-2">
+      {t("comfort.showFullMenu")}
     </button>
   );
 }
@@ -168,27 +232,59 @@ function NavList({ onNavigate }: { onNavigate?(): void }) {
   const { route, navigate } = useRouter();
   const { t } = useI18n();
   const current = moduleForRoute(route);
-  // Only what this person's role opens; a group with nothing left is not shown.
-  const modules = visibleModules();
-  const groups = (Object.keys(GROUP_LABELS) as ModuleDef["group"][]).filter((g) => modules.some((m) => m.group === g));
+  const [prefs, setPrefs] = useMenuPrefs();
+  const userId = useSession().user?.id;
+  const simple = useSimpleMenu(userId);
+  // Only what this person's role opens (the everyday screens with the simple menu); a group with nothing left is not shown.
+  const modules = menuModules(simple);
+  const pinned = prefs.pinned.map((k) => modules.find((m) => m.key === k)).filter((m): m is ModuleDef => Boolean(m));
+  const unpinned = modules.filter((m) => !prefs.pinned.includes(m.key));
+  const groups = (Object.keys(GROUP_LABELS) as ModuleDef["group"][]).filter((g) => unpinned.some((m) => m.group === g));
+  const isActive = (m: ModuleDef) => current?.key === m.key || sameRoute(route, m.route);
+  const item = (m: ModuleDef) => (
+    <NavItem
+      key={m.key}
+      mod={m}
+      active={isActive(m)}
+      pinned={prefs.pinned.includes(m.key)}
+      onPin={() => setPrefs((p) => ({ ...p, pinned: toggle(p.pinned, m.key) }))}
+      onClick={() => {
+        navigate(m.route);
+        onNavigate?.();
+      }}
+    />
+  );
   return (
-    <nav className="flex flex-col gap-5" aria-label="Main">
-      {groups.map((g) => (
-        <div key={g} className="flex flex-col gap-0.5">
-          <p className="eyebrow px-2.5 pb-1">{t(GROUP_LABELS[g])}</p>
-          {modules.filter((m) => m.group === g).map((m) => (
-            <NavItem
-              key={m.key}
-              mod={m}
-              active={current?.key === m.key || sameRoute(route, m.route)}
-              onClick={() => {
-                navigate(m.route);
-                onNavigate?.();
-              }}
-            />
-          ))}
+    <nav className="flex flex-col gap-4" aria-label="Main">
+      {pinned.length > 0 && (
+        <div className="flex flex-col gap-0.5">
+          <p className="eyebrow flex items-center gap-1.5 px-2.5 pb-1">
+            <Pin size={11} aria-hidden />
+            {t("nav.pinned")}
+          </p>
+          {pinned.map(item)}
         </div>
-      ))}
+      )}
+      {groups.map((g) => {
+        const entries = unpinned.filter((m) => m.group === g);
+        // The group holding the screen open now stays open.
+        const open = !prefs.collapsed.includes(g) || entries.some(isActive);
+        return (
+          <div key={g} className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setPrefs((p) => ({ ...p, collapsed: toggle(p.collapsed, g) }))}
+              className="eyebrow group/head flex items-center justify-between rounded-md px-2.5 pb-1 text-left hover:text-ink"
+            >
+              {t(GROUP_LABELS[g])}
+              <ChevronDown size={13} className={cn("transition-transform duration-200", !open && "-rotate-90")} aria-hidden />
+            </button>
+            {open && <div className="animate-pop flex flex-col gap-0.5">{entries.map(item)}</div>}
+          </div>
+        );
+      })}
+      {simple && <FullMenuButton userId={userId} />}
     </nav>
   );
 }
@@ -208,7 +304,9 @@ function NavGrid({ onNavigate }: { onNavigate(): void }) {
   const { route, navigate } = useRouter();
   const { t } = useI18n();
   const current = moduleForRoute(route);
-  const modules = visibleModules();
+  const userId = useSession().user?.id;
+  const simple = useSimpleMenu(userId);
+  const modules = menuModules(simple);
   const groups = (Object.keys(GROUP_LABELS) as ModuleDef["group"][]).filter((g) => modules.some((m) => m.group === g));
   return (
     <nav className="flex flex-col gap-5" aria-label="Main">
@@ -240,6 +338,7 @@ function NavGrid({ onNavigate }: { onNavigate(): void }) {
           </div>
         </div>
       ))}
+      {simple && <FullMenuButton userId={userId} />}
     </nav>
   );
 }
@@ -252,14 +351,19 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const pendingOrders = ORDERS.filter((o) => o.status === "pending").length;
   const session = useSession();
   const toast = useToast();
+  const confirm = useConfirm();
   /** Signing out needs the server; bills still waiting stay on the device for the next sign-in. */
-  const signOut = () => {
+  const signOut = async () => {
     const { offlineMode, online, entries } = getOfflineState();
     if (offlineMode || !online) {
       toast({ tone: "offline", title: t("offline.signOutOffline") });
       return;
     }
-    if (entries.length > 0 && !window.confirm(t("offline.signOutPending", { count: entries.length }))) return;
+    if (
+      entries.length > 0 &&
+      !(await confirm({ title: t("offline.signOutTitle"), body: t("offline.signOutPending", { count: entries.length }), confirmLabel: t("offline.signOutAnyway"), danger: true }))
+    )
+      return;
     void session.logout().catch(() => undefined);
   };
   const userName = LIVE ? (session.user?.name ?? "") : "Anil Sharma";
@@ -299,7 +403,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           ))}
         </select>
       )}
-      <button type="button" onClick={signOut} className="press flex h-9 items-center gap-2 rounded-xl px-2.5 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
+      <button type="button" onClick={() => void signOut()} className="press flex h-9 items-center gap-2 rounded-xl px-2.5 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
         <LogOut size={15} className="text-ink-3" />
         {t("auth.signOut")}
       </button>
@@ -325,7 +429,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
 
   // The phone's bottom bar: Customers and Outstanding for the roles that have
   // them, otherwise that role's own main screens (Products, Packing, Leave…).
-  const navModules = visibleModules();
+  const simple = useSimpleMenu(session.user?.id);
+  const navModules = menuModules(simple);
   const used = new Set<string>();
   const slot = (prefs: string[]) => {
     const m = prefs.map((k) => navModules.find((x) => x.key === k)).find((x) => x && !used.has(x.key));
@@ -347,7 +452,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   ).filter((b): b is NonNullable<typeof b> => Boolean(b) && !b!.hidden);
 
   return (
-    <div className="min-h-full lg:grid lg:grid-cols-[256px_1fr]">
+    <div className="animate-fade min-h-full lg:grid lg:grid-cols-[256px_1fr]">
       {/* Desktop sidebar: the menu on the accent-tinted navy. */}
       <aside className="on-dark bg-side sticky top-0 hidden h-screen flex-col lg:flex">
         <div className="flex h-16 items-center px-4">
@@ -417,6 +522,10 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             {LIVE ? <OfflineChip /> : <SyncChip />}
             <LanguageToggle className="hidden sm:inline-flex" />
             <ThemeToggle className="hidden sm:inline-flex" />
+            <span className="hidden sm:inline-flex">
+              <ComfortButton userId={session.user?.id} />
+            </span>
+            <HelpButton onOpenShortcuts={onOpenShortcuts} />
             {LIVE && allowed("notification.view") && <NotificationBell />}
             {!LIVE && allowed("notification.view") && <button
               type="button"
@@ -477,7 +586,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
               aria-current={active ? "page" : undefined}
               className={cn("press flex flex-col items-center justify-center gap-1 text-[10.5px] font-semibold", active ? "text-accent-ink" : "text-ink-3")}
             >
-              <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200", active ? "bg-accent-soft text-accent" : "")}>{item.icon}</span>
+              <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200", active ? "animate-pill-x bg-accent-soft text-accent" : "")}>{item.icon}</span>
               {item.label}
             </button>
           );
@@ -502,6 +611,9 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             <ThemeToggle className="bg-surface shadow-card" />
           </div>
           <AccentPicker className="justify-between" />
+          <div className="border-t border-line/70 pt-3">
+            <ComfortControls userId={session.user?.id} />
+          </div>
         </div>
         <div className="lg:hidden">
           <NavGrid onNavigate={() => setMoreOpen(false)} />

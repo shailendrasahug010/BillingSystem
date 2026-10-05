@@ -173,7 +173,7 @@ export function ReturnDialog({ kind, documentId, open, onOpenChange }: { kind: "
       {doc.isPending ? (
         <Skeleton className="h-40 w-full" />
       ) : doc.error ? (
-        <ErrorNote error={doc.error} />
+        <ErrorNote error={doc.error} onRetry={() => void doc.refetch()} />
       ) : (
         <div className="flex flex-col gap-4">
           {error ? <ErrorNote error={error} /> : null}

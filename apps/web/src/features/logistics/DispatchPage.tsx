@@ -98,8 +98,9 @@ function Ready({ onPlanned }: { onPlanned(id: string): void }) {
           </Button>
         )}
       </FilterBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
+        id="dispatch-ready"
         rows={rows}
         rowKey={(r) => r.id}
         loading={q.isPending}
@@ -115,6 +116,7 @@ function Ready({ onPlanned }: { onPlanned(id: string): void }) {
           {
             key: "invoice",
             header: t("dispatch.invoice"),
+            sortValue: (r) => r.invoiceNumber,
             render: (r) => (
               <div>
                 <p className="font-medium text-ink">{r.invoiceNumber}</p>
@@ -122,10 +124,10 @@ function Ready({ onPlanned }: { onPlanned(id: string): void }) {
               </div>
             ),
           },
-          { key: "customer", header: t("customer.name"), render: (r) => <span className="text-ink">{r.customerName}</span> },
-          { key: "place", header: t("dispatch.routeCity"), render: (r) => <span className="text-ink-2">{[r.route, r.city].filter(Boolean).join(" · ") || "—"}</span> },
-          { key: "order", header: t("packing.order"), render: (r) => (r.orderNumber ? <span className="text-ink-2">{r.orderNumber} · {t(`status.order.${r.orderStatus as "packed"}`)}</span> : <span className="text-ink-3">{t("dispatch.counterBill")}</span>) },
-          { key: "value", header: t("common.amount"), align: "right", render: (r) => money(r.grandTotal) },
+          { key: "customer", header: t("customer.name"), sortValue: (r) => r.customerName, render: (r) => <span className="text-ink">{r.customerName}</span> },
+          { key: "place", header: t("dispatch.routeCity"), sortValue: (r) => [r.route, r.city].filter(Boolean).join(" · "), render: (r) => <span className="text-ink-2">{[r.route, r.city].filter(Boolean).join(" · ") || "—"}</span> },
+          { key: "order", header: t("packing.order"), sortValue: (r) => r.orderNumber, render: (r) => (r.orderNumber ? <span className="text-ink-2">{r.orderNumber} · {t(`status.order.${r.orderStatus as "packed"}`)}</span> : <span className="text-ink-3">{t("dispatch.counterBill")}</span>) },
+          { key: "value", header: t("common.amount"), align: "right", sortValue: (r) => Number(r.grandTotal), render: (r) => money(r.grandTotal) },
         ]}
       />
       <PlanTripDialog
@@ -283,18 +285,20 @@ function Trips({ onOpen }: { onOpen(id: string): void }) {
           ]}
         />
       </FilterBar>
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable
+        id="dispatch-trips"
         rows={list.rows}
         rowKey={(r) => r.id}
         loading={list.loading}
         onRowClick={(r) => onOpen(r.id)}
         minWidth={720}
-        empty={<EmptyState title={t("dispatch.noTrips")} />}
+        empty={<EmptyState title={t("dispatch.noTrips")} hint={t("dispatch.noTripsHint")} />}
         columns={[
           {
             key: "number",
             header: t("common.number"),
+            sortValue: (r) => r.dispatchNumber,
             render: (r) => (
               <div>
                 <p className="font-medium text-ink">{r.dispatchNumber}</p>
@@ -302,10 +306,10 @@ function Trips({ onOpen }: { onOpen(id: string): void }) {
               </div>
             ),
           },
-          { key: "vehicle", header: t("dispatch.vehicle"), render: (r) => <span className="text-ink-2">{[r.vehicleNumber, r.driverName].filter(Boolean).join(" · ") || "—"}</span> },
-          { key: "status", header: t("common.status"), render: (r) => <Badge tone={TRIP_TONE[r.status]}>{t(`dispatch.status.${r.status}`)}</Badge> },
-          { key: "stops", header: t("dispatch.delivered"), align: "right", render: (r) => `${r.done}/${r.stops}` },
-          { key: "value", header: t("common.amount"), align: "right", render: (r) => money(r.value) },
+          { key: "vehicle", header: t("dispatch.vehicle"), sortValue: (r) => r.vehicleNumber, render: (r) => <span className="text-ink-2">{[r.vehicleNumber, r.driverName].filter(Boolean).join(" · ") || "—"}</span> },
+          { key: "status", header: t("common.status"), sortValue: (r) => t(`dispatch.status.${r.status}`), render: (r) => <Badge tone={TRIP_TONE[r.status]}>{t(`dispatch.status.${r.status}`)}</Badge> },
+          { key: "stops", header: t("dispatch.delivered"), align: "right", sortValue: (r) => (r.stops > 0 ? r.done / r.stops : null), render: (r) => `${r.done}/${r.stops}` },
+          { key: "value", header: t("common.amount"), align: "right", sortValue: (r) => Number(r.value), render: (r) => money(r.value) },
         ]}
       />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
@@ -387,7 +391,7 @@ function TripDialog({ id, onClose }: { id: string | null; onClose(): void }) {
       {q.isPending ? (
         <Skeleton className="h-48 w-full" />
       ) : q.error ? (
-        <ErrorNote error={q.error} />
+        <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
       ) : trip ? (
         <div className="flex flex-col gap-4">
           {error ? <ErrorNote error={error} /> : null}

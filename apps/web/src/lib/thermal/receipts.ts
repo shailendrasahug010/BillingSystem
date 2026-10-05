@@ -56,7 +56,7 @@ export function invoiceReceipt(inv: PrintableInvoice, locale: LocaleCode): Recei
   ];
   for (const l of inv.lines) {
     items.push({ t: "text", text: locale === "hi" && l.nameLocal ? l.nameLocal : l.name, bold: true, scale: 0.95 });
-    const detail = [`${qty(l.qty)} ${l.unit} × ${n(l.rate)}`, l.discountPercent ? `-${l.discountPercent}%` : null, l.hsn ? `${t("invoice.hsn")} ${l.hsn}` : null, inv.billOfSupply ? null : `${l.gstRate}%`].filter(Boolean).join(" · ");
+    const detail = [`${qty(l.qty)} ${l.unit} × ${n(l.rate)}`, l.freeQty ? `+${qty(l.freeQty)} ${t("invoice.free")}` : null, l.discountPercent ? `-${l.discountPercent}%` : null, l.hsn ? `${t("invoice.hsn")} ${l.hsn}` : null, inv.billOfSupply ? null : `${l.gstRate}%`].filter(Boolean).join(" · ");
     items.push({ t: "pair", left: detail, right: n(l.taxable), scale: 0.85 });
     if (l.batch) items.push({ t: "text", text: `${t("invoice.batch")} ${l.batch}`, scale: 0.8 });
   }

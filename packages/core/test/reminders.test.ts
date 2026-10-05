@@ -27,11 +27,18 @@ describe("reminder rules", () => {
     expect(reminderConfig("customer_reminders", { channel: "pigeon" }).channel).toBe("whatsapp_or_sms");
   });
 
+  it("keep a daily summary's numbers as ten-digit mobiles, without repeats, at most five", () => {
+    expect(reminderConfig("daily_summary", null)).toEqual({ hour: 20, channel: "whatsapp_or_sms", recipients: [] });
+    expect(reminderConfig("daily_summary", { recipients: ["+91 98260 11111", "9826011111", "12345", "5826011111", 7] }).recipients).toEqual(["9826011111"]);
+    expect(reminderConfig("daily_summary", { recipients: ["9826011111", "9826011112", "9826011113", "9826011114", "9826011115", "9826011116"] }).recipients).toHaveLength(5);
+    expect(reminderConfig("daily_summary", { recipients: "9826011111" }).recipients).toEqual([]);
+  });
+
   it("know their types, each with the permission whose holders are told", () => {
-    expect(REMINDER_TYPES).toHaveLength(12);
+    expect(REMINDER_TYPES).toHaveLength(13);
     expect(REMINDER_TYPES.every(isReminderType)).toBe(true);
     expect(isReminderType("nonsense")).toBe(false);
-    expect(new Set(NOTIFICATION_PERMISSIONS)).toEqual(new Set([...REMINDER_TYPES.map((t) => REMINDERS[t].permission), "invoice.review"]));
+    expect(new Set(NOTIFICATION_PERMISSIONS)).toEqual(new Set([...REMINDER_TYPES.map((t) => REMINDERS[t].permission), "invoice.review", "invoice.create"]));
     // Rules raised as things happen as well as by the daily check.
     expect(REMINDER_TYPES.filter((t) => REMINDERS[t].events)).toEqual(["pending_orders", "to_pack", "to_dispatch", "leave_request"]);
   });

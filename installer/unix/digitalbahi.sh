@@ -116,6 +116,14 @@ if [ "$COMMAND" = "install" ]; then
   shift
   exec "$NODE" $NODE_FLAGS "$APP/launcher/launcher.mjs" start "$@"
 fi
+# The checkout changed since the last build (git pull): build again before starting.
+if [ "$COMMAND" = "start" ] && [ -f "$APP/VERSION.txt" ] && command -v git >/dev/null 2>&1; then
+  head=$(git -C "$REPO" rev-parse --short=12 HEAD 2>/dev/null || true)
+  if [ -n "$head" ] && ! grep -q "($head)" "$APP/VERSION.txt"; then
+    say "The Digital Bahi code has changed since it was last built."
+    build
+  fi
+fi
 if [ ! -f "$APP/launcher/launcher.mjs" ]; then
   case "$COMMAND" in start | restart) build ;; *) say "Digital Bahi has not been set up on this computer yet."; exit 0 ;; esac
 fi

@@ -60,10 +60,11 @@ export function PurchasesPage() {
     : list.rows;
 
   const columns: Column<PurchaseRow>[] = [
-    { key: "date", header: t("purchase.billDate"), render: (p) => <span className="text-ink-2">{dateMedium(p.supplierInvoiceDate)}</span> },
+    { key: "date", header: t("purchase.billDate"), sortValue: (p) => p.supplierInvoiceDate, render: (p) => <span className="text-ink-2">{dateMedium(p.supplierInvoiceDate)}</span> },
     {
       key: "bill",
       header: t("purchase.billNumber"),
+      sortValue: (p) => p.supplierInvoiceNumber,
       render: (p) => (
         <div>
           <p className="font-medium text-ink">{p.supplierInvoiceNumber}</p>
@@ -71,10 +72,10 @@ export function PurchasesPage() {
         </div>
       ),
     },
-    { key: "supplier", header: t("nav.suppliers"), render: (p) => <span className="text-ink">{p.partyName}</span> },
-    { key: "status", header: t("common.status"), render: (p) => <PurchaseStatusBadge row={p} /> },
-    { key: "total", header: t("common.total"), align: "right", render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(p.grandTotal)}</span> },
-    { key: "due", header: t("common.balance"), align: "right", render: (p) => (p.status === "posted" && Number(p.balanceDue) > 0 ? <span className="font-semibold text-ink">{money(p.balanceDue)}</span> : <span className="text-ink-3">—</span>) },
+    { key: "supplier", header: t("nav.suppliers"), sortValue: (p) => p.partyName, render: (p) => <span className="text-ink">{p.partyName}</span> },
+    { key: "status", header: t("common.status"), sortValue: (p) => (p.status === "cancelled" ? p.status : p.paymentStatus), render: (p) => <PurchaseStatusBadge row={p} /> },
+    { key: "total", header: t("common.total"), align: "right", sortValue: (p) => Number(p.grandTotal), render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(p.grandTotal)}</span> },
+    { key: "due", header: t("common.balance"), align: "right", sortValue: (p) => (p.status === "posted" ? Number(p.balanceDue) : null), render: (p) => (p.status === "posted" && Number(p.balanceDue) > 0 ? <span className="font-semibold text-ink">{money(p.balanceDue)}</span> : <span className="text-ink-3">—</span>) },
   ];
 
   const posted = rows.filter((p) => p.status === "posted");
@@ -148,9 +149,10 @@ export function PurchasesPage() {
           {t("offline.keptPurchases")}
         </p>
       ) : list.error ? (
-        <ErrorNote error={list.error} />
+        <ErrorNote error={list.error} onRetry={() => void list.refetch()} />
       ) : null}
       <DataTable
+        id="purchases"
         columns={columns}
         rows={rows}
         rowKey={(p) => p.id}

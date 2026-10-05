@@ -14,6 +14,7 @@ import { api } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 import { EInvoiceTab } from "./EInvoiceTab";
 import { Gstr1Tab } from "./Gstr1Tab";
+import { Gstr2bTab } from "./Gstr2bTab";
 import { Gstr3bTab } from "./Gstr3bTab";
 import { PeriodActions } from "./PeriodActions";
 
@@ -65,6 +66,9 @@ export function GstPage() {
           <Tabs.Trigger value="gstr3b" className={TAB_TRIGGER}>
             GSTR-3B
           </Tabs.Trigger>
+          <Tabs.Trigger value="gstr2b" className={TAB_TRIGGER}>
+            GSTR-2B
+          </Tabs.Trigger>
           <Tabs.Trigger value="einvoice" className={TAB_TRIGGER}>
             {t("einvoice.tab")}
           </Tabs.Trigger>
@@ -77,6 +81,9 @@ export function GstPage() {
         </Tabs.Content>
         <Tabs.Content value="gstr3b">
           <Gstr3bTab period={period} />
+        </Tabs.Content>
+        <Tabs.Content value="gstr2b">
+          <Gstr2bTab period={period} />
         </Tabs.Content>
         <Tabs.Content value="einvoice">
           <EInvoiceTab period={period} />
@@ -140,7 +147,7 @@ function SummaryTab({ period }: { period: string }) {
           </Button>
         )}
       </div>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Tile label={t("gstPage.outputTax")} value={money(output)} />
@@ -156,7 +163,7 @@ function SummaryTab({ period }: { period: string }) {
             loading={q.isPending}
             rowKey={(r) => `${r.section}-${r.gstRate}`}
             minWidth={760}
-            empty={<EmptyState title={t("gstPage.noOutward")} />}
+            empty={<EmptyState title={t("gstPage.noOutward")} hint={t("gstPage.noOutwardHint")} />}
             columns={[
               { key: "section", header: t("gstPage.section"), render: (r) => <Badge tone={r.section === "B2B" ? "accent" : "neutral"}>{r.section}</Badge> },
               { key: "rate", header: t("invoice.gstRate"), align: "right", render: (r) => `${number(r.gstRate, 2)}%` },
@@ -175,7 +182,7 @@ function SummaryTab({ period }: { period: string }) {
             loading={q.isPending}
             rowKey={(r) => `${r.itcEligibility}-${r.reverseCharge}-${r.gstRate}`}
             minWidth={760}
-            empty={<EmptyState title={t("gstPage.noInward")} />}
+            empty={<EmptyState title={t("gstPage.noInward")} hint={t("gstPage.noInwardHint")} />}
             columns={[
               {
                 key: "itc",

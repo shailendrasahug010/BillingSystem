@@ -143,6 +143,9 @@ await api("PUT", "/settings/offline.wipe_after_days", token, { value: 2 });
 await page.fill("#auth-id", mobile);
 await page.fill("#auth-password", password);
 await page.getByRole("button", { name: "Sign in", exact: true }).click();
+// Signed in again on the screen the link names (the one left before): the dashboard next.
+await page.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
+await page.goto(`${WEB}/#dashboard`);
 await page.getByRole("heading", { name: /Ravi/ }).waitFor({ timeout: 15000 });
 await waitForKeys(["snapshot:", "device:"]);
 if ((await api("GET", "/devices", token)).data.filter((d) => !d.revokedAt).length !== 1) errors.push("the phone did not register again");

@@ -4,12 +4,14 @@ import { App } from "./app/App";
 import { AppErrorBoundary } from "./components/ErrorBoundary";
 import { installErrorReporting } from "./lib/errorReport";
 import { initAppearance } from "./app/theme";
+import { initTextSize } from "./app/comfort";
 import { setupPwa } from "./lib/pwa";
 import { startNativeApp } from "./platform/app";
 import "./styles/app.css";
 
 installErrorReporting();
 initAppearance();
+initTextSize();
 setupPwa();
 startNativeApp();
 

@@ -118,13 +118,13 @@ function Requests() {
         />
       </FilterBar>
       {error ? <ErrorNote error={error} /> : null}
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable
         rows={list.rows}
         rowKey={(r) => r.id}
         loading={list.loading}
         minWidth={820}
-        empty={<EmptyState title={t("leave.empty")} />}
+        empty={<EmptyState title={t("leave.empty")} hint={t("leave.emptyHint")} />}
         columns={[
           {
             key: "employee",
@@ -214,13 +214,13 @@ function Balances() {
         </Select>
         <span className="text-[13px] text-ink-3">{t("leave.balanceHint")}</span>
       </FilterBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
         rows={employees}
         rowKey={([id]) => id}
         loading={q.isPending}
         minWidth={520}
-        empty={<EmptyState title={t("people.empty")} />}
+        empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />}
         columns={[
           { key: "name", header: t("leave.employee"), render: ([, n]) => <span className="font-medium text-ink">{n}</span> },
           ...types.map((ty) => ({

@@ -1,25 +1,20 @@
 import { translateError } from "@digitalbahi/i18n";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ScreenErrorBoundary } from "../components/ErrorBoundary";
 import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
 import { Kbd, Skeleton } from "../components/ui/misc";
+import { Checkbox } from "../components/ui/Field";
 import { ToastProvider } from "../components/ui/Toast";
+import { ConfirmProvider } from "../components/ui/Confirm";
 import { AuthLayout, AuthPage } from "../features/auth/AuthPage";
 import { ServerSetup, useNeedsServer } from "../features/auth/ServerSetup";
 import { NativePush } from "../components/NativePush";
 import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
 import { UnlockPage } from "../features/auth/UnlockPage";
-import { CustomerProfilePage } from "../features/customers/CustomerProfilePage";
-import { CustomersPage } from "../features/customers/CustomersPage";
-import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { CreateInvoicePage } from "../features/invoice/CreateInvoicePage";
-import { InvoiceViewPage } from "../features/invoice/InvoiceViewPage";
-import { PlannedPage } from "../features/planned/PlannedPage";
-import { ProductsPage } from "../features/products/ProductsPage";
 import { CommandPalette } from "../features/search/CommandPalette";
-import { SettingsPage } from "../features/settings/SettingsPage";
+import { ShopApp, shopKeyFromHash } from "../features/shop/ShopPage";
 import { homeRoute, LIVE_MODULES, routePermission } from "./modules";
 import { ShieldX } from "lucide-react";
 import { EmptyState } from "../components/ui/misc";
@@ -31,13 +26,23 @@ import { setErrorScreen } from "../lib/errorReport";
 import { SessionProvider, useSession } from "./session";
 import { I18nProvider, useI18n } from "./i18n";
 import { RouterProvider, useRouter, type Route } from "./router";
-import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, useShortcuts } from "./shortcuts";
+import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, setTallyKeys, TALLY_SHORTCUTS, tallyKeysOn, useShortcuts } from "./shortcuts";
 
 /** Module screens load on first use, so the billing screens start fast on slow connections. */
+const CustomerProfilePage = lazy(() => import("../features/customers/CustomerProfilePage").then((m) => ({ default: m.CustomerProfilePage })));
+const CustomersPage = lazy(() => import("../features/customers/CustomersPage").then((m) => ({ default: m.CustomersPage })));
+const DashboardPage = lazy(() => import("../features/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const loadCreateInvoice = () => import("../features/invoice/CreateInvoicePage");
+const CreateInvoicePage = lazy(() => loadCreateInvoice().then((m) => ({ default: m.CreateInvoicePage })));
+const InvoiceViewPage = lazy(() => import("../features/invoice/InvoiceViewPage").then((m) => ({ default: m.InvoiceViewPage })));
+const PlannedPage = lazy(() => import("../features/planned/PlannedPage").then((m) => ({ default: m.PlannedPage })));
+const ProductsPage = lazy(() => import("../features/products/ProductsPage").then((m) => ({ default: m.ProductsPage })));
+const SettingsPage = lazy(() => import("../features/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const GstPage = lazy(() => import("../features/gst/GstPage").then((m) => ({ default: m.GstPage })));
 const InventoryPage = lazy(() => import("../features/inventory/InventoryPage").then((m) => ({ default: m.InventoryPage })));
 const PaymentsPage = lazy(() => import("../features/payments/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
 const PurchaseEntryPage = lazy(() => import("../features/purchases/PurchaseEntryPage").then((m) => ({ default: m.PurchaseEntryPage })));
+const InvoicesPage = lazy(() => import("../features/invoice/InvoicesPage").then((m) => ({ default: m.InvoicesPage })));
 const PurchasesPage = lazy(() => import("../features/purchases/PurchasesPage").then((m) => ({ default: m.PurchasesPage })));
 const PurchaseViewPage = lazy(() => import("../features/purchases/PurchaseViewPage").then((m) => ({ default: m.PurchaseViewPage })));
 const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
@@ -77,6 +82,8 @@ function Screen({ route }: { route: Route }) {
     case "invoice-new":
       // key: a fresh draft whenever the entry customer changes
       return <CreateInvoicePage key={route.customerId ?? "new"} {...(route.customerId ? { customerId: route.customerId } : {})} />;
+    case "invoices":
+      return <InvoicesPage />;
     case "invoice-view":
       return <InvoiceViewPage invoiceId={route.invoiceId} print={route.print ?? false} />;
     case "customers":
@@ -127,7 +134,7 @@ function Screen({ route }: { route: Route }) {
           case "gst":
             return <GstPage />;
           case "expenses":
-            return <ExpensesPage />;
+            return <ExpensesPage startNew={route.action === "new"} />;
           case "employees":
             return <EmployeesPage />;
           case "leave":
@@ -152,8 +159,15 @@ function Screen({ route }: { route: Route }) {
   }
 }
 
-function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v: boolean): void }) {
+function ShortcutsDialog({ open, onOpenChange, tally, onTally }: { open: boolean; onOpenChange(v: boolean): void; tally: boolean; onTally(on: boolean): void }) {
   const { t } = useI18n();
+  const tallyRows: Array<[string, string]> = [
+    [TALLY_SHORTCUTS.payment, t("shortcuts.tally.payment")],
+    [TALLY_SHORTCUTS.receipt, t("shortcuts.tally.receipt")],
+    [TALLY_SHORTCUTS.expense, t("shortcuts.tally.expense")],
+    [TALLY_SHORTCUTS.sales, t("shortcuts.tally.sales")],
+    [TALLY_SHORTCUTS.purchase, t("shortcuts.tally.purchase")],
+  ];
   const rows: Array<[string, string]> = [
     [GLOBAL_SHORTCUTS.search, t("shortcuts.search")],
     [GLOBAL_SHORTCUTS.newInvoice, t("shortcuts.newInvoice")],
@@ -180,6 +194,22 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v
           </div>
         ))}
       </dl>
+      <div className="mt-4 rounded-2xl border border-line bg-surface-2/50 p-3">
+        <Checkbox label={t("shortcuts.tally.toggle")} checked={tally} onChange={onTally} />
+        <p className="mt-1 text-[12.5px] text-ink-3">{t("shortcuts.tally.help")}</p>
+        {tally && (
+          <dl className="mt-2 flex flex-col">
+            {tallyRows.map(([k, label]) => (
+              <div key={k} className="flex items-center justify-between gap-4 border-b border-line py-1.5 text-[14px] last:border-b-0">
+                <dt className="text-ink-2">{label}</dt>
+                <dd>
+                  <Kbd keys={k} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
     </Dialog>
   );
 }
@@ -239,9 +269,10 @@ function NoAccess({ onHome }: { onHome(): void }) {
 }
 
 function Root() {
-  const { route, navigate } = useRouter();
+  const { route, navigate, direction } = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [tally, setTally] = useState(tallyKeysOn);
 
   // A shortcut only for what the role may do (the screen would refuse it anyway).
   const go = (to: Route) => {
@@ -255,7 +286,23 @@ function Root() {
     { id: "purchase", keys: GLOBAL_SHORTCUTS.purchase, handler: () => go(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
     { id: "collection", keys: GLOBAL_SHORTCUTS.collection, handler: () => go(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
     { id: "help", keys: "shift+?", handler: () => setHelpOpen(true) },
+    // Tally's voucher keys; F-keys type nothing, so they work from any field.
+    ...(tally
+      ? [
+          { id: "tally-payment", keys: TALLY_SHORTCUTS.payment, allowInInputs: true, handler: () => go(LIVE ? { name: "planned", module: "payments", action: "pay" } : { name: "planned", module: "payments" }) },
+          { id: "tally-receipt", keys: TALLY_SHORTCUTS.receipt, allowInInputs: true, handler: () => go(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
+          { id: "tally-expense", keys: TALLY_SHORTCUTS.expense, allowInInputs: true, handler: () => go({ name: "planned", module: "expenses", action: "new" }) },
+          { id: "tally-sales", keys: TALLY_SHORTCUTS.sales, allowInInputs: true, handler: () => go({ name: "invoice-new" }) },
+          { id: "tally-purchase", keys: TALLY_SHORTCUTS.purchase, allowInInputs: true, handler: () => go(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
+        ]
+      : []),
   ]);
+
+  // The billing screen is the one most used: fetch it once the first screen is up, so F2 opens it at once.
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 2000));
+    idle(() => void loadCreateInvoice().catch(() => undefined));
+  }, []);
 
   const needed = routePermission(route);
   const home = homeRoute();
@@ -267,14 +314,22 @@ function Root() {
 
   return (
     <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
-      {/* Each screen rises in as it opens. */}
-      <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className="animate-page">
+      {/* Each screen rises in as it opens (on a phone, slides in from the side it came from). */}
+      <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className={`animate-page screen-${direction}`}>
         <ScreenErrorBoundary>
           <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
         </ScreenErrorBoundary>
       </div>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
-      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <ShortcutsDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        tally={tally}
+        onTally={(on) => {
+          setTallyKeys(on);
+          setTally(on);
+        }}
+      />
       {LIVE && <NativePush />}
     </AppShell>
   );
@@ -283,6 +338,14 @@ function Root() {
 export function App() {
   // The Android app first needs its server's address; nothing reaches the API before.
   const needsServer = useNeedsServer();
+  // A shop's order link: its own page, with no sign-in.
+  const [shopKey] = useState(() => shopKeyFromHash(window.location.hash));
+  if (shopKey)
+    return (
+      <I18nProvider>
+        <ShopApp shopKey={shopKey} />
+      </I18nProvider>
+    );
   return (
     <I18nProvider>
       {needsServer ? (
@@ -291,7 +354,9 @@ export function App() {
         <SessionProvider>
           <RouterProvider>
             <ToastProvider>
-              <SessionGate />
+              <ConfirmProvider>
+                <SessionGate />
+              </ConfirmProvider>
             </ToastProvider>
           </RouterProvider>
         </SessionProvider>

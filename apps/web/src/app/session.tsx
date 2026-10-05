@@ -2,12 +2,13 @@ import type { BusinessSummary, MeResponse, SessionResponse } from "@digitalbahi/
 import { todayIn } from "@digitalbahi/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { applyMe, applyWorkspace, loadWorkspace, onPullRequest, pullWorkspace, resetWorkspace, type KeptWorkspace } from "../data/live";
+import { applyMe, applyWorkspace, loadWorkspace, onPullRequest, pullWorkspace, resetWorkspace, setQuickPull, type KeptWorkspace } from "../data/live";
 import { LIVE } from "../data/source";
 import { api, ApiError, onSessionChange, refreshSession, setSession } from "../lib/api";
 import { ensureDevice, removedDevices } from "../offline/device";
 import { clearDeviceDocuments, openDeviceDocuments, refreshDeviceDocuments } from "../offline/documents";
 import { wipeBusinessCopy } from "../offline/wipe";
+import { clearKeptDrafts } from "../features/invoice/keptDraft";
 import { clearSnapshots, copyExpired, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
 import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
@@ -183,6 +184,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         // Signed out (or the session ended): forget the saved business; waiting work stays, locked, for the next sign-in.
         void clearSnapshots();
         void clearDeviceDocuments();
+        void clearKeptDrafts();
         lockVault();
         clearOfflineScope();
         resetWorkspace();
@@ -291,6 +293,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!res) {
         void clearSnapshots();
         void clearDeviceDocuments();
+        void clearKeptDrafts();
         lockVault();
         clearOfflineScope();
         offlineMode.current = false;
@@ -343,28 +346,40 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // While online: what others changed (prices, stock, balances, new customers) comes every few minutes, when the app is shown again and when a notification arrives.
   useEffect(() => {
     if (!LIVE) return;
-    let running = false;
-    const pull = async () => {
+    let running: Promise<boolean> | null = null;
+    // One pass of the feed. `asked`: a screen just changed something (a purchase, a product) and wants it now, shown or not.
+    const pass = async (asked: boolean): Promise<boolean> => {
       const { session: s, me: m } = current.current;
-      if (running || !s?.business || !m?.business || offlineMode.current || !kept?.feed || document.visibilityState !== "visible") return;
-      running = true;
+      if (!s?.business || !m?.business || offlineMode.current || !kept?.feed || (!asked && document.visibilityState !== "visible")) return false;
       try {
         const next = await pullWorkspace(kept);
         if (!next) {
           kept = await loadWorkspace(m);
         } else {
           kept = { data: next.data, ...(next.feed ? { feed: next.feed } : {}) };
-          if (!next.changed) return;
+          if (!next.changed) return true;
           applyWorkspace(next.data);
         }
         applyPendingEffects();
         void saveSnapshot({ user: s.user, business: s.business, businesses: s.businesses, me: m, data: kept.data, ...(kept.feed ? { feed: kept.feed } : {}), savedAt: new Date().toISOString() });
+        return true;
       } catch {
         // No connection just now: the next round tries again.
-      } finally {
-        running = false;
+        return false;
       }
     };
+    // A round already running is waited for; one asked for then runs after it, so it sees the latest change.
+    const pull = (asked = false): Promise<boolean> => {
+      if (running && !asked) return running;
+      const before = running ?? Promise.resolve(false);
+      const mine: Promise<boolean> = before.then(() => pass(asked)).finally(() => {
+        if (running === mine) running = null;
+      });
+      running = mine;
+      return mine;
+    };
+    // Screens that changed the catalogue, customers or suppliers get only what changed (not the whole list again).
+    setQuickPull(() => pull(true));
     const timer = setInterval(() => void pull(), PULL_EVERY_MS);
     const shown = () => {
       if (document.visibilityState === "visible") void pull();
@@ -375,6 +390,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", shown);
       asked();
+      setQuickPull(null);
     };
   }, []);
 

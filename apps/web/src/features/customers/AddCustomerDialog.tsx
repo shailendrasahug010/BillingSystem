@@ -81,7 +81,7 @@ export function AddCustomerDialog({
     setOptOut(Boolean(customer.remindersOptOut));
     setTouched({});
     setServerError(null);
-  }, [open, customer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, customer]);
 
   // Opened from a search: start from what was typed.
   useEffect(() => {
@@ -95,7 +95,7 @@ export function AddCustomerDialog({
     } else if (digits.length >= 10 && digits.length === typed.replace(/[\s+-]/g, "").length) setForm({ ...blank(), mobile: digits.slice(-10) });
     else setForm({ ...blank(), businessName: typed });
     setTouched({});
-  }, [open, initial]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, initial]);
 
   const issueText = (issues: IssueCode[], field: "mobile" | "pincode" | "gstin"): string | null => {
     const first = issues[0];

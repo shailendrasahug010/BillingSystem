@@ -80,7 +80,7 @@ const roles = Object.fromEntries((await api("GET", "/roles", token)).data.map((r
 await api("POST", "/members", token, { name: "Ravi Salesman", mobile: raviMobile, roleId: roles.sales, username: `ravi${run}`, password: "Ravi-pass-2026" });
 const customer = (name) => api("POST", "/customers", token, { name, stateCode: "23", city: "Indore", mobile: `9826${run}${name.length}`.slice(0, 10), creditDays: 7 });
 const anand = await customer("Anand Kirana");
-const bansal = await customer("Bansal Stores");
+await customer("Bansal Stores");
 const chouhan = await customer("Chouhan General");
 // Shops in two other towns, on no route (Dewas typed three ways).
 const town = (name, city, pincode, i) => api("POST", "/customers", token, { name, stateCode: "23", city, pincode, mobile: `9827${run}${i}`, creditDays: 7 });

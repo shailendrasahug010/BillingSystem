@@ -59,6 +59,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- The barcode scanner, and the camera in the page when the scanner is not there. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- A short buzz when a bill is saved or a code is scanned. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Receipt printers paired with the phone (classic Bluetooth). -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />

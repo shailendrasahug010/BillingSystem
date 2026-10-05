@@ -96,7 +96,7 @@ export function PayrollPage() {
         </FilterBar>
       )}
       {error ? <ErrorNote error={error} /> : null}
-      {runs.error ? <ErrorNote error={runs.error} /> : null}
+      {runs.error ? <ErrorNote error={runs.error} onRetry={() => void runs.refetch()} /> : null}
       <DataTable
         rows={runs.data ?? []}
         rowKey={(r) => r.id}
@@ -146,7 +146,7 @@ function RunView({ runId, onBack }: { runId: string; onBack(): void }) {
   };
 
   if (q.isPending) return <Skeleton className="h-64 w-full" />;
-  if (q.error || !run) return <ErrorNote error={q.error} />;
+  if (q.error || !run) return <ErrorNote error={q.error} onRetry={() => void q.refetch()} />;
   const draft = run.status === "draft";
   return (
     <div className="flex flex-col gap-5">
@@ -193,7 +193,7 @@ function RunView({ runId, onBack }: { runId: string; onBack(): void }) {
         rowKey={(s) => s.id}
         minWidth={860}
         onRowClick={(s) => setViewing(s.id)}
-        empty={<EmptyState title={t("payroll.noSlips")} />}
+        empty={<EmptyState title={t("payroll.noSlips")} hint={t("payroll.noSlipsHint")} />}
         columns={[
           {
             key: "name",
@@ -368,7 +368,7 @@ function SlipDialog({ slipId, onClose }: { slipId: string | null; onClose(): voi
       {q.isPending ? (
         <Skeleton className="h-64 w-full" />
       ) : q.error ? (
-        <ErrorNote error={q.error} />
+        <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
       ) : q.data ? (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">

@@ -96,7 +96,8 @@
     "noAccess": "Not part of your role",
     "noAccessHint": "Your role does not include this screen. Ask the owner to add it if you need it.",
     "goHome": "Go to my screens",
-    "remove": "Remove"
+    "remove": "Remove",
+    "connectHint": "Connect to the internet and this opens by itself."
   },
   "nav": {
     "groupDaily": "Daily work",
@@ -137,7 +138,10 @@
     "auditLog": "Audit Log",
     "messages": "Messages",
     "outstanding": "Outstanding",
-    "beat": "Beat"
+    "beat": "Beat",
+    "pinned": "Pinned",
+    "pin": "Pin {{name}} to the top",
+    "unpin": "Unpin {{name}}"
   },
   "auth": {
     "welcome": "Welcome back",
@@ -185,7 +189,14 @@
     "switchBusiness": "Switch business",
     "loadingWorkspace": "Loading your business…",
     "loadFailed": "Could not load your business.",
-    "offlineStart": "You are offline. Your business opens as soon as the internet connection is back; your data is kept safely on the server."
+    "offlineStart": "You are offline. Your business opens as soon as the internet connection is back; your data is kept safely on the server.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "perks": {
+      "offline": "Works without internet",
+      "whatsapp": "Bills on WhatsApp as PDF",
+      "language": "English · हिन्दी"
+    }
   },
   "dashboard": {
     "greeting": "Good morning, {{name}}",
@@ -423,7 +434,35 @@
     "copyMessage": "Copy message",
     "copied": "Copied",
     "whatsAppWithPdf": "The invoice PDF goes with the message.",
-    "whatsAppPdfLater": "The message goes now; the PDF can be sent once the bill reaches the server."
+    "whatsAppPdfLater": "The message goes now; the PDF can be sent once the bill reaches the server.",
+    "kept": {
+      "restored": "Unfinished bill brought back",
+      "startNew": "Start a new bill",
+      "offer": "Unfinished bill:",
+      "resume": "Resume",
+      "discard": "Discard"
+    },
+    "copy": {
+      "button": "Copy bill",
+      "title": "Start a new bill with this bill's items",
+      "done": "Copied from {{number}}",
+      "hint": "Same items, quantities and rates, dated today. Change anything before saving.",
+      "replaceTitle": "Replace the unfinished bill?",
+      "replaceBody": "You have a bill not saved yet ({{bill}}). Copying this bill puts it in its place."
+    },
+    "notFound": "This bill was not found",
+    "notFoundHint": "It may have been removed, or belong to another business. Look for it in the invoice list.",
+    "backToList": "Back to invoices"
+  },
+  "bills": {
+    "title": "Sales bills",
+    "search": "Search by bill number or customer",
+    "onlyHeld": "Held for review",
+    "payment": "Payment",
+    "openOnly": "To collect",
+    "empty": "No bills found",
+    "emptyHint": "Change the filters, or make a new bill.",
+    "keptBills": "No connection: sales bills kept on this device. Open one to print or share it."
   },
   "suggestions": {
     "title": "Smart suggestions",
@@ -536,7 +575,11 @@
     "remindersStoppedBy": {
       "staff": "Stopped on {{date, date}}",
       "reply": "They replied STOP on WhatsApp on {{date, date}}"
-    }
+    },
+    "noPaymentsHint": "Use Receive Payment above when this customer pays.",
+    "notFound": "This customer was not found",
+    "notFoundHint": "They may have been removed, or belong to another business. Search the customer list.",
+    "backToList": "Back to customers"
   },
   "supplier": {
     "title": "Suppliers",
@@ -565,7 +608,9 @@
     "lastPurchase": "Last purchase",
     "lastPayment": "Last payment",
     "displayName": "Supplier name",
-    "companyNameHint": "Only if different, as printed on their GST bills"
+    "companyNameHint": "Only if different, as printed on their GST bills",
+    "noPurchasesHint": "Use New purchase bill under Purchases to enter this supplier's bills.",
+    "noPaymentsHint": "Payments you make to this supplier show here."
   },
   "product": {
     "title": "Products",
@@ -637,7 +682,7 @@
   },
   "status": {
     "order": {
-      "draft": "Draft",
+      "draft": "Quotation",
       "pending": "Pending",
       "confirmed": "Confirmed",
       "packing": "Packing",
@@ -713,7 +758,16 @@
     "addSuggestion": "Add suggestion 1–9",
     "closeDialog": "Close dialog",
     "help": "Show shortcuts",
-    "saveAndPrint": "Save and print"
+    "saveAndPrint": "Save and print",
+    "tally": {
+      "toggle": "Tally keys (F5 to F9)",
+      "help": "Open vouchers the way Tally does. Turn off to let F5 reload the page again.",
+      "payment": "Payment (pay a supplier)",
+      "receipt": "Receipt (receive payment)",
+      "expense": "Expense",
+      "sales": "Sales bill",
+      "purchase": "Purchase entry"
+    }
   },
   "search": {
     "placeholder": "Search customers, products, invoices, GSTIN, mobile…",
@@ -884,7 +938,7 @@
     "nilRated": "Nil rated"
   },
   "errors": {
-    "generic": "Something went wrong. Please try again.",
+    "generic": "Something went wrong. Please try again; if it keeps happening, reload the page.",
     "network": "You appear to be offline. Check the internet connection and try again.",
     "forbidden": "You do not have permission to do this.",
     "TAX_RULE_NOT_FOUND": "No GST rate is set for “{{category}}” on {{date}}. Ask an admin to update the tax category.",
@@ -904,7 +958,7 @@
     "INVALID_STATUS_TRANSITION": "An order cannot move from “{{from}}” to “{{to}}”.",
     "UNAUTHORIZED": "Please sign in again.",
     "TOKEN_INVALID": "Your session has ended. Please sign in again.",
-    "FORBIDDEN": "You do not have permission to do this.",
+    "FORBIDDEN": "You do not have permission to do this. Ask the business owner to allow it for your role in Users & Roles.",
     "NOT_FOUND": "This record was not found. It may have been removed.",
     "ROUTE_NOT_FOUND": "This feature is not available on the server yet.",
     "VALIDATION_FAILED": "Some fields need attention. Please check the highlighted fields.",
@@ -1114,7 +1168,23 @@
     "NOT_HELD_FOR_REVIEW": "This bill is not held for review.",
     "SECTION_REQUIRED": "Choose which table to download.",
     "DEVICE_NOT_FOUND": "This device is not registered in this business.",
-    "RANGE_TOO_LONG": "Choose at most {{days}} days."
+    "RANGE_TOO_LONG": "Choose at most {{days}} days.",
+    "VALID_UNTIL_BEFORE_DATE": "The valid-until date is for a quotation, on or after its date.",
+    "PERIOD_END_BEFORE_START": "The end date is before the start date.",
+    "TALLY_FILE_UNREADABLE": "This is not a Tally XML file, or it could not be read. Export it from Tally again as XML.",
+    "BANK_STATEMENT_UNREADABLE": "This doesn't look like a bank statement: no Date and Deposit/Withdrawal (or Amount) columns were found.",
+    "REPEAT_START_IN_PAST": "The first repeat must be today or later.",
+    "REPEAT_END_BEFORE_START": "The stop date is before the first repeat.",
+    "REPEAT_BILL_NOT_ALLOWED": "Only a posted tax invoice or bill of supply can repeat, not a cancelled, export or SEZ bill.",
+    "REPEAT_OWNER_INACTIVE": "The person who set up this repeat bill no longer has access. Set it up again from the bill.",
+    "REPEAT_BILL_FAILED": "The bill could not be made. It will be tried again tomorrow.",
+    "onLine": "Line {{line}}:",
+    "exportFailed": "The file could not be made",
+    "ORDER_LINK_OFF": "This order link has been turned off. Ask the business for a new one.",
+    "GSTR2B_NOT_RECOGNISED": "This is not a GSTR-2B file. Download GSTR-2B as JSON from the GST portal and choose that file.",
+    "GSTR2B_NOT_JSON": "This file is not a JSON file. On the GST portal, download GSTR-2B with the JSON button (not Excel or PDF).",
+    "GSTR2B_NO_PERIOD": "The file does not say its month. Pick the month above and choose the file again.",
+    "BACKUP_FOLDER_FAILED": "The backup could not be saved in the backup folder (is the pen drive in?): {{reason}}"
   },
   "validation": {
     "required": "This field is required",
@@ -1240,7 +1310,9 @@
     "cancel": "Cancel purchase",
     "confirmCancel": "Yes, cancel purchase",
     "cancelHint": "Stock goes back out and the supplier's payable is reduced. Payments made against it stay as an advance.",
-    "cancelledDone": "Purchase cancelled"
+    "cancelledDone": "Purchase cancelled",
+    "addNewSupplier": "Add “{{name}}” as a new supplier",
+    "addNewProduct": "Add “{{name}}” as a new product"
   },
   "inventory": {
     "title": "Inventory",
@@ -1453,7 +1525,9 @@
       "cashHint": "Indicative; interest and late fee not included",
       "zeroRated": "(b) Zero-rated (exports, SEZ)"
     },
-    "downloadCsv": "Download CSV"
+    "downloadCsv": "Download CSV",
+    "noOutwardHint": "Bills made in this month show here. Pick another month to see earlier sales.",
+    "noInwardHint": "Enter supplier bills under Purchases to claim their GST here."
   },
   "users": {
     "title": "Users and roles",
@@ -1750,7 +1824,8 @@
       "counter": "Counter",
       "phone": "Phone",
       "whatsapp": "WhatsApp",
-      "app": "App"
+      "app": "App",
+      "link": "Order link"
     },
     "cancel": "Cancel order",
     "confirmCancel": "Yes, cancel order",
@@ -1768,7 +1843,36 @@
     "makeInvoiceHint": "At the order's rates. Lower a quantity to invoice part of the order now.",
     "invoices": "Invoices",
     "noInvoices": "Not invoiced yet.",
-    "history": "History"
+    "history": "History",
+    "quotation": {
+      "tab": "Quotations",
+      "new": "New quotation",
+      "newHint": "Prices from the customer's rate list, as on an order. Nothing is packed or billed until the customer accepts it.",
+      "save": "Save quotation",
+      "saved": "Quotation saved",
+      "title": "Quotation",
+      "number": "Quotation no.",
+      "validUntil": "Valid until",
+      "validUntilShort": "valid until {{date}}",
+      "from": "from quotation {{number}}",
+      "print": "Print quotation",
+      "accept": "Accept quotation",
+      "hint": "A quotation for the customer to agree to. Print it or send it; once they accept, it becomes an order with its own order number.",
+      "printNote": "This is a quotation, not a tax invoice. Prices and GST as on the date above.",
+      "listHint": "Quotations sent to customers and not yet accepted. Open one to print it again or accept it.",
+      "empty": "No quotations waiting",
+      "emptyHint": "Make one with New quotation."
+    },
+    "challan": {
+      "title": "Delivery challan",
+      "number": "Challan no.",
+      "againstOrder": "Against order",
+      "print": "Delivery challan",
+      "short": "challan {{number}}",
+      "printNote": "Delivery challan: goods sent before the bill. Not a tax invoice; the tax invoice follows."
+    },
+    "computerGenerated": "This is a computer-generated document.",
+    "noDemandHint": "Products on booked orders that are not billed yet add up here."
   },
   "expenses": {
     "title": "Expenses",
@@ -1959,7 +2063,8 @@
     "appliedDone": "Leave request sent",
     "submit": "Send request",
     "availableHint": "{{days}} days available",
-    "halfDayOption": "Half day only"
+    "halfDayOption": "Half day only",
+    "emptyHint": "Use Apply leave to add one. Requests waiting for approval show here."
   },
   "payroll": {
     "title": "Payroll",
@@ -2043,7 +2148,8 @@
       "ptPayers_one": "{{count}} person pays",
       "ptPayers_other": "{{count}} people pay",
       "ptList": "Download list"
-    }
+    },
+    "noSlipsHint": "Add employees under Employees, then run payroll for this month again."
   },
   "packing": {
     "title": "Packing",
@@ -2080,7 +2186,8 @@
     "shipTo": "Ship to",
     "batch": "Batch",
     "exp": "exp.",
-    "checkedBy": "Checked by"
+    "checkedBy": "Checked by",
+    "noSlipsHint": "A slip is made when you start packing an order under To pack."
   },
   "dispatch": {
     "title": "Dispatch",
@@ -2143,7 +2250,8 @@
     "sheet": "Trip sheet",
     "toCollect": "To collect",
     "signature": "Signature / stamp",
-    "driverSign": "Driver"
+    "driverSign": "Driver",
+    "noTripsHint": "Pick packed bills and choose Plan trip to send them out."
   },
   "analytics": {
     "netSales": "Net sales",
@@ -2170,7 +2278,9 @@
     "stockValue": "Stock value",
     "daysOfCover": "Days of cover",
     "lastSold": "Last sold",
-    "movementHint": "Fast: the products making the first 80% of sales. Not moving: in stock but not sold in the period. Days of cover: how long the stock lasts at this period's pace."
+    "movementHint": "Fast: the products making the first 80% of sales. Not moving: in stock but not sold in the period. Days of cover: how long the stock lasts at this period's pace.",
+    "noSalesHint": "Pick a longer period, or make a bill to see it here.",
+    "noProductsHint": "Add products under Products to see how each one sells."
   },
   "insights": {
     "measures": "Measures",
@@ -2317,7 +2427,8 @@
     "billRate": "Bill: GST {{rate}}%, not in your list",
     "photo": "Photo of the bill",
     "photoTip": "A printed bill can be photographed, or a scanned PDF uploaded: keep the whole bill in the frame, straight from above, in good light. Reading a photo needs internet.",
-    "fromPhoto": "Read from a photo or scan: check every item, quantity and rate against the paper bill before saving."
+    "fromPhoto": "Read from a photo or scan: check every item, quantity and rate against the paper bill before saving.",
+    "addSupplier": "Add as new supplier"
   },
   "offline": {
     "notReady": "This device is not ready for offline bills yet. Open Digital Bahi once while connected to the internet.",
@@ -2362,7 +2473,8 @@
       "waitingSince_other": "{{count}} waiting since {{when}}",
       "refused_one": "{{count}} refused by the server",
       "refused_other": "{{count}} refused by the server",
-      "reportedAt": "as of {{when}}"
+      "reportedAt": "as of {{when}}",
+      "removeTitle": "Remove this device?"
     },
     "kinds": {
       "invoice": "Bill",
@@ -2407,7 +2519,10 @@
     "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them.",
     "heldForReview": "Held for review: the server took it, and a manager will check it",
     "editKept": "Their later change kept: {{fields}}",
-    "cancelWaiting": "Cancelled on this device, waiting to send"
+    "cancelWaiting": "Cancelled on this device, waiting to send",
+    "removeTitle": "Remove this entry?",
+    "signOutTitle": "Changes not synced yet",
+    "signOutAnyway": "Sign out anyway"
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"
@@ -2455,7 +2570,8 @@
       "receipt": "Receipt",
       "reminder": "Payment reminder",
       "test": "Test",
-      "backup": "Backup"
+      "backup": "Backup",
+      "summary": "Daily summary"
     },
     "status": {
       "queued": "Waiting",
@@ -2545,7 +2661,9 @@
     "sms": "SMS",
     "skippedOptedOut_one": "{{count}} left out: asked not to get reminders",
     "skippedOptedOut_other": "{{count}} left out: asked not to get reminders",
-    "optedOut": "No reminders"
+    "optedOut": "No reminders",
+    "dailySummary_one": "{{business}}, {{date}}: sales {{sales}} ({{count}} bill), collected {{collected}}, paid out {{paid}}, expenses {{expenses}}. Customers owe {{receivable}}, of which {{overdue}} is overdue. — Digital Bahi",
+    "dailySummary_other": "{{business}}, {{date}}: sales {{sales}} ({{count}} bills), collected {{collected}}, paid out {{paid}}, expenses {{expenses}}. Customers owe {{receivable}}, of which {{overdue}} is overdue. — Digital Bahi"
   },
   "backup": {
     "title": "Backup & Restore",
@@ -2578,7 +2696,8 @@
       "download": "Downloaded",
       "email": "Emailed",
       "restore": "Restored from a file",
-      "auto": "Emailed automatically"
+      "auto": "Emailed automatically",
+      "folder": "Saved to the backup folder"
     },
     "restoreTitle": "Restore from a backup",
     "restoreHint": "A backup is always restored as a NEW business next to this one. Nothing in the current business is changed or deleted.",
@@ -2896,7 +3015,9 @@
       "SHIPPING_BILL": "Shipping bill not added yet",
       "VEHICLE_FORMAT": "Vehicle number looks wrong",
       "EXPORT_PORT_STATE": "Export: the port's state is taken as yours; change it on the portal if not"
-    }
+    },
+    "noneHint": "An e-invoice is needed only for bills to GST-registered buyers. Pick another month to check.",
+    "noEwayHint": "An e-way bill is needed when goods worth more than ₹50,000 move. Smaller bills are left out."
   },
   "notifications": {
     "title": "Notifications",
@@ -2987,6 +3108,10 @@
         "customer_reminders": {
           "name": "Payment reminders to customers",
           "help": "Sends customers with overdue bills a reminder themselves, by WhatsApp, SMS or email, in their language: the first some days after the oldest bill fell due, then every few days, up to the set number while those bills stay unpaid. Customers who asked not to get them never do."
+        },
+        "daily_summary": {
+          "name": "Daily summary on WhatsApp",
+          "help": "Every evening sends the day's sales, collections, payments and expenses, and what customers owe, to the owner's phone (the numbers below, or the business's phone)."
         }
       },
       "afterHoursOrdersHint": "Remind when an order has waited this long at one step",
@@ -3016,7 +3141,10 @@
       "noChannel": "No WhatsApp, SMS or email",
       "sendNow": "Send now",
       "sendConfirm": "Send payment reminders now to the customers due one today? Today's scheduled run then sends nothing more.",
-      "sentNow": "Payment reminders are on their way: see Messages"
+      "sentNow": "Payment reminders are on their way: see Messages",
+      "recipients": "Send to",
+      "recipientsHint": "Up to 5 mobile numbers, separated by commas. Empty: the business's phone.",
+      "recipientsPlaceholder": "Business phone"
     },
     "customer_payment_due": {
       "overdue_one": "{{count}} customer bill is overdue: {{overdueAmount, currency}}",
@@ -3115,6 +3243,19 @@
     "push": {
       "testTitle": "Test notification from Digital Bahi",
       "testBody": "Notifications from {{business}} will show on this phone."
+    },
+    "daily_summary": {
+      "title_one": "Daily summary sent to {{count}} number",
+      "title_other": "Daily summary sent to {{count}} numbers",
+      "noneSent": "The daily summary could not go out: no WhatsApp, SMS or email for its numbers"
+    },
+    "repeat_bills_made": {
+      "title_one": "{{count}} repeat bill made",
+      "title_other": "{{count}} repeat bills made",
+      "body": "{{numbers}}"
+    },
+    "repeat_bill_failed": {
+      "title": "Repeat bill for {{customer}} not made"
     }
   },
   "beat": {
@@ -3320,5 +3461,412 @@
       "updates": "Updates",
       "updatesHint": "Orders moving on, leave decided and other news"
     }
+  },
+  "table": {
+    "columns": "Columns",
+    "showColumns": "Show columns",
+    "showMore_one": "Show {{count}} more ({{left}} left)",
+    "showMore_other": "Show {{count}} more ({{left}} left)"
+  },
+  "tally": {
+    "title": "Tally",
+    "hint": "Bring your masters over from Tally, and send the books to your CA's Tally.",
+    "importTitle": "Import masters from Tally",
+    "importHint": "In Tally: Gateway of Tally → Export → Masters (or Display → List of Accounts → Export), format XML. Customers come from Sundry Debtors, suppliers from Sundry Creditors, products from stock items, each with its opening balance or stock. Names already here are left as they are.",
+    "chooseFile": "Choose Tally XML file",
+    "found": {
+      "customers_one": "{{count}} customer (Sundry Debtors)",
+      "customers_other": "{{count}} customers (Sundry Debtors)",
+      "suppliers_one": "{{count}} supplier (Sundry Creditors)",
+      "suppliers_other": "{{count}} suppliers (Sundry Creditors)",
+      "products_one": "{{count}} stock item",
+      "products_other": "{{count}} stock items"
+    },
+    "alreadyThere_one": "{{count}} already here",
+    "alreadyThere_other": "{{count}} already here",
+    "otherLedgers_one": "{{count}} other ledger (sales, bank, tax…) not imported",
+    "otherLedgers_other": "{{count}} other ledgers (sales, bank, tax…) not imported",
+    "section": {
+      "customers": "Customer",
+      "suppliers": "Supplier",
+      "products": "Item"
+    },
+    "nothingNew": "Everything in this file is already here.",
+    "imported": "Imported from Tally",
+    "created": {
+      "customers_one": "{{count}} customer",
+      "customers_other": "{{count}} customers",
+      "suppliers_one": "{{count}} supplier",
+      "suppliers_other": "{{count}} suppliers",
+      "products_one": "{{count}} product",
+      "products_other": "{{count}} products"
+    },
+    "exportTitle": "Export vouchers for Tally",
+    "exportHint": "Sales, purchases, credit and debit notes (item by item, with their stock items), receipts, payments and expenses of the period, with their party, sales, purchase, expense and GST ledgers. In Tally: Gateway of Tally → Import → Transactions, and choose this file.",
+    "download": "Download for Tally",
+    "exported": "Tally file downloaded"
+  },
+  "bank": {
+    "open": "Bank statement",
+    "title": "Match a bank statement",
+    "hint": "Choose the statement from net banking (CSV, Excel or PDF). Each line is matched to the customer who paid or the supplier you paid; tick the ones to record as payments.",
+    "choose": "Choose statement",
+    "lines": "Statement lines",
+    "summary": "{{count}} lines: {{matched}} matched, {{likely}} to check, {{recorded}} already recorded, {{unmatched}} not matched",
+    "pick": "Record line {{row}}",
+    "whoPaid": "Who paid?",
+    "paidTo": "Paid to?",
+    "record_one": "Record {{count}} payment",
+    "record_other": "Record {{count}} payments",
+    "recorded_one": "{{count}} payment recorded",
+    "recorded_other": "{{count}} payments recorded",
+    "note": "Bank statement: {{narration}}",
+    "status": {
+      "matched": "Matched",
+      "likely": "Check",
+      "recorded": "Already recorded",
+      "unmatched": "Not matched",
+      "saved": "Recorded"
+    }
+  },
+  "setup": {
+    "title": "Get your business ready",
+    "progress": "{{done}} of {{total}} done",
+    "hide": "Hide this checklist",
+    "done": "Done",
+    "todo": "Not done yet",
+    "steps": {
+      "business": {
+        "title": "Add firm address and mobile",
+        "hint": "Printed on every bill"
+      },
+      "gst": {
+        "title": "Add your GSTIN",
+        "hint": "Needed for tax invoices and GST returns"
+      },
+      "payment": {
+        "title": "Add bank account and UPI ID",
+        "hint": "Bills then carry a QR code customers can scan to pay"
+      },
+      "product": {
+        "title": "Add your first product",
+        "hint": "Or import your price list from Excel"
+      },
+      "customer": {
+        "title": "Add your first customer",
+        "hint": "Or import them from Excel or Tally"
+      },
+      "printer": {
+        "title": "Connect a receipt printer",
+        "hint": "Optional: for 2- or 3-inch Bluetooth printers"
+      },
+      "bill": {
+        "title": "Make your first bill",
+        "hint": "Ctrl+I opens a new bill from anywhere"
+      }
+    }
+  },
+  "repeat": {
+    "button": "Repeat bill",
+    "hint": "Make this bill again every week or month, with the same items and rates",
+    "title": "Repeat {{number}}",
+    "how": "How often",
+    "monthly": "Every month",
+    "weekly": "Every week",
+    "firstOn": "First repeat on",
+    "until": "Stop after (optional)",
+    "untilHint": "Leave empty to keep going until you stop it",
+    "howItWorks": "Each repeat is a new bill dated that day, with this bill's items, quantities and rates. You get a notification when one is made. Pause or stop it from Invoices, Repeat bills.",
+    "start": "Start repeating",
+    "saved": "{{number}} will repeat",
+    "nextOn": "next on {{date}}",
+    "everyWeek": "Every week on {{day}}",
+    "everyMonth": "Every month on day {{day}}",
+    "already": "This bill already repeats: {{every}}, next on {{date}}. Starting again adds a second repeat.",
+    "listButton": "Repeat bills",
+    "listTitle": "Repeat bills",
+    "listHint": "Bills made again every week or month for regular customers.",
+    "empty": "No repeat bills yet",
+    "emptyHint": "Open a bill and choose Repeat bill to make it every week or month.",
+    "status": {
+      "on": "On",
+      "paused": "Paused",
+      "ended": "Ended",
+      "stuck": "Needs attention"
+    },
+    "endsOn": "ends {{date}}",
+    "made_one": "{{count}} bill made",
+    "made_other": "{{count}} bills made",
+    "from": "From {{number}}",
+    "last": "Latest {{number}}",
+    "pause": "Pause",
+    "resume": "Start again",
+    "remove": "Stop repeating for {{name}}",
+    "removeTitle": "Stop repeat bills for {{name}}?",
+    "removeMessage": "Bills already made stay as they are. No more will be made.",
+    "removeConfirm": "Stop repeating"
+  },
+  "voice": {
+    "sayProduct": "Say a product, like \"Parle G 10 box\"",
+    "search": "Search by voice",
+    "listening": "Listening… tap to stop",
+    "stop": "Stop listening",
+    "noMic": "Microphone not allowed",
+    "noMicHint": "Allow the microphone for this app in your browser or phone settings.",
+    "noSpeech": "Didn't hear anything. Tap the mic and speak.",
+    "failed": "Voice search isn't working right now. Type instead."
+  },
+  "orderLink": {
+    "button": "Order link",
+    "hint": "A private page where this shop sees its own rates and orders from its phone. Orders wait under Sales Orders for you to confirm.",
+    "title": "Order link for {{name}}",
+    "about": "Make a link and send it to the shop on WhatsApp. They open it with no app or sign-in, see your products at their own rates, and place orders. Each order comes to Sales Orders as Pending.",
+    "make": "Make the link",
+    "address": "Link",
+    "copy": "Copy",
+    "copied": "Link copied",
+    "copyFailed": "Could not copy. Select the link and copy it.",
+    "send": "Send on WhatsApp",
+    "message": "Namaste {{name}}, you can now order from {{business}} on your phone, at your own rates: {{url}}",
+    "made": "Made {{date}}",
+    "placed_one": "{{count}} order placed",
+    "placed_other": "{{count}} orders placed",
+    "lastOrder": "last {{date}}",
+    "new": "Make a new link",
+    "newTitle": "Make a new link?",
+    "newBody": "The old link stops working. Send the new one to the shop.",
+    "off": "Turn off",
+    "offTitle": "Turn off the order link?",
+    "offBody": "{{name}} will no longer be able to order with it. You can make a new link later.",
+    "turnedOff": "Order link for {{name}} turned off"
+  },
+  "shop": {
+    "orderFrom": "Order from {{business}}",
+    "title": "Order for {{name}}",
+    "subtitle": "Your rates. Add what you need and place the order; it is confirmed by phone or WhatsApp.",
+    "search": "Search products",
+    "categories": "Categories",
+    "products": "Products",
+    "mrp": "MRP {{amount}}",
+    "inclGst": "incl. GST",
+    "plusGst": "+ GST {{rate}}%",
+    "noGst": "no GST",
+    "outOfStock": "Out of stock",
+    "add": "Add",
+    "addNamed": "Add {{name}}",
+    "qtyOf": "Quantity of {{name}}",
+    "less": "One less",
+    "more": "One more",
+    "noMatch": "No product matches",
+    "noMatchHint": "Try another word, or pick All.",
+    "noProducts": "No products yet",
+    "noProductsHint": "{{business}} has not listed products yet. Call them to order.",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "review": "Review order",
+    "reviewTitle": "Your order",
+    "reviewHint": "{{business}} confirms it before sending.",
+    "taxable": "Before GST",
+    "gst": "GST",
+    "roundOff": "Round off",
+    "total": "Total",
+    "working": "Working out the total…",
+    "notes": "Note for the order",
+    "notesHint": "Optional: a delivery day, or anything else.",
+    "place": "Place order · {{amount}}",
+    "placeShort": "Place order",
+    "placing": "Placing…",
+    "placed": "Order {{number}} placed for {{amount}}",
+    "placedHint": "{{business}} will confirm it. You can see where it stands below.",
+    "yourOrders": "Your orders",
+    "offTitle": "This order link is off",
+    "offHint": "It was turned off or replaced. Ask the business that sent it for a new link."
+  },
+  "gstr2b": {
+    "title": "Match with GSTR-2B",
+    "subtitle": "Check your purchase bills against what suppliers reported on the GST portal, before you claim input credit.",
+    "how": "On the GST portal: Returns → GSTR-2B → pick the month → Download → JSON. Choose that file here; it is read and matched, not kept.",
+    "choose": "Choose GSTR-2B file",
+    "another": "Choose another file",
+    "reading": "Matching…",
+    "tooBig": "This file is too large for a GSTR-2B statement (over 25 MB).",
+    "readFile": "{{file}}: GSTR-2B for {{month}}",
+    "otherGstin": "This statement is for GSTIN {{gstin}}, not this business's. Check you downloaded the right one.",
+    "itc2b": "Credit on GSTR-2B",
+    "itc2bHint": "What the portal shows you may claim",
+    "itcBooks": "Credit in your bills",
+    "itcBooksHint": "GST on purchase bills entered this month",
+    "atRisk": "Credit at risk",
+    "atRiskHint_one": "{{count}} bill the supplier has not reported",
+    "atRiskHint_other": "{{count}} bills suppliers have not reported",
+    "notEntered": "Credit not entered",
+    "notEnteredHint_one": "{{count}} bill on the portal not entered yet",
+    "notEnteredHint_other": "{{count}} bills on the portal not entered yet",
+    "status": {
+      "matched": "Matched",
+      "mismatch": "Amounts differ",
+      "not_in_books": "Not entered",
+      "not_in_2b": "Not on portal"
+    },
+    "what": {
+      "matched": "These bills agree with the portal: their credit can be claimed.",
+      "mismatch": "The bill number matches but the amounts differ. Open the bill and check it against the supplier's copy; if yours is right, ask the supplier to correct their return.",
+      "not_in_books": "The supplier reported these bills but they are not entered here. Enter them to claim their credit, or ask the supplier if the bill is not yours.",
+      "not_in_2b": "You entered these bills but the supplier has not reported them. Ask the supplier to file their GSTR-1; until then this credit should not be claimed."
+    },
+    "supplier": "Supplier",
+    "bill": "Bill",
+    "booksDate": "your bill says {{date}}",
+    "taxable": "Taxable",
+    "gstPortal": "GST on portal",
+    "gstBooks": "GST in your bill",
+    "difference": "Difference",
+    "differsBy": "differs by {{amount}}",
+    "noItc": "Portal says: no credit",
+    "openBill": "Open bill",
+    "enterBill": "Enter bill",
+    "noneHere": "No bills here",
+    "noneHereHint": "Pick All to see every bill.",
+    "empty": "No GSTR-2B file chosen",
+    "emptyHint": "Choose the month's GSTR-2B file to see which purchase bills match.",
+    "notes_one": "{{count}} credit or debit note in the statement is not matched here.",
+    "notes_other": "{{count}} credit or debit notes in the statement are not matched here."
+  },
+  "comfort": {
+    "open": "Text size and simple menu",
+    "title": "Easier to use",
+    "textSize": "Text size",
+    "textSizeHint": "Makes everything bigger on this device.",
+    "simpleMenu": "Simple menu",
+    "simpleMenuHint": "Only the everyday screens: bills, payments, customers and stock. Search (Ctrl+K) still finds everything. Just for you, on this device.",
+    "showFullMenu": "Show full menu",
+    "help": "Help for this screen"
+  },
+  "help": {
+    "title": "How to use: {{screen}}",
+    "generalTitle": "How to use Digital Bahi",
+    "shortcuts": "All keyboard shortcuts",
+    "general": {
+      "s1": "The menu on the left (on a phone, the Menu button) opens every screen your role allows.",
+      "s2": "Search at the top (Ctrl+K) finds any customer, product or bill by name, mobile or number.",
+      "s3": "The + button (Ctrl+I on a computer) starts a new bill from anywhere.",
+      "s4": "The Aa button makes the text bigger or the menu simpler."
+    },
+    "dashboard": {
+      "s1": "The top cards show today's sales, money to collect and stock to reorder.",
+      "s2": "Tap a card to open the list behind it.",
+      "s3": "Quick actions start a bill, a payment or a new customer in one tap.",
+      "s4": "Each role sees its own work here: a salesman sees his beat, the accountant sees dues."
+    },
+    "invoices": {
+      "s1": "Choose the customer (F3) by name or mobile. A new shop can be added right from the search.",
+      "s2": "Type a product (F2), press Enter, type the quantity, Enter, check the rate, Enter for the next item.",
+      "s3": "Save with Ctrl+S. The popup offers Send on WhatsApp, Print and New invoice.",
+      "s4": "Ctrl+P saves and prints in one step."
+    },
+    "bills": {
+      "s1": "All sales bills, newest first. Filter by date, customer or status (paid, part paid, due).",
+      "s2": "Open a bill to print it, send it on WhatsApp, copy it or cancel it.",
+      "s3": "Totals of the filtered bills are at the top; the download button saves the list as CSV."
+    },
+    "customers": {
+      "s1": "Add customer saves the shop's name, mobile, GSTIN, credit limit and price list.",
+      "s2": "Open a customer for their bills, payments and ledger.",
+      "s3": "Import brings a whole customer list in from Excel or CSV."
+    },
+    "payments": {
+      "s1": "Receive payment (Alt+C): pick the customer, the amount and how they paid (cash, UPI, cheque).",
+      "s2": "The payment is set against their oldest bills on its own; you can change that.",
+      "s3": "Send the receipt on WhatsApp from the payment."
+    },
+    "outstanding": {
+      "s1": "Every customer who owes money, with how long it has been due.",
+      "s2": "Open a customer to send them a reminder on WhatsApp.",
+      "s3": "Their unpaid bills and the oldest due date are shown there too."
+    },
+    "products": {
+      "s1": "Add product: name, HSN, GST rate, unit, selling price and MRP.",
+      "s2": "Import brings a whole price list in from Excel, CSV or PDF.",
+      "s3": "Price B and Price C are rates for wholesale and other customer lists."
+    },
+    "inventory": {
+      "s1": "Stock of every product in every godown.",
+      "s2": "Stock adjustment corrects stock after counting or damage.",
+      "s3": "Low stock shows what to order again."
+    },
+    "purchases": {
+      "s1": "New purchase bill brings stock in from a supplier.",
+      "s2": "Import bill reads the supplier's Excel, CSV or PDF bill for you.",
+      "s3": "Items not in your product list can be added in one go from the bill."
+    },
+    "suppliers": {
+      "s1": "Add a supplier with GSTIN and mobile.",
+      "s2": "Open a supplier for their purchase bills and what you owe them."
+    },
+    "orders": {
+      "s1": "A sales order records what a shop wants before you bill it.",
+      "s2": "Turn an order into a bill in one click when the goods go out."
+    },
+    "gst": {
+      "s1": "GSTR-1 and GSTR-3B are made from your bills and purchases.",
+      "s2": "Download the files for the GST portal, or give them to your CA.",
+      "s3": "Check the warnings first: a missing GSTIN or HSN shows there."
+    },
+    "expenses": {
+      "s1": "Record shop expenses: rent, electricity, fuel, salaries paid in cash.",
+      "s2": "They show in profit and in the day's cash."
+    },
+    "reports": {
+      "s1": "Sales, profit, stock and collections by day, week or month.",
+      "s2": "Every report downloads as PDF or Excel."
+    },
+    "settings": {
+      "s1": "Business profile: your firm's name, address, GSTIN and logo for every bill.",
+      "s2": "Open on phone shows a QR code to open Digital Bahi on a phone on the same Wi-Fi.",
+      "s3": "Bill numbers, price lists, godowns and WhatsApp are set up here too."
+    },
+    "users": {
+      "s1": "Add member: name, mobile, role, and a user ID and password if they should sign in straight away.",
+      "s2": "After adding, Send invite on WhatsApp sends them the link and their user ID.",
+      "s3": "A role decides which screens a person sees."
+    },
+    "backup": {
+      "s1": "Download backup saves your whole book in one file. Give it a password and write it down.",
+      "s2": "Automatic backups make a copy every day by themselves.",
+      "s3": "Restore always makes a new business: your current one is never touched."
+    }
+  },
+  "phone": {
+    "title": "Open on phone",
+    "hint": "Scan with the phone's camera to open Digital Bahi there.",
+    "sameWifi": "The phone must be on the same Wi-Fi as this computer.",
+    "signIn": "On the phone, sign in with a user ID and password (Users & Roles → Add member). Sign-up and OTP codes are only shown on this computer.",
+    "notOpen": "Phones cannot open Digital Bahi on this computer yet. Close it and start it again with “Start Digital Bahi” (Start Digital Bahi.bat on Windows, Start Digital Bahi.command on a Mac): then phones on the same Wi-Fi can open it.",
+    "copy": "Copy link",
+    "copied": "Link copied",
+    "httpNote": "At this address the phone uses Digital Bahi in the browser. Installing it as an app and billing without internet need an https address."
+  },
+  "invite": {
+    "whatsapp": "Send invite on WhatsApp",
+    "whatsappHint": "Sends {{name}} the link and how to sign in. You tap send in WhatsApp.",
+    "hello": "Namaste {{name}}, you have been added to {{business}} on Digital Bahi.",
+    "open": "Open: {{link}}",
+    "noLink": "I will tell you the address to open.",
+    "loginPassword": "Sign in with {{login}} and the password I gave you.",
+    "loginOtp": "Sign in with your mobile number {{mobile}}: a code (OTP) will come to it.",
+    "done": "Done"
+  },
+  "backupFolder": {
+    "saved": "Copies are saved on this computer in: {{folder}}",
+    "tip": "For a copy away from this computer, use a pen drive or a Google Drive folder: see “Backups on a pen drive or Google Drive” in HOW-TO-RUN.md.",
+    "emailOptional": "Email is optional: when it is set up, a copy is emailed too.",
+    "lastSaved": "Last backup saved {{when}}.",
+    "kind": "Saved to the backup folder"
+  },
+  "backupNote": {
+    "last": "Last backup: {{when}}",
+    "none": "No backup yet. Keep a copy of your books safe.",
+    "old": "Last backup {{when}}, more than a week ago.",
+    "action": "Backup & Restore"
   }
 }

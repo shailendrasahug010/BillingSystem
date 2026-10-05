@@ -1,0 +1,127 @@
+name: Browser tests
+
+# The browser scripts in apps/web/e2e against a real API and database: the
+# API in development mode (sign-up codes shown on screen), the web app from
+# Vite's dev server, and for the offline scripts from the production build
+# (the service worker only runs there). Split in four groups that run side
+# by side; screenshots and the API's log are kept when a group fails.
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "apps/web/**"
+      - "packages/**"
+      - ".github/workflows/e2e.yml"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: billing
+            web: dev
+            flows: billing-flow bills-flow invoice-keys-flow invoice-screen-flow confirm-keys-flow quotation-challan-flow lists-flow order-link-flow gstr2b-flow
+          - group: stock
+            web: dev
+            flows: operations-flow onboarding-orders-flow phase4-flow purchase-new-entries-flow bill-import-flow pdf-flow bill-new-products-flow tally-flow
+          - group: field
+            web: dev
+            flows: team-access-flow outstanding-flow beat-flow report-views-flow error-log-flow bank-statement-flow daily-summary-flow setup-repeat-flow voice-flow empty-error-flow comfort-flow
+          - group: offline
+            web: build
+            flows: offline-flow offline-work-flow device-wipe-flow
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: postgres
+      API_URL: http://localhost:3000
+      OUT: ${{ github.workspace }}/e2e-out
+      PLAYWRIGHT_PATH: ${{ github.workspace }}/.pw/node_modules/
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --prefix .pw --no-save --no-package-lock playwright@1.56.1
+          .pw/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Database
+        run: |
+          createdb -h localhost -U postgres digitalbahi_dev
+          MIGRATION_DATABASE_URL=postgres://postgres:postgres@localhost:5432/digitalbahi_dev APP_DB_PASSWORD=devpass pnpm db:deploy
+
+      - name: Start the API
+        run: |
+          DATABASE_URL=postgres://digitalbahi_app:devpass@localhost:5432/digitalbahi_dev OTP_DEV_ECHO=true AUTH_RATE_LIMIT_MAX=1000 LOG_PRETTY=false nohup pnpm dev:api > api.log 2>&1 &
+          for i in $(seq 60); do curl -sf http://localhost:3000/api/v1/health > /dev/null && exit 0; sleep 2; done
+          cat api.log; exit 1
+
+      - name: Start the web app
+        run: |
+          if [ "${{ matrix.web }}" = build ]; then
+            pnpm build
+            (cd apps/web && nohup npx vite preview --port 4173 --strictPort > ../../web.log 2>&1 &)
+            echo "WEB_URL=http://localhost:4173" >> "$GITHUB_ENV"
+            port=4173
+          else
+            (cd apps/web && nohup npx vite --port 5173 --strictPort > ../../web.log 2>&1 &)
+            echo "WEB_URL=http://localhost:5173" >> "$GITHUB_ENV"
+            port=5173
+          fi
+          for i in $(seq 60); do curl -sf "http://localhost:$port/" > /dev/null && exit 0; sleep 2; done
+          cat web.log; exit 1
+
+      - name: Run ${{ matrix.group }}
+        run: |
+          mkdir -p "$OUT"
+          failed=""
+          for f in ${{ matrix.flows }}; do
+            echo "::group::$f"
+            if timeout 600 node "apps/web/e2e/$f.mjs"; then echo "passed: $f"; else failed="$failed $f"; fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "::error::failed:$failed"; exit 1; fi
+
+      - name: Keep screenshots and logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.group }}
+          path: |
+            e2e-out
+            api.log
+            web.log
+          if-no-files-found: ignore

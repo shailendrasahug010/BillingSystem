@@ -15,7 +15,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { auditColumns, money, percent, pk, qty, rate, softDelete, versioned } from "./columns.js";
+import { auditColumns, percent, pk, qty, rate, softDelete, versioned } from "./columns.js";
 import { taxability } from "./enums.js";
 import { priceLevels, suppliers } from "./parties.js";
 import { businessId, files } from "./platform.js";

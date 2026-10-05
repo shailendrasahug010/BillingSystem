@@ -1,12 +1,13 @@
-import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
-import { ArrowLeft, Ban, CloudOff, Printer } from "lucide-react";
+import { createTranslator, formatCurrency, formatDate, translateError, type LocaleCode } from "@digitalbahi/i18n";
+import { ArrowLeft, Ban, CloudOff, Copy, Printer, SearchX } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { EmptyState, Segmented } from "../../components/ui/misc";
+import { Dialog } from "../../components/ui/Dialog";
+import { EmptyState, ErrorState, Segmented } from "../../components/ui/misc";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
 import { PrintPortal } from "../../components/ui/PrintPortal";
@@ -14,7 +15,7 @@ import { allowed, BUSINESS, customerById, INVOICES, WORKSPACE } from "../../data
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
 import { serverOrDevice } from "../../offline/documents";
-import { api } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
 import { shareOnWhatsApp } from "../../lib/share";
 import { printableFromApi, printableFromDemo, type ApiInvoice, type PrintableInvoice } from "./printable";
 import { EMBEDDED } from "../../lib/embedded";
@@ -28,12 +29,16 @@ import { CancelInvoiceDialog, type CancellableBill } from "./CancelInvoiceDialog
 import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
 import { invoiceReceipt } from "../../lib/thermal/receipts";
 import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
+import { copyBill, type CopiedLine } from "./copyBill";
+import { RepeatBillButton } from "./RepeatBill";
+import { loadKeptDraft, type KeptDraft } from "./keptDraft";
 
 /** Bills already sent to the printer from Save & print (going back to one does not print it again). */
 const printed = new Set<string>();
 
 export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: string; print?: boolean }) {
-  const { t, locale, money } = useI18n();
+  const i18n = useI18n();
+  const { t, locale, money } = i18n;
   const { navigate } = useRouter();
   useStoreVersion();
   const [printLocale, setPrintLocale] = useState<LocaleCode>(LIVE ? (WORKSPACE.printLocale as LocaleCode) || locale : locale);
@@ -41,10 +46,12 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
   const offlineKey = invoiceId.startsWith("offline:") ? invoiceId.slice("offline:".length) : null;
   const offline = useOffline();
   const [cancelling, setCancelling] = useState(false);
+  // Copying over a bill left half made asks first.
+  const [replacing, setReplacing] = useState<KeptDraft | null>(null);
   const kept = offlineKey ? findOfflineBill(offlineKey) : {};
   const syncedId = kept.synced?.serverId;
   useEffect(() => {
-    if (syncedId) navigate({ name: "invoice-view", invoiceId: syncedId });
+    if (syncedId) navigate({ name: "invoice-view", invoiceId: syncedId }, { replace: true });
   }, [syncedId, navigate]);
   const live = useQuery({
     queryKey: ["invoice-raw", invoiceId],
@@ -73,7 +80,15 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
     };
   }, [print, shown, invoiceId]);
   if (LIVE && !offlineKey && live.isPending) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
-  if (!invoice) return <EmptyState title={t("empty.generic")} />;
+  if (!invoice) {
+    // Not found, or (with no copy on this device) could not be loaded: say which, and how to go on.
+    const missing = !live.error || (live.error instanceof ApiError && live.error.status === 404);
+    return missing ? (
+      <EmptyState icon={<SearchX size={24} />} title={t("invoice.notFound")} hint={t("invoice.notFoundHint")} action={<Button onClick={() => navigate({ name: "invoices" })}>{t("invoice.backToList")}</Button>} />
+    ) : (
+      <ErrorState title={t("empty.error")} hint={translateError(i18n, live.error instanceof ApiError ? live.error : null)} retryLabel={t("common.retry")} onRetry={() => void live.refetch()} />
+    );
+  }
   const status = invoice.status;
   const tr = createTranslator(printLocale).t;
   const m = (v: number) => formatCurrency(v, printLocale);
@@ -104,6 +119,23 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
             notSent: false,
           }
         : null;
+
+  // What the bill sold, to start a new bill from (the server's bill, or the demo's).
+  const copyLines: CopiedLine[] | null = !allowed("invoice.create")
+    ? null
+    : LIVE
+      ? (live.data?.items.map((i) => ({ productId: i.productId, unitId: i.unitId, qty: Number(i.qty), freeQty: Number(i.freeQty ?? 0), rate: Number(i.rate), discountPercent: Number(i.discountPercent) })) ?? null)
+      : (demo?.lines.map((l) => ({ productId: l.productId, unitId: null, qty: l.qty, rate: l.rate, discountPercent: l.discountPercent })) ?? null);
+  const openCopy = () => {
+    if (!copyLines) return;
+    setReplacing(null);
+    copyBill(invoice.number, invoice.customerId, copyLines);
+    navigate({ name: "invoice-new", customerId: invoice.customerId });
+  };
+  const startCopy = () =>
+    void loadKeptDraft()
+      .catch(() => null)
+      .then((kept) => (kept && kept.draft.lines.length > 0 ? setReplacing(kept) : openCopy()));
 
   return (
     <div className="flex flex-col gap-5">
@@ -154,6 +186,14 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
               { value: "hi", label: "हिन्दी" },
             ]}
           />
+          {copyLines && copyLines.length > 0 && (
+            <Button icon={<Copy size={16} />} title={t("invoice.copy.title")} onClick={startCopy}>
+              {t("invoice.copy.button")}
+            </Button>
+          )}
+          {LIVE && !offlineKey && !deviceCopyAt && live.data && live.data.status === "posted" && !live.data.zeroRatedType && allowed("invoice.create") && (
+            <RepeatBillButton invoiceId={live.data.id} number={live.data.invoiceNumber} />
+          )}
           {cancellable && (
             <Button variant="ghost" icon={<Ban size={16} />} onClick={() => setCancelling(true)}>
               {t("invoice.cancel.button")}
@@ -215,6 +255,24 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
         </div>
       )}
       {cancellable && <CancelInvoiceDialog bill={cancellable} open={cancelling} onOpenChange={setCancelling} />}
+      <Dialog
+        open={replacing !== null}
+        onOpenChange={(v) => !v && setReplacing(null)}
+        title={t("invoice.copy.replaceTitle")}
+        description={t("invoice.copy.replaceBody", {
+          bill: [replacing?.draft.customerId ? customerById.get(replacing.draft.customerId)?.businessName : null, t("common.items", { count: replacing?.draft.lines.length ?? 0 })].filter(Boolean).join(" · "),
+        })}
+        size="sm"
+        closeLabel={t("common.close")}
+        footer={
+          <>
+            <Button onClick={() => setReplacing(null)}>{t("common.cancel")}</Button>
+            <Button variant="primary" icon={<Copy size={16} />} onClick={openCopy}>
+              {t("invoice.copy.button")}
+            </Button>
+          </>
+        }
+      />
       <PrintPortal>
         <InvoiceDocument invoice={invoice} locale={printLocale} />
       </PrintPortal>

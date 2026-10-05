@@ -1,4 +1,4 @@
-import { isReminderType, REMINDER_CHANNELS, REMINDER_TYPES, REMINDERS, reminderConfig } from "@digitalbahi/core";
+import { isReminderType, MAX_SUMMARY_RECIPIENTS, REMINDER_CHANNELS, REMINDER_TYPES, REMINDERS, reminderConfig } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -37,6 +37,7 @@ const RulePatch = z.strictObject({
       maxCount: z.number().int().min(1).max(10).optional(),
       minAmount: z.number().int().min(0).max(10_000_000).optional(),
       channel: z.enum(REMINDER_CHANNELS).optional(),
+      recipients: z.array(z.string().trim().regex(/^(\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}$/)).max(MAX_SUMMARY_RECIPIENTS).optional(),
     })
     .optional(),
 });

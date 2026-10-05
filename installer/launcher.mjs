@@ -3,9 +3,10 @@
  * Digital Bahi on one computer (Windows, macOS, Linux). The first start sets
  * everything up; later starts take a few seconds.
  *
- *   node launcher.mjs start [--no-browser]   set up if needed, start, open the app
+ *   node launcher.mjs start [--no-browser] [--phone | --no-phone] [--backup-folder <folder>]
+ *                                             set up if needed, start, open the app
  *   node launcher.mjs stop                    stop the server and the database
- *   node launcher.mjs restart [--no-browser]
+ *   node launcher.mjs restart [--no-browser] [--phone | --no-phone]
  *   node launcher.mjs status
  *
  * It runs from the bundle installer/build-bundle.mjs makes (api/, web/,
@@ -22,8 +23,19 @@
  * - The server: the API, which also serves the web app, at
  *   http://localhost:<port>, open to this computer only. There is no SMS
  *   gateway on one computer, so sign-up and OTP codes are shown on the screen
- *   (OTP_DEV_ECHO); that is why the server never listens on the network.
- *   Other computers and phones need a server (HOW-TO-RUN.md, section 5).
+ *   (OTP_DEV_ECHO); that is why, by default, the server never listens on the
+ *   network. Other computers and phones need a server (HOW-TO-RUN.md,
+ *   section 5), or phone mode below.
+ * - Phone mode (--phone, remembered in config.json as "phone": true until
+ *   --no-phone): the server also answers phones and computers on the same
+ *   Wi-Fi, at http://<this computer's address>:<port>, printed with a QR
+ *   code to scan. Sign-up and OTP codes are then still shown only on this
+ *   computer (OTP_DEV_ECHO_LOCAL_ONLY): on a phone, staff sign in with a
+ *   user ID and password. The database stays open to this computer only.
+ * - Automatic backups (Backup & Restore → Automatic backups) are saved in
+ *   the data folder's "backups" folder, or the one --backup-folder names
+ *   (remembered as "backupFolder"): a pen drive, or a Google Drive /
+ *   OneDrive folder on this computer, which copies them online by itself.
  * - The data folder: %LOCALAPPDATA%\DigitalBahi (Windows),
  *   ~/Library/Application Support/DigitalBahi (macOS),
  *   ~/.local/share/digitalbahi (Linux), or DIGITALBAHI_HOME. It holds the
@@ -232,6 +244,79 @@ async function saveConfig(cfg) {
 }
 
 const appUrl = (cfg) => `http://localhost:${cfg.apiPort}`;
+
+/**
+ * This computer's addresses on the local network (Wi-Fi or cable), home
+ * routers' 192.168.x.x first: the ones a phone on the same Wi-Fi can open.
+ */
+function lanAddresses() {
+  const rank = (ip) => (ip.startsWith("192.168.") ? 0 : ip.startsWith("10.") ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 2 : 3);
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((a) => a && a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254."))
+    .map((a) => a.address)
+    .filter((ip, i, all) => all.indexOf(ip) === i)
+    .sort((a, b) => rank(a) - rank(b));
+}
+
+const phoneUrls = (cfg) => lanAddresses().map((ip) => `http://${ip}:${cfg.apiPort}`);
+
+/** A QR code drawn with text blocks (two rows of modules per line) for a terminal, or null when the QR library is missing. */
+function qrText(text) {
+  let qrcode;
+  try {
+    qrcode = createRequire(path.join(API_DIR, "package.json"))("qrcode-generator");
+  } catch {
+    return null;
+  }
+  const qr = qrcode(0, "L");
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount();
+  // Black on white whatever the terminal's own colours, so phone cameras read it.
+  const dark = (r, c) => r >= 0 && r < n && c >= 0 && c < n && qr.isDark(r, c);
+  const lines = [];
+  for (let r = -2; r < n + 2; r += 2) {
+    let line = "";
+    for (let c = -2; c < n + 2; c++) {
+      const top = dark(r, c);
+      const bottom = dark(r + 1, c);
+      line += top && bottom ? "\u2588" : top ? "\u2580" : bottom ? "\u2584" : " ";
+    }
+    lines.push(`  \x1b[30;107m${line}\x1b[0m`);
+  }
+  return lines.join("\n");
+}
+
+function showPhoneAddress(cfg) {
+  const urls = phoneUrls(cfg);
+  console.log("");
+  if (urls.length === 0) {
+    say("Phones: this computer is not on a Wi-Fi or network right now. Connect it, then start Digital Bahi again.");
+    return;
+  }
+  say("On a phone on the same Wi-Fi, open this address in Chrome (or scan the code with the camera):");
+  console.log("");
+  say(`    ${urls[0]}`);
+  for (const other of urls.slice(1)) say(`    (or ${other})`);
+  const qr = process.stdout.isTTY ? qrText(urls[0]) : null;
+  if (qr) console.log(`\n${qr}`);
+  console.log("");
+  say("Sign in on the phone with a user ID and password (Users & Roles -> Add member):");
+  say("sign-up and OTP codes are only shown on this computer.");
+  say(`If the phone cannot open it, allow Node.js through this computer's firewall${IS_WIN ? " (Private networks)" : ""}.`);
+}
+
+/** Whether the running server answers on the network: it was started in phone mode. */
+async function answersNetwork(cfg) {
+  const [ip] = lanAddresses();
+  if (!ip) return cfg.phone;
+  try {
+    return (await fetch(`http://${ip}:${cfg.apiPort}/api/v1/health`, { signal: AbortSignal.timeout(2000) })).ok;
+  } catch {
+    return false;
+  }
+}
 const ownerUrl = (cfg, db = DB_NAME) => `postgres://${OWNER_ROLE}:${cfg.ownerPassword}@127.0.0.1:${cfg.pgPort}/${db}`;
 
 // ---------------------------------------------------------------- PostgreSQL
@@ -521,7 +606,10 @@ function apiEnv(cfg) {
     // Development mode for OTP codes on screen; the rest set as a real server has it.
     NODE_ENV: "development",
     OTP_DEV_ECHO: "true",
-    HOST: "127.0.0.1",
+    // Phone mode: phones on the Wi-Fi too, but codes on screen only for this computer.
+    HOST: cfg.phone ? "0.0.0.0" : "127.0.0.1",
+    ...(cfg.phone ? { OTP_DEV_ECHO_LOCAL_ONLY: "true" } : {}),
+    BACKUP_FOLDER: cfg.backupFolder || path.join(HOME, "backups"),
     PORT: String(cfg.apiPort),
     DATABASE_URL: `postgres://${APP_ROLE}:${cfg.appPassword}@127.0.0.1:${cfg.pgPort}/${DB_NAME}`,
     JWT_PRIVATE_KEY: cfg.jwtPrivateKey,
@@ -624,14 +712,31 @@ function checkBundle() {
   }
 }
 
-async function start({ browser }) {
+async function start({ browser, phone, backupFolder }) {
   checkBundle();
   if (!IS_WIN && process.getuid?.() === 0) fail("Start Digital Bahi as your normal user, not as root (PostgreSQL does not run as root).");
   await mkdir(FILES.logs, { recursive: true });
   await mkdir(FILES.runtime, { recursive: true });
   if (!IS_WIN) await chmod(HOME, 0o700);
   const cfg = await loadConfig();
-  if (await healthy(cfg)) {
+  let changed = false;
+  if (phone !== undefined && Boolean(cfg.phone) !== phone) {
+    cfg.phone = phone;
+    changed = true;
+    say(phone ? "Phone mode is on: phones on the same Wi-Fi can open Digital Bahi too." : "Phone mode is off: only this computer can open Digital Bahi.");
+  }
+  if (backupFolder !== undefined && cfg.backupFolder !== backupFolder) {
+    cfg.backupFolder = backupFolder;
+    changed = true;
+    say(`Automatic backups will be saved in ${backupFolder || path.join(HOME, "backups")}`);
+  }
+  if (changed) await saveConfig(cfg);
+  if ((await healthy(cfg)) && (changed || (await answersNetwork(cfg)) !== Boolean(cfg.phone))) {
+    // Running, but started with other settings: the server (not the database) starts again.
+    await stopApi();
+    await startApi(cfg);
+    say(`Digital Bahi is running: ${appUrl(cfg)}`);
+  } else if (await healthy(cfg)) {
     say(`Digital Bahi is already running: ${appUrl(cfg)}`);
   } else {
     await ensurePg(cfg);
@@ -648,6 +753,7 @@ async function start({ browser }) {
     say(`Digital Bahi is running: ${appUrl(cfg)}`);
     say(`Data: ${HOME}`);
   }
+  if (cfg.phone) showPhoneAddress(cfg);
   if (browser) openBrowser(appUrl(cfg));
 }
 
@@ -664,22 +770,29 @@ async function status() {
   const cfg = await loadConfig();
   const up = await healthy(cfg);
   say(`Server:    ${up ? `running, ${appUrl(cfg)}` : "stopped"}`);
+  if (cfg.phone) say(`Phones:    ${phoneUrls(cfg).join(", ") || "phone mode is on, but this computer is not on a network"}`);
   say(`Database:  ${cfg.pgBin && (await pgRunning(cfg)) ? `running, port ${cfg.pgPort}` : "stopped"}${cfg.pgMajor ? ` (PostgreSQL ${cfg.pgMajor}, ${cfg.pgBin})` : ""}`);
   say(`Data:      ${HOME}`);
+  say(`Backups:   ${cfg.backupFolder || path.join(HOME, "backups")}`);
   say(`Logs:      ${FILES.logs}`);
   return up;
 }
 
 const [command = "start", ...flags] = process.argv.slice(2);
 const browser = !flags.includes("--no-browser") && process.env.DIGITALBAHI_NO_BROWSER !== "1";
+const phone = flags.includes("--phone") ? true : flags.includes("--no-phone") ? false : undefined;
+// --backup-folder "E:\Digital Bahi backups"; an empty value goes back to the data folder's own.
+const folderAt = flags.indexOf("--backup-folder");
+const folderArg = folderAt < 0 ? undefined : (flags[folderAt + 1] ?? "");
+const backupFolder = folderArg === undefined || folderArg.startsWith("--") ? undefined : folderArg ? path.resolve(folderArg) : "";
 console.log(`Digital Bahi (${command})`);
 try {
-  if (command === "start") await withLock(() => start({ browser }));
+  if (command === "start") await withLock(() => start({ browser, phone, backupFolder }));
   else if (command === "stop") await withLock(stop);
-  else if (command === "restart") await withLock(async () => (await stop(), await start({ browser })));
+  else if (command === "restart") await withLock(async () => (await stop(), await start({ browser, phone, backupFolder })));
   else if (command === "status") process.exitCode = (await status()) ? 0 : 3;
   else {
-    console.log("Commands: start [--no-browser], stop, restart [--no-browser], status");
+    console.log("Commands: start [--no-browser] [--phone | --no-phone] [--backup-folder <folder>], stop, restart (as start), status");
     process.exitCode = 2;
   }
 } catch (e) {

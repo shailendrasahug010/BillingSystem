@@ -14,6 +14,7 @@ import {
   PackageCheck,
   Palette,
   Receipt,
+  ReceiptText,
   Settings,
   ShieldCheck,
   ShoppingCart,
@@ -68,6 +69,7 @@ export function phaseBadge(mod: ModuleDef): number | undefined {
 export const MODULES: ModuleDef[] = [
   { key: "dashboard", label: "nav.dashboard", icon: LayoutDashboard, group: "daily", route: { name: "dashboard" }, permission: "dashboard.view" },
   { key: "invoices", label: "nav.newInvoice", icon: Receipt, group: "daily", route: { name: "invoice-new" }, permission: "invoice.create" },
+  { key: "bills", label: "nav.invoices", icon: ReceiptText, group: "daily", route: { name: "invoices" }, permission: "invoice.view" },
   { key: "orders", label: "nav.orders", icon: ClipboardList, group: "daily", route: planned("orders"), permission: "order.view", phase: 3 },
   { key: "customers", label: "nav.customers", icon: Users, group: "daily", route: { name: "customers" }, permission: "customer.view" },
   { key: "payments", label: "nav.payments", icon: Wallet, group: "daily", route: planned("payments"), permission: "payment.view", phase: 3 },
@@ -125,6 +127,15 @@ export function visibleModules(): ModuleDef[] {
   });
 }
 
+/** The everyday screens the simple menu keeps (Settings → "Aa" → Simple menu). */
+export const SIMPLE_MENU_KEYS: ReadonlySet<string> = new Set(["dashboard", "invoices", "bills", "customers", "payments", "outstanding", "products", "inventory"]);
+
+/** The menu as shown: everything this role opens, or with the simple menu on, only the everyday screens. */
+export function menuModules(simple: boolean): ModuleDef[] {
+  const all = visibleModules();
+  return simple ? all.filter((m) => SIMPLE_MENU_KEYS.has(m.key)) : all;
+}
+
 /** The permission a screen needs: what it shows, or for a create screen, what it saves. */
 export function routePermission(route: Route): Permission | null {
   switch (route.name) {
@@ -161,7 +172,7 @@ export function homeRoute(): Route {
 export function moduleForRoute(route: Route): ModuleDef | undefined {
   if (route.name === "planned") return MODULES.find((m) => m.route.name === "planned" && m.route.module === route.module);
   if (route.name === "customer") return MODULES.find((m) => m.key === "customers");
-  if (route.name === "invoice-view") return MODULES.find((m) => m.key === "invoices");
+  if (route.name === "invoice-view") return MODULES.find((m) => m.key === "bills");
   if (route.name === "purchase-new" || route.name === "purchase-view") return MODULES.find((m) => m.key === "purchases");
   if (route.name === "supplier") return MODULES.find((m) => m.key === "suppliers");
   if (route.name === "order-view") return MODULES.find((m) => m.key === "orders");

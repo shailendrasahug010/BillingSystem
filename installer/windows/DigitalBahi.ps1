@@ -195,7 +195,16 @@ try {
   if ($Command -eq 'install') {
     Build-App
     $LauncherArgs = @('start') + @($LauncherArgs | Select-Object -Skip 1)
-  } elseif (-not (Test-Path $AppLauncher)) {
+  } elseif ($Command -eq 'start' -and (Test-Path (Join-Path $App 'VERSION.txt')) -and (Get-Command git -ErrorAction SilentlyContinue)) {
+    # The checkout changed since the last build (git pull): build again before starting.
+    # Not a git checkout (a downloaded zip): git complains, and nothing is rebuilt.
+    try { $head = (& git -C $Repo rev-parse --short=12 HEAD 2>$null) } catch { $head = $null }
+    if ($head -and -not (Select-String -Path (Join-Path $App 'VERSION.txt') -SimpleMatch "($head)" -Quiet)) {
+      Write-Step 'The Digital Bahi code has changed since it was last built.'
+      Build-App
+    }
+  }
+  if ($Command -ne 'install' -and -not (Test-Path $AppLauncher)) {
     if ($Command -ne 'start' -and $Command -ne 'restart') {
       Write-Host 'Digital Bahi has not been set up on this computer yet.'
       exit 0

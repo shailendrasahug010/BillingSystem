@@ -103,7 +103,7 @@ export const syncPushModule: ApiModule = async (app, deps) => {
         },
         payload: JSON.stringify(item.body),
       });
-      let body: unknown = null;
+      let body: unknown;
       try {
         body = res.body ? JSON.parse(res.body) : null;
       } catch {

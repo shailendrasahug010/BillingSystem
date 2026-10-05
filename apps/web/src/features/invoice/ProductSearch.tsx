@@ -8,6 +8,8 @@ import { useSearchableProducts } from "../../data/hooks";
 import type { CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 import { cn } from "../../lib/cn";
+import { parseSpokenItem } from "../../lib/spoken";
+import { VoiceButton } from "../../components/voice/VoiceButton";
 import { rateFor } from "./useInvoiceDraft";
 
 
@@ -18,7 +20,7 @@ import { rateFor } from "./useInvoiceDraft";
  */
 export const ProductSearch = forwardRef<
   HTMLInputElement,
-  { customer: Customer | null; insight: CustomerInsight | null; cartIds: string[]; onAdd(productId: string): void; large?: boolean; onScan?(): void }
+  { customer: Customer | null; insight: CustomerInsight | null; cartIds: string[]; onAdd(productId: string, spoken?: { qty: number; unit: string | null }): void; large?: boolean; onScan?(): void }
 >(function ProductSearch({ customer, insight, cartIds, onAdd, large, onScan }, ref) {
   const { t, money, locale } = useI18n();
   const [query, setQuery] = useState("");
@@ -41,10 +43,37 @@ export const ProductSearch = forwardRef<
     [query, affinity, searchable],
   );
 
+  // The quantity and unit said with the name ("Parle G 10 box"), for the product picked from what it found.
+  const [spoken, setSpoken] = useState<{ qty: number; unit: string | null } | null>(null);
   const add = (p: Product) => {
-    onAdd(p.id);
+    onAdd(p.id, spoken ?? undefined);
+    setSpoken(null);
     setQuery("");
     setOpen(false);
+  };
+  const heard = (text: string) => {
+    const item = parseSpokenItem(text);
+    const find = (q: string) => (q.trim() ? searchProducts(q, searchable, { customerAffinity: affinity, limit: 8 }) : []);
+    // A number that is part of the name ("Dolo 650") stays in it.
+    const whole = find(text);
+    const top = whole[0]?.product.name.toLowerCase() ?? "";
+    const inName = item.qty !== null && new RegExp(`\\b${item.qty}\\b`).test(top);
+    const name = inName ? text : item.name;
+    const found = inName ? whole : find(item.name);
+    const said = !inName && item.qty !== null ? { qty: item.qty, unit: item.unit } : null;
+    // One clear match (the only one, or a name that starts with what was said, well ahead of the rest) is added at once; otherwise the list is open to pick from.
+    const clear = found.length === 1 || (found.length > 1 && found[0]!.score >= 200 && found[0]!.score - found[1]!.score >= 100);
+    if (clear) {
+      onAdd(found[0]!.product.id, said ?? undefined);
+      setSpoken(null);
+      setQuery("");
+      setOpen(false);
+      return;
+    }
+    setSpoken(said);
+    setQuery(name);
+    setActive(0);
+    setOpen(true);
   };
 
   return (
@@ -64,6 +93,7 @@ export const ProductSearch = forwardRef<
             inputMode="search"
             onChange={(e) => {
               setQuery(e.target.value);
+              setSpoken(null);
               setOpen(true);
               setActive(0);
             }}
@@ -92,11 +122,14 @@ export const ProductSearch = forwardRef<
               }
             }}
             className={cn(
-              "w-full rounded-xl border border-line bg-surface pr-14 text-ink placeholder:text-ink-3 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none",
+              "w-full rounded-xl border border-line bg-surface pr-14 text-ink placeholder:text-ink-3 sm:pr-24 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none",
               large ? "h-14 pl-11 text-[16px]" : "h-12 pl-10 text-[15px]",
             )}
           />
-          <Kbd keys="f2" className="absolute right-3 hidden sm:inline-flex" />
+          <span className="absolute right-2 flex items-center gap-1.5">
+            <Kbd keys="f2" className="hidden sm:inline-flex" />
+            <VoiceButton onText={heard} label={t("voice.sayProduct")} className={large ? "size-10" : "size-9"} />
+          </span>
         </div>
         <button
           type="button"

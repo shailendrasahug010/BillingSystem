@@ -147,7 +147,7 @@ function LineWarnings({ line }: { line: DraftLine }) {
   const { t } = useI18n();
   const p = productById.get(line.productId)!;
   const factor = factorOf(p, line.unitId);
-  const short = line.qty * factor > p.stock;
+  const short = (line.qty + (line.freeQty || 0)) * factor > p.stock;
   const belowCost = line.rate * (1 - line.discountPercent / 100) < p.purchasePrice * factor;
   if (!short && !belowCost) return null;
   return (
@@ -197,7 +197,7 @@ export function LineItems({
   totals: DocumentTotals | null;
   focusKey: string | null;
   onFocused(): void;
-  onUpdate(key: string, patch: Partial<Pick<DraftLine, "qty" | "rate" | "discountPercent">>): void;
+  onUpdate(key: string, patch: Partial<Pick<DraftLine, "qty" | "freeQty" | "rate" | "discountPercent">>): void;
   onUnit(key: string, unitId: string | null): void;
   onRemove(key: string): void;
   onBackToSearch(): void;
@@ -212,6 +212,9 @@ export function LineItems({
   const discountRefs = useRef(new Map<string, HTMLInputElement>());
   // The line just added or added to, lit for a moment (on a phone, where its quantity is not focused).
   const [lit, setLit] = useState<string | null>(null);
+  // On a phone, the line whose free quantity was asked for (its field shows while it is 0).
+  const [freeOpen, setFreeOpen] = useState<string | null>(null);
+  const focusFree = useRef<string | null>(null);
   // Keyboard billing: product search -> Enter -> qty -> Enter -> rate -> Enter -> product search.
   // Without the price-override permission the rate is fixed, so qty goes straight back.
   const toRate = (key: string) => {
@@ -277,7 +280,7 @@ export function LineItems({
                 if (el) rowRefs.current.set(line.key, el);
                 else rowRefs.current.delete(line.key);
               }}
-              className={cn("-mx-4 scroll-mt-36 scroll-mb-48 px-4 py-2 transition-colors duration-700", lit === line.key && "bg-accent-soft")}
+              className={cn("animate-line -mx-4 scroll-mt-36 scroll-mb-48 px-4 py-2 transition-colors duration-700", lit === line.key && "bg-accent-soft")}
             >
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 text-[14.5px] leading-snug font-medium text-ink">{name}</p>
@@ -303,6 +306,41 @@ export function LineItems({
                 <p className="num min-w-0 flex-1 truncate text-[12.5px] text-ink-3">
                   {money(line.rate)} × {line.qty} {unitSymbolOf(p, line.unitId)} · GST {p.gstRate}%
                 </p>
+                {/* Free pieces (10+1): a small button until there are some, so the price keeps its room. */}
+                {line.freeQty > 0 || freeOpen === line.key ? (
+                  <label className="flex shrink-0 items-center gap-1 text-[12px] text-good">
+                    {t("invoice.free")}
+                    <span className="w-11 shrink-0">
+                      <NumberCell
+                        value={line.freeQty}
+                        decimals={3}
+                        label={`${t("invoice.free")} ${p.name}`}
+                        inputRef={(el) => {
+                          // Opened by its button: the cursor goes in once.
+                          if (el && focusFree.current === line.key) {
+                            focusFree.current = null;
+                            el.focus();
+                          }
+                        }}
+                        onCommit={(v) => onUpdate(line.key, { freeQty: v })}
+                        onEnter={onBackToSearch}
+                        className="h-8 border-line px-1 text-[13px] font-semibold text-good"
+                      />
+                    </span>
+                  </label>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      focusFree.current = line.key;
+                      setFreeOpen(line.key);
+                    }}
+                    className="h-8 shrink-0 rounded-lg px-1.5 text-[12px] font-medium text-accent"
+                    aria-label={`${t("invoice.free")} ${p.name}`}
+                  >
+                    +{t("invoice.free")}
+                  </button>
+                )}
                 {units.length > 1 && <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} className="h-8 text-[13px]" />}
                 <span className="num text-[15px] font-semibold text-ink">{r ? money(r.total.toNumber()) : "—"}</span>
                 <button type="button" onClick={() => onRemove(line.key)} className="-mr-1.5 flex size-8 items-center justify-center rounded-lg text-ink-3 hover:text-danger" aria-label={`${t("invoice.remove")}: ${p.name}`}>
@@ -332,6 +370,7 @@ export function LineItems({
         <col className="w-[116px]" />
         <col className="w-20" />
         <col className="w-14" />
+        <col className="w-14" />
         <col className="w-[104px]" />
         <col className="w-9" />
       </colgroup>
@@ -342,6 +381,7 @@ export function LineItems({
           <th className="py-1.5 text-center font-medium">{t("invoice.qty")}</th>
           <th className="py-1.5 pr-2 text-right font-medium">{t("invoice.rate")}</th>
           <th className="py-1.5 pr-2 text-right font-medium">{t("invoice.discount")}</th>
+          <th className="py-1.5 pr-2 text-right font-medium">{t("invoice.free")}</th>
           <th className="py-1.5 pr-2 text-right font-medium">{t("invoice.amount")}</th>
           <th className="py-1.5" />
         </tr>
@@ -354,7 +394,7 @@ export function LineItems({
           const units = saleUnits(p);
           return (
             // The search bar stays at the top while lines scroll: a focused field keeps clear of it.
-            <tr key={line.key} className="border-b border-line last:border-b-0 hover:bg-surface-2/60 focus-within:bg-accent-soft/40 [&_input]:scroll-mt-48 [&_input]:scroll-mb-28 [&_select]:scroll-mt-48">
+            <tr key={line.key} className="animate-line border-b border-line last:border-b-0 hover:bg-surface-2/60 focus-within:bg-accent-soft/40 [&_input]:scroll-mt-48 [&_input]:scroll-mb-28 [&_select]:scroll-mt-48">
               <td className="num py-1 pl-3 align-middle text-[12px] text-ink-3">{i + 1}</td>
               <td className="py-1 pl-1 align-middle">
                 <p className="truncate leading-tight font-medium text-ink" title={name}>
@@ -422,6 +462,18 @@ export function LineItems({
                   onEnter={onBackToSearch}
                   onTab={onBackToSearch}
                   className="h-8"
+                />
+              </td>
+              <td className="py-1 pr-1 align-middle">
+                {/* Scheme quantity given free (10+1), in the line's unit; clicked into, so Tab from Disc % still goes back to the search. */}
+                <NumberCell
+                  value={line.freeQty}
+                  decimals={3}
+                  label={`${t("invoice.free")} ${p.name}`}
+                  onCommit={(v) => onUpdate(line.key, { freeQty: v })}
+                  onEnter={onBackToSearch}
+                  onTab={onBackToSearch}
+                  className={cn("h-8", line.freeQty > 0 && "font-semibold text-good")}
                 />
               </td>
               <td className="py-1 pr-2 text-right align-middle">

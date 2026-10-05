@@ -60,7 +60,7 @@ export function RoutesTab() {
     return new Map([...byRoute].map(([id, shops]) => [id, { shops: shops.length, places: places(shops) }]));
   }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (offline.offlineMode || !offline.online) return <EmptyState icon={<MapPinned size={22} />} title={t("beat.routesOffline")} />;
+  if (offline.offlineMode || !offline.online) return <EmptyState icon={<MapPinned size={22} />} title={t("beat.routesOffline")} hint={t("common.connectHint")} />;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -69,7 +69,7 @@ export function RoutesTab() {
           {t("beat.newRoute")}
         </Button>
       </div>
-      <ErrorNote error={routes.error} />
+      <ErrorNote error={routes.error} onRetry={() => void routes.refetch()} />
       {routes.isPending ? (
         <div className="flex flex-col gap-2" role="status" aria-label={t("common.loading")}>
           {Array.from({ length: 3 }, (_, i) => (

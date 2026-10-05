@@ -157,6 +157,17 @@ export const homeModule: ApiModule = async (app, deps) => {
         out.expenses = { month, total: dec(e!.total).toFixed(2), count: e!.count };
       }
 
+      // The first-time checklist for whoever sets the business up: has there been a first product, customer and bill yet.
+      if (may("settings.update")) {
+        const [n] = (
+          await tx.execute<{ products: boolean; customers: boolean; invoices: boolean }>(sql`
+            select exists (select 1 from products where business_id = ${b} and deleted_at is null) as products,
+                   exists (select 1 from customers where business_id = ${b} and deleted_at is null) as customers,
+                   exists (select 1 from invoices where business_id = ${b}) as invoices`)
+        ).rows;
+        out.setup = { products: n!.products, customers: n!.customers, invoices: n!.invoices };
+      }
+
       return out;
     });
   });

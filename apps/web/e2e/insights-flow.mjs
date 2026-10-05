@@ -165,7 +165,8 @@ try {
   await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText("View “Month vs last year” saved").first().waitFor();
   await page.reload();
-  await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
+  // A reload stays on Business Reports.
+  await page.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
   await nav("Business Reports");
   await page.getByRole("button", { name: /^Saved views/ }).click();
   const menu = page.getByRole("dialog", { name: "Saved views" });

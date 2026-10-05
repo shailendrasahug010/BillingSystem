@@ -1,11 +1,10 @@
 import { translateError } from "@digitalbahi/i18n";
-import { ArrowLeft, TriangleAlert } from "lucide-react";
+import { ArrowLeft, RotateCw, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { Button } from "./Button";
-import { EmptyState, Skeleton } from "./misc";
 
 export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
@@ -22,99 +21,39 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   );
 }
 
-export interface Column<T> {
-  key: string;
-  header: ReactNode;
-  align?: "left" | "right";
-  className?: string;
-  render(row: T): ReactNode;
-}
+export { DataTable, type Column } from "./DataTable";
 
-/**
- * The list table used by every module: sticky-looking header row, row click,
- * skeleton while loading, empty state. Wide tables scroll sideways on phones.
- */
-export function DataTable<T>({
-  columns,
-  rows,
-  rowKey,
-  onRowClick,
-  loading,
-  empty,
-  minWidth = 640,
-  footer,
-}: {
-  columns: Column<T>[];
-  rows: T[];
-  rowKey(row: T): string;
-  onRowClick?(row: T): void;
-  loading?: boolean;
-  empty?: ReactNode;
-  minWidth?: number;
-  footer?: ReactNode;
-}) {
-  const { t } = useI18n();
+/** An API error in the user's language (field-level errors are shown by their fields). */
+export function ErrorNote({ error, className, onRetry }: { error: unknown; className?: string; onRetry?(): void }) {
+  const i18n = useI18n();
+  if (!error) return null;
+  const e = error instanceof ApiError ? error : new ApiError(0, "generic");
+  // Worth trying again: no connection, too many requests, or the server failed (not a rule the request broke).
+  const passing = e.status === 0 || e.status === 429 || e.status >= 500;
+  const line = lineOf(e.field);
   return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line/80 bg-surface shadow-card">
-      {loading ? (
-        <div className="flex flex-col gap-3 p-4" role="status" aria-label={t("common.loading")}>
-          {Array.from({ length: 5 }, (_, i) => (
-            <Skeleton key={i} className="h-5 w-full" />
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        (empty ?? <EmptyState title={t("empty.generic")} />)
-      ) : (
-        <div className="scroll-x">
-          <table className="w-full text-[13.5px]" style={{ minWidth }}>
-            <thead>
-              <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
-                {columns.map((c, i) => (
-                  <th key={c.key} className={cn("py-2.5 font-medium", i === 0 ? "pl-4" : "pl-3", i === columns.length - 1 ? "pr-4" : "pr-3", c.align === "right" && "text-right")}>
-                    {c.header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="num">
-              {rows.map((row) => (
-                <tr
-                  key={rowKey(row)}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={cn("border-b border-line/70 transition-colors last:border-b-0", onRowClick && "cursor-pointer hover:bg-accent-soft/40")}
-                >
-                  {columns.map((c, i) => (
-                    <td key={c.key} className={cn("py-3 align-top", i === 0 ? "pl-4" : "pl-3", i === columns.length - 1 ? "pr-4" : "pr-3", c.align === "right" && "text-right", c.className)}>
-                      {c.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-            {footer}
-          </table>
-        </div>
+    <div className={cn("flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger", className)} role="alert">
+      <TriangleAlert size={15} className="mt-0.5 shrink-0" />
+      <span className="min-w-0 flex-1">
+        {line !== null && <span className="font-medium">{i18n.t("errors.onLine", { line })} </span>}
+        {translateError(i18n, e)}
+        {/* A server failure is in the error log under this reference. */}
+        {e.status >= 500 && e.requestId && <span className="mt-0.5 block font-mono text-[11.5px] opacity-80">{i18n.t("errors.reference", { ref: e.requestId })}</span>}
+      </span>
+      {onRetry && passing && (
+        <button type="button" onClick={onRetry} className="press -my-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-medium underline-offset-2 hover:underline">
+          <RotateCw size={13} aria-hidden />
+          {i18n.t("common.retry")}
+        </button>
       )}
     </div>
   );
 }
 
-/** An API error in the user's language (field-level errors are shown by their fields). */
-export function ErrorNote({ error, className }: { error: unknown; className?: string }) {
-  const i18n = useI18n();
-  if (!error) return null;
-  const e = error instanceof ApiError ? error : new ApiError(0, "generic");
-  return (
-    <p className={cn("flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger", className)} role="alert">
-      <TriangleAlert size={15} className="mt-0.5 shrink-0" />
-      <span>
-        {translateError(i18n, e)}
-        {e.field && <span className="ml-1 font-mono text-[12px] opacity-80">({e.field})</span>}
-        {/* A server failure is in the error log under this reference. */}
-        {e.status >= 500 && e.requestId && <span className="mt-0.5 block font-mono text-[11.5px] opacity-80">{i18n.t("errors.reference", { ref: e.requestId })}</span>}
-      </span>
-    </p>
-  );
+/** The bill line an error is about ("lines.2.qty" is line 3), or null; other field names are not shown, as they mean nothing to the reader. */
+function lineOf(field: string | undefined): number | null {
+  const m = field ? /(?:^|\.)(?:lines|items)\.(\d+)(?:\.|$)/.exec(field) : null;
+  return m ? Number(m[1]) + 1 : null;
 }
 
 /** Field error text for an ApiError that names this field. */

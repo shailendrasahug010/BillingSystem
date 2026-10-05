@@ -14,7 +14,7 @@ import { withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, conflict, forbidden } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { getSettings } from "../../services/settings.js";
-import { businessContact, channelsFor, deliverLogged, loadSettings, pumpMessages, ready, recipient, resolveChannels, type Channel, type MessageRow, type SettingsRow } from "../../services/messaging/queue.js";
+import { businessContact, channelsFor, deliverLogged, loadSettings, pumpMessages, ready, recipient, resolveChannels, type Channel, type SettingsRow } from "../../services/messaging/queue.js";
 import type { Channels } from "../../services/messaging/transport.js";
 import { invoicePdfFile, notePdfFile, receiptPdfFile, type PdfFile } from "../documents/routes.js";
 import type { ApiModule } from "../types.js";

@@ -71,8 +71,9 @@ function Queue() {
   const q = useQuery({ queryKey: ["packing", "queue"], queryFn: () => api.get<{ data: QueueOrder[] }>("/packing/queue").then((r) => r.data) });
   return (
     <div className="flex flex-col gap-4">
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
+        id="packing-queue"
         rows={q.data ?? []}
         rowKey={(o) => o.id}
         loading={q.isPending}
@@ -83,6 +84,7 @@ function Queue() {
           {
             key: "order",
             header: t("packing.order"),
+            sortValue: (o) => o.orderNumber,
             render: (o) => (
               <div>
                 <p className="font-medium text-ink">{o.orderNumber}</p>
@@ -93,6 +95,7 @@ function Queue() {
           {
             key: "customer",
             header: t("customer.name"),
+            sortValue: (o) => o.customerName,
             render: (o) => (
               <span className="text-ink">
                 {o.customerName}
@@ -100,15 +103,16 @@ function Queue() {
               </span>
             ),
           },
-          { key: "delivery", header: t("orders.deliveryDate"), render: (o) => <span className="text-ink-2">{o.expectedDeliveryDate ? dateMedium(o.expectedDeliveryDate) : "—"}</span> },
-          { key: "status", header: t("common.status"), render: (o) => <Badge tone={o.status === "packing" ? "warn" : "accent"}>{t(`status.order.${o.status as "confirmed"}`)}</Badge> },
-          { key: "left", header: t("packing.itemsLeft"), align: "right", render: (o) => `${o.lines.filter((l) => Number(l.remaining) > 0).length} / ${o.lines.length}` },
-          { key: "qty", header: t("packing.piecesLeft"), align: "right", render: (o) => number(o.lines.reduce((s, l) => s + Number(l.remaining), 0), 0) },
+          { key: "delivery", header: t("orders.deliveryDate"), sortValue: (o) => o.expectedDeliveryDate, render: (o) => <span className="text-ink-2">{o.expectedDeliveryDate ? dateMedium(o.expectedDeliveryDate) : "—"}</span> },
+          { key: "status", header: t("common.status"), sortValue: (o) => t(`status.order.${o.status as "confirmed"}`), render: (o) => <Badge tone={o.status === "packing" ? "warn" : "accent"}>{t(`status.order.${o.status as "confirmed"}`)}</Badge> },
+          { key: "left", header: t("packing.itemsLeft"), align: "right", sortValue: (o) => o.lines.filter((l) => Number(l.remaining) > 0).length, render: (o) => `${o.lines.filter((l) => Number(l.remaining) > 0).length} / ${o.lines.length}` },
+          { key: "qty", header: t("packing.piecesLeft"), align: "right", sortValue: (o) => o.lines.reduce((s, l) => s + Number(l.remaining), 0), render: (o) => number(o.lines.reduce((s, l) => s + Number(l.remaining), 0), 0) },
           {
             key: "action",
             header: "",
             align: "right",
-            render: (o) =>
+            hideable: false,
+            render: () =>
               allowed("packing.pack") ? (
                 <Button size="sm" variant="primary" icon={<PackageCheck size={14} />}>
                   {t("packing.pack")}
@@ -353,21 +357,22 @@ function Slips() {
   const list = usePaged<SlipRow>("packing", "/packing", {});
   return (
     <div className="flex flex-col gap-4">
-      {list.error ? <ErrorNote error={list.error} /> : null}
+      {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
       <DataTable
+        id="packing-slips"
         rows={list.rows}
         rowKey={(r) => r.id}
         loading={list.loading}
         onRowClick={(r) => setOpenId(r.id)}
         minWidth={680}
-        empty={<EmptyState title={t("packing.noSlips")} />}
+        empty={<EmptyState title={t("packing.noSlips")} hint={t("packing.noSlipsHint")} />}
         columns={[
-          { key: "number", header: t("common.number"), render: (r) => <span className="font-medium text-ink">{r.packingNumber}</span> },
-          { key: "when", header: t("common.date"), render: (r) => <span className="text-ink-2">{r.packedAt ? dateTime(r.packedAt) : "—"}</span> },
-          { key: "order", header: t("packing.order"), render: (r) => <span className="text-ink-2">{r.orderNumber}</span> },
-          { key: "customer", header: t("customer.name"), render: (r) => <span className="text-ink">{r.customerName}</span> },
-          { key: "boxes", header: t("packing.boxCount"), align: "right", render: (r) => r.boxCount },
-          { key: "status", header: t("common.status"), render: (r) => <Badge tone={r.status === "cancelled" ? "danger" : "good"}>{r.status === "cancelled" ? t("packing.unpacked") : t("packing.packedStatus")}</Badge> },
+          { key: "number", header: t("common.number"), sortValue: (r) => r.packingNumber, render: (r) => <span className="font-medium text-ink">{r.packingNumber}</span> },
+          { key: "when", header: t("common.date"), sortValue: (r) => r.packedAt, render: (r) => <span className="text-ink-2">{r.packedAt ? dateTime(r.packedAt) : "—"}</span> },
+          { key: "order", header: t("packing.order"), sortValue: (r) => r.orderNumber, render: (r) => <span className="text-ink-2">{r.orderNumber}</span> },
+          { key: "customer", header: t("customer.name"), sortValue: (r) => r.customerName, render: (r) => <span className="text-ink">{r.customerName}</span> },
+          { key: "boxes", header: t("packing.boxCount"), align: "right", sortValue: (r) => r.boxCount, render: (r) => r.boxCount },
+          { key: "status", header: t("common.status"), sortValue: (r) => (r.status === "cancelled" ? t("packing.unpacked") : t("packing.packedStatus")), render: (r) => <Badge tone={r.status === "cancelled" ? "danger" : "good"}>{r.status === "cancelled" ? t("packing.unpacked") : t("packing.packedStatus")}</Badge> },
         ]}
       />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
@@ -419,7 +424,7 @@ function SlipDialog({ id, onClose }: { id: string | null; onClose(): void }) {
       {q.isPending ? (
         <Skeleton className="h-48 w-full" />
       ) : q.error ? (
-        <ErrorNote error={q.error} />
+        <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
       ) : p ? (
         <div className="flex flex-col gap-3">
           {error ? <ErrorNote error={error} /> : null}

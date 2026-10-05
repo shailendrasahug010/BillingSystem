@@ -1,3 +1,4 @@
+import { translateError } from "@digitalbahi/i18n";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
@@ -59,7 +60,7 @@ export function ExportButton({ path, query, filename }: { path: string; query: R
   const run = (format: "pdf" | "xlsx" | "csv") => {
     setBusy(format);
     downloadReport(path, query, filename, format)
-      .catch((e: unknown) => toast({ tone: "danger", title: i18n.t("errors.generic"), body: e instanceof ApiError ? e.code : undefined }))
+      .catch((e: unknown) => toast({ tone: "danger", title: i18n.t("errors.exportFailed"), body: translateError(i18n, e instanceof ApiError ? e : null) }))
       .finally(() => setBusy(null));
   };
   return (

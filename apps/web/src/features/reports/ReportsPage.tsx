@@ -226,7 +226,7 @@ function GroupedReport({ kind, settings, onChange }: { kind: keyof typeof GROUPS
           <ExportButton path={`/reports/${kind}`} query={query} filename={`${kind}-${period.from}-${period.to}.csv`} />
         </div>
       </PeriodBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
         columns={columns}
         rows={q.data?.rows ?? []}
@@ -341,7 +341,7 @@ function OutstandingReport({ settings, onChange }: ReportProps) {
         </span>
         <ExportButton path="/reports/outstanding" query={query} filename={`outstanding-${party}.csv`} />
       </FilterBar>
-      {q.error ? <ErrorNote error={q.error} /> : null}
+      {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable columns={columns} rows={q.data?.rows ?? []} rowKey={(r) => r.partyId} loading={q.isPending} minWidth={760} />
     </div>
   );

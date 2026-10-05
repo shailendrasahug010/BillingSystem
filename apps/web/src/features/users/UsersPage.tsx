@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PERMISSION_CATALOG, validateMobile, type PermissionModule } from "@digitalbahi/core";
 import type { TranslationKey } from "@digitalbahi/i18n";
-import { ShieldPlus, UserPlus } from "lucide-react";
+import { MessageCircle, ShieldPlus, UserPlus } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -12,8 +12,10 @@ import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Avatar } from "../../components/ui/misc";
 import { DataTable, ErrorNote, PageHeader, TAB_TRIGGER, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
-import { allowed } from "../../data/db";
+import { allowed, BUSINESS } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
+import { useAppLink } from "../../lib/appLink";
+import { shareOnWhatsApp } from "../../lib/share";
 
 interface Member {
   id: string;
@@ -96,8 +98,9 @@ export function UsersPage() {
           </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="members">
-          {members.error ? <ErrorNote error={members.error} /> : null}
+          {members.error ? <ErrorNote error={members.error} onRetry={() => void members.refetch()} /> : null}
           <DataTable
+            id="users"
             rows={members.data ?? []}
             loading={members.isPending}
             rowKey={(m) => m.id}
@@ -106,6 +109,7 @@ export function UsersPage() {
               {
                 key: "name",
                 header: t("common.name"),
+                sortValue: (m) => m.name,
                 render: (m) => (
                   <div className="flex items-center gap-3">
                     <Avatar name={m.name} className="size-8 text-[12px]" />
@@ -120,15 +124,16 @@ export function UsersPage() {
                   </div>
                 ),
               },
-              { key: "role", header: t("users.role"), render: (m) => (m.isOwner ? <Badge tone="accent">{t("users.owner")}</Badge> : <span className="text-ink-2">{m.role.name}</span>) },
-              { key: "status", header: t("common.status"), render: (m) => (m.isActive ? <Badge tone="good">{t("common.active")}</Badge> : <Badge tone="danger">{t("common.inactive")}</Badge>) },
-              { key: "login", header: t("users.lastLogin"), align: "right", render: (m) => <span className="text-ink-3">{m.lastLoginAt ? dateMedium(m.lastLoginAt.slice(0, 10)) : t("users.never")}</span> },
+              { key: "role", header: t("users.role"), sortValue: (m) => (m.isOwner ? t("users.owner") : m.role.name), render: (m) => (m.isOwner ? <Badge tone="accent">{t("users.owner")}</Badge> : <span className="text-ink-2">{m.role.name}</span>) },
+              { key: "status", header: t("common.status"), sortValue: (m) => (m.isActive ? t("common.active") : t("common.inactive")), render: (m) => (m.isActive ? <Badge tone="good">{t("common.active")}</Badge> : <Badge tone="danger">{t("common.inactive")}</Badge>) },
+              { key: "login", header: t("users.lastLogin"), align: "right", sortValue: (m) => m.lastLoginAt, render: (m) => <span className="text-ink-3">{m.lastLoginAt ? dateMedium(m.lastLoginAt.slice(0, 10)) : t("users.never")}</span> },
             ]}
           />
         </Tabs.Content>
         <Tabs.Content value="roles">
-          {roles.error ? <ErrorNote error={roles.error} /> : null}
+          {roles.error ? <ErrorNote error={roles.error} onRetry={() => void roles.refetch()} /> : null}
           <DataTable
+            id="roles"
             rows={roles.data ?? []}
             loading={roles.isPending}
             rowKey={(r) => r.id}
@@ -137,6 +142,7 @@ export function UsersPage() {
               {
                 key: "name",
                 header: t("users.role"),
+                sortValue: (r) => roleName(r),
                 render: (r) => (
                   <div>
                     <p className="font-medium text-ink">
@@ -146,8 +152,8 @@ export function UsersPage() {
                   </div>
                 ),
               },
-              { key: "grants", header: t("users.permissions"), render: (r) => <span className="text-ink-2">{r.grants.includes("*") ? t("users.everything") : t("users.permissionCount", { count: r.grants.length })}</span> },
-              { key: "members", header: t("users.members"), align: "right", render: (r) => r.memberCount },
+              { key: "grants", header: t("users.permissions"), sortValue: (r) => (r.grants.includes("*") ? Number.POSITIVE_INFINITY : r.grants.length), render: (r) => <span className="text-ink-2">{r.grants.includes("*") ? t("users.everything") : t("users.permissionCount", { count: r.grants.length })}</span> },
+              { key: "members", header: t("users.members"), align: "right", sortValue: (r) => r.memberCount, render: (r) => r.memberCount },
             ]}
           />
         </Tabs.Content>
@@ -159,6 +165,21 @@ export function UsersPage() {
   );
 }
 
+/** Opens WhatsApp with an invite for a member: the address to open and how they sign in. */
+function useWhatsAppInvite() {
+  const { t } = useI18n();
+  const { link } = useAppLink();
+  return (m: Pick<Member, "name" | "mobile" | "username" | "hasPassword">) => {
+    const lines = [
+      t("invite.hello", { name: m.name, business: BUSINESS.name }),
+      "",
+      link ? t("invite.open", { link }) : t("invite.noLink"),
+      m.hasPassword ? t("invite.loginPassword", { login: m.username ?? m.mobile }) : t("invite.loginOtp", { mobile: m.mobile }),
+    ];
+    shareOnWhatsApp(lines.join("\n"), m.mobile);
+  };
+}
+
 function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChange(v: boolean): void; roles: Role[] }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -166,10 +187,14 @@ function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChan
   const [form, setForm] = useState({ name: "", mobile: "", email: "", roleId: "", username: "", password: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  /** Added just now: the dialog then offers to send them an invite on WhatsApp. */
+  const [added, setAdded] = useState<Member | null>(null);
+  const invite = useWhatsAppInvite();
   const fieldError = useFieldError(error);
   const assignable = roles.filter((r) => !r.grants.includes("*"));
   useEffect(() => {
     if (open) {
+      setAdded(null);
       setForm({ name: "", mobile: "", email: "", roleId: assignable.find((r) => r.key === "sales")?.id ?? assignable[0]?.id ?? "", username: "", password: "" });
       setError(null);
     }
@@ -201,7 +226,7 @@ function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChan
             ? t("users.invitedWithPassword", { name: m.name, mobile: m.mobile })
             : t("users.invitedHint", { name: m.name, mobile: m.mobile });
       toast({ tone: "success", title: t("users.invited"), body });
-      onOpenChange(false);
+      setAdded({ ...m, hasPassword: m.hasPassword || Boolean(form.password) });
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
     } finally {
@@ -212,47 +237,62 @@ function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChan
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t("users.invite")}
-      description={t("users.inviteHint")}
+      title={added ? t("users.invited") : t("users.invite")}
+      description={added ? undefined : t("users.inviteHint")}
       closeLabel={t("common.close")}
       footer={
-        <>
-          <Button onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
-          <Button variant="primary" disabled={busy || !ok} onClick={() => void save()}>
-            {t("users.invite")}
+        added ? (
+          <Button variant="primary" onClick={() => onOpenChange(false)}>
+            {t("invite.done")}
           </Button>
-        </>
+        ) : (
+          <>
+            <Button onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
+            <Button variant="primary" disabled={busy || !ok} onClick={() => void save()}>
+              {t("users.invite")}
+            </Button>
+          </>
+        )
       }
     >
-      <div className="flex flex-col gap-4">
-        {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}
-        <Field label={t("common.name")} htmlFor="inv-name" error={fieldError("name")}>
-          <Input id="inv-name" autoFocus value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        </Field>
-        <Field label={t("auth.mobile")} htmlFor="inv-mobile" error={mobileBad ? t("validation.mobile") : fieldError("mobile")}>
-          <Input id="inv-mobile" inputMode="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} />
-        </Field>
-        <Field label={t("auth.email")} htmlFor="inv-email" hint={t("common.optional")} error={fieldError("email")}>
-          <Input id="inv-email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-        </Field>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label={t("users.username")} htmlFor="inv-username" hint={t("users.usernameHint")} error={usernameBad ? t("users.usernameHint") : fieldError("username")}>
-            <Input id="inv-username" autoComplete="off" autoCapitalize="none" spellCheck={false} className="[&_input]:font-mono" value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value.replace(/\s/g, "") }))} />
+      {added ? (
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-[14px] text-ink">{t("invite.whatsappHint", { name: added.name })}</p>
+          <Button icon={<MessageCircle size={16} />} onClick={() => invite(added)}>
+            {t("invite.whatsapp")}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}
+          <Field label={t("common.name")} htmlFor="inv-name" error={fieldError("name")}>
+            <Input id="inv-name" autoFocus value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           </Field>
-          <Field label={t("users.password")} htmlFor="inv-password" hint={t("users.passwordHint")} error={passwordBad || (username && !form.password) ? t("users.passwordHint") : fieldError("password")}>
-            <Input id="inv-password" type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+          <Field label={t("auth.mobile")} htmlFor="inv-mobile" error={mobileBad ? t("validation.mobile") : fieldError("mobile")}>
+            <Input id="inv-mobile" inputMode="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} />
+          </Field>
+          <Field label={t("auth.email")} htmlFor="inv-email" hint={t("common.optional")} error={fieldError("email")}>
+            <Input id="inv-email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label={t("users.username")} htmlFor="inv-username" hint={t("users.usernameHint")} error={usernameBad ? t("users.usernameHint") : fieldError("username")}>
+              <Input id="inv-username" autoComplete="off" autoCapitalize="none" spellCheck={false} className="[&_input]:font-mono" value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value.replace(/\s/g, "") }))} />
+            </Field>
+            <Field label={t("users.password")} htmlFor="inv-password" hint={t("users.passwordHint")} error={passwordBad || (username && !form.password) ? t("users.passwordHint") : fieldError("password")}>
+              <Input id="inv-password" type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+            </Field>
+          </div>
+          <Field label={t("users.role")} htmlFor="inv-role" error={fieldError("roleId")}>
+            <Select id="inv-role" value={form.roleId} onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}>
+              {assignable.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </Select>
           </Field>
         </div>
-        <Field label={t("users.role")} htmlFor="inv-role" error={fieldError("roleId")}>
-          <Select id="inv-role" value={form.roleId} onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}>
-            {assignable.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+      )}
     </Dialog>
   );
 }
@@ -260,6 +300,7 @@ function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChan
 function MemberDialog({ member, onClose, roles }: { member: Member | null; onClose(): void; roles: Role[] }) {
   const { t } = useI18n();
   const toast = useToast();
+  const invite = useWhatsAppInvite();
   const qc = useQueryClient();
   const [roleId, setRoleId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -347,6 +388,13 @@ function MemberDialog({ member, onClose, roles }: { member: Member | null; onClo
             <h3 className="text-[13px] font-semibold text-ink">{t("users.signIn")}</h3>
             <p className="text-[12.5px] text-ink-3">{t("users.signInWith", { ways })}</p>
           </div>
+          {member?.isActive && (
+            <div>
+              <Button size="sm" icon={<MessageCircle size={14} />} onClick={() => invite(member)}>
+                {t("invite.whatsapp")}
+              </Button>
+            </div>
+          )}
           {allowed("user.update") && (
             <>
               <p className="text-[12px] text-ink-3">{t("users.signInHint")}</p>

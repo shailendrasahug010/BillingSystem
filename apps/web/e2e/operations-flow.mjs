@@ -171,6 +171,8 @@ const product = catalog.products.find((p) => p.name.startsWith("Parle-G"));
 const customer = await api("POST", "/customers", { name: "Sharma Kirana", businessName: "Sharma Kirana Store", mobile: "9893012345", stateCode: me.business.stateCode, creditDays: 7 });
 const invoice = await api("POST", "/invoices", { customerId: customer.id, lines: [{ productId: product.id, qty: "48" }] });
 log("invoice via API", invoice.invoiceNumber, invoice.grandTotal);
+// A reload keeps the screen it is on: back to the dashboard first.
+await page.goto(`${WEB}/#dashboard`);
 await page.reload();
 await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
 await nav("Payments");
@@ -209,6 +211,9 @@ await page.fill("#inv-name", "Raju Salesman");
 await page.fill("#inv-mobile", "9111122222");
 await page.getByRole("dialog").getByRole("button", { name: "Add member" }).click();
 await toast("Member added");
+// The dialog then offers a WhatsApp invite; Done closes it.
+await page.getByRole("dialog").getByRole("button", { name: "Send invite on WhatsApp" }).waitFor();
+await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
 await page.getByRole("cell", { name: /Raju Salesman/ }).waitFor();
 await page.getByRole("button", { name: "New role" }).click();
 await page.fill("#r-name", "Delivery boy");

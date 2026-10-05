@@ -13,6 +13,7 @@ import type { Route } from "../../app/router";
 import { passwordOpens, rememberPassword, vaultOpen } from "../../offline/vault";
 import { Field, Input } from "../ui/Field";
 import { useToast } from "../ui/Toast";
+import { useConfirm } from "../ui/Confirm";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
@@ -93,6 +94,7 @@ function useKindLabel() {
 function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const i18n = useI18n();
   const { t, money, date } = i18n;
+  const confirm = useConfirm();
   const label = useKindLabel();
   const failed = entry.status === "failed";
   const kind = kindOf(entry);
@@ -160,7 +162,9 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
               size="sm"
               variant="ghost"
               onClick={() => {
-                if (window.confirm(removeText)) void removeEntry(entry.id);
+                void confirm({ title: t("offline.removeTitle"), body: removeText, confirmLabel: t("offline.remove"), danger: true }).then((ok) => {
+                  if (ok) void removeEntry(entry.id);
+                });
               }}
             >
               {t("offline.remove")}
