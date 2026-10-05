@@ -72,11 +72,12 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
   }, [action, partyId]);
 
   const columns: Column<PaymentRow>[] = [
-    { key: "date", header: t("common.date"), render: (p) => <span className="text-ink-2">{dateMedium(p.paymentDate)}</span> },
-    { key: "number", header: t("common.number"), render: (p) => <span className="font-medium text-ink">{p.paymentNumber}</span> },
+    { key: "date", header: t("common.date"), sortValue: (p) => p.paymentDate, render: (p) => <span className="text-ink-2">{dateMedium(p.paymentDate)}</span> },
+    { key: "number", header: t("common.number"), sortValue: (p) => p.paymentNumber, render: (p) => <span className="font-medium text-ink">{p.paymentNumber}</span> },
     {
       key: "party",
       header: t("common.party"),
+      sortValue: (p) => p.partyName,
       render: (p) => (
         <span className="flex items-center gap-2">
           {p.direction === "in" ? <ArrowDownLeft size={14} className="text-good" aria-label={t("payment.in")} /> : <ArrowUpRight size={14} className="text-warn" aria-label={t("payment.out")} />}
@@ -87,6 +88,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
     {
       key: "method",
       header: t("common.method"),
+      sortValue: (p) => t(`paymentMethod.${p.method}`),
       render: (p) => (
         <span className="text-ink-2">
           {t(`paymentMethod.${p.method}`)}
@@ -97,6 +99,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
     {
       key: "status",
       header: t("common.status"),
+      sortValue: (p) => (p.status === "cancelled" ? p.status : (p.chequeStatus ?? (Number(p.unallocatedAmount) > 0 ? "advance" : null))),
       render: (p) =>
         p.status === "cancelled" ? (
           <Badge tone="danger">{p.chequeStatus === "bounced" ? t("payment.chequeStatus.bounced") : t("common.cancelled")}</Badge>
@@ -112,6 +115,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
       key: "amount",
       header: t("common.amount"),
       align: "right",
+      sortValue: (p) => Number(p.amount),
       render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : p.direction === "in" ? "font-semibold text-good" : "font-semibold text-ink"}>{money(p.amount)}</span>,
     },
   ];
@@ -197,7 +201,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
       </FilterBar>
 
       {list.error ? <ErrorNote error={list.error} /> : null}
-      <DataTable columns={columns} rows={list.rows} rowKey={(p) => p.id} loading={list.loading} onRowClick={(p) => setOpenId(p.id)} minWidth={760} />
+      <DataTable id="payments" columns={columns} rows={list.rows} rowKey={(p) => p.id} loading={list.loading} onRowClick={(p) => setOpenId(p.id)} minWidth={760} />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
 
       {dialog && (

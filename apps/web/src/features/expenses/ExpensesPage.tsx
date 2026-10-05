@@ -116,10 +116,11 @@ function ExpenseList() {
   });
 
   const columns: Column<ExpenseRow>[] = [
-    { key: "date", header: t("common.date"), render: (x) => <span className="text-ink-2">{dateMedium(x.expenseDate)}</span> },
+    { key: "date", header: t("common.date"), sortValue: (x) => x.expenseDate, render: (x) => <span className="text-ink-2">{dateMedium(x.expenseDate)}</span> },
     {
       key: "category",
       header: t("expenses.category"),
+      sortValue: (x) => label(x),
       render: (x) => (
         <div>
           <p className="font-medium text-ink">{label(x)}</p>
@@ -130,6 +131,7 @@ function ExpenseList() {
     {
       key: "paidTo",
       header: t("expenses.paidTo"),
+      sortValue: (x) => x.paidTo,
       render: (x) => (
         <span className="text-ink-2">
           {x.paidTo ?? "—"}
@@ -137,12 +139,13 @@ function ExpenseList() {
         </span>
       ),
     },
-    { key: "method", header: t("common.method"), render: (x) => <span className="text-ink-2">{t(`paymentMethod.${x.paymentMethod}`)}</span> },
-    { key: "gst", header: "GST", align: "right", render: (x) => (Number(x.gst) > 0 ? money(x.gst) : <span className="text-ink-3">—</span>) },
+    { key: "method", header: t("common.method"), sortValue: (x) => t(`paymentMethod.${x.paymentMethod}`), render: (x) => <span className="text-ink-2">{t(`paymentMethod.${x.paymentMethod}`)}</span> },
+    { key: "gst", header: "GST", align: "right", sortValue: (x) => Number(x.gst), render: (x) => (Number(x.gst) > 0 ? money(x.gst) : <span className="text-ink-3">—</span>) },
     {
       key: "total",
       header: t("common.total"),
       align: "right",
+      sortValue: (x) => Number(x.totalAmount),
       render: (x) => (x.status === "cancelled" ? <span className="text-ink-3 line-through">{money(x.totalAmount)}</span> : <span className="font-semibold text-ink">{money(x.totalAmount)}</span>),
     },
   ];
@@ -186,6 +189,7 @@ function ExpenseList() {
       )}
       {list.error ? <ErrorNote error={list.error} /> : null}
       <DataTable
+        id="expenses"
         columns={columns}
         rows={list.rows}
         rowKey={(x) => x.id}
@@ -339,6 +343,7 @@ function ExpenseSummary() {
       </PeriodBar>
       {q.error ? <ErrorNote error={q.error} /> : null}
       <DataTable
+        id="expense-summary"
         rows={q.data?.rows ?? []}
         rowKey={(r) => r.key}
         loading={q.isPending}
@@ -347,6 +352,7 @@ function ExpenseSummary() {
           {
             key: "label",
             header: t(`reports.groups.${groupBy}`),
+            sortValue: (r) => rowLabel(r),
             render: (r) => (
               <div className="flex min-w-40 flex-col gap-1">
                 <span className="font-medium text-ink">{rowLabel(r)}</span>
@@ -354,11 +360,11 @@ function ExpenseSummary() {
               </div>
             ),
           },
-          { key: "count", header: t("expenses.count"), align: "right", render: (r) => number(r.count, 0) },
-          { key: "amount", header: t("expenses.amountBeforeGst"), align: "right", render: (r) => money(r.amount) },
-          { key: "gst", header: "GST", align: "right", render: (r) => money(r.gst) },
-          { key: "itc", header: t("expenses.itcShort"), align: "right", render: (r) => money(r.itc) },
-          { key: "total", header: t("common.total"), align: "right", render: (r) => <span className="font-semibold">{money(r.total)}</span> },
+          { key: "count", header: t("expenses.count"), align: "right", hideable: false, sortValue: (r) => r.count, render: (r) => number(r.count, 0) },
+          { key: "amount", header: t("expenses.amountBeforeGst"), align: "right", hideable: false, sortValue: (r) => Number(r.amount), render: (r) => money(r.amount) },
+          { key: "gst", header: "GST", align: "right", hideable: false, sortValue: (r) => Number(r.gst), render: (r) => money(r.gst) },
+          { key: "itc", header: t("expenses.itcShort"), align: "right", hideable: false, sortValue: (r) => Number(r.itc), render: (r) => money(r.itc) },
+          { key: "total", header: t("common.total"), align: "right", hideable: false, sortValue: (r) => Number(r.total), render: (r) => <span className="font-semibold">{money(r.total)}</span> },
         ]}
         footer={
           q.data?.totals ? (
@@ -439,17 +445,19 @@ function CategoryManager() {
         </form>
       )}
       <DataTable
+        id="expense-categories"
         rows={categories.data ?? []}
         rowKey={(c) => c.id}
         loading={categories.isPending}
         columns={[
-          { key: "name", header: t("common.name"), render: (c) => <span className={c.isActive ? "font-medium text-ink" : "text-ink-3 line-through"}>{c.name}</span> },
-          { key: "nameHi", header: t("expenses.nameHi"), render: (c) => <span className="text-ink-2">{c.nameHi ?? "—"}</span> },
-          { key: "status", header: t("common.status"), render: (c) => <Badge tone={c.isActive ? "good" : "neutral"}>{c.isActive ? t("common.active") : t("common.inactive")}</Badge> },
+          { key: "name", header: t("common.name"), sortValue: (c) => c.name, render: (c) => <span className={c.isActive ? "font-medium text-ink" : "text-ink-3 line-through"}>{c.name}</span> },
+          { key: "nameHi", header: t("expenses.nameHi"), sortValue: (c) => c.nameHi, render: (c) => <span className="text-ink-2">{c.nameHi ?? "—"}</span> },
+          { key: "status", header: t("common.status"), sortValue: (c) => (c.isActive ? t("common.active") : t("common.inactive")), render: (c) => <Badge tone={c.isActive ? "good" : "neutral"}>{c.isActive ? t("common.active") : t("common.inactive")}</Badge> },
           {
             key: "action",
             header: "",
             align: "right",
+            hideable: false,
             render: (c) =>
               canEdit ? (
                 <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(() => api.patch(`/expense-categories/${c.id}`, { isActive: !c.isActive }), c.isActive ? t("expenses.categoryHidden") : t("expenses.categoryShown"))}>

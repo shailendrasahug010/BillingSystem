@@ -98,6 +98,7 @@ export function UsersPage() {
         <Tabs.Content value="members">
           {members.error ? <ErrorNote error={members.error} /> : null}
           <DataTable
+            id="users"
             rows={members.data ?? []}
             loading={members.isPending}
             rowKey={(m) => m.id}
@@ -106,6 +107,7 @@ export function UsersPage() {
               {
                 key: "name",
                 header: t("common.name"),
+                sortValue: (m) => m.name,
                 render: (m) => (
                   <div className="flex items-center gap-3">
                     <Avatar name={m.name} className="size-8 text-[12px]" />
@@ -120,15 +122,16 @@ export function UsersPage() {
                   </div>
                 ),
               },
-              { key: "role", header: t("users.role"), render: (m) => (m.isOwner ? <Badge tone="accent">{t("users.owner")}</Badge> : <span className="text-ink-2">{m.role.name}</span>) },
-              { key: "status", header: t("common.status"), render: (m) => (m.isActive ? <Badge tone="good">{t("common.active")}</Badge> : <Badge tone="danger">{t("common.inactive")}</Badge>) },
-              { key: "login", header: t("users.lastLogin"), align: "right", render: (m) => <span className="text-ink-3">{m.lastLoginAt ? dateMedium(m.lastLoginAt.slice(0, 10)) : t("users.never")}</span> },
+              { key: "role", header: t("users.role"), sortValue: (m) => (m.isOwner ? t("users.owner") : m.role.name), render: (m) => (m.isOwner ? <Badge tone="accent">{t("users.owner")}</Badge> : <span className="text-ink-2">{m.role.name}</span>) },
+              { key: "status", header: t("common.status"), sortValue: (m) => (m.isActive ? t("common.active") : t("common.inactive")), render: (m) => (m.isActive ? <Badge tone="good">{t("common.active")}</Badge> : <Badge tone="danger">{t("common.inactive")}</Badge>) },
+              { key: "login", header: t("users.lastLogin"), align: "right", sortValue: (m) => m.lastLoginAt, render: (m) => <span className="text-ink-3">{m.lastLoginAt ? dateMedium(m.lastLoginAt.slice(0, 10)) : t("users.never")}</span> },
             ]}
           />
         </Tabs.Content>
         <Tabs.Content value="roles">
           {roles.error ? <ErrorNote error={roles.error} /> : null}
           <DataTable
+            id="roles"
             rows={roles.data ?? []}
             loading={roles.isPending}
             rowKey={(r) => r.id}
@@ -137,6 +140,7 @@ export function UsersPage() {
               {
                 key: "name",
                 header: t("users.role"),
+                sortValue: (r) => roleName(r),
                 render: (r) => (
                   <div>
                     <p className="font-medium text-ink">
@@ -146,8 +150,8 @@ export function UsersPage() {
                   </div>
                 ),
               },
-              { key: "grants", header: t("users.permissions"), render: (r) => <span className="text-ink-2">{r.grants.includes("*") ? t("users.everything") : t("users.permissionCount", { count: r.grants.length })}</span> },
-              { key: "members", header: t("users.members"), align: "right", render: (r) => r.memberCount },
+              { key: "grants", header: t("users.permissions"), sortValue: (r) => (r.grants.includes("*") ? Number.POSITIVE_INFINITY : r.grants.length), render: (r) => <span className="text-ink-2">{r.grants.includes("*") ? t("users.everything") : t("users.permissionCount", { count: r.grants.length })}</span> },
+              { key: "members", header: t("users.members"), align: "right", sortValue: (r) => r.memberCount, render: (r) => r.memberCount },
             ]}
           />
         </Tabs.Content>
