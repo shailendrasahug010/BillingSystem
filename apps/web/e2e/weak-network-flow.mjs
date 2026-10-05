@@ -128,13 +128,13 @@ try {
   await a.page.fill("#su-name", "Prakash Jain");
   await a.page.fill("#su-mobile", ownerMobile);
   await a.page.fill("#su-password", password);
+  await a.page.getByRole("button", { name: "Next" }).click();
   await a.page.fill("#su-business", "Jain Distributors");
   await a.page.getByRole("button", { name: "Send OTP" }).click();
   const hint = a.page.getByText(/Development code: \d{6}/);
   await hint.waitFor();
   await a.page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-  await a.page.getByRole("button", { name: "Verify and create account" }).click();
-  await a.page.getByRole("heading", { name: /Prakash/ }).waitFor({ timeout: 20000 });
+  await a.page.getByRole("heading", { name: /, Prakash/ }).waitFor({ timeout: 20000 });
   a.signedIn = true;
   const token = (await api("POST", "/auth/login", null, { identifier: ownerMobile, password })).accessToken;
   const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
@@ -165,7 +165,7 @@ try {
     p.signedIn = true;
   }
   await a.page.reload();
-  await a.page.getByRole("heading", { name: /Prakash/ }).waitFor({ timeout: 20000 });
+  await a.page.getByRole("heading", { name: /, Prakash/ }).waitFor({ timeout: 20000 });
   await Promise.all([a, b, c].map(keptOnDevice));
   const series = (await api("GET", "/devices", token)).data.map((d) => d.seriesCode).sort();
   if (series.length !== 3 || new Set(series).size !== 3) errors.push(`device series: ${series.join(", ")}`);

@@ -65,9 +65,9 @@ await page.getByRole("button", { name: "Create account" }).click();
 // What is missing or wrong is said on this panel, at each field, before any code is sent.
 await page.fill("#su-mobile", "12345");
 await page.fill("#su-password", "short");
-await page.getByRole("button", { name: "Send OTP" }).click();
+await page.getByRole("button", { name: "Next" }).click();
 const fieldError = async (id) => (await page.locator(`#${id}`).getAttribute("aria-invalid")) === "true";
-for (const id of ["su-name", "su-mobile", "su-password", "su-business"]) {
+for (const id of ["su-name", "su-mobile", "su-password"]) {
   if (!(await fieldError(id))) errors.push(`sign-up: ${id} not marked`);
 }
 for (const text of ["This field is required", "Enter a 10-digit mobile number", "At least 8 characters"]) await page.getByText(text).first().waitFor();
@@ -78,17 +78,21 @@ log("sign-up with fields missing: each said at its field, no code sent");
 await page.fill("#su-name", "Ravi Kumar");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
-await page.fill("#su-business", "Ravi Distributors");
+await page.getByRole("button", { name: "Next" }).click();
+await page.locator("#su-business").waitFor();
 if (await page.getByText("This field is required").count()) errors.push("sign-up: a message stayed after the field was filled");
+// The business step says what is missing there too.
+await page.getByRole("button", { name: "Send OTP" }).click();
+if (!(await fieldError("su-business"))) errors.push("sign-up: su-business not marked");
+await page.fill("#su-business", "Ravi Distributors");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 const code = (await hint.textContent()).match(/\d{6}/)[0];
 await page.fill("#auth-otp", code);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Ravi/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Ravi/ }).waitFor({ timeout: 15000 });
 signedIn = true;
-log("signed up; dashboard greets", await page.getByRole("heading", { name: /Ravi/ }).textContent());
+log("signed up; dashboard greets", await page.getByRole("heading", { name: /, Ravi/ }).textContent());
 await page.screenshot({ path: `${OUT}/e2e-1-dashboard-empty.png` });
 
 // 2. Master data through the API (the web product/customer editors come later).
@@ -187,8 +191,9 @@ await page.keyboard.press("Escape");
 await page.reload();
 await page.getByText("Today's Sales").waitFor({ timeout: 15000 });
 log("session restored after reload (refresh cookie)");
-await page.getByRole("button", { name: "Sign out" }).click();
-await page.getByRole("heading", { name: "Welcome back" }).waitFor();
+await page.getByRole("button", { name: "Sign out" }).first().click();
+await page.getByRole("dialog", { name: /Sign out of/ }).getByRole("button", { name: "Sign out" }).click();
+await page.getByRole("heading", { name: "Welcome back, Ravi" }).waitFor();
 log("signed out");
 
 console.log("page errors:", errors.length ? errors : "none");

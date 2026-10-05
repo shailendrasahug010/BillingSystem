@@ -58,13 +58,13 @@ await page.getByRole("button", { name: "Create account" }).click();
 await page.fill("#su-name", "Meena Gupta");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
+await page.getByRole("button", { name: "Next" }).click();
 await page.fill("#su-business", "Gupta Traders");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Meena/ }).waitFor({ timeout: 15000 });
 signedIn = true;
 log("signed up");
 
@@ -176,7 +176,7 @@ log("invoice via API", invoice.invoiceNumber, invoice.grandTotal);
 // A reload keeps the screen it is on: back to the dashboard first.
 await page.goto(`${WEB}/#dashboard`);
 await page.reload();
-await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Meena/ }).waitFor({ timeout: 15000 });
 await nav("Payments");
 await page.getByRole("button", { name: "Receive payment" }).click();
 await page.getByPlaceholder(/Search by name, mobile/).fill("sharma");

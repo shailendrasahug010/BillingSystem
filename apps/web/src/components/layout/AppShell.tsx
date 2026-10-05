@@ -49,6 +49,8 @@ import { useToast } from "../ui/Toast";
 import { useConfirm } from "../ui/Confirm";
 import { BrandMark, FirmLogo } from "../brand/Brand";
 import { ComfortButton, ComfortControls, HelpButton } from "./Comfort";
+import { AccountMenu } from "./AccountMenu";
+import { setWelcomeBusiness } from "../../lib/lastSignIn";
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
@@ -361,11 +363,14 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
       toast({ tone: "offline", title: t("offline.signOutOffline") });
       return;
     }
-    if (
-      entries.length > 0 &&
-      !(await confirm({ title: t("offline.signOutTitle"), body: t("offline.signOutPending", { count: entries.length }), confirmLabel: t("offline.signOutAnyway"), danger: true }))
-    )
-      return;
+    // Bills still waiting are the bigger worry; otherwise a plain "are you sure?", so a stray tap does not sign out.
+    const sure =
+      entries.length > 0
+        ? await confirm({ title: t("offline.signOutTitle"), body: t("offline.signOutPending", { count: entries.length }), confirmLabel: t("offline.signOutAnyway"), danger: true })
+        : await confirm({ title: t("auth.signOutTitle", { business: BUSINESS.name }), body: t("auth.signOutBody"), confirmLabel: t("auth.signOut") });
+    if (!sure) return;
+    setMoreOpen(false);
+    setWelcomeBusiness(null);
     void session.logout().catch(() => undefined);
   };
   const userName = LIVE ? (session.user?.name ?? "") : "Anil Sharma";
@@ -549,6 +554,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
                 <Kbd keys="mod+i" className="opacity-80 [&_kbd]:border-white/30 [&_kbd]:bg-white/15 [&_kbd]:text-white" />
               </button>
             )}
+            {LIVE && <AccountMenu onSignOut={() => void signOut()} />}
           </div>
         </header>
 

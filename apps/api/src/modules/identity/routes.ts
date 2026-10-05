@@ -9,6 +9,7 @@ import {
   ResetPasswordBody,
   SignupBody,
   SwitchBusinessBody,
+  UpdateProfileBody,
   type MeResponse,
   type OtpRequestResponse,
 } from "@digitalbahi/contracts";
@@ -370,6 +371,19 @@ export const identityModule: ApiModule = async (app, deps) => {
     }
     reply.header("cache-control", "private, no-store");
     return { key: deps.cipher.decrypt(sealed) };
+  });
+
+  /** The person changes their own name or email (their mobile number stays: it is how they sign in). */
+  r.patch("/me", { preHandler: authenticate(deps), schema: { tags: ["auth"], body: UpdateProfileBody } }, async (request) => {
+    const claims = request.user!;
+    const { name, email } = request.body;
+    const [user] = await deps.db
+      .update(schema.users)
+      .set({ ...(name !== undefined ? { name } : {}), ...(email !== undefined ? { email: email ? email.toLowerCase() : null } : {}) })
+      .where(and(eq(schema.users.id, claims.userId), eq(schema.users.isActive, true)))
+      .returning();
+    if (!user) throw unauthorized();
+    return { user: publicUser(user) };
   });
 
   r.get("/me", { preHandler: authenticate(deps), schema: { tags: ["auth"] } }, async (request): Promise<MeResponse> => {

@@ -37,6 +37,7 @@ const CreateInvoicePage = lazy(() => loadCreateInvoice().then((m) => ({ default:
 const InvoiceViewPage = lazy(() => import("../features/invoice/InvoiceViewPage").then((m) => ({ default: m.InvoiceViewPage })));
 const PlannedPage = lazy(() => import("../features/planned/PlannedPage").then((m) => ({ default: m.PlannedPage })));
 const ProductsPage = lazy(() => import("../features/products/ProductsPage").then((m) => ({ default: m.ProductsPage })));
+const ProfilePage = lazy(() => import("../features/auth/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 const SettingsPage = lazy(() => import("../features/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const GstPage = lazy(() => import("../features/gst/GstPage").then((m) => ({ default: m.GstPage })));
 const InventoryPage = lazy(() => import("../features/inventory/InventoryPage").then((m) => ({ default: m.InventoryPage })));
@@ -98,6 +99,8 @@ function Screen({ route }: { route: Route }) {
       return <ProductsPage />;
     case "settings":
       return <SettingsPage />;
+    case "profile":
+      return <ProfilePage />;
     case "design-system":
       return <DesignSystemPage />;
     case "purchase-new":

@@ -44,13 +44,13 @@ await page.getByRole("button", { name: "Create account" }).click();
 await page.fill("#su-name", "Kavita Jain");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", "Str0ng-pass!");
+await page.getByRole("button", { name: "Next" }).click();
 await page.fill("#su-business", "Jain Distributors");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Kavita/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Kavita/ }).waitFor({ timeout: 15000 });
 signedIn = true;
 log("signed up");
 

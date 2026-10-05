@@ -89,16 +89,16 @@ await page.getByRole("button", { name: "Create account" }).click();
 await page.fill("#su-name", "Ravi Gupta");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
+await page.getByRole("button", { name: "Next" }).click();
 await page.fill("#su-business", "Ravi Agencies");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Ravi/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Ravi/ }).waitFor({ timeout: 15000 });
 const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
 await page.reload();
-await page.getByRole("heading", { name: /Ravi/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Ravi/ }).waitFor({ timeout: 15000 });
 const before = await waitForKeys(["snapshot:", "device:", "vault:"]);
 log("copy kept on the phone:", before.filter((k) => !k.startsWith("probe")).map((k) => k.split(":")[0]).join(", "));
 
@@ -107,7 +107,7 @@ await goOffline(true);
 await page.reload();
 await page.fill("#unlock-password", password);
 await page.getByRole("button", { name: "Open", exact: true }).click();
-await page.getByRole("heading", { name: /Ravi/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Ravi/ }).waitFor({ timeout: 15000 });
 await nav("Expenses");
 await page.getByRole("button", { name: "New expense" }).click();
 await dialog().getByLabel("Category").selectOption({ label: "Rent" });
@@ -146,7 +146,7 @@ await page.getByRole("button", { name: "Sign in", exact: true }).click();
 // Signed in again on the screen the link names (the one left before): the dashboard next.
 await page.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 });
 await page.goto(`${WEB}/#dashboard`);
-await page.getByRole("heading", { name: /Ravi/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Ravi/ }).waitFor({ timeout: 15000 });
 await waitForKeys(["snapshot:", "device:"]);
 if ((await api("GET", "/devices", token)).data.filter((d) => !d.revokedAt).length !== 1) errors.push("the phone did not register again");
 // Three days pass without a connection (the copy's date is moved back).

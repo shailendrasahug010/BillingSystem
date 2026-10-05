@@ -5,6 +5,7 @@ describe("screen links", () => {
   const routes: Route[] = [
     { name: "dashboard" },
     { name: "invoices" },
+    { name: "profile" },
     { name: "invoice-new" },
     { name: "invoice-new", customerId: "c1" },
     { name: "invoice-view", invoiceId: "0b6f7e0c-6d1e-4c38-9a59-7a1f1a0e8b11" },

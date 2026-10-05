@@ -33,7 +33,7 @@ jobs:
         include:
           - group: billing
             web: dev
-            flows: billing-flow bills-flow invoice-keys-flow invoice-screen-flow confirm-keys-flow quotation-challan-flow lists-flow order-link-flow gstr2b-flow start-to-end-flow
+            flows: billing-flow bills-flow invoice-keys-flow invoice-screen-flow confirm-keys-flow quotation-challan-flow lists-flow order-link-flow gstr2b-flow start-to-end-flow account-flow
           - group: stock
             web: dev
             flows: operations-flow onboarding-orders-flow phase4-flow purchase-new-entries-flow bill-import-flow pdf-flow bill-new-products-flow tally-flow

@@ -81,13 +81,13 @@ await page.getByRole("button", { name: "Create account" }).click();
 await page.fill("#su-name", "Kamla Devi");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
+await page.getByRole("button", { name: "Next" }).click();
 await page.fill("#su-business", "Kamla Stores");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Kamla/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Kamla/ }).waitFor({ timeout: 15000 });
 signedIn = true;
 const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
 const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
@@ -100,7 +100,7 @@ log("signed up; 50 soaps, a customer, a supplier; sold 5 online:", sale.invoiceN
 
 // 2. Loaded once online: the business and its recent bills are kept on the device.
 await page.reload();
-await page.getByRole("heading", { name: /Kamla/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Kamla/ }).waitFor({ timeout: 15000 });
 for (let i = 0; i < 40; i++) {
   const keys = await idbKeys();
   if (keys.some((k) => k.startsWith("snapshot:")) && keys.some((k) => k.startsWith("docs:"))) break;
