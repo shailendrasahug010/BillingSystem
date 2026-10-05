@@ -5,7 +5,6 @@ import { useI18n } from "../../app/i18n";
 import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { Button } from "./Button";
-import { EmptyState, Skeleton } from "./misc";
 
 export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
@@ -22,82 +21,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   );
 }
 
-export interface Column<T> {
-  key: string;
-  header: ReactNode;
-  align?: "left" | "right";
-  className?: string;
-  render(row: T): ReactNode;
-}
-
-/**
- * The list table used by every module: sticky-looking header row, row click,
- * skeleton while loading, empty state. Wide tables scroll sideways on phones.
- */
-export function DataTable<T>({
-  columns,
-  rows,
-  rowKey,
-  onRowClick,
-  loading,
-  empty,
-  minWidth = 640,
-  footer,
-}: {
-  columns: Column<T>[];
-  rows: T[];
-  rowKey(row: T): string;
-  onRowClick?(row: T): void;
-  loading?: boolean;
-  empty?: ReactNode;
-  minWidth?: number;
-  footer?: ReactNode;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line/80 bg-surface shadow-card">
-      {loading ? (
-        <div className="flex flex-col gap-3 p-4" role="status" aria-label={t("common.loading")}>
-          {Array.from({ length: 5 }, (_, i) => (
-            <Skeleton key={i} className="h-5 w-full" />
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        (empty ?? <EmptyState title={t("empty.generic")} />)
-      ) : (
-        <div className="scroll-x">
-          <table className="w-full text-[13.5px]" style={{ minWidth }}>
-            <thead>
-              <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
-                {columns.map((c, i) => (
-                  <th key={c.key} className={cn("py-2.5 font-medium", i === 0 ? "pl-4" : "pl-3", i === columns.length - 1 ? "pr-4" : "pr-3", c.align === "right" && "text-right")}>
-                    {c.header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="num rows-in">
-              {rows.map((row) => (
-                <tr
-                  key={rowKey(row)}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={cn("border-b border-line/70 transition-colors last:border-b-0", onRowClick && "cursor-pointer hover:bg-accent-soft/40")}
-                >
-                  {columns.map((c, i) => (
-                    <td key={c.key} className={cn("py-3 align-top", i === 0 ? "pl-4" : "pl-3", i === columns.length - 1 ? "pr-4" : "pr-3", c.align === "right" && "text-right", c.className)}>
-                      {c.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-            {footer}
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
+export { DataTable, type Column } from "./DataTable";
 
 /** An API error in the user's language (field-level errors are shown by their fields). */
 export function ErrorNote({ error, className }: { error: unknown; className?: string }) {

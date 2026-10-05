@@ -5,6 +5,7 @@ import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
+import { DataTable } from "../../components/ui/DataTable";
 import { EmptyState, Segmented } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BRANDS, PRODUCTS } from "../../data/db";
@@ -16,6 +17,8 @@ import { searchProducts } from "@digitalbahi/core";
 import { ImportDialog } from "../imports/ImportDialog";
 import { ProductEditor } from "./ProductEditor";
 
+type Product = ReturnType<typeof useSearchableProducts>[number];
+
 export function ProductsPage() {
   const { t, money, locale } = useI18n();
   const [query, setQuery] = useState("");
@@ -26,6 +29,7 @@ export function ProductsPage() {
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
   const [importing, setImporting] = useState(false);
   const canEdit = LIVE && allowed("product.update");
+  const showMargin = !LIVE || allowed("product.view_cost");
 
   const rows = useMemo(() => {
     const base = query.trim() ? searchProducts(query, searchable, { limit: 100 }).map((h) => h.product) : searchable;
@@ -113,8 +117,14 @@ export function ProductsPage() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
-        {rows.length === 0 ? (
+      <DataTable<Product>
+        id="products"
+        rows={rows}
+        rowKey={(p) => p.id}
+        {...(canEdit ? { onRowClick: (p: Product) => setEditing({ id: p.id }) } : {})}
+        pageSize={50}
+        minWidth={860}
+        empty={
           <EmptyState
             title={t("empty.products")}
             {...(LIVE && allowed("product.create") && PRODUCTS.length === 0
@@ -128,57 +138,57 @@ export function ProductsPage() {
                 }
               : {})}
           />
-        ) : (
-          <div className="scroll-x">
-            <table className="w-full min-w-[860px] text-[13.5px]">
-              <thead>
-                <tr className="border-b border-line bg-surface-2/70 text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
-                  <th className="px-4 py-2.5 font-medium">{t("product.name")}</th>
-                  <th className="px-3 py-2.5 font-medium">{t("product.brand")}</th>
-                  <th className="px-3 py-2.5 font-medium">{t("product.hsn")}</th>
-                  <th className="px-3 py-2.5 text-right font-medium">{t("product.gstRate")}</th>
-                  <th className="px-3 py-2.5 text-right font-medium">{t("product.mrp")}</th>
-                  <th className="px-3 py-2.5 text-right font-medium">{t("product.sellingPrice")}</th>
-                  <th className="px-3 py-2.5 text-right font-medium">{t("product.margin")}</th>
-                  <th className="px-4 py-2.5 text-right font-medium">{t("product.currentStock")}</th>
-                </tr>
-              </thead>
-              <tbody className="num rows-in">
-                {rows.map((p) => {
-                  const level = stockLevel(p.stock, p.minStock);
-                  const margin = ((p.rate - p.purchasePrice) / p.rate) * 100;
-                  return (
-                    <tr key={p.id} onClick={canEdit ? () => setEditing({ id: p.id }) : undefined} className={cn("border-b border-line last:border-b-0 hover:bg-surface-2", canEdit && "cursor-pointer")}>
-                      <td className="px-4 py-2.5">
-                        <p className="font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
-                        <p className="text-[12px] text-ink-3">
-                          <span className="font-mono">{p.code}</span> · {p.packSize} · <span className="font-mono">{p.barcode}</span>
-                        </p>
-                      </td>
-                      <td className="px-3 py-2.5 text-ink-2">{p.brand}</td>
-                      <td className="px-3 py-2.5 font-mono text-[12.5px] text-ink-2">{p.hsn}</td>
-                      <td className="px-3 py-2.5 text-right">{p.taxCategory.kind === "taxable" ? `${p.gstRate}%` : t("gst.nilRated")}</td>
-                      <td className="px-3 py-2.5 text-right text-ink-2">{money(p.mrp)}</td>
-                      <td className="px-3 py-2.5 text-right text-ink">{money(p.rate)}</td>
-                      <td className="px-3 py-2.5 text-right text-ink-2">{p.rate > 0 && (!LIVE || allowed("product.view_cost")) ? `${margin.toFixed(1)}%` : "—"}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        <p className={cn("font-semibold", level === "out_of_stock" ? "text-danger" : level === "low" ? "text-warn" : "text-ink")}>
-                          {p.stock} {p.unit}
-                        </p>
-                        {level !== "ok" && (
-                          <Badge tone={level === "out_of_stock" ? "danger" : "warn"} className="mt-0.5 h-5 text-[11px]">
-                            {t(`status.stock.${level}`)}
-                          </Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        }
+        columns={[
+          {
+            key: "name",
+            header: t("product.name"),
+            sortValue: (p) => (locale === "hi" ? p.nameHi : p.name),
+            render: (p) => (
+              <>
+                <p className="font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
+                <p className="text-[12px] text-ink-3">
+                  <span className="font-mono">{p.code}</span> · {p.packSize} · <span className="font-mono">{p.barcode}</span>
+                </p>
+              </>
+            ),
+          },
+          { key: "brand", header: t("product.brand"), sortValue: (p) => p.brand, className: "text-ink-2", render: (p) => p.brand },
+          { key: "hsn", header: t("product.hsn"), sortValue: (p) => p.hsn, className: "font-mono text-[12.5px] text-ink-2", render: (p) => p.hsn },
+          { key: "gst", header: t("product.gstRate"), align: "right", sortValue: (p) => p.gstRate, render: (p) => (p.taxCategory.kind === "taxable" ? `${p.gstRate}%` : t("gst.nilRated")) },
+          { key: "mrp", header: t("product.mrp"), align: "right", sortValue: (p) => p.mrp, className: "text-ink-2", render: (p) => money(p.mrp) },
+          { key: "rate", header: t("product.sellingPrice"), align: "right", sortValue: (p) => p.rate, className: "text-ink", render: (p) => money(p.rate) },
+          {
+            key: "margin",
+            header: t("product.margin"),
+            align: "right",
+            className: "text-ink-2",
+            ...(showMargin ? { sortValue: (p: Product) => (p.rate > 0 ? (p.rate - p.purchasePrice) / p.rate : null) } : {}),
+            render: (p) => (p.rate > 0 && showMargin ? `${(((p.rate - p.purchasePrice) / p.rate) * 100).toFixed(1)}%` : "—"),
+          },
+          {
+            key: "stock",
+            header: t("product.currentStock"),
+            align: "right",
+            sortValue: (p) => p.stock,
+            render: (p) => {
+              const level = stockLevel(p.stock, p.minStock);
+              return (
+                <>
+                  <p className={cn("font-semibold", level === "out_of_stock" ? "text-danger" : level === "low" ? "text-warn" : "text-ink")}>
+                    {p.stock} {p.unit}
+                  </p>
+                  {level !== "ok" && (
+                    <Badge tone={level === "out_of_stock" ? "danger" : "warn"} className="mt-0.5 h-5 text-[11px]">
+                      {t(`status.stock.${level}`)}
+                    </Badge>
+                  )}
+                </>
+              );
+            },
+          },
+        ]}
+      />
       {LIVE && <ImportDialog kind="products" open={importing} onOpenChange={setImporting} />}
       {LIVE && <ProductEditor productId={editing?.id ?? null} open={editing !== null} onOpenChange={(v) => !v && setEditing(null)} />}
     </div>

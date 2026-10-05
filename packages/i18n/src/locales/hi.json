@@ -3400,5 +3400,11 @@
       "updates": "अपडेट",
       "updatesHint": "आगे बढ़ते ऑर्डर, छुट्टी के फ़ैसले और बाकी खबरें"
     }
+  },
+  "table": {
+    "columns": "कॉलम",
+    "showColumns": "कॉलम दिखाएँ",
+    "showMore_one": "{{count}} और दिखाएँ ({{left}} बाकी)",
+    "showMore_other": "{{count}} और दिखाएँ ({{left}} बाकी)"
   }
 }

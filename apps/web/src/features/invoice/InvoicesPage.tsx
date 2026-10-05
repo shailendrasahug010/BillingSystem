@@ -119,6 +119,7 @@ export function InvoicesPage() {
     {
       key: "bill",
       header: t("invoice.number"),
+      sortValue: (r) => r.invoiceNumber,
       render: (r) => (
         <div>
           <p className="font-mono text-[12.5px] font-medium whitespace-nowrap text-accent">{r.invoiceNumber}</p>
@@ -126,19 +127,21 @@ export function InvoicesPage() {
         </div>
       ),
     },
-    { key: "date", header: t("common.date"), render: (r) => <span className="text-ink-2">{dateMedium(r.invoiceDate)}</span> },
-    { key: "customer", header: t("invoice.customer"), render: (r) => <span className="text-ink">{r.partyName}</span> },
+    { key: "date", header: t("common.date"), sortValue: (r) => r.invoiceDate, render: (r) => <span className="text-ink-2">{dateMedium(r.invoiceDate)}</span> },
+    { key: "customer", header: t("invoice.customer"), sortValue: (r) => r.partyName, render: (r) => <span className="text-ink">{r.partyName}</span> },
     {
       key: "dueDate",
       header: t("invoice.dueDate"),
+      sortValue: (r) => r.dueDate,
       render: (r) => (r.dueDate ? <span className={isOverdue(r) ? "text-danger" : "text-ink-2"}>{dateMedium(r.dueDate)}</span> : <span className="text-ink-3">—</span>),
     },
     { key: "status", header: t("common.status"), render: (r) => <InvoiceStatusBadge row={r} /> },
-    { key: "total", header: t("common.total"), align: "right", render: (r) => <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(r.grandTotal)}</span> },
+    { key: "total", header: t("common.total"), align: "right", sortValue: (r) => Number(r.grandTotal), render: (r) => <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(r.grandTotal)}</span> },
     {
       key: "balance",
       header: t("invoice.balance"),
       align: "right",
+      sortValue: (r) => (r.status === "posted" ? Number(r.balanceDue) : null),
       render: (r) => (r.status === "posted" && Number(r.balanceDue) > 0.5 ? <span className="font-semibold text-ink">{money(r.balanceDue)}</span> : <span className="text-ink-3">—</span>),
     },
   ];
@@ -231,6 +234,7 @@ export function InvoicesPage() {
         <ErrorNote error={list.error} />
       ) : null}
       <DataTable
+        id="sales-bills"
         columns={columns}
         rows={rows}
         rowKey={(r) => r.id}

@@ -3400,5 +3400,11 @@
       "updates": "Updates",
       "updatesHint": "Orders moving on, leave decided and other news"
     }
+  },
+  "table": {
+    "columns": "Columns",
+    "showColumns": "Show columns",
+    "showMore_one": "Show {{count}} more ({{left}} left)",
+    "showMore_other": "Show {{count}} more ({{left}} left)"
   }
 }
