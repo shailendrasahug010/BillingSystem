@@ -252,3 +252,10 @@ export const ImportBody = z.strictObject({
   dryRun: z.boolean().default(false),
   rows: z.array(z.record(z.string().trim().max(60), z.string().max(500).nullish())).min(1).max(5000),
 });
+
+const ImportRows = z.array(z.record(z.string().trim().max(60), z.string().max(500).nullish())).max(5000);
+
+/** Masters read from a Tally XML file, imported together, all or nothing. */
+export const TallyImportBody = z
+  .strictObject({ dryRun: z.boolean().default(false), customers: ImportRows.default([]), suppliers: ImportRows.default([]), products: ImportRows.default([]) })
+  .refine((b) => b.customers.length + b.suppliers.length + b.products.length > 0, { message: "nothing to import" });

@@ -1159,7 +1159,9 @@
     "SECTION_REQUIRED": "कौन-सी तालिका डाउनलोड करनी है, चुनें।",
     "DEVICE_NOT_FOUND": "यह डिवाइस इस बिज़नेस में दर्ज नहीं है।",
     "RANGE_TOO_LONG": "ज़्यादा से ज़्यादा {{days}} दिन चुनें।",
-    "VALID_UNTIL_BEFORE_DATE": "मान्य तारीख़ सिर्फ़ कोटेशन के लिए है, और उसकी तारीख़ के बाद की होनी चाहिए।"
+    "VALID_UNTIL_BEFORE_DATE": "मान्य तारीख़ सिर्फ़ कोटेशन के लिए है, और उसकी तारीख़ के बाद की होनी चाहिए।",
+    "PERIOD_END_BEFORE_START": "आखिरी तारीख शुरू की तारीख से पहले है।",
+    "TALLY_FILE_UNREADABLE": "यह Tally की XML फ़ाइल नहीं है, या पढ़ी नहीं जा सकी। Tally से फिर से XML में एक्सपोर्ट करें।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -3406,5 +3408,43 @@
     "showColumns": "कॉलम दिखाएँ",
     "showMore_one": "{{count}} और दिखाएँ ({{left}} बाकी)",
     "showMore_other": "{{count}} और दिखाएँ ({{left}} बाकी)"
+  },
+  "tally": {
+    "title": "Tally",
+    "hint": "Tally से अपने मास्टर लाएँ, और खाते अपने CA के Tally में भेजें।",
+    "importTitle": "Tally से मास्टर इम्पोर्ट करें",
+    "importHint": "Tally में: Gateway of Tally → Export → Masters (या Display → List of Accounts → Export), फ़ॉर्मेट XML। ग्राहक Sundry Debtors से, सप्लायर Sundry Creditors से, प्रोडक्ट स्टॉक आइटम से आते हैं, हर एक अपने ओपनिंग बैलेंस या स्टॉक के साथ। जो नाम यहाँ पहले से हैं, वे जैसे हैं वैसे रहते हैं।",
+    "chooseFile": "Tally की XML फ़ाइल चुनें",
+    "found": {
+      "customers_one": "{{count}} ग्राहक (Sundry Debtors)",
+      "customers_other": "{{count}} ग्राहक (Sundry Debtors)",
+      "suppliers_one": "{{count}} सप्लायर (Sundry Creditors)",
+      "suppliers_other": "{{count}} सप्लायर (Sundry Creditors)",
+      "products_one": "{{count}} स्टॉक आइटम",
+      "products_other": "{{count}} स्टॉक आइटम"
+    },
+    "alreadyThere_one": "{{count}} पहले से है",
+    "alreadyThere_other": "{{count}} पहले से हैं",
+    "otherLedgers_one": "{{count}} अन्य लेजर (सेल्स, बैंक, टैक्स…) इम्पोर्ट नहीं हुआ",
+    "otherLedgers_other": "{{count}} अन्य लेजर (सेल्स, बैंक, टैक्स…) इम्पोर्ट नहीं हुए",
+    "section": {
+      "customers": "ग्राहक",
+      "suppliers": "सप्लायर",
+      "products": "आइटम"
+    },
+    "nothingNew": "इस फ़ाइल का सब कुछ यहाँ पहले से है।",
+    "imported": "Tally से इम्पोर्ट हो गया",
+    "created": {
+      "customers_one": "{{count}} ग्राहक",
+      "customers_other": "{{count}} ग्राहक",
+      "suppliers_one": "{{count}} सप्लायर",
+      "suppliers_other": "{{count}} सप्लायर",
+      "products_one": "{{count}} प्रोडक्ट",
+      "products_other": "{{count}} प्रोडक्ट"
+    },
+    "exportTitle": "Tally के लिए वाउचर एक्सपोर्ट करें",
+    "exportHint": "अवधि की बिक्री, खरीद, क्रेडिट और डेबिट नोट, रसीद और भुगतान, उनके पार्टी, सेल्स, परचेज़ और GST लेजर के साथ। Tally में: Gateway of Tally → Import → Transactions, और यह फ़ाइल चुनें।",
+    "download": "Tally के लिए डाउनलोड करें",
+    "exported": "Tally फ़ाइल डाउनलोड हो गई"
   }
 }

@@ -32,3 +32,7 @@ export * from "./insights/kpis.js";
 export * from "./validation/identifiers.js";
 export * from "./words/amount-in-words.js";
 export * from "./rbac/permissions.js";
+
+export * from "./tally/xml.js";
+export * from "./tally/masters.js";
+export * from "./tally/vouchers.js";

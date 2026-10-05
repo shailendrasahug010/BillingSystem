@@ -19,6 +19,7 @@ import { touch, useStoreVersion } from "../../data/store";
 import { api, ApiError } from "../../lib/api";
 import { prepareLogo } from "./firmLogo";
 import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
+import { TallyCard } from "./TallyCard";
 import { stateOptions } from "../../lib/states";
 import { PrinterPanel } from "../../components/thermal/ThermalPrint";
 import { serverOrigin } from "../../platform/server";
@@ -297,6 +298,7 @@ export function LiveSettings() {
       <SeriesCard />
       <MessagingCard />
       <DevicesCard />
+      <TallyCard />
       <PrinterCard />
     </>
   );

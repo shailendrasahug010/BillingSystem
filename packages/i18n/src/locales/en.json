@@ -1159,7 +1159,9 @@
     "SECTION_REQUIRED": "Choose which table to download.",
     "DEVICE_NOT_FOUND": "This device is not registered in this business.",
     "RANGE_TOO_LONG": "Choose at most {{days}} days.",
-    "VALID_UNTIL_BEFORE_DATE": "The valid-until date is for a quotation, on or after its date."
+    "VALID_UNTIL_BEFORE_DATE": "The valid-until date is for a quotation, on or after its date.",
+    "PERIOD_END_BEFORE_START": "The end date is before the start date.",
+    "TALLY_FILE_UNREADABLE": "This is not a Tally XML file, or it could not be read. Export it from Tally again as XML."
   },
   "validation": {
     "required": "This field is required",
@@ -3406,5 +3408,43 @@
     "showColumns": "Show columns",
     "showMore_one": "Show {{count}} more ({{left}} left)",
     "showMore_other": "Show {{count}} more ({{left}} left)"
+  },
+  "tally": {
+    "title": "Tally",
+    "hint": "Bring your masters over from Tally, and send the books to your CA's Tally.",
+    "importTitle": "Import masters from Tally",
+    "importHint": "In Tally: Gateway of Tally → Export → Masters (or Display → List of Accounts → Export), format XML. Customers come from Sundry Debtors, suppliers from Sundry Creditors, products from stock items, each with its opening balance or stock. Names already here are left as they are.",
+    "chooseFile": "Choose Tally XML file",
+    "found": {
+      "customers_one": "{{count}} customer (Sundry Debtors)",
+      "customers_other": "{{count}} customers (Sundry Debtors)",
+      "suppliers_one": "{{count}} supplier (Sundry Creditors)",
+      "suppliers_other": "{{count}} suppliers (Sundry Creditors)",
+      "products_one": "{{count}} stock item",
+      "products_other": "{{count}} stock items"
+    },
+    "alreadyThere_one": "{{count}} already here",
+    "alreadyThere_other": "{{count}} already here",
+    "otherLedgers_one": "{{count}} other ledger (sales, bank, tax…) not imported",
+    "otherLedgers_other": "{{count}} other ledgers (sales, bank, tax…) not imported",
+    "section": {
+      "customers": "Customer",
+      "suppliers": "Supplier",
+      "products": "Item"
+    },
+    "nothingNew": "Everything in this file is already here.",
+    "imported": "Imported from Tally",
+    "created": {
+      "customers_one": "{{count}} customer",
+      "customers_other": "{{count}} customers",
+      "suppliers_one": "{{count}} supplier",
+      "suppliers_other": "{{count}} suppliers",
+      "products_one": "{{count}} product",
+      "products_other": "{{count}} products"
+    },
+    "exportTitle": "Export vouchers for Tally",
+    "exportHint": "Sales, purchases, credit and debit notes, receipts and payments of the period, with their party, sales, purchase and GST ledgers. In Tally: Gateway of Tally → Import → Transactions, and choose this file.",
+    "download": "Download for Tally",
+    "exported": "Tally file downloaded"
   }
 }

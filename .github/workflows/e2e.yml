@@ -36,7 +36,7 @@ jobs:
             flows: billing-flow bills-flow invoice-keys-flow invoice-screen-flow confirm-keys-flow quotation-challan-flow lists-flow
           - group: stock
             web: dev
-            flows: operations-flow onboarding-orders-flow phase4-flow purchase-new-entries-flow bill-import-flow pdf-flow bill-new-products-flow
+            flows: operations-flow onboarding-orders-flow phase4-flow purchase-new-entries-flow bill-import-flow pdf-flow bill-new-products-flow tally-flow
           - group: field
             web: dev
             flows: team-access-flow outstanding-flow beat-flow report-views-flow error-log-flow
