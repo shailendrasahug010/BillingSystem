@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardPlus, Search } from "lucide-react";
+import { ClipboardPlus, FileText, Search } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -9,7 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Field";
 import { EmptyState, ProgressBar, Segmented } from "../../components/ui/misc";
 import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
-import { allowed } from "../../data/db";
+import { allowed, TODAY } from "../../data/db";
 import { api } from "../../lib/api";
 import { usePaged } from "../../lib/usePaged";
 import { OrderEntryDialog } from "./OrderEntryDialog";
@@ -30,6 +30,8 @@ export const ORDER_TONE: Record<OrderStatus, Tone> = {
 interface OrderRow {
   id: string;
   orderNumber: string;
+  quotationNumber?: string | null;
+  validUntil?: string | null;
   orderDate: string;
   expectedDeliveryDate: string | null;
   customerId: string;
@@ -47,7 +49,10 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
   const [status, setStatus] = useState<"open" | "pending" | "confirmed" | "all">("open");
   const [q, setQ] = useState("");
   const [entering, setEntering] = useState(false);
+  const [quoting, setQuoting] = useState(false);
   const list = usePaged<OrderRow>("orders", "/sales-orders", { status, q: q.trim().length >= 2 ? q.trim() : undefined });
+  // Quotations: priced like orders, waiting on the customer's yes.
+  const quotes = usePaged<OrderRow>("orders", "/sales-orders", { status: "draft", q: q.trim().length >= 2 ? q.trim() : undefined });
   const demand = useQuery({
     queryKey: ["orders", "demand"],
     queryFn: () => api.get<{ data: Array<{ productId: string; name: string; qty: string; stock: string; orders: number; short: boolean }> }>("/sales-orders/demand").then((r) => r.data),
@@ -92,9 +97,14 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
         subtitle={t("orders.subtitle")}
         actions={
           allowed("order.create") ? (
-            <Button variant="primary" icon={<ClipboardPlus size={16} />} onClick={() => setEntering(true)}>
-              {t("orders.new")}
-            </Button>
+            <>
+              <Button icon={<FileText size={16} />} onClick={() => setQuoting(true)}>
+                {t("orders.quotation.new")}
+              </Button>
+              <Button variant="primary" icon={<ClipboardPlus size={16} />} onClick={() => setEntering(true)}>
+                {t("orders.new")}
+              </Button>
+            </>
           ) : undefined
         }
       />
@@ -102,6 +112,10 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
         <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={t("orders.title")}>
           <Tabs.Trigger value="orders" className={TAB_TRIGGER}>
             {t("orders.title")}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="quotes" className={TAB_TRIGGER}>
+            {t("orders.quotation.tab")}
+            {quotes.rows.length > 0 && <span className="num ml-1.5 text-ink-3">{quotes.rows.length}{quotes.hasMore ? "+" : ""}</span>}
           </Tabs.Trigger>
           <Tabs.Trigger value="demand" className={TAB_TRIGGER}>
             {t("orders.demand")}
@@ -136,6 +150,30 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
           />
           <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
         </Tabs.Content>
+        <Tabs.Content value="quotes" className="flex flex-col gap-4">
+          <p className="text-[13px] text-ink-3">{t("orders.quotation.listHint")}</p>
+          {quotes.error ? <ErrorNote error={quotes.error} /> : null}
+          <DataTable
+            columns={[
+              columns[0]!,
+              { key: "number", header: t("common.number"), render: (o) => <span className="font-medium text-ink">{o.quotationNumber ?? o.orderNumber}</span> },
+              columns[2]!,
+              {
+                key: "valid",
+                header: t("orders.quotation.validUntil"),
+                render: (o) => (o.validUntil ? <span className={o.validUntil < TODAY ? "text-danger" : "text-ink-2"}>{dateMedium(o.validUntil)}</span> : <span className="text-ink-3">—</span>),
+              },
+              columns[columns.length - 1]!,
+            ]}
+            rows={quotes.rows}
+            rowKey={(o) => o.id}
+            loading={quotes.loading}
+            onRowClick={(o) => navigate({ name: "order-view", orderId: o.id })}
+            minWidth={680}
+            empty={<EmptyState title={t("orders.quotation.empty")} hint={t("orders.quotation.emptyHint")} />}
+          />
+          <LoadMore hasMore={quotes.hasMore} loading={quotes.loadingMore} onClick={quotes.loadMore} />
+        </Tabs.Content>
         <Tabs.Content value="demand">
           <p className="mb-3 text-[13px] text-ink-3">{t("orders.demandHint")}</p>
           <DataTable
@@ -161,6 +199,7 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
         }}
         {...(customerId ? { customerId } : {})}
       />
+      <OrderEntryDialog open={quoting} onOpenChange={setQuoting} quotation {...(customerId ? { customerId } : {})} />
     </div>
   );
 }

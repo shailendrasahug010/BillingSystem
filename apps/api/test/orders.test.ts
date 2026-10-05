@@ -79,4 +79,36 @@ describe.skipIf(!hasDatabase)("sales orders", () => {
     expect(res.body.items[0]).toMatchObject({ cancelledQty: "5.000", remainingQty: "0.000" });
     expect((await post(`/sales-orders/${o.id}/status`, { status: "confirmed" })).body.error.code).toBe("INVALID_STATUS_TRANSITION");
   });
+
+  it("a quotation is numbered on its own, moves no stock and is not an open order until accepted", async () => {
+    const q = await post("/sales-orders", { customerId: ids.customer, quotation: true, validUntil: "2099-12-31", lines: [{ productId: ids.soap, qty: "3" }] }, salesToken);
+    expect(q.status).toBe(201);
+    expect(q.body).toMatchObject({ orderNumber: "QT/26-27/00001", quotationNumber: "QT/26-27/00001", validUntil: "2099-12-31", status: "draft", grandTotal: "354.00" });
+    expect((await post(`/sales-orders/${q.body.id}/invoice`, {})).body.error.code).toBe("ORDER_NOT_CONFIRMED");
+    expect((await post(`/sales-orders/${q.body.id}/challan`, {})).body.error.code).toBe("ORDER_NOT_CONFIRMED");
+    const open = (await get("/sales-orders?status=open")).body.data.map((o: { id: string }) => o.id);
+    const all = (await get("/sales-orders")).body.data.map((o: { id: string }) => o.id);
+    const quotes = (await get("/sales-orders?status=draft")).body.data;
+    expect(open).not.toContain(q.body.id);
+    expect(all).not.toContain(q.body.id);
+    expect(quotes).toEqual([expect.objectContaining({ id: q.body.id, quotationNumber: "QT/26-27/00001" })]);
+    expect((await post("/sales-orders", { customerId: ids.customer, validUntil: "2099-12-31", lines: [{ productId: ids.soap, qty: "1" }] })).body.error.code).toBe("VALID_UNTIL_BEFORE_DATE");
+
+    // Accepted: an order with an order number of its own, the quotation's number kept.
+    const accepted = await post(`/sales-orders/${q.body.id}/status`, { status: "pending" }, salesToken);
+    expect(accepted.body).toMatchObject({ orderNumber: "SO/26-27/00003", quotationNumber: "QT/26-27/00001", status: "pending" });
+    ids.quoted = q.body.id;
+  });
+
+  it("a delivery challan for goods sent before the bill: numbered once, the same when printed again", async () => {
+    expect((await post(`/sales-orders/${ids.quoted}/challan`, {})).body.error.code).toBe("ORDER_NOT_CONFIRMED");
+    await post(`/sales-orders/${ids.quoted}/status`, { status: "confirmed" });
+    const first = await post(`/sales-orders/${ids.quoted}/challan`, {});
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ challanNumber: "DC/26-27/00001", challanDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+    const again = await post(`/sales-orders/${ids.quoted}/challan`, {}, salesToken);
+    expect(again.body).toMatchObject({ challanNumber: "DC/26-27/00001", challanDate: first.body.challanDate });
+    // Nothing moves until the bill.
+    expect(await stockOf(ids.soap)).toBe("40.000");
+  });
 });

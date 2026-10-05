@@ -37,6 +37,8 @@ export interface DraftLine {
   /** The unit sold in: null for the stock unit, else one of the product's packs (box, strip). */
   unitId: string | null;
   qty: number;
+  /** Given free on the scheme (10+1), in the line's unit: moves stock, carries no value. */
+  freeQty: number;
   rate: number;
   discountPercent: number;
 }
@@ -70,7 +72,9 @@ type Action =
   | { type: "method"; value: PaymentMethod }
   | { type: "focused" }
   | { type: "zeroRated"; patch: Partial<ZeroRatedChoice> }
-  | { type: "reset"; customerId?: string | null };
+  | { type: "reset"; customerId?: string | null }
+  /** A bill left half made, brought back (see keptDraft). */
+  | { type: "restore"; draft: Omit<Draft, "focusKey"> };
 
 let lineSeq = 0;
 
@@ -143,7 +147,7 @@ function reducer(state: Draft, action: Action): Draft {
       const key = `l${lineSeq}`;
       return {
         ...state,
-        lines: [...state.lines, { key, productId: product.id, unitId, qty, rate: rateFor(product, customer, unitId), discountPercent: discountFor(product, customer, unitId) }],
+        lines: [...state.lines, { key, productId: product.id, unitId, qty, freeQty: 0, rate: rateFor(product, customer, unitId), discountPercent: discountFor(product, customer, unitId) }],
         focusKey: key,
       };
     }
@@ -174,6 +178,23 @@ function reducer(state: Draft, action: Action): Draft {
       return { ...state, zeroRated: { ...state.zeroRated, ...action.patch } };
     case "reset":
       return initialDraft(action.customerId ?? null);
+    case "restore": {
+      // Products and customers since removed drop out; the bill is for today, as a new one is.
+      const kept = action.draft;
+      const lines = kept.lines
+        .filter((l) => productById.has(l.productId))
+        .map((l) => {
+          lineSeq += 1;
+          return { ...l, key: `l${lineSeq}`, freeQty: l.freeQty ?? 0 };
+        });
+      return {
+        ...initialDraft(kept.customerId && customerById.has(kept.customerId) ? kept.customerId : null),
+        lines,
+        received: kept.received,
+        method: kept.method,
+        zeroRated: kept.zeroRated,
+      };
+    }
   }
 }
 

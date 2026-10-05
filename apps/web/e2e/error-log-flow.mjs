@@ -70,6 +70,8 @@ log("signed up");
 // 2. The sales report's data comes back broken: the screen crashes and says so.
 await page.route("**/api/v1/reports/sales?**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ rows: "broken", totals: {} }) }));
 await nav("Business Reports");
+// Reports open on Insights: the Sales tab loads the broken report.
+await page.getByRole("tab", { name: "Sales", exact: true }).click();
 await page.getByText("This screen stopped working").waitFor({ timeout: 15000 });
 const reference = (await page.getByText(/^Reference: [0-9a-f-]{36}$/).textContent()).replace("Reference: ", "");
 await page.screenshot({ path: `${OUT}/error-log-1-crash.png` });
@@ -101,6 +103,7 @@ await page.route("**/api/v1/reports/sales?**", (route) =>
 await page.reload();
 await page.getByRole("heading", { name: "Customers" }).first().waitFor({ timeout: 15000 });
 await nav("Business Reports");
+await page.getByRole("tab", { name: "Sales", exact: true }).click();
 await page.getByText("Reference: 01926b3e-1111-7222-8333-944455556666 — quote it if this keeps happening.").waitFor({ timeout: 15000 });
 await page.screenshot({ path: `${OUT}/error-log-2-server.png` });
 log("a server failure shows its reference");

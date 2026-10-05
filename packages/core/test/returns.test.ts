@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildGstr1, buildGstr3b, gstr1Csv, utiliseCredit, type GstRegisterRow } from "../src/index.js";
 
 const B2B = "23AAACM1234M1ZR";
-let seq = 0;
 function row(p: Partial<GstRegisterRow> & Pick<GstRegisterRow, "docNumber" | "taxableValue" | "gstRate" | "documentValue">): GstRegisterRow {
-  seq += 1;
   return {
     direction: "outward",
     docType: "invoice",

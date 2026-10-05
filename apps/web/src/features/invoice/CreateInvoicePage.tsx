@@ -7,7 +7,7 @@ import { ariaShortcut, INVOICE_SHORTCUTS, useShortcuts } from "../../app/shortcu
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Field";
-import { Kbd } from "../../components/ui/misc";
+import { CountUp, Kbd } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BUSINESS, CUSTOMERS, PRODUCTS, productById } from "../../data/db";
 import { LIVE } from "../../data/source";
@@ -29,8 +29,11 @@ import { InvoiceSavedDialog, type SavedNotice } from "./InvoiceSavedDialog";
 import { saleUnits } from "./units";
 import { AddCustomerDialog } from "../customers/AddCustomerDialog";
 import { unitSymbolOf, useInvoiceDraft, type DraftView } from "./useInvoiceDraft";
+import { dropKeptDraft } from "./keptDraft";
+import { KeptDraftOffer, useKeptDraft, type KeptDraftState } from "./KeptDraftNotice";
 import { BarcodeCamera } from "../../components/scan/BarcodeCamera";
 import { nativeScanner, scanWithPhone } from "../../components/scan/barcode";
+import { buzz, SAVED, SCANNED } from "../../lib/haptics";
 
 /**
  * Adds products by barcode: the camera reads packs one after another (on
@@ -69,7 +72,10 @@ function ScanDialog({ open, onOpenChange, onFound }: { open: boolean; onOpenChan
   const withPhone = async () => {
     try {
       const scanned = await scanWithPhone();
-      if (scanned) take(scanned, true);
+      if (scanned) {
+        buzz(SCANNED);
+        take(scanned, true);
+      }
     } catch {
       // The phone's scanner is not ready (Google's module downloads once): the camera in the page meanwhile.
       void nativeScanner()
@@ -161,12 +167,15 @@ function useSave(view: DraftView) {
 
   const afterSave = useCallback(
     (invoice: SavedInvoice, mode: "save" | "print" | "share", offline: boolean) => {
+      buzz(SAVED);
       const { customer, dueDate } = view;
       const warning = invoice.warnings[0];
       const warningText = warning ? t((WARNING_KEYS[warning.code] ?? "errors.generic") as "errors.generic", warning.params) : null;
       // Feedback on the suggestions goes with a bill saved online (the server knows that bill).
       if (offline) view.feedback.reset();
       else view.feedback.send(invoice.id, view.draft.lines.map((l) => l.productId));
+      // Saved: not kept as unfinished any more (before Save & print leaves the screen).
+      void dropKeptDraft();
       view.dispatch({ type: "reset" });
       // Save & print: the bill opens with the print dialog.
       if (mode === "print") {
@@ -270,7 +279,7 @@ function useSave(view: DraftView) {
   return { save, saved, closeSaved: () => setSaved(null) };
 }
 
-function DesktopInvoice({ view }: { view: DraftView }) {
+function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }) {
   const i18n = useI18n();
   const { t, money } = i18n;
   const { navigate } = useRouter();
@@ -349,6 +358,8 @@ function DesktopInvoice({ view }: { view: DraftView }) {
         </div>
       </div>
 
+      <KeptDraftOffer state={kept} />
+
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-3">
           {customer && insight ? (
@@ -421,7 +432,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
-                <p className="num font-display text-[20px] leading-tight font-semibold text-ink">{money(totals?.grandTotal.toNumber() ?? 0)}</p>
+                <p className="num font-display text-[20px] leading-tight font-semibold text-ink"><CountUp value={totals?.grandTotal.toNumber() ?? 0} format={(v) => money(v)} duration={300} /></p>
               </div>
               {allowed("invoice.print") && (
                 <Button icon={<Printer size={16} />} disabled={!canSave} onClick={() => save("print")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.saveAndPrint)}>
@@ -453,7 +464,7 @@ function DesktopInvoice({ view }: { view: DraftView }) {
 }
 
 /** Phone flow: Customer → Products → Review & pay, big targets, sticky total. */
-function MobileInvoice({ view }: { view: DraftView }) {
+function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }) {
   const { t, money, locale } = useI18n();
   const { save, saved, closeSaved } = useSave(view);
   const [step, setStep] = useState(view.customer ? 1 : 0);
@@ -508,6 +519,11 @@ function MobileInvoice({ view }: { view: DraftView }) {
   );
 
   const steps = [t("invoice.steps.customer"), t("invoice.steps.products"), t("invoice.steps.review")];
+  // A kept bill brought back: on to its products.
+  useEffect(() => {
+    if (kept.restoredAt) setStep(view.customer ? 1 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kept.restoredAt]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -515,6 +531,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
         <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
         <span className="font-mono text-[12.5px] text-ink-3">{numberLabel}</span>
       </div>
+      <KeptDraftOffer state={kept} />
       <ol className="grid grid-cols-3 gap-2" aria-label={t("invoice.quick")}>
         {steps.map((s, i) => (
           <li key={s}>
@@ -619,7 +636,7 @@ function MobileInvoice({ view }: { view: DraftView }) {
             <div className="mx-auto flex max-w-xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
-                <p className="num font-display text-[22px] leading-tight font-semibold text-ink">{money(totals?.grandTotal.toNumber() ?? 0)}</p>
+                <p className="num font-display text-[22px] leading-tight font-semibold text-ink"><CountUp value={totals?.grandTotal.toNumber() ?? 0} format={(v) => money(v)} duration={300} /></p>
               </div>
               <Button variant="primary" size="lg" disabled={!totals} onClick={() => setStep(2)} trailing={<ArrowRight size={18} />}>
                 {t("common.next")}
@@ -674,7 +691,8 @@ const canAddCustomer = () => LIVE && allowed("customer.create");
 
 export function CreateInvoicePage({ customerId }: { customerId?: string }) {
   const view = useInvoiceDraft(customerId ?? null);
+  const kept = useKeptDraft(view, customerId ?? null);
   // The full screen (with its keyboard shortcuts) from tablet width up; the step-by-step one on phones.
   const desktop = useMediaQuery("(min-width: 768px)");
-  return desktop ? <DesktopInvoice view={view} /> : <MobileInvoice view={view} />;
+  return desktop ? <DesktopInvoice view={view} kept={kept} /> : <MobileInvoice view={view} kept={kept} />;
 }

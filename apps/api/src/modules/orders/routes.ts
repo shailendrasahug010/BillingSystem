@@ -21,8 +21,11 @@ import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
 const money = (d: { toFixed(n: number): string }) => d.toFixed(2);
-/** Orders that can still be invoiced. */
+/** Orders that can still be invoiced (and whose goods can leave on a delivery challan). */
 const INVOICEABLE = new Set<OrderStatus>(["confirmed", "packing", "packed", "dispatched", "delivered"]);
+/** Quotations are numbered on their own series; accepted, the order takes an order number too. */
+const QUOTATION_SERIES = { name: "Quotation", pattern: "QT/{FYS}/{SEQ:5}" };
+const CHALLAN_SERIES = { name: "Delivery challan", pattern: "DC/{FYS}/{SEQ:5}" };
 
 async function orderDetail(tx: Tx, ctx: RequestCtx, id: string, workflow: OrderWorkflowConfig) {
   const [o] = await tx.select().from(schema.salesOrders).where(and(eq(schema.salesOrders.id, id), eq(schema.salesOrders.businessId, ctx.businessId)));
@@ -93,12 +96,17 @@ export const ordersModule: ApiModule = async (app, deps) => {
       }
       const today = deps.clock.today(ctx.timeZone);
       if (body.expectedDeliveryDate && body.expectedDeliveryDate < (body.orderDate ?? today)) throw badRequest("DELIVERY_BEFORE_ORDER", {}, "expectedDeliveryDate");
+      if (body.validUntil && (!body.quotation || body.validUntil < (body.orderDate ?? today))) throw badRequest("VALID_UNTIL_BEFORE_DATE", {}, "validUntil");
       // Priced by the same code as an invoice on the order date.
       const sale = await prepareSale(tx, ctx, { customerId: body.customerId, invoiceDate: body.orderDate, lines: body.lines, charges: [] } as z.output<typeof InvoiceBody>, today, { order: true });
       const t = sale.totals;
-      const numbering = await nextDocumentNumber(tx, ctx.businessId, "sales_order", sale.invoiceDate, sale.business.financialYearStartMonth);
+      const quotation = body.quotation === true;
+      const numbering = quotation
+        ? await nextDocumentNumber(tx, ctx.businessId, "quotation", sale.invoiceDate, sale.business.financialYearStartMonth, QUOTATION_SERIES)
+        : await nextDocumentNumber(tx, ctx.businessId, "sales_order", sale.invoiceDate, sale.business.financialYearStartMonth);
       const id = uuidv7();
-      const status: OrderStatus = workflow.requireConfirmation ? "pending" : "confirmed";
+      // A quotation waits as a draft until the customer accepts it.
+      const status: OrderStatus = quotation ? "draft" : workflow.requireConfirmation ? "pending" : "confirmed";
       await tx.insert(schema.salesOrders).values({
         id,
         businessId: ctx.businessId,
@@ -107,6 +115,8 @@ export const ordersModule: ApiModule = async (app, deps) => {
         financialYear: numbering.financialYear,
         orderDate: sale.invoiceDate,
         expectedDeliveryDate: body.expectedDeliveryDate ?? null,
+        quotationNumber: quotation ? numbering.number : null,
+        validUntil: quotation ? (body.validUntil ?? null) : null,
         customerId: sale.customer.id,
         warehouseId: sale.warehouseId,
         priceLevelId: sale.priceLevelId,
@@ -168,8 +178,8 @@ export const ordersModule: ApiModule = async (app, deps) => {
         }),
       );
       await recordStatus(tx, ctx, id, null, status);
-      await audit(tx, ctx, { action: "sales_order.created", entityType: "sales_order", entityId: id, entityLabel: numbering.number, changes: { customer: sale.customer.name, grandTotal: toAmountString(t.grandTotal) } });
-      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id, status } });
+      await audit(tx, ctx, { action: quotation ? "quotation.created" : "sales_order.created", entityType: "sales_order", entityId: id, entityLabel: numbering.number, changes: { customer: sale.customer.name, grandTotal: toAmountString(t.grandTotal) } });
+      if (!quotation) await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "sales_order.created", aggregateType: "sales_order", aggregateId: id, payload: { customerId: sale.customer.id, status } });
       return { replay: false, detail: await orderDetail(tx, ctx, id, workflow) };
     });
     if (result.replay) reply.header("idempotent-replay", "true");
@@ -183,7 +193,8 @@ export const ordersModule: ApiModule = async (app, deps) => {
     const o = schema.salesOrders;
     const where: SQL[] = [eq(o.businessId, ctx.businessId)];
     if (q.status === "open") where.push(sql`${o.status} not in ('delivered', 'cancelled', 'draft')`);
-    else if (q.status !== "all") where.push(eq(o.status, q.status));
+    else if (q.status === "all") where.push(sql`${o.status} <> 'draft'`);
+    else where.push(eq(o.status, q.status));
     if (q.customerId) where.push(eq(o.customerId, q.customerId));
     if (q.from) where.push(sql`${o.orderDate} >= ${q.from}`);
     if (q.to) where.push(sql`${o.orderDate} <= ${q.to}`);
@@ -194,6 +205,8 @@ export const ordersModule: ApiModule = async (app, deps) => {
         .select({
           id: o.id,
           orderNumber: o.orderNumber,
+          quotationNumber: o.quotationNumber,
+          validUntil: o.validUntil,
           orderDate: o.orderDate,
           expectedDeliveryDate: o.expectedDeliveryDate,
           customerId: o.customerId,
@@ -239,10 +252,16 @@ export const ordersModule: ApiModule = async (app, deps) => {
           if (open.gt(0)) await tx.update(schema.salesOrderItems).set({ cancelledQty: sql`${schema.salesOrderItems.cancelledQty} + ${toQtyString(open)}` }).where(eq(schema.salesOrderItems.id, i.id));
         }
       }
+      // A quotation accepted becomes an order with an order number (the quotation's number is kept).
+      const accepted =
+        from === "draft" && to !== "cancelled"
+          ? await nextDocumentNumber(tx, ctx.businessId, "sales_order", deps.clock.today(ctx.timeZone), (await tx.select({ m: schema.businesses.financialYearStartMonth }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId)))[0]!.m)
+          : null;
       await tx
         .update(schema.salesOrders)
         .set({
           status: to,
+          ...(accepted ? { orderNumber: accepted.number, seriesId: accepted.seriesId, financialYear: accepted.financialYear } : {}),
           ...(to === "cancelled" ? { cancelledAt: deps.clock.now().toISOString(), cancelReason: request.body.note ?? null } : {}),
           version: o.version + 1,
           updatedBy: ctx.userId,
@@ -250,7 +269,37 @@ export const ordersModule: ApiModule = async (app, deps) => {
         .where(eq(schema.salesOrders.id, o.id));
       await recordStatus(tx, ctx, o.id, from, to, request.body.note);
       await orderStatusEvent(tx, ctx.businessId, o.id, from, to);
-      await audit(tx, ctx, { action: `sales_order.${to}`, entityType: "sales_order", entityId: o.id, entityLabel: o.orderNumber ?? undefined, changes: { status: [from, to] } });
+      await audit(tx, ctx, {
+        action: accepted ? "quotation.accepted" : `sales_order.${to}`,
+        entityType: "sales_order",
+        entityId: o.id,
+        entityLabel: accepted?.number ?? o.orderNumber ?? undefined,
+        changes: { status: [from, to], ...(accepted ? { quotation: o.orderNumber, order: accepted.number } : {}) },
+      });
+      return orderDetail(tx, ctx, o.id, workflow);
+    });
+  });
+
+  /**
+   * The order's delivery challan, for goods that leave before the bill: given
+   * a number from its own series and today's date the first time, the same
+   * ever after (printing it again is the same challan).
+   */
+  r.post("/sales-orders/:id/challan", { preHandler: guard(deps, "order.view"), schema: { tags: ["orders"], params: IdParams } }, async (request) => {
+    const ctx = request.ctx;
+    if (!can(ctx, "order.update") && !can(ctx, "dispatch.dispatch")) throw forbidden("order.update");
+    return tenant(ctx, async (tx) => {
+      const [o] = await tx.select().from(schema.salesOrders).where(and(eq(schema.salesOrders.id, request.params.id), eq(schema.salesOrders.businessId, ctx.businessId))).for("update");
+      if (!o) throw notFound("sales_order");
+      const workflow = await workflowOf(tx, ctx.businessId);
+      if (!o.challanNumber) {
+        if (!INVOICEABLE.has(o.status as OrderStatus)) throw conflict("ORDER_NOT_CONFIRMED", { status: o.status });
+        const today = deps.clock.today(ctx.timeZone);
+        const [b] = await tx.select({ m: schema.businesses.financialYearStartMonth }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
+        const numbering = await nextDocumentNumber(tx, ctx.businessId, "delivery_challan", today, b!.m, CHALLAN_SERIES);
+        await tx.update(schema.salesOrders).set({ challanNumber: numbering.number, challanDate: today, updatedBy: ctx.userId }).where(eq(schema.salesOrders.id, o.id));
+        await audit(tx, ctx, { action: "delivery_challan.created", entityType: "sales_order", entityId: o.id, entityLabel: numbering.number, changes: { order: o.orderNumber } });
+      }
       return orderDetail(tx, ctx, o.id, workflow);
     });
   });

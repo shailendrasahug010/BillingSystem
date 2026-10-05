@@ -7,7 +7,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | | Count |
 |---|---|
 | Tables | 98 |
-| Columns | 1626 |
+| Columns | 1630 |
 | Foreign keys | 261 |
 | Unique constraints | 46 |
 | Check constraints | 59 |
@@ -16,7 +16,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Tables with row-level security | 92 |
 | Enums | 39 |
 | Functions | 14 |
-| Migrations | 29 (last: `0028_beats`) |
+| Migrations | 30 (last: `0029_quotations_challans`) |
 
 ## How the database is set up
 
@@ -1403,6 +1403,10 @@ How a supplier names our products on their bills ("SURF EXL 1KG", item code "HU-
 | `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
 | `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+| `quotation_number` | varchar(30) |  |  | Number of the quotation the order started as (kept when the customer accepts it). |
+| `valid_until` | date |  |  | A quotation's offer holds until this date. |
+| `challan_number` | varchar(30) |  |  | Delivery challan for goods sent before the bill: its number, given once. |
+| `challan_date` | date |  |  | Date of the delivery challan (the day it was first printed). |
 
 * Unique `sales_orders_number_uq`: `(business_id, financial_year, order_number)`
 * Index `sales_orders_client_id_uq`: unique, btree `(business_id, client_id) WHERE (client_id IS NOT NULL)`
@@ -3161,4 +3165,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans`

@@ -53,9 +53,9 @@ interface Totals {
   total: string;
 }
 
-export function ExpensesPage() {
+export function ExpensesPage({ startNew = false }: { startNew?: boolean }) {
   const { t } = useI18n();
-  const [entering, setEntering] = useState(false);
+  const [entering, setEntering] = useState(startNew && allowed("expense.create"));
   return (
     <div className="flex flex-col gap-5">
       <PageHeader

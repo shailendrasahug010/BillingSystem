@@ -39,6 +39,7 @@ export function OrderEntryDialog({
   initialLines,
   stay = false,
   onSaved,
+  quotation = false,
 }: {
   open: boolean;
   onOpenChange(v: boolean): void;
@@ -48,6 +49,8 @@ export function OrderEntryDialog({
   /** Stay where the order was booked (the beat) instead of opening it. */
   stay?: boolean;
   onSaved?(): void;
+  /** A quotation (estimate) instead of an order: priced the same, numbered on its own, nothing to pack until accepted. */
+  quotation?: boolean;
 }) {
   const { t, money, number } = useI18n();
   const toast = useToast();
@@ -103,7 +106,7 @@ export function OrderEntryDialog({
     const body = {
       customerId,
       source,
-      ...(delivery ? { expectedDeliveryDate: delivery } : {}),
+      ...(quotation ? { quotation: true, ...(delivery ? { validUntil: delivery } : {}) } : delivery ? { expectedDeliveryDate: delivery } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       lines: lines.map((l) => {
         const p = productById.get(l.productId);
@@ -136,7 +139,7 @@ export function OrderEntryDialog({
           body,
         }));
       if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
-      toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("orders.saved")} · ${customer?.businessName ?? ""} · ${t("offline.sendsLater")}` });
+      toast({ tone: "offline", title: t("offline.savedHere"), body: `${quotation ? t("orders.quotation.saved") : t("orders.saved")} · ${customer?.businessName ?? ""} · ${t("offline.sendsLater")}` });
       onSaved?.();
       onOpenChange(false);
     };
@@ -144,7 +147,7 @@ export function OrderEntryDialog({
       if (keepHere || workingOffline()) return await keep();
       const res = await api.post<{ id: string; orderNumber: string; grandTotal: string }>("/sales-orders", body, { idempotencyKey: key });
       void qc.invalidateQueries({ queryKey: ["orders"] });
-      toast({ tone: "success", title: t("orders.saved"), body: `${res.orderNumber} · ${money(res.grandTotal)}` });
+      toast({ tone: "success", title: quotation ? t("orders.quotation.saved") : t("orders.saved"), body: `${res.orderNumber} · ${money(res.grandTotal)}` });
       onSaved?.();
       onOpenChange(false);
       if (!stay) navigate({ name: "order-view", orderId: res.id });
@@ -163,15 +166,15 @@ export function OrderEntryDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t("orders.new")}
-      description={t("orders.newHint")}
+      title={quotation ? t("orders.quotation.new") : t("orders.new")}
+      description={quotation ? t("orders.quotation.newHint") : t("orders.newHint")}
       size="xl"
       closeLabel={t("common.close")}
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button variant="primary" disabled={busy || !ready} onClick={() => void save()}>
-            {busy ? t("common.saving") : estimate > 0 ? `${t("orders.save")} · ≈ ${money(estimate, 0)}` : t("orders.save")}
+            {busy ? t("common.saving") : estimate > 0 ? `${quotation ? t("orders.quotation.save") : t("orders.save")} · ≈ ${money(estimate, 0)}` : quotation ? t("orders.quotation.save") : t("orders.save")}
           </Button>
         </>
       }
@@ -199,7 +202,7 @@ export function OrderEntryDialog({
               search={(q) => searchCustomers(q).map((c) => ({ id: c.id, label: c.businessName, sub: [c.code, c.city, c.mobile].filter(Boolean).join(" · "), trailing: c.balance ? money(c.balance) : undefined }))}
             />
           </Field>
-          <Field label={t("orders.deliveryDate")} htmlFor="so-delivery" hint={t("common.optional")} error={fieldError("expectedDeliveryDate")}>
+          <Field label={quotation ? t("orders.quotation.validUntil") : t("orders.deliveryDate")} htmlFor="so-delivery" hint={t("common.optional")} error={fieldError(quotation ? "validUntil" : "expectedDeliveryDate")}>
             <Input id="so-delivery" type="date" min={TODAY} value={delivery} onChange={(e) => setDelivery(e.target.value)} />
           </Field>
           <Field label={t("orders.source")} htmlFor="so-source">

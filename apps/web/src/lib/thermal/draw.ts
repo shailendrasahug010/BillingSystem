@@ -28,7 +28,6 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, max: number): string[
         continue;
       }
       if (line) out.push(line);
-      line = "";
       // A word wider than the line goes by characters (grapheme by grapheme).
       let piece = "";
       for (const ch of Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(word), (s) => s.segment)) {

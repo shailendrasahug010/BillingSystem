@@ -121,8 +121,8 @@ await staffPage.screenshot({ path: `${OUT}/team-3-staff-dashboard.png` });
 log("salesperson signed in with the user ID");
 
 // 4. Only what the Sales role allows: the menu, the dashboard's actions, the buttons on each screen.
-const menu = (await staffPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
-const expectedMenu = ["Dashboard", "New Invoice", "Sales Orders", "Customers", "Payments", "Outstanding", "Beat", "Messages", "Products", "Notifications"];
+const menu = (await staffPage.getByRole("navigation", { name: "Main" }).locator("button:not([aria-expanded]):not([aria-pressed])").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
+const expectedMenu = ["Dashboard", "New Invoice", "Invoices", "Sales Orders", "Customers", "Payments", "Outstanding", "Beat", "Messages", "Products", "Notifications"];
 if (JSON.stringify(menu) !== JSON.stringify(expectedMenu)) errors.push(`sales menu: ${menu.join(", ")}`);
 const quick = (await staffPage.getByRole("region", { name: "Quick actions" }).getByRole("button").allTextContents()).map((s) => s.replace(/(Ctrl|Alt).*$/, "").trim());
 if (JSON.stringify(quick) !== JSON.stringify(["Create Invoice", "New Order", "Receive Payment", "Add Customer"])) errors.push(`sales quick actions: ${quick.join(", ")}`);
@@ -164,7 +164,7 @@ packerState.signedIn = true;
 await packerPage.getByRole("heading", { name: "Pack next" }).waitFor({ timeout: 15000 });
 for (const figure of ["Orders to Pack", "Orders to Dispatch"]) if ((await packerPage.getByText(figure, { exact: true }).count()) === 0) errors.push(`warehouse home lacks ${figure}`);
 if ((await packerPage.getByText("Today's Sales").count()) !== 0) errors.push("warehouse sees the sales figures");
-const packerMenu = (await packerPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
+const packerMenu = (await packerPage.getByRole("navigation", { name: "Main" }).locator("button:not([aria-expanded]):not([aria-pressed])").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
 if (JSON.stringify(packerMenu) !== JSON.stringify(["Dashboard", "Sales Orders", "Products", "Inventory", "Purchases", "Packing", "Dispatch", "Notifications"])) errors.push(`warehouse menu: ${packerMenu.join(", ")}`);
 await packerPage.screenshot({ path: `${OUT}/team-6-warehouse.png` });
 log("warehouse worker lands on their own home (to pack, to send); menu:", packerMenu.join(", "));
@@ -184,7 +184,7 @@ await hrPage.getByRole("heading", { name: "Staff today" }).waitFor({ timeout: 15
 for (const h of ["Leave to decide", "Expenses this month"]) if ((await hrPage.getByRole("heading", { name: h }).count()) === 0) errors.push(`HR home lacks ${h}`);
 if ((await hrPage.getByRole("heading", { name: /^Salary for / }).count()) === 0) errors.push("HR home lacks the salary run");
 if ((await hrPage.getByText("Today's Sales").count()) !== 0 || (await hrPage.getByText("Pack next").count()) !== 0) errors.push("HR sees sales or warehouse parts");
-const hrMenu = (await hrPage.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
+const hrMenu = (await hrPage.getByRole("navigation", { name: "Main" }).locator("button:not([aria-expanded]):not([aria-pressed])").allTextContents()).map((s) => s.replace(/P\d$/, "").trim());
 if (JSON.stringify(hrMenu) !== JSON.stringify(["Dashboard", "Expenses", "Employees", "Salary", "Leave", "Notifications"])) errors.push(`HR menu: ${hrMenu.join(", ")}`);
 await hrPage.screenshot({ path: `${OUT}/team-7-hr.png` });
 log("HR lands on staff today, leave to decide, salary and expenses; menu:", hrMenu.join(", "));

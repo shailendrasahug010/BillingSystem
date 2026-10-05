@@ -5,7 +5,7 @@ import { useI18n } from "../../app/i18n";
 import { ariaShortcut, INVOICE_SHORTCUTS } from "../../app/shortcuts";
 import { Button } from "../../components/ui/Button";
 import { Field, Input } from "../../components/ui/Field";
-import { Kbd } from "../../components/ui/misc";
+import { CountUp, Kbd } from "../../components/ui/misc";
 import { allowed, BUSINESS, WORKSPACE } from "../../data/db";
 import { cn } from "../../lib/cn";
 import { lutValidOn, type DraftView } from "./useInvoiceDraft";
@@ -182,7 +182,9 @@ export function SummaryPanel({
           <div className="dots pointer-events-none absolute inset-0 opacity-40" aria-hidden />
           <div className="relative flex items-baseline justify-between gap-3">
             <span className="text-[13.5px] font-medium text-ink-2">{t("invoice.grandTotal")}</span>
-            <span className="num font-display text-[26px] leading-none font-semibold tracking-tight text-ink">{money(grand)}</span>
+            <span className="num font-display text-[26px] leading-none font-semibold tracking-tight text-ink">
+              <CountUp value={grand} format={(v) => money(v)} duration={300} />
+            </span>
           </div>
         </div>
 

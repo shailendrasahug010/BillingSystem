@@ -468,6 +468,7 @@ h3 {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -508,17 +509,200 @@ h3 {
   animation: rise-in 360ms var(--ease-out) backwards;
 }
 
+/* --stagger-start holds a list back until what is above it has arrived. */
 .stagger > * {
-  animation: rise-in 480ms var(--ease-out) backwards;
+  animation: rise-in 480ms var(--ease-out) var(--stagger-start, 0ms) backwards;
 }
-.stagger > :nth-child(2) { animation-delay: 40ms; }
-.stagger > :nth-child(3) { animation-delay: 80ms; }
-.stagger > :nth-child(4) { animation-delay: 120ms; }
-.stagger > :nth-child(5) { animation-delay: 160ms; }
-.stagger > :nth-child(6) { animation-delay: 200ms; }
-.stagger > :nth-child(7) { animation-delay: 240ms; }
-.stagger > :nth-child(8) { animation-delay: 280ms; }
-.stagger > :nth-child(n + 9) { animation-delay: 320ms; }
+.stagger > :nth-child(2) { animation-delay: calc(var(--stagger-start, 0ms) + 40ms); }
+.stagger > :nth-child(3) { animation-delay: calc(var(--stagger-start, 0ms) + 80ms); }
+.stagger > :nth-child(4) { animation-delay: calc(var(--stagger-start, 0ms) + 120ms); }
+.stagger > :nth-child(5) { animation-delay: calc(var(--stagger-start, 0ms) + 160ms); }
+.stagger > :nth-child(6) { animation-delay: calc(var(--stagger-start, 0ms) + 200ms); }
+.stagger > :nth-child(7) { animation-delay: calc(var(--stagger-start, 0ms) + 240ms); }
+.stagger > :nth-child(8) { animation-delay: calc(var(--stagger-start, 0ms) + 280ms); }
+.stagger > :nth-child(n + 9) { animation-delay: calc(var(--stagger-start, 0ms) + 320ms); }
+
+/* The app fades in once signed in (opacity only: nothing fixed inside it moves). */
+.animate-fade {
+  animation: fade-in 320ms ease-out backwards;
+}
+
+/* The sign-in screen: the logo settles in, the shapes behind it drift slowly. */
+@keyframes logo-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-logo {
+  animation: logo-in 560ms var(--ease-out) backwards;
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate3d(-28px, 22px, 0) rotate(10deg);
+  }
+}
+.animate-drift {
+  animation: drift 14s ease-in-out infinite alternate;
+}
+.animate-drift-slow {
+  animation: drift 19s ease-in-out -7s infinite alternate-reverse;
+}
+
+/* A refused sign-in shakes its form, the way a wrong PIN does on a phone. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+.animate-shake {
+  animation: shake 380ms var(--ease-out);
+}
+
+/*
+ * Phones: a screen opened slides in from the right, Back slides the one
+ * returned to in from the left. Wider screens keep the rise.
+ */
+@keyframes slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 1023.98px) {
+  .animate-page.screen-forward {
+    animation: slide-from-right 280ms var(--ease-out) backwards;
+  }
+  .animate-page.screen-back {
+    animation: slide-from-left 280ms var(--ease-out) backwards;
+  }
+}
+
+/* Table rows arrive one after another: the first dozen, the rest at once. */
+.rows-in > :nth-child(-n + 12) {
+  animation: rise-in 360ms var(--ease-out) backwards;
+}
+.rows-in > :nth-child(2) { animation-delay: 25ms; }
+.rows-in > :nth-child(3) { animation-delay: 50ms; }
+.rows-in > :nth-child(4) { animation-delay: 75ms; }
+.rows-in > :nth-child(5) { animation-delay: 100ms; }
+.rows-in > :nth-child(6) { animation-delay: 125ms; }
+.rows-in > :nth-child(7) { animation-delay: 150ms; }
+.rows-in > :nth-child(8) { animation-delay: 175ms; }
+.rows-in > :nth-child(9) { animation-delay: 200ms; }
+.rows-in > :nth-child(10) { animation-delay: 225ms; }
+.rows-in > :nth-child(11) { animation-delay: 250ms; }
+.rows-in > :nth-child(12) { animation-delay: 275ms; }
+
+/* A line added to a bill slides in. */
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+    background-color: var(--accent-soft);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-line {
+  animation: line-in 260ms var(--ease-out) backwards;
+}
+
+/* The menu entry just opened: its highlight settles in; on the phone's tab bar it widens. */
+@keyframes pill-in {
+  from {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-pill {
+  animation: pill-in 240ms var(--ease-out) backwards;
+}
+@keyframes pill-x {
+  from {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-pill-x {
+  animation: pill-x 260ms var(--ease-out) backwards;
+}
+
+/* A green tick draws itself (a bill saved). */
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ring-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+.tick-ring {
+  animation: ring-pop 360ms var(--ease-out) backwards;
+}
+.tick-draw path,
+.tick-draw polyline {
+  stroke-dasharray: 24;
+  animation: tick-draw 320ms var(--ease-out) 200ms backwards;
+}
 
 /* Bottom sheets on phones slide up. */
 @keyframes sheet-up {

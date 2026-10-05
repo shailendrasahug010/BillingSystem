@@ -61,7 +61,20 @@ type Form = ReturnType<typeof blank>;
  * as you type and fills the state; the bank account number is stored
  * encrypted and only its last four digits are ever shown again.
  */
-export function SupplierDialog({ supplierId, open, onOpenChange, onSaved }: { supplierId: string | null; open: boolean; onOpenChange(v: boolean): void; onSaved?(id: string): void }) {
+export function SupplierDialog({
+  supplierId,
+  open,
+  onOpenChange,
+  onSaved,
+  prefill,
+}: {
+  supplierId: string | null;
+  open: boolean;
+  onOpenChange(v: boolean): void;
+  onSaved?(id: string): void;
+  /** A new supplier's details already known (from their bill, or the name typed in a search). */
+  prefill?: { name?: string; gstin?: string };
+}) {
   const { t, locale } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
@@ -81,7 +94,12 @@ export function SupplierDialog({ supplierId, open, onOpenChange, onSaved }: { su
     if (!open) return;
     setError(null);
     setTouched(false);
-    if (!supplierId) setForm(blank());
+    if (!supplierId) {
+      // A GSTIN on the bill gives the state too.
+      const gstin = prefill?.gstin ? normalizeGstin(prefill.gstin) : "";
+      const state = gstin && /^\d{2}$/.test(stateCodeFromGstin(gstin)) ? stateCodeFromGstin(gstin) : null;
+      setForm({ ...blank(), ...(prefill?.name ? { name: prefill.name } : {}), ...(gstin ? { gstin, gstRegistration: "regular" } : {}), ...(state ? { stateCode: state } : {}) });
+    }
     else if (s)
       setForm({
         ...blank(),
@@ -103,6 +121,7 @@ export function SupplierDialog({ supplierId, open, onOpenChange, onSaved }: { su
         upiId: s.upiId ?? "",
         notes: s.notes ?? "",
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, supplierId, s]);
 
   const set = (k: keyof Form, v: string) => setForm((f) => ({ ...f, [k]: v }));

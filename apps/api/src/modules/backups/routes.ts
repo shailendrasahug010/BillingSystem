@@ -41,7 +41,7 @@ const REAUTH_LOCK_MINUTES = 15;
 type ScheduleRow = typeof schema.backupSchedules.$inferSelect;
 
 function scheduleView(row: ScheduleRow | null, extra: { defaultTo: string | null; emailReady: boolean; by: string | null }) {
-  let lastError: { code: string; params: Record<string, string | number> } | null = null;
+  let lastError: { code: string; params: Record<string, string | number> } | null;
   try {
     lastError = row?.lastError ? JSON.parse(row.lastError) : null;
   } catch {

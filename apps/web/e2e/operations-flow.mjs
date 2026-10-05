@@ -171,6 +171,8 @@ const product = catalog.products.find((p) => p.name.startsWith("Parle-G"));
 const customer = await api("POST", "/customers", { name: "Sharma Kirana", businessName: "Sharma Kirana Store", mobile: "9893012345", stateCode: me.business.stateCode, creditDays: 7 });
 const invoice = await api("POST", "/invoices", { customerId: customer.id, lines: [{ productId: product.id, qty: "48" }] });
 log("invoice via API", invoice.invoiceNumber, invoice.grandTotal);
+// A reload keeps the screen it is on: back to the dashboard first.
+await page.goto(`${WEB}/#dashboard`);
 await page.reload();
 await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
 await nav("Payments");

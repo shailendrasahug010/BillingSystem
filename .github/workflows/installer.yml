@@ -48,7 +48,14 @@ jobs:
       - name: NSIS
         shell: pwsh
         run: |
-          if (-not (Test-Path 'C:\Program Files (x86)\NSIS\makensis.exe')) { choco install nsis -y --no-progress }
+          # The Chocolatey feed answers 503 now and then: try a few times, and stop here if it never installs.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe'
+          for ($i = 1; $i -le 4 -and -not (Test-Path $makensis); $i++) {
+            choco install nsis -y --no-progress
+            if (-not (Test-Path $makensis)) { Start-Sleep -Seconds (15 * $i) }
+          }
+          if (-not (Test-Path $makensis)) { throw 'NSIS did not install' }
 
       - name: Build DigitalBahi-Setup.exe
         run: node installer/build-bundle.mjs --exe

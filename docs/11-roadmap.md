@@ -140,9 +140,9 @@ Why this cut: these are the operations a distributor performs every day and the 
 | **GST rates and thresholds in seed and sample data are illustrative** | Verify against current notifications before go-live; maintain as dated data (runbook in [08-gst-architecture.md](08-gst-architecture.md#8-runbook-the-government-changed-a-rule)) |
 | E-invoicing needed at launch? (mandatory above the turnover threshold) | If pilot customers are above it, move 6.5 into Phase 4 |
 | Single-tenant install vs SaaS first | Architecture supports both; decides hosting, onboarding and pricing |
-| Tally data migration | Most distributors run Tally: an import of masters and opening balances (and an export for their CA) is likely a sales requirement |
+| Tally data migration | Done: Settings → Tally imports masters (debtors, creditors, stock items with opening balances and stock) from Tally's XML and exports the period's vouchers for the CA's Tally |
 | Invoice numbering offline | Device series (default) vs "draft until sync": the business's CA should confirm their preference |
-| Keyboard shortcuts | Ctrl+P / Ctrl+C conflict with browser Print / Copy; the design uses Alt+P / Alt+C (Ctrl+I and Ctrl+K kept as requested). Confirm with users; a Tally-style F-key preset is planned |
+| Keyboard shortcuts | Ctrl+P / Ctrl+C conflict with browser Print / Copy; the design uses Alt+P / Alt+C (Ctrl+I and Ctrl+K kept as requested). Confirm with users; Tally's F5–F9 voucher keys are on by default and can be switched off in the shortcuts list |
 | Hindi copy | Glossary in [05-design-system.md](05-design-system.md#8-localisation) should be reviewed by 3–5 real users (counter staff, salespeople) |
 
 ## Definition of done (every milestone)

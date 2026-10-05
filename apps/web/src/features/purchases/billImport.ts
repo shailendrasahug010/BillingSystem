@@ -33,6 +33,8 @@ export interface PurchaseDraft {
   supplierId: string | null;
   /** What the file says about the supplier, shown when it did not match one of ours. */
   supplierHint: string | null;
+  /** The supplier as the bill names them, to add as a new supplier. */
+  supplierFromBill?: { name?: string; gstin?: string };
   supplierCandidates: MatchResponse["supplierCandidates"];
   duplicate: MatchResponse["duplicate"];
   items: ImportedItem[];
@@ -67,6 +69,9 @@ export function draftFromMatch(fileName: string, bill: BillFileBill, match: Matc
     supplierId: match.supplier?.id ?? null,
     supplierHint: match.supplier ? null : [bill.supplierName, bill.supplierGstin].filter(Boolean).join(" · ") || null,
     supplierCandidates: match.supplierCandidates,
+    ...(!match.supplier && (bill.supplierName || bill.supplierGstin)
+      ? { supplierFromBill: { ...(bill.supplierName ? { name: bill.supplierName } : {}), ...(bill.supplierGstin ? { gstin: bill.supplierGstin } : {}) } }
+      : {}),
     duplicate: match.duplicate,
     items: bill.lines.map((file, i) => {
       const m = match.lines[i];

@@ -134,6 +134,10 @@ export const SalesOrderBody = z.strictObject({
   source: z.enum(["counter", "salesperson", "phone", "whatsapp", "app"]).default("app"),
   lines: z.array(DocumentLineInput).min(1).max(300),
   notes: z.string().trim().max(1000).optional(),
+  /** A quotation (estimate): priced like an order, numbered on its own, nothing to pack until the customer accepts it. */
+  quotation: z.boolean().optional(),
+  /** Until when a quotation's prices hold. */
+  validUntil: IsoDate.optional(),
 });
 
 export const OrderListQuery = PageQuery.extend({
