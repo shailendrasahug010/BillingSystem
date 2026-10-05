@@ -97,6 +97,8 @@ await page.getByRole("button", { name: "Harpic Toilet Cleaner 500ml" }).click();
 await page.screenshot({ path: `${OUT}/flow-pdf-import-review.png`, fullPage: true });
 await page.getByRole("button", { name: "Save purchase" }).click();
 await toast("Purchase saved");
+// The bill costs more than the price list: keep the selling rates as they are.
+await dialog().getByRole("button", { name: "Keep old rates" }).click({ timeout: 10000 });
 log("bill SG/1044 read from the PDF, matched, reviewed and saved");
 
 // 5. Reports as PDF, Excel and CSV.
