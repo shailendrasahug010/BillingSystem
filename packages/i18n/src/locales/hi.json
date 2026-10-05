@@ -748,7 +748,16 @@
     "addSuggestion": "सुझाव 1–9 जोड़ें",
     "closeDialog": "डायलॉग बंद करें",
     "help": "शॉर्टकट दिखाएँ",
-    "saveAndPrint": "सेव करके प्रिंट करें"
+    "saveAndPrint": "सेव करके प्रिंट करें",
+    "tally": {
+      "toggle": "Tally कुंजियाँ (F5 से F9)",
+      "help": "Tally की तरह वाउचर खोलें। बंद करने पर F5 फिर से पेज रीलोड करेगा।",
+      "payment": "भुगतान (सप्लायर को)",
+      "receipt": "रसीद (भुगतान प्राप्त करें)",
+      "expense": "खर्च",
+      "sales": "बिक्री बिल",
+      "purchase": "खरीद एंट्री"
+    }
   },
   "search": {
     "placeholder": "ग्राहक, प्रोडक्ट, इनवॉइस, GSTIN, मोबाइल खोजें…",
@@ -2429,7 +2438,8 @@
       "waitingSince_other": "{{count}} रुके हुए, {{when}} से",
       "refused_one": "{{count}} सर्वर ने नहीं लिया",
       "refused_other": "{{count}} सर्वर ने नहीं लिए",
-      "reportedAt": "{{when}} तक की जानकारी"
+      "reportedAt": "{{when}} तक की जानकारी",
+      "removeTitle": "यह डिवाइस हटाएँ?"
     },
     "kinds": {
       "invoice": "बिल",
@@ -2474,7 +2484,10 @@
     "wipedWaiting_other": "न भेजी गई {{count}} एंट्री भी साथ में हटा दी गईं।",
     "heldForReview": "जाँच के लिए रोका गया: सर्वर ने ले लिया, मैनेजर इसे जाँचेंगे",
     "editKept": "उनका बाद का बदलाव रखा गया: {{fields}}",
-    "cancelWaiting": "इस डिवाइस पर रद्द, भेजना बाकी"
+    "cancelWaiting": "इस डिवाइस पर रद्द, भेजना बाकी",
+    "removeTitle": "यह एंट्री हटाएँ?",
+    "signOutTitle": "बदलाव अभी सिंक नहीं हुए",
+    "signOutAnyway": "फिर भी साइन आउट करें"
   },
   "pdf": {
     "page": "पृष्ठ {{page}} / {{count}}"

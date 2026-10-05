@@ -45,6 +45,7 @@ import { NotificationBell } from "./NotificationBell";
 import { OfflineBanner, OfflineChip } from "../offline/OfflineBills";
 import { getOfflineState } from "../../offline/sync";
 import { useToast } from "../ui/Toast";
+import { useConfirm } from "../ui/Confirm";
 import { BrandMark, FirmLogo } from "../brand/Brand";
 
 function sameRoute(a: Route, b: Route): boolean {
@@ -332,14 +333,19 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const pendingOrders = ORDERS.filter((o) => o.status === "pending").length;
   const session = useSession();
   const toast = useToast();
+  const confirm = useConfirm();
   /** Signing out needs the server; bills still waiting stay on the device for the next sign-in. */
-  const signOut = () => {
+  const signOut = async () => {
     const { offlineMode, online, entries } = getOfflineState();
     if (offlineMode || !online) {
       toast({ tone: "offline", title: t("offline.signOutOffline") });
       return;
     }
-    if (entries.length > 0 && !window.confirm(t("offline.signOutPending", { count: entries.length }))) return;
+    if (
+      entries.length > 0 &&
+      !(await confirm({ title: t("offline.signOutTitle"), body: t("offline.signOutPending", { count: entries.length }), confirmLabel: t("offline.signOutAnyway"), danger: true }))
+    )
+      return;
     void session.logout().catch(() => undefined);
   };
   const userName = LIVE ? (session.user?.name ?? "") : "Anil Sharma";
@@ -379,7 +385,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           ))}
         </select>
       )}
-      <button type="button" onClick={signOut} className="press flex h-9 items-center gap-2 rounded-xl px-2.5 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
+      <button type="button" onClick={() => void signOut()} className="press flex h-9 items-center gap-2 rounded-xl px-2.5 text-left text-[13px] text-ink-2 hover:bg-surface-2 hover:text-ink">
         <LogOut size={15} className="text-ink-3" />
         {t("auth.signOut")}
       </button>

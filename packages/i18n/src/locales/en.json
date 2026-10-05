@@ -748,7 +748,16 @@
     "addSuggestion": "Add suggestion 1–9",
     "closeDialog": "Close dialog",
     "help": "Show shortcuts",
-    "saveAndPrint": "Save and print"
+    "saveAndPrint": "Save and print",
+    "tally": {
+      "toggle": "Tally keys (F5 to F9)",
+      "help": "Open vouchers the way Tally does. Turn off to let F5 reload the page again.",
+      "payment": "Payment (pay a supplier)",
+      "receipt": "Receipt (receive payment)",
+      "expense": "Expense",
+      "sales": "Sales bill",
+      "purchase": "Purchase entry"
+    }
   },
   "search": {
     "placeholder": "Search customers, products, invoices, GSTIN, mobile…",
@@ -2429,7 +2438,8 @@
       "waitingSince_other": "{{count}} waiting since {{when}}",
       "refused_one": "{{count}} refused by the server",
       "refused_other": "{{count}} refused by the server",
-      "reportedAt": "as of {{when}}"
+      "reportedAt": "as of {{when}}",
+      "removeTitle": "Remove this device?"
     },
     "kinds": {
       "invoice": "Bill",
@@ -2474,7 +2484,10 @@
     "wipedWaiting_other": "{{count}} entries that had not been sent were deleted with them.",
     "heldForReview": "Held for review: the server took it, and a manager will check it",
     "editKept": "Their later change kept: {{fields}}",
-    "cancelWaiting": "Cancelled on this device, waiting to send"
+    "cancelWaiting": "Cancelled on this device, waiting to send",
+    "removeTitle": "Remove this entry?",
+    "signOutTitle": "Changes not synced yet",
+    "signOutAnyway": "Sign out anyway"
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"

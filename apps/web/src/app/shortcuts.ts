@@ -104,3 +104,35 @@ export const INVOICE_SHORTCUTS = {
   saveAlt: "mod+enter",
   saveAndPrint: "mod+p",
 } as const;
+
+/**
+ * Tally's voucher keys, for accountants who bill with their left hand on the
+ * F-row: F5 Payment, F6 Receipt, F7 Expense (Tally's Journal), F8 Sales,
+ * F9 Purchase. On by default; switched off, F5 reloads the page again.
+ */
+export const TALLY_SHORTCUTS = {
+  payment: "f5",
+  receipt: "f6",
+  expense: "f7",
+  sales: "f8",
+  purchase: "f9",
+} as const;
+
+const TALLY_KEY = "digitalbahi:tally-keys";
+
+export function tallyKeysOn(): boolean {
+  try {
+    return localStorage.getItem(TALLY_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setTallyKeys(on: boolean): void {
+  try {
+    if (on) localStorage.removeItem(TALLY_KEY);
+    else localStorage.setItem(TALLY_KEY, "off");
+  } catch {
+    // Private mode: the choice lasts until the page closes.
+  }
+}

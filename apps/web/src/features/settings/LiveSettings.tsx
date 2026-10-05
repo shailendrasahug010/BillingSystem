@@ -11,6 +11,7 @@ import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
 import { DataTable, ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
+import { useConfirm } from "../../components/ui/Confirm";
 import { Badge } from "../../components/ui/Badge";
 import { allowed, BUSINESS, TODAY, WORKSPACE } from "../../data/db";
 import { applyMe, refreshCatalog, refreshWarehouses } from "../../data/live";
@@ -1149,11 +1150,13 @@ function DevicesCard() {
   const { t, dateTime } = useI18n();
   const toast = useToast();
   const canEdit = allowed("settings.update");
+  const confirm = useConfirm();
   const q = useQuery({ queryKey: ["devices"], queryFn: () => api.get<{ data: DeviceRow[] }>("/devices").then((r) => r.data) });
   const [error, setError] = useState<unknown>(null);
 
   const revoke = async (d: DeviceRow) => {
-    if (!window.confirm(t("offline.devices.removeConfirm", { name: d.name, code: d.seriesCode ?? "" }))) return;
+    const ok = await confirm({ title: t("offline.devices.removeTitle"), body: t("offline.devices.removeConfirm", { name: d.name, code: d.seriesCode ?? "" }), confirmLabel: t("offline.devices.remove"), danger: true });
+    if (!ok) return;
     setError(null);
     try {
       await api.post(`/devices/${d.id}/revoke`);

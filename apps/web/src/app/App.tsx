@@ -4,7 +4,9 @@ import { ScreenErrorBoundary } from "../components/ErrorBoundary";
 import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
 import { Kbd, Skeleton } from "../components/ui/misc";
+import { Checkbox } from "../components/ui/Field";
 import { ToastProvider } from "../components/ui/Toast";
+import { ConfirmProvider } from "../components/ui/Confirm";
 import { AuthLayout, AuthPage } from "../features/auth/AuthPage";
 import { ServerSetup, useNeedsServer } from "../features/auth/ServerSetup";
 import { NativePush } from "../components/NativePush";
@@ -31,7 +33,7 @@ import { setErrorScreen } from "../lib/errorReport";
 import { SessionProvider, useSession } from "./session";
 import { I18nProvider, useI18n } from "./i18n";
 import { RouterProvider, useRouter, type Route } from "./router";
-import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, useShortcuts } from "./shortcuts";
+import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, setTallyKeys, TALLY_SHORTCUTS, tallyKeysOn, useShortcuts } from "./shortcuts";
 
 /** Module screens load on first use, so the billing screens start fast on slow connections. */
 const GstPage = lazy(() => import("../features/gst/GstPage").then((m) => ({ default: m.GstPage })));
@@ -130,7 +132,7 @@ function Screen({ route }: { route: Route }) {
           case "gst":
             return <GstPage />;
           case "expenses":
-            return <ExpensesPage />;
+            return <ExpensesPage startNew={route.action === "new"} />;
           case "employees":
             return <EmployeesPage />;
           case "leave":
@@ -155,8 +157,15 @@ function Screen({ route }: { route: Route }) {
   }
 }
 
-function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v: boolean): void }) {
+function ShortcutsDialog({ open, onOpenChange, tally, onTally }: { open: boolean; onOpenChange(v: boolean): void; tally: boolean; onTally(on: boolean): void }) {
   const { t } = useI18n();
+  const tallyRows: Array<[string, string]> = [
+    [TALLY_SHORTCUTS.payment, t("shortcuts.tally.payment")],
+    [TALLY_SHORTCUTS.receipt, t("shortcuts.tally.receipt")],
+    [TALLY_SHORTCUTS.expense, t("shortcuts.tally.expense")],
+    [TALLY_SHORTCUTS.sales, t("shortcuts.tally.sales")],
+    [TALLY_SHORTCUTS.purchase, t("shortcuts.tally.purchase")],
+  ];
   const rows: Array<[string, string]> = [
     [GLOBAL_SHORTCUTS.search, t("shortcuts.search")],
     [GLOBAL_SHORTCUTS.newInvoice, t("shortcuts.newInvoice")],
@@ -183,6 +192,22 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange(v
           </div>
         ))}
       </dl>
+      <div className="mt-4 rounded-2xl border border-line bg-surface-2/50 p-3">
+        <Checkbox label={t("shortcuts.tally.toggle")} checked={tally} onChange={onTally} />
+        <p className="mt-1 text-[12.5px] text-ink-3">{t("shortcuts.tally.help")}</p>
+        {tally && (
+          <dl className="mt-2 flex flex-col">
+            {tallyRows.map(([k, label]) => (
+              <div key={k} className="flex items-center justify-between gap-4 border-b border-line py-1.5 text-[14px] last:border-b-0">
+                <dt className="text-ink-2">{label}</dt>
+                <dd>
+                  <Kbd keys={k} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
     </Dialog>
   );
 }
@@ -245,6 +270,7 @@ function Root() {
   const { route, navigate, direction } = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [tally, setTally] = useState(tallyKeysOn);
 
   // A shortcut only for what the role may do (the screen would refuse it anyway).
   const go = (to: Route) => {
@@ -258,6 +284,16 @@ function Root() {
     { id: "purchase", keys: GLOBAL_SHORTCUTS.purchase, handler: () => go(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
     { id: "collection", keys: GLOBAL_SHORTCUTS.collection, handler: () => go(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
     { id: "help", keys: "shift+?", handler: () => setHelpOpen(true) },
+    // Tally's voucher keys; F-keys type nothing, so they work from any field.
+    ...(tally
+      ? [
+          { id: "tally-payment", keys: TALLY_SHORTCUTS.payment, allowInInputs: true, handler: () => go(LIVE ? { name: "planned", module: "payments", action: "pay" } : { name: "planned", module: "payments" }) },
+          { id: "tally-receipt", keys: TALLY_SHORTCUTS.receipt, allowInInputs: true, handler: () => go(LIVE ? { name: "planned", module: "payments", action: "collect" } : { name: "planned", module: "payments" }) },
+          { id: "tally-expense", keys: TALLY_SHORTCUTS.expense, allowInInputs: true, handler: () => go({ name: "planned", module: "expenses", action: "new" }) },
+          { id: "tally-sales", keys: TALLY_SHORTCUTS.sales, allowInInputs: true, handler: () => go({ name: "invoice-new" }) },
+          { id: "tally-purchase", keys: TALLY_SHORTCUTS.purchase, allowInInputs: true, handler: () => go(LIVE ? { name: "purchase-new" } : { name: "planned", module: "purchases" }) },
+        ]
+      : []),
   ]);
 
   const needed = routePermission(route);
@@ -277,7 +313,15 @@ function Root() {
         </ScreenErrorBoundary>
       </div>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
-      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <ShortcutsDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        tally={tally}
+        onTally={(on) => {
+          setTallyKeys(on);
+          setTally(on);
+        }}
+      />
       {LIVE && <NativePush />}
     </AppShell>
   );
@@ -294,7 +338,9 @@ export function App() {
         <SessionProvider>
           <RouterProvider>
             <ToastProvider>
-              <SessionGate />
+              <ConfirmProvider>
+                <SessionGate />
+              </ConfirmProvider>
             </ToastProvider>
           </RouterProvider>
         </SessionProvider>
