@@ -13,6 +13,7 @@ import { beatsModule } from "./beats/routes.js";
 import { expensesModule } from "./expenses/routes.js";
 import { eInvoiceModule } from "./gst/einvoice.js";
 import { gstModule } from "./gst/routes.js";
+import { gstr2bModule } from "./gst/gstr2b.js";
 import { healthModule } from "./health.js";
 import { identityModule } from "./identity/routes.js";
 import { inventoryModule } from "./inventory/routes.js";
@@ -91,6 +92,7 @@ export const MODULES: ApiModule[] = [
   notesModule,
   expensesModule,
   gstModule,
+  gstr2bModule,
   eInvoiceModule,
   employeesModule,
   leaveModule,

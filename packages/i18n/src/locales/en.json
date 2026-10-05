@@ -1180,7 +1180,10 @@
     "REPEAT_BILL_FAILED": "The bill could not be made. It will be tried again tomorrow.",
     "onLine": "Line {{line}}:",
     "exportFailed": "The file could not be made",
-    "ORDER_LINK_OFF": "This order link has been turned off. Ask the business for a new one."
+    "ORDER_LINK_OFF": "This order link has been turned off. Ask the business for a new one.",
+    "GSTR2B_NOT_RECOGNISED": "This is not a GSTR-2B file. Download GSTR-2B as JSON from the GST portal and choose that file.",
+    "GSTR2B_NOT_JSON": "This file is not a JSON file. On the GST portal, download GSTR-2B with the JSON button (not Excel or PDF).",
+    "GSTR2B_NO_PERIOD": "The file does not say its month. Pick the month above and choose the file again."
   },
   "validation": {
     "required": "This field is required",
@@ -3676,5 +3679,55 @@
     "yourOrders": "Your orders",
     "offTitle": "This order link is off",
     "offHint": "It was turned off or replaced. Ask the business that sent it for a new link."
+  },
+  "gstr2b": {
+    "title": "Match with GSTR-2B",
+    "subtitle": "Check your purchase bills against what suppliers reported on the GST portal, before you claim input credit.",
+    "how": "On the GST portal: Returns → GSTR-2B → pick the month → Download → JSON. Choose that file here; it is read and matched, not kept.",
+    "choose": "Choose GSTR-2B file",
+    "another": "Choose another file",
+    "reading": "Matching…",
+    "tooBig": "This file is too large for a GSTR-2B statement (over 25 MB).",
+    "readFile": "{{file}}: GSTR-2B for {{month}}",
+    "otherGstin": "This statement is for GSTIN {{gstin}}, not this business's. Check you downloaded the right one.",
+    "itc2b": "Credit on GSTR-2B",
+    "itc2bHint": "What the portal shows you may claim",
+    "itcBooks": "Credit in your bills",
+    "itcBooksHint": "GST on purchase bills entered this month",
+    "atRisk": "Credit at risk",
+    "atRiskHint_one": "{{count}} bill the supplier has not reported",
+    "atRiskHint_other": "{{count}} bills suppliers have not reported",
+    "notEntered": "Credit not entered",
+    "notEnteredHint_one": "{{count}} bill on the portal not entered yet",
+    "notEnteredHint_other": "{{count}} bills on the portal not entered yet",
+    "status": {
+      "matched": "Matched",
+      "mismatch": "Amounts differ",
+      "not_in_books": "Not entered",
+      "not_in_2b": "Not on portal"
+    },
+    "what": {
+      "matched": "These bills agree with the portal: their credit can be claimed.",
+      "mismatch": "The bill number matches but the amounts differ. Open the bill and check it against the supplier's copy; if yours is right, ask the supplier to correct their return.",
+      "not_in_books": "The supplier reported these bills but they are not entered here. Enter them to claim their credit, or ask the supplier if the bill is not yours.",
+      "not_in_2b": "You entered these bills but the supplier has not reported them. Ask the supplier to file their GSTR-1; until then this credit should not be claimed."
+    },
+    "supplier": "Supplier",
+    "bill": "Bill",
+    "booksDate": "your bill says {{date}}",
+    "taxable": "Taxable",
+    "gstPortal": "GST on portal",
+    "gstBooks": "GST in your bill",
+    "difference": "Difference",
+    "differsBy": "differs by {{amount}}",
+    "noItc": "Portal says: no credit",
+    "openBill": "Open bill",
+    "enterBill": "Enter bill",
+    "noneHere": "No bills here",
+    "noneHereHint": "Pick All to see every bill.",
+    "empty": "No GSTR-2B file chosen",
+    "emptyHint": "Choose the month's GSTR-2B file to see which purchase bills match.",
+    "notes_one": "{{count}} credit or debit note in the statement is not matched here.",
+    "notes_other": "{{count}} credit or debit notes in the statement are not matched here."
   }
 }

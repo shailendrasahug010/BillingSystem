@@ -21,7 +21,7 @@ const API = (process.env.API_URL ?? "http://localhost:3000") + "/api/v1";
 const WEB = process.env.WEB_URL ?? "http://localhost:5173";
 const OUT = process.env.OUT ?? ".";
 const run = String(Date.now()).slice(-5);
-const mobile = process.env.E2E_MOBILE ?? `98766${run}`;
+const mobile = process.env.E2E_MOBILE ?? `98791${run}`;
 const password = "Str0ng-pass!";
 const log = (...a) => console.log("•", ...a);
 
