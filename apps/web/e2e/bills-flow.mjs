@@ -5,7 +5,8 @@
  * pieces -> the server took them (stock, PDF) -> Invoices lists it, filters
  * -> reload on the bill and on a module keeps the screen, Back goes back ->
  * a bill left half made is offered again and can be thrown away -> a bill
- * copied into a new one, asking first over an unfinished bill.
+ * copied into a new one, asking first over an unfinished bill -> the menu:
+ * an entry pinned, a group folded, kept after a reload.
  *
  * Run against an empty database, with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/bills-flow.mjs
@@ -208,6 +209,27 @@ await page.getByRole("dialog", { name: "Invoice added successfully" }).waitFor({
 const copies = (await api("GET", "/invoices", token)).data.filter((b) => Number(b.grandTotal) === 282);
 check(copies.length === 2, `bills of 282 after the copy: ${copies.length}`);
 log("over an unfinished bill it asks first; the copy saved for the same total");
+
+// 7. The menu: an entry pinned to the top, a group folded away; both kept after a reload.
+await page.keyboard.press("Escape");
+await page.getByRole("dialog").waitFor({ state: "detached" });
+const menu = page.getByRole("navigation", { name: "Main" });
+await menu.getByRole("button", { name: "Payments", exact: true }).hover();
+await menu.getByRole("button", { name: "Pin Payments to the top" }).click();
+await menu.getByText("Pinned").waitFor();
+const firstEntry = async () => (await menu.locator("button:not([aria-expanded]):not([aria-pressed])").first().textContent()).trim();
+check((await firstEntry()) === "Payments", `first menu entry after pinning: ${await firstEntry()}`);
+await menu.getByRole("button", { name: "Stock", exact: true }).click();
+check((await menu.getByRole("button", { name: "Products", exact: true }).count()) === 0, "the folded Stock group still shows Products");
+await page.screenshot({ path: `${OUT}/bills-6-menu.png` });
+await page.reload();
+await menu.getByText("Pinned").waitFor({ timeout: 15000 });
+check((await firstEntry()) === "Payments" && (await menu.getByRole("button", { name: "Products", exact: true }).count()) === 0, "the menu's pins and folds were not kept");
+await menu.getByRole("button", { name: "Stock", exact: true }).click();
+await menu.getByRole("button", { name: "Products", exact: true }).waitFor();
+await menu.getByRole("button", { name: "Unpin Payments" }).click();
+check((await menu.getByText("Pinned").count()) === 0, "the Pinned section stayed after unpinning");
+log("menu: Payments pinned to the top, Stock folded, both kept after a reload, then undone");
 
 console.log("errors:", errors.length ? errors : "none");
 await browser.close();

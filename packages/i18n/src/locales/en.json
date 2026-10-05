@@ -137,7 +137,10 @@
     "auditLog": "Audit Log",
     "messages": "Messages",
     "outstanding": "Outstanding",
-    "beat": "Beat"
+    "beat": "Beat",
+    "pinned": "Pinned",
+    "pin": "Pin {{name}} to the top",
+    "unpin": "Unpin {{name}}"
   },
   "auth": {
     "welcome": "Welcome back",

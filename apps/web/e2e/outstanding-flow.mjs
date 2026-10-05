@@ -268,7 +268,7 @@ const packer = await browser.newPage({ viewport: { width: 1360, height: 900 } })
 const packerState = { signedIn: false };
 watch(packer, packerState);
 await signIn(packer, packerState, `pappu${run}`, "Pappu-pass-2026");
-const menu = await packer.getByRole("navigation", { name: "Main" }).getByRole("button").allTextContents();
+const menu = await packer.getByRole("navigation", { name: "Main" }).locator("button:not([aria-expanded]):not([aria-pressed])").allTextContents();
 if (menu.some((m) => m.includes("Outstanding"))) errors.push(`warehouse menu: ${menu.join(", ")}`);
 await packer.goto(`${WEB}/#outstanding`);
 await packer.getByText("Not part of your role").waitFor({ timeout: 15000 });
