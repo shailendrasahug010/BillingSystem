@@ -55,7 +55,8 @@ page.on("response", (r) => {
 page.on("requestfailed", (r) => {
   // Without a network the app's requests fail by design.
   // The live notifications stream is cut by design when the page reloads or the network goes.
-  if (!offline && r.url().includes("/api/") && !r.url().includes("/notifications/stream")) errors.push(`failed ${r.method()} ${r.url()}`);
+  // A request cut off by a reload or the switch to offline is not a failure of the app.
+  if (!offline && r.url().includes("/api/") && !r.url().includes("/notifications/stream") && r.failure()?.errorText !== "net::ERR_ABORTED") errors.push(`failed ${r.method()} ${r.url()} ${r.failure()?.errorText ?? ""}`);
 });
 
 const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
