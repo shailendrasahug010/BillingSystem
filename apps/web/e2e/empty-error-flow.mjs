@@ -27,16 +27,27 @@ const errors = [];
 let signedIn = false;
 /** Failures the test causes on purpose. */
 const expected = (url) => url.includes(MISSING) || url.includes("/expenses");
-const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+const browser = await chromium.launch(
+  process.env.CHROMIUM_PATH
+    ? { executablePath: process.env.CHROMIUM_PATH }
+    : {},
+);
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 page.on("pageerror", (e) => errors.push(e.message));
-page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(m.text()));
+page.on(
+  "console",
+  (m) =>
+    m.type() === "error" &&
+    !m.text().startsWith("Failed to load resource") &&
+    errors.push(m.text()),
+);
 page.on("response", (r) => {
-  if (!signedIn && r.status() === 401 && r.url().endsWith("/auth/refresh")) return;
-  if (r.status() >= 400 && !expected(r.url())) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
+  if (!signedIn && r.status() === 401 && r.url().endsWith("/auth/refresh"))
+    return;
+  if (r.status() >= 400 && !expected(r.url()))
+    errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
 });
 const go = (hash) => page.evaluate((h) => (location.hash = h), hash);
-const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 
 try {
   await page.goto(WEB);
@@ -50,7 +61,9 @@ try {
   await hint.waitFor();
   await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
   await page.getByRole("button", { name: "Verify and create account" }).click();
-  await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
+  await page
+    .getByRole("heading", { name: /Meena/ })
+    .waitFor({ timeout: 15000 });
   signedIn = true;
 
   // 1. A bill that does not exist: said in plain words, with the way back.
@@ -59,20 +72,31 @@ try {
   await page.getByText(/look for it in the invoice list/i).waitFor();
   await page.screenshot({ path: `${OUT}/empty-1-bill.png` });
   await page.getByRole("button", { name: "Back to invoices" }).click();
-  await page.getByRole("heading", { name: "Sales bills" }).waitFor({ timeout: 10000 });
+  await page
+    .getByRole("heading", { name: "Sales bills" })
+    .waitFor({ timeout: 10000 });
   log("a missing bill: not found, and Back to invoices opens the list");
 
   // 2. A customer that does not exist.
   await go(`#customer/${MISSING}`);
-  await page.getByText("This customer was not found").waitFor({ timeout: 15000 });
+  await page
+    .getByText("This customer was not found")
+    .waitFor({ timeout: 15000 });
   await page.getByRole("button", { name: "Back to customers" }).click();
-  await page.getByRole("heading", { name: "Customers" }).waitFor({ timeout: 10000 });
+  await page
+    .getByRole("heading", { name: "Customers" })
+    .waitFor({ timeout: 10000 });
   log("a missing customer: not found, and Back to customers opens the list");
 
   // 3. No connection for a list: said so, and Try again loads it when it is back.
-  await page.route("**/api/v1/expenses?**", (r) => r.abort("internetdisconnected"));
+  await page.route("**/api/v1/expenses?**", (r) =>
+    r.abort("internetdisconnected"),
+  );
   await go("#expenses");
-  const note = page.getByRole("alert").filter({ hasText: /offline|connection/i }).first();
+  const note = page
+    .getByRole("alert")
+    .filter({ hasText: /offline|connection/i })
+    .first();
   await note.waitFor({ timeout: 30000 });
   const retry = note.getByRole("button", { name: "Try again" });
   await retry.waitFor();
@@ -80,26 +104,54 @@ try {
   await page.unroute("**/api/v1/expenses?**");
   await retry.click();
   await note.waitFor({ state: "detached", timeout: 15000 });
-  await page.getByText("No expenses in this view").first().waitFor({ timeout: 15000 });
-  await page.getByText(/Record rent, electricity/).first().waitFor();
-  log("a list with no connection: the reason and Try again, which then loads it");
+  await page
+    .getByText("No expenses in this view")
+    .first()
+    .waitFor({ timeout: 15000 });
+  await page
+    .getByText(/Record rent, electricity/)
+    .first()
+    .waitFor();
+  log(
+    "a list with no connection: the reason and Try again, which then loads it",
+  );
 
   // 4. Empty lists say what to do next.
   await go("#gst");
-  await page.getByText("No sales in this month").first().waitFor({ timeout: 15000 });
-  await page.getByText(/Pick another month to see earlier sales/).first().waitFor();
+  await page
+    .getByText("No sales in this month")
+    .first()
+    .waitFor({ timeout: 15000 });
+  await page
+    .getByText(/Pick another month to see earlier sales/)
+    .first()
+    .waitFor();
   log("GST with no sales: says bills made this month show there");
 
   // 5. On a phone it fits.
   await page.setViewportSize({ width: 390, height: 844 });
   await go(`#invoice/${MISSING}`);
   await page.getByText("This bill was not found").waitFor({ timeout: 15000 });
-  if (!(await fits())) errors.push("the not-found screen does not fit a phone");
+  // The screen before (GST, wide tables) may still be leaving: give the layout a moment to settle.
+  const fitted = await page
+    .waitForFunction(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+      null,
+      { timeout: 5000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!fitted)
+    errors.push(
+      `the not-found screen does not fit a phone (${await page.evaluate(() => document.documentElement.scrollWidth)}px wide)`,
+    );
   await page.screenshot({ path: `${OUT}/empty-3-phone.png` });
   log("on a phone: fits");
 } catch (e) {
   errors.push(e.message);
-  await page.screenshot({ path: `${OUT}/empty-error.png` }).catch(() => undefined);
+  await page
+    .screenshot({ path: `${OUT}/empty-error.png` })
+    .catch(() => undefined);
 }
 
 await browser.close();

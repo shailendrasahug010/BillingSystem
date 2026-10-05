@@ -13,6 +13,7 @@ import { beatsModule } from "./beats/routes.js";
 import { expensesModule } from "./expenses/routes.js";
 import { eInvoiceModule } from "./gst/einvoice.js";
 import { gstModule } from "./gst/routes.js";
+import { gstr2bModule } from "./gst/gstr2b.js";
 import { healthModule } from "./health.js";
 import { identityModule } from "./identity/routes.js";
 import { inventoryModule } from "./inventory/routes.js";
@@ -23,6 +24,7 @@ import { tallyModule } from "./tally/routes.js";
 import { logisticsModule } from "./logistics/routes.js";
 import { invoicesModule } from "./invoices/routes.js";
 import { repeatBillsModule } from "./invoices/repeat.js";
+import { orderLinksModule } from "./orders/links.js";
 import { suggestionsModule } from "./invoices/suggestions.js";
 import { notesModule } from "./notes/routes.js";
 import { notificationsModule } from "./notifications/routes.js";
@@ -64,6 +66,7 @@ export const MODULES: ApiModule[] = [
   tallyModule,
   bankModule,
   repeatBillsModule,
+  orderLinksModule,
   ocrModule,
   invoicesModule,
   devicesModule,
@@ -89,6 +92,7 @@ export const MODULES: ApiModule[] = [
   notesModule,
   expensesModule,
   gstModule,
+  gstr2bModule,
   eInvoiceModule,
   employeesModule,
   leaveModule,

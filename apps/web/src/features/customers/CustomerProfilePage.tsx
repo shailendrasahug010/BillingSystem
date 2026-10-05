@@ -19,6 +19,7 @@ import { shareOnWhatsApp } from "../../lib/share";
 import { ApiError } from "../../lib/api";
 import { useToast } from "../../components/ui/Toast";
 import { AddCustomerDialog } from "./AddCustomerDialog";
+import { OrderLinkButton } from "../orders/OrderLink";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
 import { translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
@@ -179,6 +180,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               {t("dashboard.actions.receivePayment")}
             </Button>
           )}
+          {LIVE && allowed("order.create") && <OrderLinkButton customerId={customer.id} customerName={customer.name} mobile={customer.mobile ?? null} />}
           {LIVE && allowed("order.create") && (
             <Button icon={<ClipboardPlus size={16} />} onClick={() => navigate({ name: "planned", module: "orders", action: "new", partyId: customer.id })}>
               {t("orders.new")}

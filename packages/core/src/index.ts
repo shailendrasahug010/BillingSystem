@@ -8,6 +8,7 @@ export * from "./gst/supply.js";
 export * from "./gst/line.js";
 export * from "./gst/returns.js";
 export * from "./gst/einvoice.js";
+export * from "./gst/gstr2b.js";
 export * from "./qr.js";
 export * from "./escpos.js";
 
