@@ -49,6 +49,12 @@ export const ResetPasswordBody = z.strictObject({
   password: z.string().min(8).max(128),
 });
 
+/** The signed-in person's own name and email (an empty email removes it). */
+export const UpdateProfileBody = z.strictObject({
+  name: z.string().trim().min(2).max(100).optional(),
+  email: z.union([z.email(), z.literal("")]).optional(),
+});
+
 export const CheckPasswordBody = z.strictObject({
   password: z.string().min(1).max(128),
 });

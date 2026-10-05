@@ -91,13 +91,13 @@ try {
   await page.fill("#su-name", "Mohan Lal");
   await page.fill("#su-mobile", mobile);
   await page.fill("#su-password", password);
+  await page.getByRole("button", { name: "Next" }).click();
   await page.fill("#su-business", "Mohan Traders");
   await page.getByRole("button", { name: "Send OTP" }).click();
   const hint = page.getByText(/Development code: \d{6}/);
   await hint.waitFor();
   await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-  await page.getByRole("button", { name: "Verify and create account" }).click();
-  await page.getByRole("heading", { name: /Mohan/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("heading", { name: /, Mohan/ }).waitFor({ timeout: 15000 });
   signedIn = true;
   const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
   const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
@@ -108,7 +108,7 @@ try {
 
   // 2. Loaded online and kept on the device; the next start loads only what changed.
   await page.reload();
-  await page.getByRole("heading", { name: /Mohan/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("heading", { name: /, Mohan/ }).waitFor({ timeout: 15000 });
   await page.waitForFunction(
     () =>
       new Promise((resolve) => {
@@ -125,7 +125,7 @@ try {
   await page.waitForTimeout(1000);
   asked.length = 0;
   await page.reload();
-  await page.getByRole("heading", { name: /Mohan/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("heading", { name: /, Mohan/ }).waitFor({ timeout: 15000 });
   await page.waitForTimeout(1500);
   if (asked.some((u) => u.startsWith("/api/v1/catalog"))) errors.push(`second start downloaded the catalogue: ${asked.filter((u) => u.includes("catalog")).join(", ")}`);
   if (!asked.some((u) => u.startsWith("/api/v1/sync/pull?cursor="))) errors.push(`second start did not pull: ${asked.join(", ")}`);

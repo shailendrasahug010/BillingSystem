@@ -65,13 +65,13 @@ try {
   await page.fill("#su-name", "Meena Agarwal");
   await page.fill("#su-mobile", mobile);
   await page.fill("#su-password", password);
+  await page.getByRole("button", { name: "Next" }).click();
   await page.fill("#su-business", "Agarwal Traders");
   await page.getByRole("button", { name: "Send OTP" }).click();
   const hint = page.getByText(/Development code: \d{6}/);
   await hint.waitFor();
   await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-  await page.getByRole("button", { name: "Verify and create account" }).click();
-  await page.getByRole("heading", { name: /Meena/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("heading", { name: /, Meena/ }).waitFor({ timeout: 15000 });
   signedIn = true;
   const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
   await api("PUT", "/messaging/settings", token, { whatsappProvider: "meta", whatsappPhoneNumberId: "109876543210", whatsappSecret: "EAAG-e2e-secret-token", whatsappAppSecret: "e2e-meta-app-secret", whatsappTemplateLanguage: "en" });

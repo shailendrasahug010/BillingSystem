@@ -22,6 +22,8 @@ export type Route =
   | { name: "beat" }
   | { name: "products" }
   | { name: "settings" }
+  /** The signed-in person's own name, email and password. */
+  | { name: "profile" }
   | { name: "design-system" }
   | { name: "purchase-new"; supplierId?: string; draft?: PurchaseDraft }
   | { name: "purchase-view"; purchaseId: string }
@@ -95,6 +97,7 @@ const SIMPLE_ROUTES: Record<string, Route> = {
   beat: { name: "beat" },
   products: { name: "products" },
   settings: { name: "settings" },
+  profile: { name: "profile" },
   design: { name: "design-system" },
   login: { name: "login" },
   "purchase-new": { name: "purchase-new" },

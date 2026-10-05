@@ -64,13 +64,13 @@ await page.getByRole("button", { name: "Create account" }).click();
 await page.fill("#su-name", "Suresh Jain");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
+await page.getByRole("button", { name: "Next" }).click();
 await page.fill("#su-business", "Jain Traders");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Suresh/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Suresh/ }).waitFor({ timeout: 15000 });
 signedIn = true;
 const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
 const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
@@ -84,7 +84,7 @@ const products = {};
 for (const [name, tax, price] of items) products[name] = (await api("POST", "/products", token, { name, hsnCode: "1905", taxCategoryId: taxes[tax], baseUnitId: units.PCS, sellingPrice: price })).id;
 const supplier = await api("POST", "/suppliers", token, { name: "Sample Biscuit Agency", stateCode: "23", gstRegistration: "unregistered" });
 await page.reload();
-await page.getByRole("heading", { name: /Suresh/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Suresh/ }).waitFor({ timeout: 15000 });
 log("signed up; 3 products and the supplier");
 
 // 2. The printed bill, photographed at an angle in uneven light; and scanned into a PDF.

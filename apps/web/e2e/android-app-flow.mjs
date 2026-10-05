@@ -259,6 +259,8 @@ log("notification tapped: its bill opened");
 // 10. Signing out: no more pushes to this phone, the stored sign-in gone.
 await page.getByRole("button", { name: "More", exact: true }).first().click();
 await page.getByRole("button", { name: "Sign out" }).last().click();
+// "Sign out of …?": the confirm box's own button.
+await page.getByRole("dialog", { name: /Sign out of/ }).getByRole("button", { name: "Sign out" }).click();
 await page.getByRole("button", { name: "Sign in", exact: true }).waitFor({ timeout: 15000 });
 state.signedIn = false;
 if (await page.evaluate(() => window.__secure.refreshToken ?? null)) errors.push("the stored sign-in stayed after signing out");

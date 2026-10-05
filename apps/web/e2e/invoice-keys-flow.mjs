@@ -75,13 +75,13 @@ await page.getByRole("button", { name: "Create account" }).click();
 await page.fill("#su-name", "Kishan Lal");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
+await page.getByRole("button", { name: "Next" }).click();
 await page.fill("#su-business", "Kishan Agencies");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Kishan/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Kishan/ }).waitFor({ timeout: 15000 });
 signedIn = true;
 const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
 const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
@@ -89,7 +89,7 @@ const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).da
 const oil = await api("POST", "/products", token, { name: "Fortune Oil 1L", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "150", openingStock: "100", units: [{ unitId: units.BOX, conversionFactor: "12" }] });
 await api("POST", "/products", token, { name: "Tata Salt 1kg", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "28", openingStock: "100" });
 await page.reload();
-await page.getByRole("heading", { name: /Kishan/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Kishan/ }).waitFor({ timeout: 15000 });
 log("signed up; one product, sold by the piece or in boxes of 12");
 
 // 2. Ctrl+I, a new shop added from the customer search with the keyboard.

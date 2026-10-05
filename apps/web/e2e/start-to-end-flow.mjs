@@ -65,12 +65,12 @@ try {
   await page.fill("#su-name", "Asha Verma");
   await page.fill("#su-mobile", mobile);
   await page.fill("#su-password", password);
+  await page.getByRole("button", { name: "Next" }).click();
   await page.fill("#su-business", "Asha Traders");
   await page.getByRole("button", { name: "Send OTP" }).click();
   const hint = page.getByText(/Development code: \d{6}/);
   await hint.waitFor();
   await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-  await page.getByRole("button", { name: "Verify and create account" }).click();
   await page.getByText("Today's Sales").waitFor({ timeout: 15000 });
   signedUp();
   log("signed up from a page titled Create your business");

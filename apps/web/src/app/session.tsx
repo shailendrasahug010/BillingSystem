@@ -13,6 +13,7 @@ import { clearSnapshots, copyExpired, dropUnlockedSnapshots, hasSnapshot, lastSn
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
 import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
 import { stopPush } from "../platform/push";
+import { markSignedOut, rememberSignInName } from "../lib/lastSignIn";
 
 /** "locked": no server, and the copy on this device waits for the person's password. */
 export type SessionStatus = "loading" | "signed-out" | "no-business" | "ready" | "error" | "locked";
@@ -38,6 +39,9 @@ interface SessionValue {
   loginWithOtp(mobile: string, otp: string): Promise<void>;
   signup(input: SignupInput): Promise<void>;
   resetPassword(mobile: string, otp: string, password: string): Promise<void>;
+  /** The person's own name and email ("" removes the email). */
+  updateProfile(input: { name?: string; email?: string }): Promise<void>;
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
   switchBusiness(businessId: string): Promise<void>;
   createBusiness(input: SignupInput["business"]): Promise<void>;
   /** Moves into a session the server already switched (a restored business). */
@@ -177,6 +181,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const enter = useCallback(
     async (res: SessionResponse | null, password?: string) => {
       setSessionState(res);
+      // The sign-in screen greets them by name next time.
+      if (res) rememberSignInName(res.user.name);
       queryClient.clear();
       offlineMode.current = false;
       setLocked(null);
@@ -437,6 +443,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       resetPassword: async (mobile, otp, password) => {
         await api.post("/auth/password/reset", { mobile, otp, password });
       },
+      updateProfile: async (input) => {
+        const { user } = await api.patch<{ user: SessionResponse["user"] }>("/me", input);
+        setSessionState((s) => (s ? { ...s, user } : s));
+        setMe((m) => (m ? { ...m, user: { ...m.user, ...user } } : m));
+        rememberSignInName(user.name);
+      },
+      changePassword: async (currentPassword, newPassword) => {
+        await api.post("/auth/password/change", { currentPassword, newPassword });
+        // This device's offline copy now opens with the new password too.
+        if (session) await rememberPassword(session.user.id, newPassword).catch(() => false);
+      },
       switchBusiness: (businessId) => withSession(() => api.post<SessionResponse>("/auth/switch-business", { businessId })),
       createBusiness: (input) => withSession(() => api.post<SessionResponse>("/businesses", input)),
       adopt: (res) => withSession(() => Promise.resolve(res)),
@@ -446,6 +463,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           // In the Android app: this phone stops getting the person's notifications.
           await stopPush();
           await api.post("/auth/logout");
+          markSignedOut();
         } finally {
           setSession(null);
           await enter(null);

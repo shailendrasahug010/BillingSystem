@@ -40,6 +40,7 @@ import { useSession } from "../../app/session";
 import { useDashboardView, type Grain } from "./data";
 import { LIVE } from "../../data/source";
 import { SetupGuide } from "./SetupGuide";
+import { WelcomeCard } from "./WelcomeCard";
 import { BackupNote } from "./BackupNote";
 import { ExpensesCard, LeaveCard, PayrollCard, PeopleCard, PromisesCard, QueueCard, ReviewCard, roleHeroFigures, useHome } from "./RoleHome";
 import { cn } from "../../lib/cn";
@@ -277,6 +278,7 @@ export function DashboardPage() {
         </div>
       </section>
 
+      <WelcomeCard />
       {home?.setup && <SetupGuide setup={home.setup} />}
       <BackupNote />
 

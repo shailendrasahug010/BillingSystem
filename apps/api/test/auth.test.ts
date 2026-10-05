@@ -287,6 +287,25 @@ describe.skipIf(!hasDatabase)("auth and SaaS signup", () => {
     });
   });
 
+  it("lets a person change their own name and email", async () => {
+    const s = await signup(t);
+    const renamed = await call(t.app, "PATCH", "/me", { token: s.token, body: { name: "Ramesh Kumar", email: `Ramesh.${s.mobile}@Example.com` } });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.user).toMatchObject({ name: "Ramesh Kumar", email: `ramesh.${s.mobile}@example.com`, mobile: s.mobile });
+    expect((await call(t.app, "GET", "/me", { token: s.token })).body.user.name).toBe("Ramesh Kumar");
+    // Signs in with the new email; an empty email removes it.
+    expect((await call(t.app, "POST", "/auth/login", { body: { identifier: `ramesh.${s.mobile}@example.com`, password: s.password } })).status).toBe(200);
+    expect((await call(t.app, "PATCH", "/me", { token: s.token, body: { email: "" } })).body.user.email).toBeNull();
+    // Another account's email is refused at the field.
+    const other = await signup(t);
+    const theirs = `taken.${other.mobile}@example.com`;
+    await call(t.app, "PATCH", "/me", { token: other.token, body: { email: theirs } });
+    const taken = await call(t.app, "PATCH", "/me", { token: s.token, body: { email: theirs } });
+    expect(taken.status).toBe(409);
+    expect(taken.body.error).toMatchObject({ code: "EMAIL_IN_USE", field: "email" });
+    expect((await call(t.app, "PATCH", "/me", { token: s.token, body: { name: "R" } })).status).toBe(400);
+  });
+
   describe("multi-business (SaaS tenancy)", () => {
     it("creates another business and switches between them per session", async () => {
       const s = await signup(t, { legalName: "First Traders" });

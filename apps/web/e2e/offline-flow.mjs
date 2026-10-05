@@ -102,13 +102,13 @@ await page.getByRole("button", { name: "Create account" }).click();
 await page.fill("#su-name", "Mohan Lal");
 await page.fill("#su-mobile", mobile);
 await page.fill("#su-password", password);
+await page.getByRole("button", { name: "Next" }).click();
 await page.fill("#su-business", "Mohan Traders");
 await page.getByRole("button", { name: "Send OTP" }).click();
 const hint = page.getByText(/Development code: \d{6}/);
 await hint.waitFor();
 await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("button", { name: "Verify and create account" }).click();
-await page.getByRole("heading", { name: /Mohan/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Mohan/ }).waitFor({ timeout: 15000 });
 signedIn = true;
 const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
 const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
@@ -119,7 +119,7 @@ log("signed up; product (50 in stock) and customer added");
 
 // 2. Loaded once online: the business is kept on the device and the device gets its series.
 await page.reload();
-await page.getByRole("heading", { name: /Mohan/ }).waitFor({ timeout: 15000 });
+await page.getByRole("heading", { name: /, Mohan/ }).waitFor({ timeout: 15000 });
 await page.waitForFunction(
   () =>
     new Promise((resolve) => {
@@ -148,7 +148,7 @@ await page.screenshot({ path: `${OUT}/offline-0-locked.png` });
 await page.fill("#unlock-password", password);
 await page.getByRole("button", { name: "Open", exact: true }).click();
 await page.getByText("No connection. Bills, payments, orders, purchases, expenses, returns and customer changes are saved on this device").waitFor({ timeout: 15000 });
-await page.getByRole("heading", { name: /Mohan/ }).waitFor();
+await page.getByRole("heading", { name: /, Mohan/ }).waitFor();
 await page.screenshot({ path: `${OUT}/offline-1-start.png` });
 log("opened offline from the saved copy");
 

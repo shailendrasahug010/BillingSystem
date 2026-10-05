@@ -64,13 +64,13 @@ try {
   await page.fill("#su-name", "Kavita Joshi");
   await page.fill("#su-mobile", mobile);
   await page.fill("#su-password", password);
+  await page.getByRole("button", { name: "Next" }).click();
   await page.fill("#su-business", "Joshi Suppliers");
   await page.getByRole("button", { name: "Send OTP" }).click();
   const hint = page.getByText(/Development code: \d{6}/);
   await hint.waitFor();
   await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-  await page.getByRole("button", { name: "Verify and create account" }).click();
-  await page.getByRole("heading", { name: /Kavita/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("heading", { name: /, Kavita/ }).waitFor({ timeout: 15000 });
   signedIn = true;
   await guide.waitFor({ timeout: 15000 });
   await guide.getByText("Get your business ready").waitFor();
@@ -154,7 +154,7 @@ try {
   if (!(await fits())) errors.push("the dashboard scrolls sideways on a phone");
   await guide.getByRole("button", { name: "Hide this checklist" }).click();
   await page.reload();
-  await page.getByRole("heading", { name: /Kavita/ }).waitFor({ timeout: 15000 });
+  await page.getByRole("heading", { name: /, Kavita/ }).waitFor({ timeout: 15000 });
   await page.waitForTimeout(1000);
   if (await guide.count()) errors.push("the guide came back after it was hidden");
   log("phone: fits; hidden stays hidden");
