@@ -12,3 +12,5 @@ coverage/
 apps/web/dist-singlefile/
 logs/
 dist-installer/
+.pw/
+e2e-out/
