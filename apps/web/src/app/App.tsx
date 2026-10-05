@@ -1,5 +1,5 @@
 import { translateError } from "@digitalbahi/i18n";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ScreenErrorBoundary } from "../components/ErrorBoundary";
 import { AppShell } from "../components/layout/AppShell";
 import { Dialog } from "../components/ui/Dialog";
@@ -13,15 +13,7 @@ import { NativePush } from "../components/NativePush";
 import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
 import { UnlockPage } from "../features/auth/UnlockPage";
-import { CustomerProfilePage } from "../features/customers/CustomerProfilePage";
-import { CustomersPage } from "../features/customers/CustomersPage";
-import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { CreateInvoicePage } from "../features/invoice/CreateInvoicePage";
-import { InvoiceViewPage } from "../features/invoice/InvoiceViewPage";
-import { PlannedPage } from "../features/planned/PlannedPage";
-import { ProductsPage } from "../features/products/ProductsPage";
 import { CommandPalette } from "../features/search/CommandPalette";
-import { SettingsPage } from "../features/settings/SettingsPage";
 import { homeRoute, LIVE_MODULES, routePermission } from "./modules";
 import { ShieldX } from "lucide-react";
 import { EmptyState } from "../components/ui/misc";
@@ -36,6 +28,15 @@ import { RouterProvider, useRouter, type Route } from "./router";
 import { GLOBAL_SHORTCUTS, INVOICE_SHORTCUTS, setTallyKeys, TALLY_SHORTCUTS, tallyKeysOn, useShortcuts } from "./shortcuts";
 
 /** Module screens load on first use, so the billing screens start fast on slow connections. */
+const CustomerProfilePage = lazy(() => import("../features/customers/CustomerProfilePage").then((m) => ({ default: m.CustomerProfilePage })));
+const CustomersPage = lazy(() => import("../features/customers/CustomersPage").then((m) => ({ default: m.CustomersPage })));
+const DashboardPage = lazy(() => import("../features/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const loadCreateInvoice = () => import("../features/invoice/CreateInvoicePage");
+const CreateInvoicePage = lazy(() => loadCreateInvoice().then((m) => ({ default: m.CreateInvoicePage })));
+const InvoiceViewPage = lazy(() => import("../features/invoice/InvoiceViewPage").then((m) => ({ default: m.InvoiceViewPage })));
+const PlannedPage = lazy(() => import("../features/planned/PlannedPage").then((m) => ({ default: m.PlannedPage })));
+const ProductsPage = lazy(() => import("../features/products/ProductsPage").then((m) => ({ default: m.ProductsPage })));
+const SettingsPage = lazy(() => import("../features/settings/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const GstPage = lazy(() => import("../features/gst/GstPage").then((m) => ({ default: m.GstPage })));
 const InventoryPage = lazy(() => import("../features/inventory/InventoryPage").then((m) => ({ default: m.InventoryPage })));
 const PaymentsPage = lazy(() => import("../features/payments/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
@@ -295,6 +296,12 @@ function Root() {
         ]
       : []),
   ]);
+
+  // The billing screen is the one most used: fetch it once the first screen is up, so F2 opens it at once.
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 2000));
+    idle(() => void loadCreateInvoice().catch(() => undefined));
+  }, []);
 
   const needed = routePermission(route);
   const home = homeRoute();

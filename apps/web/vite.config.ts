@@ -54,6 +54,8 @@ function buildId(): string {
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), ...(mode === "singlefile" ? [viteSingleFile()] : [serviceWorker()])],
   define: { __APP_BUILD__: JSON.stringify(buildId()) },
+  // The browser build of the translations: Hindi is fetched when it is chosen, not with every visit.
+  resolve: { alias: [{ find: /^@digitalbahi\/i18n$/, replacement: join(here, "../../packages/i18n/src/web.ts") }] },
   build: {
     outDir: mode === "singlefile" ? "dist-singlefile" : "dist",
     // Source maps for the error log (errors from the browser shown at their source line). "hidden":
