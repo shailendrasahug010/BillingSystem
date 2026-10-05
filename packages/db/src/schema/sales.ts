@@ -50,8 +50,9 @@ export const salesOrders = pgTable(
     quotationNumber: varchar({ length: 30 }),
     /** A quotation's offer holds until this date. */
     validUntil: date({ mode: "string" }),
-    /** Delivery challan for goods sent before the bill: its number and date, given once. */
+    /** Delivery challan for goods sent before the bill: its number, given once. */
     challanNumber: varchar({ length: 30 }),
+    /** Date of the delivery challan (the day it was first printed). */
     challanDate: date({ mode: "string" }),
     /** The customer who ordered. */
     customerId: uuid()
