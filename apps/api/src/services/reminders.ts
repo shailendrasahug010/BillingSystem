@@ -6,6 +6,7 @@ import type { AppDeps } from "../lib/context.js";
 import { withTenant } from "../lib/db.js";
 import { rootMessage } from "../lib/errors.js";
 import { queueCustomerReminders } from "./customer-reminders.js";
+import { queueDailySummary } from "./daily-summary.js";
 import { pumpMessages } from "./messaging/queue.js";
 import { notify, type NewNotification } from "./notifications.js";
 import { getSettings } from "./settings.js";
@@ -161,6 +162,14 @@ const CHECKS: Record<ReminderType, Check> = {
     if (!c.deps) throw new Error("customer_reminders needs the API's dependencies");
     const deps = c.deps;
     const { queued, notification } = await queueCustomerReminders(deps, c.tx, c.businessId, c.today, c.config);
+    if (queued) c.afterCommit(() => pumpMessages(deps, { businessId: c.businessId, userId: "" }));
+    return notification;
+  },
+
+  async daily_summary(c) {
+    if (!c.deps) throw new Error("daily_summary needs the API's dependencies");
+    const deps = c.deps;
+    const { queued, notification } = await queueDailySummary(deps, c.tx, c.businessId, c.today, c.config);
     if (queued) c.afterCommit(() => pumpMessages(deps, { businessId: c.businessId, userId: "" }));
     return notification;
   },

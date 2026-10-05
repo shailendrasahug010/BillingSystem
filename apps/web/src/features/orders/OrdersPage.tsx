@@ -63,10 +63,11 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
   }, [newOrder]);
 
   const columns: Column<OrderRow>[] = [
-    { key: "date", header: t("common.date"), render: (o) => <span className="text-ink-2">{dateMedium(o.orderDate)}</span> },
+    { key: "date", header: t("common.date"), sortValue: (o) => o.orderDate, render: (o) => <span className="text-ink-2">{dateMedium(o.orderDate)}</span> },
     {
       key: "number",
       header: t("common.number"),
+      sortValue: (o) => o.orderNumber,
       render: (o) => (
         <div>
           <p className="font-medium text-ink">{o.orderNumber}</p>
@@ -74,11 +75,12 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
         </div>
       ),
     },
-    { key: "customer", header: t("customer.name"), render: (o) => <span className="text-ink">{o.partyName}</span> },
-    { key: "status", header: t("common.status"), render: (o) => <Badge tone={ORDER_TONE[o.status]}>{t(`status.order.${o.status}`)}</Badge> },
+    { key: "customer", header: t("customer.name"), sortValue: (o) => o.partyName, render: (o) => <span className="text-ink">{o.partyName}</span> },
+    { key: "status", header: t("common.status"), sortValue: (o) => t(`status.order.${o.status}`), render: (o) => <Badge tone={ORDER_TONE[o.status]}>{t(`status.order.${o.status}`)}</Badge> },
     {
       key: "invoiced",
       header: t("orders.invoiced"),
+      sortValue: (o) => Number(o.invoiced),
       render: (o) => (
         <div className="flex w-28 items-center gap-2">
           <ProgressBar value={Number(o.invoiced)} tone={Number(o.invoiced) >= 1 ? "good" : "accent"} label={t("orders.invoiced")} />
@@ -86,8 +88,8 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
         </div>
       ),
     },
-    { key: "delivery", header: t("orders.deliveryDate"), render: (o) => <span className="text-ink-2">{o.expectedDeliveryDate ? dateMedium(o.expectedDeliveryDate) : "—"}</span> },
-    { key: "total", header: t("common.total"), align: "right", render: (o) => <span className={o.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(o.grandTotal)}</span> },
+    { key: "delivery", header: t("orders.deliveryDate"), sortValue: (o) => o.expectedDeliveryDate, render: (o) => <span className="text-ink-2">{o.expectedDeliveryDate ? dateMedium(o.expectedDeliveryDate) : "—"}</span> },
+    { key: "total", header: t("common.total"), align: "right", sortValue: (o) => Number(o.grandTotal), render: (o) => <span className={o.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(o.grandTotal)}</span> },
   ];
 
   return (
@@ -140,6 +142,7 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
           </FilterBar>
           {list.error ? <ErrorNote error={list.error} /> : null}
           <DataTable
+            id="orders"
             columns={columns}
             rows={list.rows}
             rowKey={(o) => o.id}
@@ -154,13 +157,15 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
           <p className="text-[13px] text-ink-3">{t("orders.quotation.listHint")}</p>
           {quotes.error ? <ErrorNote error={quotes.error} /> : null}
           <DataTable
+            id="quotations"
             columns={[
               columns[0]!,
-              { key: "number", header: t("common.number"), render: (o) => <span className="font-medium text-ink">{o.quotationNumber ?? o.orderNumber}</span> },
+              { key: "number", header: t("common.number"), sortValue: (o) => o.quotationNumber ?? o.orderNumber, render: (o) => <span className="font-medium text-ink">{o.quotationNumber ?? o.orderNumber}</span> },
               columns[2]!,
               {
                 key: "valid",
                 header: t("orders.quotation.validUntil"),
+                sortValue: (o) => o.validUntil,
                 render: (o) => (o.validUntil ? <span className={o.validUntil < TODAY ? "text-danger" : "text-ink-2"}>{dateMedium(o.validUntil)}</span> : <span className="text-ink-3">—</span>),
               },
               columns[columns.length - 1]!,
@@ -177,16 +182,17 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
         <Tabs.Content value="demand">
           <p className="mb-3 text-[13px] text-ink-3">{t("orders.demandHint")}</p>
           <DataTable
+            id="order-demand"
             rows={demand.data ?? []}
             loading={demand.isPending}
             rowKey={(d) => d.productId}
             empty={<EmptyState title={t("orders.noDemand")} />}
             columns={[
-              { key: "name", header: t("product.name"), render: (d) => <span className="font-medium text-ink">{d.name}</span> },
-              { key: "orders", header: t("orders.title"), align: "right", render: (d) => d.orders },
-              { key: "qty", header: t("orders.toSupply"), align: "right", render: (d) => number(d.qty) },
-              { key: "stock", header: t("product.currentStock"), align: "right", render: (d) => number(d.stock) },
-              { key: "short", header: t("common.status"), render: (d) => (d.short ? <Badge tone="danger">{t("orders.short", { qty: number(Number(d.qty) - Number(d.stock)) })}</Badge> : <Badge tone="good">{t("status.stock.ok")}</Badge>) },
+              { key: "name", header: t("product.name"), sortValue: (d) => d.name, render: (d) => <span className="font-medium text-ink">{d.name}</span> },
+              { key: "orders", header: t("orders.title"), align: "right", sortValue: (d) => d.orders, render: (d) => d.orders },
+              { key: "qty", header: t("orders.toSupply"), align: "right", sortValue: (d) => Number(d.qty), render: (d) => number(d.qty) },
+              { key: "stock", header: t("product.currentStock"), align: "right", sortValue: (d) => Number(d.stock), render: (d) => number(d.stock) },
+              { key: "short", header: t("common.status"), sortValue: (d) => (d.short ? Number(d.qty) - Number(d.stock) : 0), render: (d) => (d.short ? <Badge tone="danger">{t("orders.short", { qty: number(Number(d.qty) - Number(d.stock)) })}</Badge> : <Badge tone="good">{t("status.stock.ok")}</Badge>) },
             ]}
           />
         </Tabs.Content>

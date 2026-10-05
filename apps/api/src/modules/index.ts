@@ -18,6 +18,7 @@ import { identityModule } from "./identity/routes.js";
 import { inventoryModule } from "./inventory/routes.js";
 import { ocrModule } from "./imports/ocr.js";
 import { importsModule } from "./imports/routes.js";
+import { bankModule } from "./bank/routes.js";
 import { tallyModule } from "./tally/routes.js";
 import { logisticsModule } from "./logistics/routes.js";
 import { invoicesModule } from "./invoices/routes.js";
@@ -60,6 +61,7 @@ export const MODULES: ApiModule[] = [
   beatsModule,
   importsModule,
   tallyModule,
+  bankModule,
   ocrModule,
   invoicesModule,
   devicesModule,

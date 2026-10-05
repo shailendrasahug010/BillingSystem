@@ -49,7 +49,7 @@ describe.skipIf(!hasDatabase)("notifications", () => {
     it("are listed with their settings; the owner changes them, others may not", async () => {
       const list = await get("/reminder-rules");
       expect(list.status).toBe(200);
-      expect(list.body.data).toHaveLength(12);
+      expect(list.body.data).toHaveLength(13);
       expect(list.body.data.find((r: { type: string }) => r.type === "customer_payment_due")).toMatchObject({ isActive: true, permission: "customer.view_ledger", config: { hour: 9, daysBefore: 3 }, lastRunOn: null });
 
       const changed = await patch("/reminder-rules/customer_payment_due", { config: { daysBefore: 5 } });

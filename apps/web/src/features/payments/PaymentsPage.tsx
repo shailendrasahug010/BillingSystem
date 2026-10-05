@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaymentMethod } from "@digitalbahi/core";
 import type { LocaleCode } from "@digitalbahi/i18n";
-import { ArrowDownLeft, ArrowUpRight, Download, Printer, Search } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Download, Landmark, Printer, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -20,6 +20,7 @@ import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 import { usePaged } from "../../lib/usePaged";
 import { WaitingStrip } from "../../components/offline/OfflineBills";
+import { BankStatementDialog } from "./BankStatementDialog";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
@@ -63,6 +64,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
   const [to, setTo] = useState("");
   const [q, setQ] = useState("");
   const [dialog, setDialog] = useState<{ direction: "in" | "out"; partyId: string | null } | null>(null);
+  const [bank, setBank] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const list = usePaged<PaymentRow>("payments", "/payments", { direction, method, from, to, q: q.trim().length >= 2 ? q.trim() : undefined });
 
@@ -72,11 +74,12 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
   }, [action, partyId]);
 
   const columns: Column<PaymentRow>[] = [
-    { key: "date", header: t("common.date"), render: (p) => <span className="text-ink-2">{dateMedium(p.paymentDate)}</span> },
-    { key: "number", header: t("common.number"), render: (p) => <span className="font-medium text-ink">{p.paymentNumber}</span> },
+    { key: "date", header: t("common.date"), sortValue: (p) => p.paymentDate, render: (p) => <span className="text-ink-2">{dateMedium(p.paymentDate)}</span> },
+    { key: "number", header: t("common.number"), sortValue: (p) => p.paymentNumber, render: (p) => <span className="font-medium text-ink">{p.paymentNumber}</span> },
     {
       key: "party",
       header: t("common.party"),
+      sortValue: (p) => p.partyName,
       render: (p) => (
         <span className="flex items-center gap-2">
           {p.direction === "in" ? <ArrowDownLeft size={14} className="text-good" aria-label={t("payment.in")} /> : <ArrowUpRight size={14} className="text-warn" aria-label={t("payment.out")} />}
@@ -87,6 +90,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
     {
       key: "method",
       header: t("common.method"),
+      sortValue: (p) => t(`paymentMethod.${p.method}`),
       render: (p) => (
         <span className="text-ink-2">
           {t(`paymentMethod.${p.method}`)}
@@ -97,6 +101,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
     {
       key: "status",
       header: t("common.status"),
+      sortValue: (p) => (p.status === "cancelled" ? p.status : (p.chequeStatus ?? (Number(p.unallocatedAmount) > 0 ? "advance" : null))),
       render: (p) =>
         p.status === "cancelled" ? (
           <Badge tone="danger">{p.chequeStatus === "bounced" ? t("payment.chequeStatus.bounced") : t("common.cancelled")}</Badge>
@@ -112,6 +117,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
       key: "amount",
       header: t("common.amount"),
       align: "right",
+      sortValue: (p) => Number(p.amount),
       render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : p.direction === "in" ? "font-semibold text-good" : "font-semibold text-ink"}>{money(p.amount)}</span>,
     },
   ];
@@ -152,6 +158,11 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
                 }
               >
                 {t("common.export")}
+              </Button>
+            )}
+            {(allowed("payment.collect") || allowed("payment.pay")) && (
+              <Button icon={<Landmark size={16} />} onClick={() => setBank(true)}>
+                {t("bank.open")}
               </Button>
             )}
             {allowed("payment.pay") && (
@@ -197,7 +208,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
       </FilterBar>
 
       {list.error ? <ErrorNote error={list.error} /> : null}
-      <DataTable columns={columns} rows={list.rows} rowKey={(p) => p.id} loading={list.loading} onRowClick={(p) => setOpenId(p.id)} minWidth={760} />
+      <DataTable id="payments" columns={columns} rows={list.rows} rowKey={(p) => p.id} loading={list.loading} onRowClick={(p) => setOpenId(p.id)} minWidth={760} />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
 
       {dialog && (
@@ -214,6 +225,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         />
       )}
       <PaymentDetailDialog paymentId={openId} onClose={() => setOpenId(null)} />
+      <BankStatementDialog open={bank} onOpenChange={setBank} />
     </div>
   );
 }

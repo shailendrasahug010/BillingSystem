@@ -1161,7 +1161,8 @@
     "RANGE_TOO_LONG": "Choose at most {{days}} days.",
     "VALID_UNTIL_BEFORE_DATE": "The valid-until date is for a quotation, on or after its date.",
     "PERIOD_END_BEFORE_START": "The end date is before the start date.",
-    "TALLY_FILE_UNREADABLE": "This is not a Tally XML file, or it could not be read. Export it from Tally again as XML."
+    "TALLY_FILE_UNREADABLE": "This is not a Tally XML file, or it could not be read. Export it from Tally again as XML.",
+    "BANK_STATEMENT_UNREADABLE": "This doesn't look like a bank statement: no Date and Deposit/Withdrawal (or Amount) columns were found."
   },
   "validation": {
     "required": "This field is required",
@@ -2537,7 +2538,8 @@
       "receipt": "Receipt",
       "reminder": "Payment reminder",
       "test": "Test",
-      "backup": "Backup"
+      "backup": "Backup",
+      "summary": "Daily summary"
     },
     "status": {
       "queued": "Waiting",
@@ -2627,7 +2629,9 @@
     "sms": "SMS",
     "skippedOptedOut_one": "{{count}} left out: asked not to get reminders",
     "skippedOptedOut_other": "{{count}} left out: asked not to get reminders",
-    "optedOut": "No reminders"
+    "optedOut": "No reminders",
+    "dailySummary_one": "{{business}}, {{date}}: sales {{sales}} ({{count}} bill), collected {{collected}}, paid out {{paid}}, expenses {{expenses}}. Customers owe {{receivable}}, of which {{overdue}} is overdue. — Digital Bahi",
+    "dailySummary_other": "{{business}}, {{date}}: sales {{sales}} ({{count}} bills), collected {{collected}}, paid out {{paid}}, expenses {{expenses}}. Customers owe {{receivable}}, of which {{overdue}} is overdue. — Digital Bahi"
   },
   "backup": {
     "title": "Backup & Restore",
@@ -3069,6 +3073,10 @@
         "customer_reminders": {
           "name": "Payment reminders to customers",
           "help": "Sends customers with overdue bills a reminder themselves, by WhatsApp, SMS or email, in their language: the first some days after the oldest bill fell due, then every few days, up to the set number while those bills stay unpaid. Customers who asked not to get them never do."
+        },
+        "daily_summary": {
+          "name": "Daily summary on WhatsApp",
+          "help": "Every evening sends the day's sales, collections, payments and expenses, and what customers owe, to the owner's phone (the numbers below, or the business's phone)."
         }
       },
       "afterHoursOrdersHint": "Remind when an order has waited this long at one step",
@@ -3098,7 +3106,10 @@
       "noChannel": "No WhatsApp, SMS or email",
       "sendNow": "Send now",
       "sendConfirm": "Send payment reminders now to the customers due one today? Today's scheduled run then sends nothing more.",
-      "sentNow": "Payment reminders are on their way: see Messages"
+      "sentNow": "Payment reminders are on their way: see Messages",
+      "recipients": "Send to",
+      "recipientsHint": "Up to 5 mobile numbers, separated by commas. Empty: the business's phone.",
+      "recipientsPlaceholder": "Business phone"
     },
     "customer_payment_due": {
       "overdue_one": "{{count}} customer bill is overdue: {{overdueAmount, currency}}",
@@ -3197,6 +3208,11 @@
     "push": {
       "testTitle": "Test notification from Digital Bahi",
       "testBody": "Notifications from {{business}} will show on this phone."
+    },
+    "daily_summary": {
+      "title_one": "Daily summary sent to {{count}} number",
+      "title_other": "Daily summary sent to {{count}} numbers",
+      "noneSent": "The daily summary could not go out: no WhatsApp, SMS or email for its numbers"
     }
   },
   "beat": {
@@ -3443,8 +3459,31 @@
       "products_other": "{{count}} products"
     },
     "exportTitle": "Export vouchers for Tally",
-    "exportHint": "Sales, purchases, credit and debit notes, receipts and payments of the period, with their party, sales, purchase and GST ledgers. In Tally: Gateway of Tally → Import → Transactions, and choose this file.",
+    "exportHint": "Sales, purchases, credit and debit notes (item by item, with their stock items), receipts, payments and expenses of the period, with their party, sales, purchase, expense and GST ledgers. In Tally: Gateway of Tally → Import → Transactions, and choose this file.",
     "download": "Download for Tally",
     "exported": "Tally file downloaded"
+  },
+  "bank": {
+    "open": "Bank statement",
+    "title": "Match a bank statement",
+    "hint": "Choose the statement from net banking (CSV, Excel or PDF). Each line is matched to the customer who paid or the supplier you paid; tick the ones to record as payments.",
+    "choose": "Choose statement",
+    "lines": "Statement lines",
+    "summary": "{{count}} lines: {{matched}} matched, {{likely}} to check, {{recorded}} already recorded, {{unmatched}} not matched",
+    "pick": "Record line {{row}}",
+    "whoPaid": "Who paid?",
+    "paidTo": "Paid to?",
+    "record_one": "Record {{count}} payment",
+    "record_other": "Record {{count}} payments",
+    "recorded_one": "{{count}} payment recorded",
+    "recorded_other": "{{count}} payments recorded",
+    "note": "Bank statement: {{narration}}",
+    "status": {
+      "matched": "Matched",
+      "likely": "Check",
+      "recorded": "Already recorded",
+      "unmatched": "Not matched",
+      "saved": "Recorded"
+    }
   }
 }

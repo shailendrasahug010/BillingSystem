@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeTallyFile, documentEntries, paymentEntries, parseTallyMasters, parseXml, tallyImportXml, tallyNumber, tallyUnit } from "../src/index.js";
+import { decodeTallyFile, documentEntries, expenseEntries, paymentEntries, parseTallyMasters, parseXml, tallyImportXml, tallyNumber, tallyUnit } from "../src/index.js";
 
 /** As TallyPrime writes "Export → Masters" (trimmed): groups, ledgers, a stock group and items. */
 const MASTERS = `<ENVELOPE>
@@ -133,5 +133,57 @@ describe("Tally vouchers", () => {
 
   it("refuses a voucher that does not balance", () => {
     expect(() => tallyImportXml({ ledgers: [], vouchers: [{ type: "Sales", date: "2026-10-04", number: "X", party: "A", entries: [{ ledger: "A", amount: 10, party: true }] }] })).toThrow(/does not balance/);
+  });
+
+  it("writes a sale item-wise: stock lines with free pieces allocated to Sales, freight left on the ledger", () => {
+    // 2 lines worth 90, 10 freight, 9 + 9 GST: 118.
+    const entries = documentEntries({ cgstTotal: "9", sgstTotal: "9", igstTotal: "0", cessTotal: "0", roundOff: "0", grandTotal: "118" }, "Gupta Stores", "sales", 1);
+    const xml = tallyImportXml({
+      ledgers: [],
+      stockItems: [{ name: "Parle-G 100g", unit: "PCS", hsn: "1905" }],
+      vouchers: [
+        {
+          type: "Sales",
+          date: "2026-10-04",
+          number: "INV/1",
+          party: "Gupta Stores",
+          entries,
+          counterLedger: "Sales",
+          inventory: [
+            { item: "Parle-G 100g", unit: "PCS", qty: 10, freeQty: 1, rate: 5, amount: -50 },
+            { item: "Parle-G 100g", unit: "PCS", qty: 8, rate: 5, amount: -40 },
+          ],
+        },
+      ],
+    });
+    expect(xml).toContain('<UNIT NAME="PCS">');
+    expect(xml).toContain("<BASEUNITS>PCS</BASEUNITS>");
+    expect(xml).toContain("<ISINVOICE>Yes</ISINVOICE>");
+    expect(xml).toContain("<RATE>5.00/PCS</RATE><AMOUNT>50.00</AMOUNT><ACTUALQTY> 11 PCS</ACTUALQTY><BILLEDQTY> 10 PCS</BILLEDQTY>");
+    expect(xml).toContain("<ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>50.00</AMOUNT>");
+    // What the items leave of the 100 to Sales (the freight) stays a ledger line.
+    expect(xml).toContain("<LEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><ISPARTYLEDGER>No</ISPARTYLEDGER><AMOUNT>10.00</AMOUNT>");
+    expect(xml).not.toContain("ALLLEDGERENTRIES");
+  });
+
+  it("falls back to an accounting voucher when the item lines do not fit", () => {
+    const entries = documentEntries({ cgstTotal: "0", sgstTotal: "0", igstTotal: "0", cessTotal: "0", roundOff: "0", grandTotal: "100" }, "A", "sales", 1);
+    const xml = tallyImportXml({ ledgers: [], vouchers: [{ type: "Sales", date: "2026-10-04", number: "X", party: "A", entries, counterLedger: "Sales", inventory: [{ item: "I", unit: "NOS", qty: 1, rate: 120, amount: -120 }] }] });
+    expect(xml).toContain("<ISINVOICE>No</ISINVOICE>");
+    expect(xml).not.toContain("ALLINVENTORYENTRIES");
+  });
+
+  it("books an expense: the head, claimable GST as input credit, the account paid from", () => {
+    const tax = { amount: "100", cgstAmount: "9", sgstAmount: "9", igstAmount: "0", totalAmount: "118" };
+    expect(expenseEntries({ ...tax, claimable: true }, "Rent", false)).toEqual([
+      { ledger: "Rent", amount: 100 },
+      { ledger: "Input CGST", amount: 9 },
+      { ledger: "Input SGST", amount: 9 },
+      { ledger: "Bank", amount: -118 },
+    ]);
+    expect(expenseEntries({ ...tax, claimable: false }, "Rent", true)).toEqual([
+      { ledger: "Rent", amount: 118 },
+      { ledger: "Cash", amount: -118 },
+    ]);
   });
 });

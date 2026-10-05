@@ -31,6 +31,7 @@ export function SuppliersPage() {
     {
       key: "name",
       header: t("supplier.displayName"),
+      sortValue: (s) => supplierLabel(s),
       render: (s) => (
         <div>
           <p className="font-medium text-ink">{supplierLabel(s)}</p>
@@ -41,11 +42,11 @@ export function SuppliersPage() {
         </div>
       ),
     },
-    { key: "city", header: t("common.city"), render: (s) => <span className="text-ink-2">{s.city ?? ""}</span> },
+    { key: "city", header: t("common.city"), sortValue: (s) => s.city, render: (s) => <span className="text-ink-2">{s.city ?? ""}</span> },
     { key: "mobile", header: t("common.mobile"), render: (s) => <span className="text-ink-2">{s.mobile ?? ""}</span> },
-    { key: "gstin", header: t("customer.gstin"), render: (s) => <span className="font-mono text-[12.5px] text-ink-2">{s.gstin ?? t(`supplier.registration.${s.gstRegistration === "composition" ? "composition" : s.gstRegistration === "regular" ? "regular" : "unregistered"}`)}</span> },
-    { key: "days", header: t("customer.creditDays"), align: "right", render: (s) => <span className="text-ink-2">{s.creditDays || "—"}</span> },
-    { key: "balance", header: t("supplier.outstandingPayable"), align: "right", render: (s) => <span className={s.balance > 0 ? "font-semibold text-ink" : "text-ink-3"}>{money(s.balance)}</span> },
+    { key: "gstin", header: t("customer.gstin"), sortValue: (s) => s.gstin, render: (s) => <span className="font-mono text-[12.5px] text-ink-2">{s.gstin ?? t(`supplier.registration.${s.gstRegistration === "composition" ? "composition" : s.gstRegistration === "regular" ? "regular" : "unregistered"}`)}</span> },
+    { key: "days", header: t("customer.creditDays"), align: "right", sortValue: (s) => s.creditDays, render: (s) => <span className="text-ink-2">{s.creditDays || "—"}</span> },
+    { key: "balance", header: t("supplier.outstandingPayable"), align: "right", sortValue: (s) => s.balance, render: (s) => <span className={s.balance > 0 ? "font-semibold text-ink" : "text-ink-3"}>{money(s.balance)}</span> },
   ];
 
   return (
@@ -101,6 +102,7 @@ export function SuppliersPage() {
         />
       </FilterBar>
       <DataTable
+        id="suppliers"
         columns={columns}
         rows={rows}
         rowKey={(s) => s.id}

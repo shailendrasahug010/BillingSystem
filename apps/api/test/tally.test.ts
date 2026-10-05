@@ -53,7 +53,7 @@ describe.skipIf(!hasDatabase)("Tally", () => {
     expect((await get("/suppliers?q=Fine")).body.data).toHaveLength(0);
   });
 
-  it("exports the period's sales, purchases, receipts and payments as balanced Tally vouchers", async () => {
+  it("exports the period's sales and purchases item-wise, receipts, payments and expenses as balanced Tally vouchers", async () => {
     const customer = (await get("/customers?q=Gupta")).body.data[0].id;
     const supplier = (await get("/suppliers?q=Parle")).body.data[0].id;
     const product = (await get("/products?q=Parle")).body.data[0].id;
@@ -61,6 +61,8 @@ describe.skipIf(!hasDatabase)("Tally", () => {
     await post("/purchases", { supplierId: supplier, supplierInvoiceNumber: "PA/77", supplierInvoiceDate: "2026-09-20", lines: [{ productId: product, qty: "20", rate: "8" }] });
     await post("/payments", { direction: "in", customerId: customer, amount: "105", method: "cash" });
     await post("/payments", { direction: "out", supplierId: supplier, amount: "1000", method: "bank_transfer" });
+    const cats = Object.fromEntries((await get("/expense-categories")).body.data.map((c: { name: string; id: string }) => [c.name, c.id]));
+    const rent = (await post("/expenses", { categoryId: cats.Rent, amount: "5000", paymentMethod: "cash", paidTo: "Landlord" })).body;
 
     const res = await t.app.inject({ method: "GET", url: "/api/v1/tally/export?from=2026-09-01&to=2026-09-30", headers: { authorization: `Bearer ${owner.token}` } });
     expect(res.statusCode).toBe(200);
@@ -68,25 +70,37 @@ describe.skipIf(!hasDatabase)("Tally", () => {
     const doc = parseXml(res.body);
     const vouchers = descendants(doc, "VOUCHER");
     expect(vouchers.map((v) => [v.attrs.VCHTYPE, textOf(v, "VOUCHERNUMBER")])).toEqual([
+      ["Payment", rent.expenseNumber],
       ["Payment", expect.any(String)],
       ["Purchase", expect.any(String)],
       ["Receipt", expect.any(String)],
       ["Sales", sale.invoiceNumber],
     ]);
     for (const v of vouchers) {
-      const sum = descendants(v, "ALLLEDGERENTRIES.LIST").reduce((s, e) => s + Math.round(Number(textOf(e, "AMOUNT")) * 100), 0);
+      // Ledger lines and item lines together balance.
+      const lines = [...descendants(v, "ALLLEDGERENTRIES.LIST"), ...descendants(v, "LEDGERENTRIES.LIST"), ...descendants(v, "ALLINVENTORYENTRIES.LIST")];
+      const sum = lines.reduce((s, e) => s + Math.round(Number(textOf(e, "AMOUNT")) * 100), 0);
       expect(sum).toBe(0);
     }
     const saleVoucher = vouchers.find((v) => v.attrs.VCHTYPE === "Sales")!;
-    const entries = descendants(saleVoucher, "ALLLEDGERENTRIES.LIST").map((e) => [textOf(e, "LEDGERNAME"), textOf(e, "AMOUNT")]);
+    // Item-wise: the stock line carries the sale to the Sales ledger.
+    expect(textOf(saleVoucher, "ISINVOICE")).toBe("Yes");
+    const entries = descendants(saleVoucher, "LEDGERENTRIES.LIST").map((e) => [textOf(e, "LEDGERNAME"), textOf(e, "AMOUNT")]);
     expect(entries).toEqual([
       ["Gupta Stores", `-${sale.grandTotal}`],
-      ["Sales", "100.00"],
       ["Output CGST", "2.50"],
       ["Output SGST", "2.50"],
     ]);
+    const [line] = descendants(saleVoucher, "ALLINVENTORYENTRIES.LIST");
+    expect([textOf(line, "STOCKITEMNAME"), textOf(line, "BILLEDQTY"), textOf(line, "RATE"), textOf(line, "AMOUNT")]).toEqual(["Parle-G 100g", "10 NOS", "10.00/NOS", "100.00"]);
+    expect(descendants(doc, "STOCKITEM").map((i) => [i.attrs.NAME, textOf(i, "BASEUNITS")])).toEqual([["Parle-G 100g", "NOS"]]);
+    const expense = vouchers.find((v) => textOf(v, "VOUCHERNUMBER") === rent.expenseNumber)!;
+    expect(descendants(expense, "ALLLEDGERENTRIES.LIST").map((e) => [textOf(e, "LEDGERNAME"), textOf(e, "AMOUNT")])).toEqual([
+      ["Rent", "-5000.00"],
+      ["Cash", "5000.00"],
+    ]);
     const ledgers = descendants(doc, "LEDGER").map((l) => [l.attrs.NAME, textOf(l, "PARENT")]);
-    expect(ledgers).toEqual(expect.arrayContaining([["Gupta Stores", "Sundry Debtors"], ["Parle Agro", "Sundry Creditors"], ["Sales", "Sales Accounts"], ["Purchase", "Purchase Accounts"], ["Output CGST", "Duties & Taxes"], ["Cash", "Cash-in-Hand"], ["Bank", "Bank Accounts"]]));
+    expect(ledgers).toEqual(expect.arrayContaining([["Gupta Stores", "Sundry Debtors"], ["Parle Agro", "Sundry Creditors"], ["Sales", "Sales Accounts"], ["Purchase", "Purchase Accounts"], ["Output CGST", "Duties & Taxes"], ["Cash", "Cash-in-Hand"], ["Bank", "Bank Accounts"], ["Rent", "Indirect Expenses"]]));
     const purchase = vouchers.find((v) => v.attrs.VCHTYPE === "Purchase")!;
     expect(textOf(purchase, "REFERENCE")).toBe("PA/77");
   });

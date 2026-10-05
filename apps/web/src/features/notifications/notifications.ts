@@ -34,6 +34,8 @@ export type ReminderChannel = "whatsapp_or_sms" | "whatsapp" | "sms" | "email";
 
 export interface ReminderConfig {
   hour: number;
+  /** Daily summary: the mobile numbers it goes to. */
+  recipients?: string[];
   daysBefore?: number;
   dayOfMonth?: number;
   afterHours?: number;
@@ -166,6 +168,7 @@ export function targetRoute(n: Pick<NotificationRow, "type" | "entityType" | "en
     case "orders_waiting":
       return { name: "planned", module: "orders" };
     case "customer_reminders":
+    case "daily_summary":
       return { name: "planned", module: "messages" };
     case "leave_request":
     case "leave_requested":

@@ -72,6 +72,7 @@ function EmployeeList() {
     {
       key: "name",
       header: t("common.name"),
+      sortValue: (e) => e.name,
       render: (e) => (
         <div>
           <p className="font-medium text-ink">{e.name}</p>
@@ -82,11 +83,11 @@ function EmployeeList() {
         </div>
       ),
     },
-    { key: "dept", header: t("people.department"), render: (e) => <span className="text-ink-2">{e.departmentName ?? "—"}</span> },
+    { key: "dept", header: t("people.department"), sortValue: (e) => e.departmentName, render: (e) => <span className="text-ink-2">{e.departmentName ?? "—"}</span> },
     { key: "mobile", header: t("common.mobile"), render: (e) => <span className="text-ink-2">{e.mobile}</span> },
-    { key: "joined", header: t("people.joiningDate"), render: (e) => <span className="text-ink-2">{dateMedium(e.joiningDate)}</span> },
-    { key: "status", header: t("common.status"), render: (e) => <Badge tone={STATUS_TONE[e.status]}>{t(`people.status.${e.status}`)}</Badge> },
-    ...(allowed("payroll.view") ? [{ key: "salary", header: t("people.monthlySalary"), align: "right" as const, render: (e: EmployeeRow) => (e.monthlySalary && Number(e.monthlySalary) > 0 ? money(e.monthlySalary) : "—") }] : []),
+    { key: "joined", header: t("people.joiningDate"), sortValue: (e) => e.joiningDate, render: (e) => <span className="text-ink-2">{dateMedium(e.joiningDate)}</span> },
+    { key: "status", header: t("common.status"), sortValue: (e) => t(`people.status.${e.status}`), render: (e) => <Badge tone={STATUS_TONE[e.status]}>{t(`people.status.${e.status}`)}</Badge> },
+    ...(allowed("payroll.view") ? [{ key: "salary", header: t("people.monthlySalary"), align: "right" as const, sortValue: (e: EmployeeRow) => (e.monthlySalary ? Number(e.monthlySalary) : null), render: (e: EmployeeRow) => (e.monthlySalary && Number(e.monthlySalary) > 0 ? money(e.monthlySalary) : "—") }] : []),
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -114,7 +115,7 @@ function EmployeeList() {
         />
       </FilterBar>
       {list.error ? <ErrorNote error={list.error} /> : null}
-      <DataTable columns={columns} rows={list.rows} rowKey={(e) => e.id} loading={list.loading} onRowClick={(e) => setOpenId(e.id)} minWidth={760} empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />} />
+      <DataTable id="employees" columns={columns} rows={list.rows} rowKey={(e) => e.id} loading={list.loading} onRowClick={(e) => setOpenId(e.id)} minWidth={760} empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />} />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
       <EmployeeDetailDialog employeeId={openId} onClose={() => setOpenId(null)} />
     </div>

@@ -4,8 +4,8 @@
  * items, other ledgers left out; one debtor with a bad GSTIN is named and
  * nothing is saved; with it fixed everything is imported with opening
  * balances and stock, and the same file again adds nothing. Then a bill is
- * made and the month's vouchers downloaded: the sale and its party ledger
- * are in the file and every voucher balances.
+ * made and the month's vouchers downloaded: the sale (item-wise, with its
+ * stock item) and its party ledger are in the file and every voucher balances.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/tally-flow.mjs
@@ -127,9 +127,11 @@ const xml = await readFile(await download.path(), "utf8");
 check(download.suggestedFilename().startsWith("tally-vouchers-"), `file name ${download.suggestedFilename()}`);
 check(xml.includes(`<VOUCHERNUMBER>${sale.invoiceNumber}</VOUCHERNUMBER>`), "the sale is not in the file");
 check(xml.includes('<LEDGER NAME="Sethi General Store">') && xml.includes("<PARENT>Sundry Debtors</PARENT>"), "the party ledger is not in the file");
+check(xml.includes('<STOCKITEM NAME="Lifebuoy 100g">') && xml.includes("<STOCKITEMNAME>Lifebuoy 100g</STOCKITEMNAME>"), "the sale is not item-wise");
 check(xml.includes('VCHTYPE="Receipt"') && xml.includes("<LEDGERNAME>Bank</LEDGERNAME>"), "the UPI receipt is not posted to Bank");
 for (const v of xml.split("<VOUCHER ").slice(1)) {
-  const sum = [...v.matchAll(/<ALLLEDGERENTRIES\.LIST>[\s\S]*?<AMOUNT>(-?[\d.]+)<\/AMOUNT>/g)].reduce((s, m) => s + Math.round(Number(m[1]) * 100), 0);
+  // Ledger lines and, item-wise, the item lines (their first amount; the allocation repeats it).
+  const sum = [...v.matchAll(/<(?:ALLLEDGERENTRIES|LEDGERENTRIES|ALLINVENTORYENTRIES)\.LIST>[\s\S]*?<AMOUNT>(-?[\d.]+)<\/AMOUNT>/g)].reduce((s, m) => s + Math.round(Number(m[1]) * 100), 0);
   check(sum === 0, `a voucher does not balance: ${v.slice(0, 120)}`);
 }
 log("downloaded", download.suggestedFilename(), "with", xml.split("<VOUCHER ").length - 1, "vouchers, each balanced");

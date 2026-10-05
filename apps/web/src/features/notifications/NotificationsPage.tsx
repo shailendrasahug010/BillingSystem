@@ -9,7 +9,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
-import { Checkbox, Select } from "../../components/ui/Field";
+import { Checkbox, Input, Select } from "../../components/ui/Field";
 import { Segmented, Skeleton } from "../../components/ui/misc";
 import { ErrorNote, LoadMore, PageHeader, TAB_TRIGGER } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
@@ -218,6 +218,41 @@ function Rules() {
   );
 }
 
+/** The daily summary's numbers, typed with commas; saved when the field is left. */
+function Recipients({ rule, name, disabled, onSave }: { rule: ReminderRule; name: string; disabled: boolean; onSave(recipients: string[]): void }) {
+  const { t } = useI18n();
+  const saved = (rule.config.recipients ?? []).join(", ");
+  const [text, setText] = useState(saved);
+  const [shown, setShown] = useState(saved);
+  // A save from elsewhere (another tab, the server's cleaning) shows here.
+  if (shown !== saved) {
+    setShown(saved);
+    setText(saved);
+  }
+  return (
+    <label className="flex flex-col gap-1 text-[12px] text-ink-3">
+      {t("notifications.rules.recipients")}
+      <Input
+        aria-label={`${name}: ${t("notifications.rules.recipients")}`}
+        value={text}
+        inputMode="tel"
+        disabled={disabled}
+        placeholder={t("notifications.rules.recipientsPlaceholder")}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          const list = text
+            .split(/[,;\n]+/)
+            .map((m) => m.trim())
+            .filter(Boolean);
+          if (list.join(", ") !== saved) onSave(list);
+        }}
+        className="max-w-md"
+      />
+      <span>{t("notifications.rules.recipientsHint")}</span>
+    </label>
+  );
+}
+
 /** One rule: on or off, its hour and settings, when it last looked, and "Check now" (or, for payment reminders to customers, who is due one today and "Send now"). */
 function RuleCard({ rule: r, canEdit, busy, onSave, onCheck }: { rule: ReminderRule; canEdit: boolean; busy: boolean; onSave(patch: RulePatch): void; onCheck(): void }) {
   const { t, locale, money, dateTime } = useI18n();
@@ -225,6 +260,8 @@ function RuleCard({ rule: r, canEdit, busy, onSave, onCheck }: { rule: ReminderR
   const disabled = !canEdit || busy;
   const name = t(`notifications.rules.types.${r.type}.name` as TranslationKey);
   const customers = r.type === "customer_reminders";
+  // Rules that write messages (to customers, or the summary to the owner) send rather than check.
+  const sends = customers || r.type === "daily_summary";
   const hourLabel = (h: number) => new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2000, 0, 1, h)));
   const permissionLabel = (p: string) => {
     const [module, action] = p.split(".");
@@ -245,7 +282,7 @@ function RuleCard({ rule: r, canEdit, busy, onSave, onCheck }: { rule: ReminderR
       </label>
     );
   const days = (d: number) => (d === 0 ? t("notifications.rules.dayZero") : t("common.days", { count: d }));
-  const hourText = customers ? t("notifications.rules.sendAfter") : t("notifications.rules.hour");
+  const hourText = sends ? t("notifications.rules.sendAfter") : t("notifications.rules.hour");
   return (
     <Card className="flex flex-col gap-3 p-4" data-rule={r.type}>
       <div className="flex items-start gap-3">
@@ -291,6 +328,7 @@ function RuleCard({ rule: r, canEdit, busy, onSave, onCheck }: { rule: ReminderR
           </label>
         )}
       </div>
+      {r.defaults.recipients !== undefined && <Recipients rule={r} name={name} disabled={disabled || !r.isActive} onSave={(recipients) => onSave({ config: { recipients } })} />}
       {customers && r.isActive && canEdit && <DueToday />}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] text-ink-3">
@@ -299,8 +337,8 @@ function RuleCard({ rule: r, canEdit, busy, onSave, onCheck }: { rule: ReminderR
           {r.hourly && r.lastRunAt ? t("notifications.rules.lastRunAt", { time: dateTime(r.lastRunAt) }) : r.lastRunOn ? t("notifications.rules.lastRun", { date: r.lastRunOn }) : t("notifications.rules.notRun")}
         </p>
         {canEdit && r.isActive && (
-          <Button size="sm" variant={customers ? "secondary" : "ghost"} className="ml-auto" disabled={busy} onClick={() => (customers ? setConfirming(true) : onCheck())}>
-            {customers ? t("notifications.rules.sendNow") : t("notifications.rules.checkNow")}
+          <Button size="sm" variant={sends ? "secondary" : "ghost"} className="ml-auto" disabled={busy} onClick={() => (customers ? setConfirming(true) : onCheck())}>
+            {sends ? t("notifications.rules.sendNow") : t("notifications.rules.checkNow")}
           </Button>
         )}
       </div>
