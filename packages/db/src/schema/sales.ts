@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   char,
   check,
   date,
@@ -29,7 +30,7 @@ import {
 import { batches, products, units } from "./catalog.js";
 import { employees } from "./hr.js";
 import { customers, priceLevels } from "./parties.js";
-import { businessId, devices, documentSeries, files, warehouses } from "./platform.js";
+import { businessId, devices, documentSeries, files, users, warehouses } from "./platform.js";
 
 export const salesOrders = pgTable(
   "sales_orders",
@@ -506,4 +507,54 @@ export const priceOverrides = pgTable(
     createdAt: tstz().notNull().defaultNow(),
   },
   (t) => [index("price_overrides_item_idx").on(t.invoiceItemId)],
+);
+
+/**
+ * A bill made again every week or month for a regular customer (rent, a
+ * monthly supply, a service contract). The lines are copied from the bill it
+ * was set up from and posted like any bill, dated the day it falls due. The
+ * job moves `next_date` on after each bill; a bill that cannot be made
+ * (credit or stock blocked) is tried again the next day.
+ */
+export const recurringInvoices = pgTable(
+  "recurring_invoices",
+  {
+    id: pk(),
+    businessId: businessId(),
+    customerId: uuid()
+      .notNull()
+      .references(() => customers.id),
+    /** The bill it was set up from. */
+    sourceInvoiceId: uuid().references(() => invoices.id),
+    /** weekly or monthly. */
+    frequency: varchar({ length: 10 }).notNull(),
+    /** Day of the month a monthly bill keeps to (1-31; shorter months use their last day). */
+    anchorDay: smallint().notNull(),
+    /** Date of the next bill. */
+    nextDate: date({ mode: "string" }).notNull(),
+    /** No bills after this date (empty: until stopped). */
+    endDate: date({ mode: "string" }),
+    /** The bill to post: the POST /invoices body without its date or payment. */
+    template: jsonb().notNull().$type<Record<string, unknown>>(),
+    isActive: boolean().notNull().default(true),
+    /** The latest bill made. */
+    lastInvoiceId: uuid().references(() => invoices.id),
+    /** Bills made so far. */
+    billsMade: integer().notNull().default(0),
+    /** The day the job last tried it: a blocked bill is tried once a day, not on every run. */
+    lastTriedOn: date({ mode: "string" }),
+    /** Why the last try failed (an error code), cleared once a bill is made. */
+    lastError: varchar({ length: 60 }),
+    /** Whose name the bills are made in. */
+    ownerId: uuid()
+      .notNull()
+      .references(() => users.id),
+    ...auditColumns,
+  },
+  (t) => [
+    index("recurring_invoices_due_idx").on(t.businessId, t.isActive, t.nextDate),
+    index("recurring_invoices_customer_idx").on(t.businessId, t.customerId),
+    check("recurring_invoices_frequency_chk", sql`${t.frequency} in ('weekly', 'monthly')`),
+    check("recurring_invoices_day_chk", sql`${t.anchorDay} between 1 and 31`),
+  ],
 );

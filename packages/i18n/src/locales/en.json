@@ -1162,7 +1162,12 @@
     "VALID_UNTIL_BEFORE_DATE": "The valid-until date is for a quotation, on or after its date.",
     "PERIOD_END_BEFORE_START": "The end date is before the start date.",
     "TALLY_FILE_UNREADABLE": "This is not a Tally XML file, or it could not be read. Export it from Tally again as XML.",
-    "BANK_STATEMENT_UNREADABLE": "This doesn't look like a bank statement: no Date and Deposit/Withdrawal (or Amount) columns were found."
+    "BANK_STATEMENT_UNREADABLE": "This doesn't look like a bank statement: no Date and Deposit/Withdrawal (or Amount) columns were found.",
+    "REPEAT_START_IN_PAST": "The first repeat must be today or later.",
+    "REPEAT_END_BEFORE_START": "The stop date is before the first repeat.",
+    "REPEAT_BILL_NOT_ALLOWED": "Only a posted tax invoice or bill of supply can repeat, not a cancelled, export or SEZ bill.",
+    "REPEAT_OWNER_INACTIVE": "The person who set up this repeat bill no longer has access. Set it up again from the bill.",
+    "REPEAT_BILL_FAILED": "The bill could not be made. It will be tried again tomorrow."
   },
   "validation": {
     "required": "This field is required",
@@ -3213,6 +3218,14 @@
       "title_one": "Daily summary sent to {{count}} number",
       "title_other": "Daily summary sent to {{count}} numbers",
       "noneSent": "The daily summary could not go out: no WhatsApp, SMS or email for its numbers"
+    },
+    "repeat_bills_made": {
+      "title_one": "{{count}} repeat bill made",
+      "title_other": "{{count}} repeat bills made",
+      "body": "{{numbers}}"
+    },
+    "repeat_bill_failed": {
+      "title": "Repeat bill for {{customer}} not made"
     }
   },
   "beat": {
@@ -3485,5 +3498,82 @@
       "unmatched": "Not matched",
       "saved": "Recorded"
     }
+  },
+  "setup": {
+    "title": "Get your business ready",
+    "progress": "{{done}} of {{total}} done",
+    "hide": "Hide this checklist",
+    "done": "Done",
+    "todo": "Not done yet",
+    "steps": {
+      "business": {
+        "title": "Add firm address and mobile",
+        "hint": "Printed on every bill"
+      },
+      "gst": {
+        "title": "Add your GSTIN",
+        "hint": "Needed for tax invoices and GST returns"
+      },
+      "payment": {
+        "title": "Add bank account and UPI ID",
+        "hint": "Bills then carry a QR code customers can scan to pay"
+      },
+      "product": {
+        "title": "Add your first product",
+        "hint": "Or import your price list from Excel"
+      },
+      "customer": {
+        "title": "Add your first customer",
+        "hint": "Or import them from Excel or Tally"
+      },
+      "printer": {
+        "title": "Connect a receipt printer",
+        "hint": "Optional: for 2- or 3-inch Bluetooth printers"
+      },
+      "bill": {
+        "title": "Make your first bill",
+        "hint": "Ctrl+I opens a new bill from anywhere"
+      }
+    }
+  },
+  "repeat": {
+    "button": "Repeat bill",
+    "hint": "Make this bill again every week or month, with the same items and rates",
+    "title": "Repeat {{number}}",
+    "how": "How often",
+    "monthly": "Every month",
+    "weekly": "Every week",
+    "firstOn": "First repeat on",
+    "until": "Stop after (optional)",
+    "untilHint": "Leave empty to keep going until you stop it",
+    "howItWorks": "Each repeat is a new bill dated that day, with this bill's items, quantities and rates. You get a notification when one is made. Pause or stop it from Invoices, Repeat bills.",
+    "start": "Start repeating",
+    "saved": "{{number}} will repeat",
+    "nextOn": "next on {{date}}",
+    "everyWeek": "Every week on {{day}}",
+    "everyMonth": "Every month on day {{day}}",
+    "already": "This bill already repeats: {{every}}, next on {{date}}. Starting again adds a second repeat.",
+    "listButton": "Repeat bills",
+    "listTitle": "Repeat bills",
+    "listHint": "Bills made again every week or month for regular customers.",
+    "empty": "No repeat bills yet",
+    "emptyHint": "Open a bill and choose Repeat bill to make it every week or month.",
+    "status": {
+      "on": "On",
+      "paused": "Paused",
+      "ended": "Ended",
+      "stuck": "Needs attention"
+    },
+    "endsOn": "ends {{date}}",
+    "made_one": "{{count}} bill made",
+    "made_other": "{{count}} bills made",
+    "from": "From {{number}}",
+    "last": "Latest {{number}}",
+    "pause": "Pause",
+    "resume": "Start again",
+    "remove": "Stop repeating for {{name}}",
+    "removeTitle": "Stop repeat bills for {{name}}?",
+    "removeMessage": "Bills already made stay as they are. No more will be made.",
+    "removeConfirm": "Stop repeating"
   }
 }

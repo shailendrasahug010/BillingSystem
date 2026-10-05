@@ -106,7 +106,7 @@ function PaymentDetailsRow({ value, canEdit, onSave }: { value: PaymentDetails |
     </Field>
   );
   return (
-    <div className="flex flex-col gap-2 border-b border-line py-3">
+    <div id="settings-payment" className="flex scroll-mt-20 flex-col gap-2 border-b border-line py-3">
       <div>
         <p className="text-[14px] font-medium text-ink">{t("settings.paymentDetails")}</p>
         <p className="text-[12.5px] text-ink-3">{t("settings.paymentDetailsHint")}</p>

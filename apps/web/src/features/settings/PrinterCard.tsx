@@ -6,7 +6,7 @@ import { PrinterPanel } from "../../components/thermal/ThermalPrint";
 export function PrinterCard() {
   const { t } = useI18n();
   return (
-    <Card>
+    <Card id="settings-printer" className="scroll-mt-20">
       <CardHeader title={t("thermal.title")} subtitle={t("thermal.hint")} />
       <div className="p-4 sm:p-5">
         <PrinterPanel />

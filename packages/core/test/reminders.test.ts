@@ -38,7 +38,7 @@ describe("reminder rules", () => {
     expect(REMINDER_TYPES).toHaveLength(13);
     expect(REMINDER_TYPES.every(isReminderType)).toBe(true);
     expect(isReminderType("nonsense")).toBe(false);
-    expect(new Set(NOTIFICATION_PERMISSIONS)).toEqual(new Set([...REMINDER_TYPES.map((t) => REMINDERS[t].permission), "invoice.review"]));
+    expect(new Set(NOTIFICATION_PERMISSIONS)).toEqual(new Set([...REMINDER_TYPES.map((t) => REMINDERS[t].permission), "invoice.review", "invoice.create"]));
     // Rules raised as things happen as well as by the daily check.
     expect(REMINDER_TYPES.filter((t) => REMINDERS[t].events)).toEqual(["pending_orders", "to_pack", "to_dispatch", "leave_request"]);
   });

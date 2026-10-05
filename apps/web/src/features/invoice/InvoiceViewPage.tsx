@@ -30,6 +30,7 @@ import { ThermalPrintButton } from "../../components/thermal/ThermalPrint";
 import { invoiceReceipt } from "../../lib/thermal/receipts";
 import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 import { copyBill, type CopiedLine } from "./copyBill";
+import { RepeatBillButton } from "./RepeatBill";
 import { loadKeptDraft, type KeptDraft } from "./keptDraft";
 
 /** Bills already sent to the printer from Save & print (going back to one does not print it again). */
@@ -180,6 +181,9 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
             <Button icon={<Copy size={16} />} title={t("invoice.copy.title")} onClick={startCopy}>
               {t("invoice.copy.button")}
             </Button>
+          )}
+          {LIVE && !offlineKey && !deviceCopyAt && live.data && live.data.status === "posted" && !live.data.zeroRatedType && allowed("invoice.create") && (
+            <RepeatBillButton invoiceId={live.data.id} number={live.data.invoiceNumber} />
           )}
           {cancellable && (
             <Button variant="ghost" icon={<Ban size={16} />} onClick={() => setCancelling(true)}>

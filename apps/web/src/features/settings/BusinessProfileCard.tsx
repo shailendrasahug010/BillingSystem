@@ -179,7 +179,7 @@ export function BusinessProfileCard() {
   );
 
   return (
-    <Card>
+    <Card id="settings-business" className="scroll-mt-20">
       <CardHeader title={t("settings.business")} subtitle={t("settings.businessHint")} />
       <div className="flex flex-col gap-4 p-4 sm:p-5">
         <LogoField canEdit={canEdit} />

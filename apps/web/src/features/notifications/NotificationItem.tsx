@@ -1,4 +1,4 @@
-import { BadgeIndianRupee, Bell, BellOff, Boxes, CalendarDays, ChartNoAxesColumn, ClipboardList, CloudOff, Hourglass, Package, Send, Smartphone, Timer, Truck, UserPen, Wallet, type LucideIcon } from "lucide-react";
+import { BadgeIndianRupee, Bell, BellOff, Boxes, CalendarDays, ChartNoAxesColumn, ClipboardList, CloudOff, Hourglass, Package, Repeat, Send, Smartphone, Timer, Truck, UserPen, Wallet, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { cn } from "../../lib/cn";
@@ -27,6 +27,8 @@ const ICONS: Record<string, LucideIcon> = {
   orders_waiting: Timer,
   customer_reminders: Send,
   daily_summary: ChartNoAxesColumn,
+  repeat_bills_made: Repeat,
+  repeat_bill_failed: Repeat,
   reminders_stopped: BellOff,
 };
 
