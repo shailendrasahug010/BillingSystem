@@ -29,7 +29,8 @@ import { useCustomerInsight } from "../../data/hooks";
 import { storeAssociations, useStoreVersion, type CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 import { useSuggestionFeedback, type SuggestionFeedback } from "./suggestionFeedback";
-import { startUnit } from "./units";
+import { saleUnits, startUnit } from "./units";
+import { unitForWord } from "../../lib/spoken";
 
 export interface DraftLine {
   key: string;
@@ -64,7 +65,8 @@ export interface ZeroRatedChoice {
 
 type Action =
   | { type: "customer"; customerId: string | null }
-  | { type: "add"; productId: string; qty?: number }
+  /** `spoken`: the quantity and unit word said with the name (voice search), in that unit when the product is sold in it. */
+  | { type: "add"; productId: string; qty?: number; spoken?: { qty: number; unit: string | null } }
   | { type: "update"; key: string; patch: Partial<Omit<DraftLine, "key" | "productId" | "unitId">> }
   | { type: "unit"; key: string; unitId: string | null }
   | { type: "remove"; key: string }
@@ -130,9 +132,10 @@ function reducer(state: Draft, action: Action): Draft {
       // In the unit new lines start in (strips of a product sold by the strip); a suggested quantity, counted
       // in the product's own unit, only when it is whole packs of it (20 tablets: 2 strips of 10).
       const start = startUnit(product);
-      const inStart = start !== null && (action.qty === undefined || action.qty % start.factor === 0);
-      const unitId = inStart ? start.unitId : null;
-      const qty = inStart && action.qty !== undefined ? action.qty / start.factor : (action.qty ?? 1);
+      const said = action.spoken ? unitForWord(saleUnits(product), action.spoken.unit) : undefined;
+      const inStart = !action.spoken && start !== null && (action.qty === undefined || action.qty % start.factor === 0);
+      const unitId = said ? said.unitId : inStart ? start.unitId : action.spoken ? (start?.unitId ?? null) : null;
+      const qty = action.spoken ? action.spoken.qty : inStart && action.qty !== undefined ? action.qty / start.factor : (action.qty ?? 1);
       // Another scan or suggestion of the same product adds to its line in that unit.
       const existing = state.lines.find((l) => l.productId === action.productId && l.unitId === unitId);
       if (existing) {

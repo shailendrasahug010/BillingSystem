@@ -3575,5 +3575,15 @@
     "removeTitle": "Stop repeat bills for {{name}}?",
     "removeMessage": "Bills already made stay as they are. No more will be made.",
     "removeConfirm": "Stop repeating"
+  },
+  "voice": {
+    "sayProduct": "Say a product, like \"Parle G 10 box\"",
+    "search": "Search by voice",
+    "listening": "Listening… tap to stop",
+    "stop": "Stop listening",
+    "noMic": "Microphone not allowed",
+    "noMicHint": "Allow the microphone for this app in your browser or phone settings.",
+    "noSpeech": "Didn't hear anything. Tap the mic and speak.",
+    "failed": "Voice search isn't working right now. Type instead."
   }
 }
