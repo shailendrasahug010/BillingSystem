@@ -79,8 +79,9 @@ const parle = (
 ).id;
 const ors = (await api("POST", "/products", token, { name: "ORS Sachet", hsnCode: "3004", taxCategoryId: taxes["GST 5%"], baseUnitId: units.PCS, sellingPrice: "20", trackBatches: true, trackExpiry: true })).id;
 const supplier = (await api("POST", "/suppliers", token, { name: "Shree Stockist", stateCode: "23", gstRegistration: "unregistered", mobile: "9876500011", creditDays: 15 })).id;
-const today = new Date().toISOString().slice(0, 10);
-const days = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+// The business's own today (India time), which near midnight is not the UTC date.
+const today = (await api("GET", "/stock/batches", token)).today;
+const days = (n) => new Date(Date.parse(today) + n * 86_400_000).toISOString().slice(0, 10);
 await api("POST", "/purchases", token, {
   supplierId: supplier,
   supplierInvoiceNumber: "SS-100",
@@ -187,6 +188,8 @@ log("statement PDF", statement);
 await nav("Payments");
 await page.getByRole("tab", { name: "Cash book" }).click();
 await page.getByText("Closing").first().waitFor({ timeout: 15000 });
+await page.getByRole("combobox", { name: "Period" }).selectOption("last7");
+await page.getByText("₹500.00").first().waitFor({ timeout: 10000 }).catch(() => undefined);
 check((await page.getByText("₹500.00").count()) > 0, "the cash book does not show the ₹500 paid out");
 await shot("5-cash-book");
 log("cash book shows the cash paid out");
