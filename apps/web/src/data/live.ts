@@ -274,16 +274,36 @@ export interface SupplierRow {
 
 const mapSupplier = (s: SupplierRow): Supplier => ({ ...s, balance: Number(s.balance) });
 
-/** Reloads the catalogue snapshot (after product edits, purchases or adjustments change prices, costs or stock). */
+/** Customers and suppliers per request when the whole list is loaded (a few round trips for thousands, not dozens). */
+const FULL_PAGE = 1000;
+
+let quickPull: (() => Promise<boolean>) | null = null;
+/** The session's pull feed (set while signed in online): brings the copy up to date with only what changed. */
+export function setQuickPull(fn: (() => Promise<boolean>) | null): void {
+  quickPull = fn;
+}
+/** Only what changed, through the feed; false when that could not be done (no feed, no connection). */
+const pulled = async () => (quickPull ? quickPull().catch(() => false) : false);
+
+/**
+ * Brings the catalogue up to date after product edits, purchases or
+ * adjustments change prices, costs or stock: only the products that changed
+ * (the pull feed), or the whole catalogue again where there is no feed. A
+ * business with thousands of products then does not download them all after
+ * every purchase. The feed also carries brands, categories, price lists,
+ * routes and godowns when they changed.
+ */
 export async function refreshCatalog(): Promise<void> {
   if (!can("product.view")) return;
+  if (await pulled()) return;
   applyCatalog(await api.get<Catalog>("/catalog"));
   touch();
 }
 
 export async function refreshSuppliers(): Promise<void> {
   if (!can("supplier.view")) return;
-  const rows = (await fetchAll<SupplierRow>("/suppliers", { active: "true" })).map(mapSupplier);
+  if (await pulled()) return;
+  const rows = (await fetchAll<SupplierRow>("/suppliers", { active: "true" }, FULL_PAGE)).map(mapSupplier);
   replaceAll(SUPPLIERS, rows);
   replaceMap(supplierById, rows.map((s) => [s.id, s]));
   touch();
@@ -292,6 +312,7 @@ export async function refreshSuppliers(): Promise<void> {
 /** Reloads the godown list (after one is added or changed). */
 export async function refreshWarehouses(): Promise<void> {
   if (!can("product.view")) return;
+  if (await pulled()) return;
   WORKSPACE.warehouses = (await api.get<{ data: typeof WORKSPACE.warehouses }>("/warehouses")).data;
   touch();
 }
@@ -299,8 +320,9 @@ export async function refreshWarehouses(): Promise<void> {
 /** Reloads all customers and routes (after an import). */
 export async function refreshCustomers(): Promise<void> {
   if (!can("customer.view")) return;
+  if (await pulled()) return;
   const [customers, routes] = await Promise.all([
-    fetchAll<CustomerRow>("/customers", { active: "true" }),
+    fetchAll<CustomerRow>("/customers", { active: "true" }, FULL_PAGE),
     api.get<{ data: Array<{ id: string; name: string }> }>("/routes").then((r) => r.data),
   ]);
   const routeName = new Map(routes.map((r) => [r.id, r.name]));
@@ -337,9 +359,9 @@ export interface WorkspaceData {
 async function fetchWorkspace(): Promise<WorkspaceData> {
   const [catalog, customers, routes, suppliers, warehouses, expenseCategories] = await Promise.all([
     can("product.view") ? api.get<Catalog>("/catalog") : Promise.resolve(null),
-    can("customer.view") ? fetchAll<CustomerRow>("/customers", { active: "true" }) : Promise.resolve([] as CustomerRow[]),
+    can("customer.view") ? fetchAll<CustomerRow>("/customers", { active: "true" }, FULL_PAGE) : Promise.resolve([] as CustomerRow[]),
     can("customer.view") ? api.get<{ data: Array<{ id: string; name: string }> }>("/routes").then((r) => r.data) : Promise.resolve([]),
-    can("supplier.view") ? fetchAll<SupplierRow>("/suppliers", { active: "true" }) : Promise.resolve([] as SupplierRow[]),
+    can("supplier.view") ? fetchAll<SupplierRow>("/suppliers", { active: "true" }, FULL_PAGE) : Promise.resolve([] as SupplierRow[]),
     can("product.view") ? api.get<{ data: typeof WORKSPACE.warehouses }>("/warehouses").then((r) => r.data) : Promise.resolve([]),
     can("expense.view") ? api.get<{ data: ExpenseCategoryRow[] }>("/expense-categories").then((r) => r.data) : Promise.resolve([] as ExpenseCategoryRow[]),
   ]);

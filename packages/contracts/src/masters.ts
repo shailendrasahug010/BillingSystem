@@ -149,7 +149,11 @@ export const OfflineEdit = z.strictObject({
 
 export const CustomerPatch = patchOf(CustomerBody.omit({ openingBalance: true, openingBalanceSide: true })).extend({ offline: OfflineEdit.optional() });
 
+/** Up to 1000 a page: a device loading every customer or supplier needs only a few requests. */
+const LongPage = { limit: z.coerce.number().int().min(1).max(1000).default(50) };
+
 export const CustomerListQuery = PageQuery.extend({
+  ...LongPage,
   type: z.enum(["all", "b2b", "b2c"]).default("all"),
   routeId: z.uuid().optional(),
   outstanding: z.enum(["any", "yes", "overdue"]).default("any"),
@@ -183,6 +187,7 @@ export const SupplierBody = z.strictObject({
 export const SupplierPatch = patchOf(SupplierBody.omit({ openingBalance: true, openingBalanceSide: true }));
 
 export const SupplierListQuery = PageQuery.extend({
+  ...LongPage,
   outstanding: z.enum(["any", "yes"]).default("any"),
   active: z.enum(["true", "false", "all"]).default("true"),
 });
