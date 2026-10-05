@@ -76,3 +76,59 @@ export function unitForWord<T extends { symbol: string }>(units: T[], word: stri
   const w = word.toUpperCase();
   return units.find((u) => u.symbol.toUpperCase() === w) ?? units.find((u) => u.symbol.toUpperCase().startsWith(w) || w.startsWith(u.symbol.toUpperCase()));
 }
+
+/**
+ * What was typed in the product search to add an item with its quantity:
+ * "parle 10b", "parle 10 box", "10 b parle", "10box parle", "surf 3". A
+ * unit is a unit word or a unit's one letter (the letter only after the
+ * number, so "parle g 10" stays Parle-G); without one the line's own unit.
+ */
+export interface TypedItem {
+  name: string;
+  qty: number | null;
+  /** A unit word's symbol (BOX). */
+  unit: string | null;
+  /** A unit's letter (B), as on the line's unit list. */
+  letter: string | null;
+}
+
+export function parseTypedItem(text: string): TypedItem {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const none: TypedItem = { name: words.join(" "), qty: null, unit: null, letter: null };
+  if (words.length < 2) return none;
+  const num = (w: string | undefined) => (w && /^\d+(\.\d+)?$/.test(w) && Number(w) > 0 ? Number(w) : null);
+  // A unit word's symbol, or a single letter.
+  const unitOf = (w: string | undefined): Pick<TypedItem, "unit" | "letter"> | null => {
+    if (!w) return null;
+    const word = UNIT_OF.get(w.toLowerCase());
+    if (word) return { unit: word, letter: null };
+    return /^\p{L}$/u.test(w) ? { unit: null, letter: w.toUpperCase() } : null;
+  };
+  // "10b", "10box": the number and the unit as one word.
+  const glued = (w: string | undefined) => {
+    const m = w?.match(/^(\d+(?:\.\d+)?)(\p{L}+)$/u);
+    const u = m ? unitOf(m[2]) : null;
+    return m && u && Number(m[1]) > 0 ? { qty: Number(m[1]), ...u } : null;
+  };
+  const found = (qty: number, u: Pick<TypedItem, "unit" | "letter"> | null, rest: string[]): TypedItem => ({ name: rest.join(" "), qty, unit: u?.unit ?? null, letter: u?.letter ?? null });
+  const n = words.length;
+  // At the end: "... 10b", "... 10 b", "... 10".
+  const lastGlued = glued(words[n - 1]);
+  if (lastGlued) return found(lastGlued.qty, lastGlued, words.slice(0, -1));
+  const endUnit = unitOf(words[n - 1]);
+  const beforeUnit = num(words[n - 2]);
+  if (endUnit && beforeUnit !== null && n >= 3) return found(beforeUnit, endUnit, words.slice(0, -2));
+  const endQty = num(words[n - 1]);
+  if (endQty !== null) return found(endQty, null, words.slice(0, -1));
+  // At the start: "10b ...", "10 b ...", "10 ...".
+  const firstGlued = glued(words[0]);
+  if (firstGlued) return found(firstGlued.qty, firstGlued, words.slice(1));
+  const startQty = num(words[0]);
+  if (startQty !== null) {
+    const u = unitOf(words[1]);
+    // A letter after the number at the start is a unit only when more follows ("10 b parle").
+    if (u && n >= 3) return found(startQty, u, words.slice(2));
+    return found(startQty, null, words.slice(1));
+  }
+  return none;
+}

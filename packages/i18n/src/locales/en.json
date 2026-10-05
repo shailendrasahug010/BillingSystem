@@ -452,7 +452,23 @@
     },
     "notFound": "This bill was not found",
     "notFoundHint": "It may have been removed, or belong to another business. Look for it in the invoice list.",
-    "backToList": "Back to invoices"
+    "backToList": "Back to invoices",
+    "topToday": "Billed most today and this week",
+    "typedQty": "Enter adds {{qty}} {{unit}}",
+    "lastTime_one": "Last time: {{qty}} {{unit}} at {{rate}}, {{count}} day ago",
+    "lastTime_other": "Last time: {{qty}} {{unit}} at {{rate}}, {{count}} days ago",
+    "swapFor": "Use {{name}} ({{qty}} in stock)",
+    "swapHint": "Swap this line for an in-stock product of the same kind",
+    "alsoOnLine": "Also on line {{line}} ({{qty}} {{unit}})",
+    "held": {
+      "hold": "Hold",
+      "holdHint": "Put this bill aside and start the next one",
+      "done": "Bill on hold",
+      "full": "{{max}} bills are on hold already. Finish one first.",
+      "title": "On hold",
+      "resume": "Pick this bill up again",
+      "noCustomer": "No customer"
+    }
   },
   "bills": {
     "title": "Sales bills",

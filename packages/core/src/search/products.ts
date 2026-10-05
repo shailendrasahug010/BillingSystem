@@ -59,18 +59,64 @@ function scoreText(text: string, query: string, queryTokens: readonly string[]):
   const tc = compact(t);
   let matched = 0;
   let prefixHits = 0;
+  let nearHits = 0;
   for (const token of queryTokens) {
     if (words.some((w) => w.startsWith(token))) {
       matched++;
       prefixHits++;
     } else if (t.includes(token)) {
       matched++;
+    } else if (words.some((w) => nearWord(token, w))) {
+      nearHits++;
     }
   }
   if (matched === queryTokens.length) return 120 + prefixHits * 20;
   // "parleg" should still find "Parle-G".
   if (tc.includes(compact(query))) return 90;
+  // A word or two spelt a little off ("britania", "colget"): found, below every exact match.
+  if (nearHits > 0 && matched + nearHits === queryTokens.length) return 60 + matched * 10;
   return matched > 0 ? 20 * matched : 0;
+}
+
+/** How many letters an edit (add, drop, change, or swap two side by side) away `a` is from `b`, up to `max` + 1. */
+export function editDistance(a: string, b: string, max = 2): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const A = Array.from(a);
+  const B = Array.from(b);
+  let prev2: number[] = [];
+  let prev = Array.from({ length: B.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= A.length; i++) {
+    const row = [i];
+    let best = i;
+    for (let j = 1; j <= B.length; j++) {
+      const cost = A[i - 1] === B[j - 1] ? 0 : 1;
+      let v = Math.min(prev[j]! + 1, row[j - 1]! + 1, prev[j - 1]! + cost);
+      if (i > 1 && j > 1 && A[i - 1] === B[j - 2] && A[i - 2] === B[j - 1]) v = Math.min(v, prev2[j - 2]! + 1);
+      row.push(v);
+      best = Math.min(best, v);
+    }
+    if (best > max) return max + 1;
+    prev2 = prev;
+    prev = row;
+  }
+  return prev[B.length]!;
+}
+
+/**
+ * A typed word close enough to a word of the name, or to its start: one slip
+ * in a word of 4 to 7 letters, two from 8. Short words and numbers must match
+ * as typed ("dolo 650" never finds "dolo 500").
+ */
+function nearWord(token: string, word: string): boolean {
+  const n = Array.from(token).length;
+  if (n < 4 || /\d/.test(token)) return false;
+  const max = n >= 8 ? 2 : 1;
+  const w = Array.from(word);
+  for (const len of [w.length, n - 1, n, n + 1]) {
+    if (len < 3 || len > w.length) continue;
+    if (editDistance(token, w.slice(0, len).join(""), max) <= max) return true;
+  }
+  return false;
 }
 
 export function searchProducts<T extends SearchableProduct>(

@@ -61,10 +61,51 @@ export async function dropKeptDraft(): Promise<void> {
   if (stored) await inOrder(() => idbDelete("kv", key));
 }
 
-/** Signing out: every bill left half made on this device goes. */
+/**
+ * Bills put on hold to serve the next customer, kept the same way (this
+ * page's memory, and sealed on the device where its copy is open), newest
+ * first.
+ */
+const HELD = "invoice-held:";
+const heldMemory = new Map<string, KeptDraft[]>();
+const heldWhere = () => {
+  const { key, stored } = where();
+  return { key: HELD + key.slice(PREFIX.length), stored };
+};
+
+export async function loadHeld(): Promise<KeptDraft[]> {
+  const { key, stored } = heldWhere();
+  const inMemory = heldMemory.get(key);
+  if (inMemory || !stored) return inMemory ?? [];
+  await queue;
+  const row = await idbGet<{ sealed: Sealed }>("kv", key);
+  const held = row && isSealed(row.sealed) ? ((await unseal<KeptDraft[]>(row.sealed, key)) ?? []) : [];
+  heldMemory.set(key, held);
+  return held;
+}
+
+export async function saveHeld(held: KeptDraft[]): Promise<void> {
+  const { key, stored } = heldWhere();
+  heldMemory.set(key, held);
+  if (!stored) return;
+  await inOrder(async () => {
+    if (held.length === 0) return idbDelete("kv", key);
+    const sealed = await seal(held, key);
+    if (sealed) await idbPut("kv", { sealed }, key);
+  });
+}
+
+/** A bill as kept: what was on the screen, without the field to focus. */
+export function asKept(draft: Draft): KeptDraft {
+  const { focusKey: _focus, ...rest } = draft;
+  return { savedAt: new Date().toISOString(), draft: rest };
+}
+
+/** Signing out: every bill left half made or held on this device goes. */
 export async function clearKeptDrafts(): Promise<void> {
   memory.clear();
+  heldMemory.clear();
   await inOrder(async () => {
-    for (const k of await idbKeys("kv")) if (k.startsWith(PREFIX)) await idbDelete("kv", k);
+    for (const k of await idbKeys("kv")) if (k.startsWith(PREFIX) || k.startsWith(HELD)) await idbDelete("kv", k);
   });
 }

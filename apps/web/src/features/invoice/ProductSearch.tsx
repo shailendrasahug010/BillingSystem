@@ -8,9 +8,18 @@ import { useSearchableProducts } from "../../data/hooks";
 import type { CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 import { cn } from "../../lib/cn";
-import { parseSpokenItem } from "../../lib/spoken";
+import { parseSpokenItem, parseTypedItem } from "../../lib/spoken";
 import { VoiceButton } from "../../components/voice/VoiceButton";
+import { productById } from "../../data/db";
+import { topBilled } from "./topItems";
+import { usualPick, wholeUnit } from "./units";
 import { rateFor } from "./useInvoiceDraft";
+
+/** How a product is added: with the quantity said or typed with it, or in the unit and count the shop usually takes. */
+export interface AddHow {
+  spoken?: { qty: number; unit: string | null; letter?: string | null };
+  pick?: { unitId: string | null; qty: number };
+}
 
 
 /**
@@ -20,12 +29,13 @@ import { rateFor } from "./useInvoiceDraft";
  */
 export const ProductSearch = forwardRef<
   HTMLInputElement,
-  { customer: Customer | null; insight: CustomerInsight | null; cartIds: string[]; onAdd(productId: string, spoken?: { qty: number; unit: string | null }): void; large?: boolean; onScan?(): void }
+  { customer: Customer | null; insight: CustomerInsight | null; cartIds: string[]; onAdd(productId: string, how?: AddHow): void; large?: boolean; onScan?(): void }
 >(function ProductSearch({ customer, insight, cartIds, onAdd, large, onScan }, ref) {
   const { t, money, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const [browsed, setBrowsed] = useState(false);
   const listId = useId();
   const searchable = useSearchableProducts();
   // The list closes a moment after the field loses focus (so a click on it lands); coming back cancels that.
@@ -38,18 +48,38 @@ export const ProductSearch = forwardRef<
     return m;
   }, [insight]);
 
-  const hits = useMemo(
-    () => (query.trim() ? searchProducts(query, searchable, { customerAffinity: affinity, limit: 8 }) : []),
-    [query, affinity, searchable],
-  );
+  // A quantity typed with the name ("parle 10b"): the name is searched, the quantity goes with the product picked.
+  // A number that is part of the name ("dolo 650") stays in it.
+  const { hits, typed } = useMemo(() => {
+    const find = (q: string) => (q.trim() ? searchProducts(q, searchable, { customerAffinity: affinity, limit: 8 }) : []);
+    const whole = find(query);
+    const item = parseTypedItem(query);
+    if (item.qty === null || !item.name) return { hits: whole, typed: null };
+    const top = whole[0]?.product.name.toLowerCase() ?? "";
+    if (new RegExp(`\\b${item.qty}\\b`).test(top)) return { hits: whole, typed: null };
+    const found = find(item.name);
+    return found.length ? { hits: found, typed: { qty: item.qty, unit: item.unit, letter: item.letter } } : { hits: whole, typed: null };
+  }, [query, affinity, searchable]);
+  // With nothing typed: what was billed most today and this week, one tap away.
+  const top = useMemo(() => (open && !query.trim() ? topBilled(8).map((id) => productById.get(id)!) : []), [open, query]);
+  const rows = query.trim() ? hits.map((h) => h.product) : top;
 
   // The quantity and unit said with the name ("Parle G 10 box"), for the product picked from what it found.
-  const [spoken, setSpoken] = useState<{ qty: number; unit: string | null } | null>(null);
+  const [spoken, setSpoken] = useState<AddHow["spoken"] | null>(null);
+  // Without a quantity: the unit and count this shop usually takes (not for a product already on the bill, which goes up by one).
+  const usual = (p: Product): AddHow | undefined => {
+    if (cartIds.includes(p.id)) return undefined;
+    const pick = usualPick(p, insight?.stats.get(p.id));
+    return pick ? { pick: { unitId: pick.unitId, qty: pick.qty } } : undefined;
+  };
   const add = (p: Product) => {
-    onAdd(p.id, spoken ?? undefined);
+    const said = spoken ?? typed;
+    onAdd(p.id, said ? { spoken: said } : usual(p));
     setSpoken(null);
     setQuery("");
     setOpen(false);
+    setBrowsed(false);
+    setActive(0);
   };
   const heard = (text: string) => {
     const item = parseSpokenItem(text);
@@ -64,7 +94,8 @@ export const ProductSearch = forwardRef<
     // One clear match (the only one, or a name that starts with what was said, well ahead of the rest) is added at once; otherwise the list is open to pick from.
     const clear = found.length === 1 || (found.length > 1 && found[0]!.score >= 200 && found[0]!.score - found[1]!.score >= 100);
     if (clear) {
-      onAdd(found[0]!.product.id, said ?? undefined);
+      const p = found[0]!.product;
+      onAdd(p.id, said ? { spoken: said } : usual(p));
       setSpoken(null);
       setQuery("");
       setOpen(false);
@@ -84,9 +115,9 @@ export const ProductSearch = forwardRef<
           <input
             ref={ref}
             role="combobox"
-            aria-expanded={open && hits.length > 0}
+            aria-expanded={open && rows.length > 0}
             aria-controls={listId}
-            aria-activedescendant={open && hits[active] ? `${listId}-${active}` : undefined}
+            aria-activedescendant={open && rows[active] ? `${listId}-${active}` : undefined}
             aria-label={t("invoice.searchProduct")}
             placeholder={t("invoice.searchProduct")}
             value={query}
@@ -94,6 +125,7 @@ export const ProductSearch = forwardRef<
             onChange={(e) => {
               setQuery(e.target.value);
               setSpoken(null);
+              setBrowsed(false);
               setOpen(true);
               setActive(0);
             }}
@@ -107,15 +139,18 @@ export const ProductSearch = forwardRef<
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setActive((a) => Math.min(hits.length - 1, a + 1));
+                setBrowsed(true);
+                setActive((a) => Math.min(rows.length - 1, a + 1));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
+                setBrowsed(true);
                 setActive((a) => Math.max(0, a - 1));
               } else if (e.key === "Enter") {
-                const hit = hits[active];
-                if (hit) {
+                // The day's list (nothing typed) takes Enter only once an arrow picked from it.
+                const p = query.trim() || browsed ? rows[active] : undefined;
+                if (p) {
                   e.preventDefault();
-                  add(hit.product);
+                  add(p);
                 }
               } else if (e.key === "Escape") {
                 setOpen(false);
@@ -145,13 +180,25 @@ export const ProductSearch = forwardRef<
         </button>
       </div>
 
-      {open && hits.length > 0 && (
-        <ul id={listId} role="listbox" className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[420px] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-pop">
-          {hits.map((hit, i) => {
-            const p = hit.product;
+      {open && rows.length > 0 && (
+        <ul id={listId} role="listbox" aria-label={query.trim() ? undefined : t("invoice.topToday")} className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[420px] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-pop">
+          {!query.trim() && (
+            <li role="presentation" className="px-3 pt-1.5 pb-1 text-[12px] font-medium text-ink-3">
+              {t("invoice.topToday")}
+            </li>
+          )}
+          {typed && (
+            <li role="presentation" className="px-3 pt-1.5 pb-1 text-[12px] font-medium text-accent">
+              {t("invoice.typedQty", { qty: typed.qty, unit: typed.unit ?? typed.letter ?? "" })}
+            </li>
+          )}
+          {rows.map((p, i) => {
             const level = stockLevel(p.stock, p.minStock);
             const stats = insight?.stats.get(p.id);
             const inCart = cartIds.includes(p.id);
+            // What this shop paid last time, in the unit it took then (the bill's rate before tax, with tax for a price list that includes it).
+            const last = stats?.lastRate ? wholeUnit(p, stats.lastQty.toNumber()) : null;
+            const lastRate = last && stats?.lastRate ? stats.lastRate.toNumber() * last.factor * (p.pricesIncludeTax ? 1 + p.gstRate / 100 : 1) : 0;
             return (
               <li
                 key={p.id}
@@ -173,6 +220,11 @@ export const ProductSearch = forwardRef<
                   <p className="truncate text-[12.5px] text-ink-3">
                     <span className="font-mono">{p.code}</span> · {p.brand} · {p.packSize} · HSN <span className="font-mono">{p.hsn}</span> · GST {p.gstRate}%
                   </p>
+                  {last && stats && (
+                    <p className="num truncate text-[12px] font-medium text-ink-2">
+                      {t("invoice.lastTime", { qty: last.qty, unit: last.symbol, rate: money(lastRate), count: stats.daysSinceLast })}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <span className="num text-[14px] font-semibold text-ink">{money(rateFor(p, customer))}</span>
