@@ -13,6 +13,7 @@ So there is no separate "desktop version" or "mobile version" to build. Run the 
 
 | I want to… | Go to |
 |---|---|
+| Start it with a double-click, on my computer and my phone | [Double-click to start](#double-click-to-start-computer-and-phone) |
 | Install it on my computer with one installer (Windows, Mac, Linux) | [The quick way: the installer](#the-quick-way-the-installer) |
 | Try it on my own computer, step by step | [1. Run it on your computer](#1-run-it-on-your-computer) |
 | Open it on my phone while trying it | [2. Open it on your phone over Wi-Fi](#2-open-it-on-your-phone-over-wi-fi) |
@@ -27,6 +28,31 @@ So there is no separate "desktop version" or "mobile version" to build. Run the 
 ## 1. Run it on your computer
 
 It works on Windows 10/11, macOS and Linux. The installer below does everything by itself; the steps after it do the same by hand, for developing the app.
+
+### Double-click to start (computer and phone)
+
+In the `BillingSystem` folder (`git clone` it, or download it from GitHub as a zip and unpack it):
+
+| Computer | Start | Stop |
+|---|---|---|
+| Windows | double-click **Start Digital Bahi.bat** | double-click **Stop Digital Bahi.bat** |
+| Mac | double-click **Start Digital Bahi.command** (the first time: right-click → **Open**, as macOS asks about files from the internet) | `./start-digitalbahi.sh stop` in Terminal |
+| Linux | `./start-digitalbahi.sh` in a terminal | `./start-digitalbahi.sh stop` |
+
+The first start downloads what the computer lacks (Node.js, PostgreSQL) and builds Digital Bahi for it: a few minutes, with the internet. After that it starts in seconds. It then:
+
+1. opens the app in the browser on this computer (**http://localhost:8710**);
+2. prints the address for phones, with a **QR code**: on a phone on the **same Wi-Fi**, scan it with the camera (or type the address into Chrome). Turn the computer's sleep off while phones use it.
+
+Close the window when you like: Digital Bahi keeps running until you stop it or turn the computer off. After `git pull` (or a newer zip) the next start builds again by itself.
+
+**Signing in on a phone.** Sign-up and OTP codes are shown only on this computer, never on a phone on the Wi-Fi (anyone on the Wi-Fi could read them). So create the business on the computer, then give each person a **user ID and password** under **Users & Roles → Add member**, and sign in with those on the phone.
+
+**If the phone cannot open it:** check it is on the same Wi-Fi as the computer (not mobile data, not a guest network). On Windows, the first start may ask to let Node.js through the firewall: tick **Private networks** and click **Allow**. If you missed it, **Windows Security → Firewall → Allow an app through firewall → Node.js**.
+
+On the phone it works in the browser as on the computer. Installing it as an app, billing without internet and handing PDFs straight to WhatsApp need an https address: [section 5](#5-put-it-on-a-server) (or the tunnel in [section 4](#4-install-the-mobile-app) to try the Android app).
+
+**Phone mode** is what these files add to the installer below: `--phone` on its start command (`installer/unix/digitalbahi.sh start --phone`, `installer\windows\DigitalBahi.cmd start --phone`). It is remembered, so the desktop icon starts Digital Bahi for phones too, until `start --no-phone` turns it off again.
 
 ### The quick way: the installer
 
@@ -66,7 +92,7 @@ The first time it builds Digital Bahi for this computer (a few minutes; Node.js 
 
 **Backups.** Use **Settings → Backup** in the app, or copy the whole data folder while Digital Bahi is stopped. Keep `config.json` with it: bank details in the database can only be read with the key in that file.
 
-**Other computers and phones** cannot connect to this one: the server only answers this computer, because anyone who could reach it could read sign-in codes off the screen. To use Digital Bahi from several devices, put it on a server ([section 5](#5-put-it-on-a-server)).
+**Other computers and phones** cannot connect to this one: the server only answers this computer, because anyone who could reach it could read sign-in codes off the screen. For phones on the same Wi-Fi, start it in phone mode ([Double-click to start](#double-click-to-start-computer-and-phone)), where the codes stay on this computer. To use Digital Bahi from anywhere, put it on a server ([section 5](#5-put-it-on-a-server)).
 
 **Settings.** `"env"` in `config.json` adds or changes the server's settings, for example `{"SMTP_URL": "smtps://user:pass@smtp.example.com:465", "MAIL_FROM": "bills@example.com"}` for the platform mail server. Restart Digital Bahi afterwards.
 
@@ -157,6 +183,8 @@ Open **http://localhost:5173** in Chrome or Edge.
 ---
 
 ## 2. Open it on your phone over Wi-Fi
+
+The easy way is [Double-click to start](#double-click-to-start-computer-and-phone): it prints the phone address with a QR code. The steps below are for the development setup (section 1, step by step).
 
 While the app runs on your computer (section 1), a phone on the **same Wi-Fi** can open it too.
 
