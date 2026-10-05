@@ -72,6 +72,8 @@ log("signed up");
 await nav("Products");
 await page.getByRole("button", { name: "Add product" }).first().click();
 await page.fill("#p-name", "Parle-G Biscuit 100 g");
+// Brand, pack size, barcode and pack units sit under "More details" on a new product.
+await page.getByRole("button", { name: /More details/ }).click();
 await page.selectOption("#p-brand", "__new");
 await page.getByPlaceholder("New company / brand").fill("Parle");
 await page.fill("#p-pack", "100 g");

@@ -83,10 +83,13 @@ export function TrendChart({
   const n = labels.length;
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
-  const max = useMemo(() => niceMax(Math.max(1, ...series.flatMap((s) => s.values))), [series]);
+  // At least 4, so the quarter lines are whole rupees (not ₹0.25 shown as ₹0, ₹0, ₹1, ₹1).
+  const max = useMemo(() => niceMax(Math.max(4, ...series.flatMap((s) => s.values))), [series]);
+  // Nothing yet: only the ₹0 line, no made-up scale.
+  const blank = series.every((s) => s.values.every((v) => !v));
   const x = (i: number) => pad.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
   const y = (v: number) => pad.top + innerH - (v / max) * innerH;
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
+  const ticks = blank ? [0] : [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(innerW / 72))));
 
   // Smooth, but never overshooting: a monotone cubic through the points (no dip below zero).

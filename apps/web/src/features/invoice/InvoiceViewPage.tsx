@@ -1,5 +1,5 @@
 import { createTranslator, formatCurrency, formatDate, translateError, type LocaleCode } from "@digitalbahi/i18n";
-import { ArrowLeft, Ban, CloudOff, Copy, Printer, SearchX } from "lucide-react";
+import { ArrowLeft, Ban, CloudOff, Copy, Printer, SearchX, Wallet } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -31,6 +31,7 @@ import { invoiceReceipt } from "../../lib/thermal/receipts";
 import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 import { copyBill, type CopiedLine } from "./copyBill";
 import { RepeatBillButton } from "./RepeatBill";
+import { PaymentDialog } from "../payments/PaymentDialog";
 import { loadKeptDraft, type KeptDraft } from "./keptDraft";
 
 /** Bills already sent to the printer from Save & print (going back to one does not print it again). */
@@ -46,6 +47,7 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
   const offlineKey = invoiceId.startsWith("offline:") ? invoiceId.slice("offline:".length) : null;
   const offline = useOffline();
   const [cancelling, setCancelling] = useState(false);
+  const [collecting, setCollecting] = useState(false);
   // Copying over a bill left half made asks first.
   const [replacing, setReplacing] = useState<KeptDraft | null>(null);
   const kept = offlineKey ? findOfflineBill(offlineKey) : {};
@@ -90,6 +92,8 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
     );
   }
   const status = invoice.status;
+  // An unpaid or part-paid bill takes its payment right here, against this bill first.
+  const collectable = LIVE && !offlineKey && Boolean(live.data) && status !== "cancelled" && invoice.balance > 0.5 && allowed("payment.collect");
   const tr = createTranslator(printLocale).t;
   const m = (v: number) => formatCurrency(v, printLocale);
   const shareText = tr(invoice.balance > 0 && status !== "cancelled" ? "share.invoiceDue" : "share.invoice", {
@@ -186,6 +190,11 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
               { value: "hi", label: "हिन्दी" },
             ]}
           />
+          {collectable && (
+            <Button icon={<Wallet size={16} />} onClick={() => setCollecting(true)}>
+              {t("dashboard.actions.receivePayment")}
+            </Button>
+          )}
           {copyLines && copyLines.length > 0 && (
             <Button icon={<Copy size={16} />} title={t("invoice.copy.title")} onClick={startCopy}>
               {t("invoice.copy.button")}
@@ -255,6 +264,9 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
         </div>
       )}
       {cancellable && <CancelInvoiceDialog bill={cancellable} open={cancelling} onOpenChange={setCancelling} />}
+      {collectable && live.data && (
+        <PaymentDialog direction="in" partyId={live.data.customerId} initialAmount={invoice.balance.toFixed(2)} documentId={live.data.id} open={collecting} onOpenChange={setCollecting} />
+      )}
       <Dialog
         open={replacing !== null}
         onOpenChange={(v) => !v && setReplacing(null)}

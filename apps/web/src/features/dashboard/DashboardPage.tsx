@@ -310,14 +310,16 @@ export function DashboardPage() {
 
       {/* The person's own work today, from what their role covers. */}
       {LIVE && home && (() => {
+        // Attendance, leave and salary wait for the first employee (a new business has none).
+        const staff = home.people === undefined || home.people.employees > 0;
         const cards = [
           home.review && <ReviewCard key="review" data={home.review} />,
           !full && home.orders?.packNext && <QueueCard key="pack" stage="pack" rows={home.orders.packNext} count={home.orders.toPack ?? 0} />,
           !full && home.orders?.dispatchNext && <QueueCard key="dispatch" stage="dispatch" rows={home.orders.dispatchNext} count={home.orders.toDispatch ?? 0} />,
           home.collections && <PromisesCard key="promises" data={home.collections} />,
-          home.people && <PeopleCard key="people" data={home.people} />,
-          home.leave && <LeaveCard key="leave" data={home.leave} />,
-          home.payroll && <PayrollCard key="payroll" data={home.payroll} />,
+          staff && home.people && <PeopleCard key="people" data={home.people} />,
+          staff && home.leave && <LeaveCard key="leave" data={home.leave} />,
+          staff && home.payroll && <PayrollCard key="payroll" data={home.payroll} />,
           !full && home.expenses && <ExpensesCard key="expenses" data={home.expenses} />,
           !full && allowed("product.view") && <StockCard key="stock" />,
         ].filter(Boolean);
@@ -482,7 +484,7 @@ export function DashboardPage() {
           <Card>
             <CardHeader title={t("dashboard.charts.topProducts")} />
             <div className="px-4 pt-3 pb-5 sm:px-5">
-              <BarList ariaLabel={t("dashboard.charts.topProducts")} items={view?.topProducts ?? []} format={(v) => compact(v)} />
+              <BarList ariaLabel={t("dashboard.charts.topProducts")} items={view?.topProducts ?? []} empty={view ? t("dashboard.empty.topProducts") : undefined} format={(v) => compact(v)} />
             </div>
           </Card>
           <Card>
@@ -490,7 +492,7 @@ export function DashboardPage() {
             <div className="px-4 pt-3 pb-5 sm:px-5">
               <BarList
                 ariaLabel={t("dashboard.charts.topCustomers")}
-                items={view?.topCustomers ?? []}
+                items={view?.topCustomers ?? []} empty={view ? t("dashboard.empty.topCustomers") : undefined}
                 format={(v) => compact(v)}
                 onSelect={(id) => navigate({ name: "customer", customerId: id })}
               />
@@ -499,7 +501,7 @@ export function DashboardPage() {
           <Card>
             <CardHeader title={t("dashboard.charts.companySales")} />
             <div className="px-4 pt-3 pb-5 sm:px-5">
-              <BarList ariaLabel={t("dashboard.charts.companySales")} items={view?.brands ?? []} format={(v) => compact(v)} />
+              <BarList ariaLabel={t("dashboard.charts.companySales")} items={view?.brands ?? []} empty={view ? t("dashboard.empty.companySales") : undefined} format={(v) => compact(v)} />
             </div>
           </Card>
         </div>
@@ -522,6 +524,7 @@ export function DashboardPage() {
         </Card>}
         {allowed("customer.view_ledger") && <Card>
           <CardHeader title={t("dashboard.needsAttention")} subtitle={t("customer.filters.overdue")} />
+          {view && view.attention.length === 0 && <p className="px-4 pt-3 pb-5 text-[13px] text-ink-3 sm:px-5">{t("dashboard.empty.attention")}</p>}
           <ul className="px-2 pt-2 pb-3">
             {(view?.attention ?? []).map((c) => (
               <li key={c.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-surface-2">

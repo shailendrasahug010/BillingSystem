@@ -346,6 +346,8 @@ function NavGrid({ onNavigate }: { onNavigate(): void }) {
 export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children: ReactNode; onOpenSearch(): void; onOpenShortcuts(): void }) {
   const { t } = useI18n();
   const { route, navigate } = useRouter();
+  // The bill screen on a phone has its own bar (total, Next, Save) where the tab bar would be.
+  const billing = route.name === "invoice-new";
   const [moreOpen, setMoreOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const pendingOrders = ORDERS.filter((o) => o.status === "pending").length;
@@ -558,13 +560,13 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-[1920px] flex-1 px-4 pt-5 pb-32 short:pb-8 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12">{children}</main>
+        <main className={cn("mx-auto w-full max-w-[1920px] flex-1 px-4 pt-5 short:pb-8 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12", billing ? "pb-8" : "pb-32")}>{children}</main>
       </div>
 
-      {/* Phones: a floating tab bar with the Create button in the middle. */}
+      {/* Phones: a floating tab bar with the Create button in the middle (not on the bill screen, which has its own bar with the total and Save). */}
       <nav
         data-overlay="bottom"
-        className="glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] border border-line/70 shadow-pop short:hidden lg:hidden"
+        className={cn("glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] border border-line/70 shadow-pop short:hidden lg:hidden", billing && "hidden")}
         style={{ gridTemplateColumns: `repeat(${bottomItems.length}, minmax(0, 1fr))` }}
         aria-label="Primary"
       >
@@ -605,7 +607,10 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             </div>
           </div>
         </div>
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-line/70 bg-surface-2/60 px-3 py-3 lg:hidden">
+        <div className="lg:hidden">
+          <NavGrid onNavigate={() => setMoreOpen(false)} />
+        </div>
+        <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-line/70 bg-surface-2/60 px-3 py-3 lg:hidden">
           <div className="flex items-center justify-between gap-3">
             <LanguageToggle />
             <ThemeToggle className="bg-surface shadow-card" />
@@ -614,9 +619,6 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           <div className="border-t border-line/70 pt-3">
             <ComfortControls userId={session.user?.id} />
           </div>
-        </div>
-        <div className="lg:hidden">
-          <NavGrid onNavigate={() => setMoreOpen(false)} />
         </div>
         <div className="hidden lg:block">
           <NavList onNavigate={() => setMoreOpen(false)} />

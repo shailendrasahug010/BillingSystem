@@ -21,6 +21,7 @@ import { cn } from "../../lib/cn";
 import { useMediaQuery } from "../../lib/useMediaQuery";
 import { CustomerCard, CustomerStrip } from "./CustomerCard";
 import { CustomerPicker } from "./CustomerPicker";
+import { CashSaleButton } from "./CashSaleButton";
 import { LineItems } from "./LineItems";
 import { ProductSearch } from "./ProductSearch";
 import { SuggestionsPanel } from "./SuggestionsPanel";
@@ -195,6 +196,7 @@ function useSave(view: DraftView) {
       setSaved({
         id: invoice.id,
         number: invoice.number,
+        customerId: customer!.id,
         customerName: customer!.businessName,
         mobile: customer!.mobile ?? null,
         total: invoice.total,
@@ -374,9 +376,17 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
           ) : (
             // Above the search bar below it, which its list of customers overlaps.
             <div className="relative z-[25] flex flex-col gap-1.5">
-              <label className="text-[13px] font-medium text-ink-2" htmlFor="customer-search">
-                {t("invoice.customer")}
-              </label>
+              <div className="flex items-end justify-between gap-2">
+                <label className="text-[13px] font-medium text-ink-2" htmlFor="customer-search">
+                  {t("invoice.customer")}
+                </label>
+                <CashSaleButton
+                  onPicked={(id) => {
+                    dispatch({ type: "customer", customerId: id });
+                    setTimeout(() => productRef.current?.focus(), 0);
+                  }}
+                />
+              </div>
               <CustomerPicker
                 ref={customerRef}
                 autoFocus
@@ -436,7 +446,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
       {/* Below 1280 px the summary is under the lines: the total and Save stay at the foot of the screen. */}
       {draft.lines.length > 0 && (
         <>
-          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:right-8 lg:bottom-4 lg:left-[calc(256px+2rem)] xl:hidden">
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:right-8 lg:bottom-4 lg:left-[calc(256px+2rem)] xl:hidden">
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
@@ -564,6 +574,14 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
 
       {step === 0 && (
         <div className="flex flex-col gap-4">
+          {/* Above the search, whose list of customers would cover it. */}
+          <CashSaleButton
+            large
+            onPicked={(id) => {
+              dispatch({ type: "customer", customerId: id });
+              toProducts();
+            }}
+          />
           <CustomerPicker
             ref={customerRef}
             large
@@ -573,7 +591,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
             }}
             onAdd={canAddCustomer() ? setAdding : undefined}
           />
-          <div>
+          <div hidden={recent.length === 0}>
             <p className="eyebrow mb-2">{t("invoice.customerCard.lastPurchase")}</p>
             <ul className="flex flex-col gap-2">
               {recent.map(({ c }) => (
@@ -646,7 +664,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
               onBackToSearch={() => productRef.current?.focus()}
             />
           </section>
-          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
             <div className="mx-auto flex max-w-xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
@@ -682,6 +700,19 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
             </ul>
           </section>
           <SummaryPanel view={view} invoiceNumber={numberLabel} onSave={saveFromReview} blocked={isBlocked(view)} />
+          {/* Save without scrolling to the end: the total and Save stay at the bottom of the screen. */}
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
+            <div className="mx-auto flex max-w-xl items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] text-ink-3">{t("invoice.grandTotal")}</p>
+                <p className="num font-display text-[22px] leading-tight font-semibold text-ink">{money(totals?.grandTotal.toNumber() ?? 0)}</p>
+              </div>
+              <Button variant="primary" size="lg" icon={<Save size={18} />} disabled={!totals || isBlocked(view)} onClick={() => saveFromReview("save")}>
+                {t("invoice.save")}
+              </Button>
+            </div>
+          </div>
+          <div className="h-24" aria-hidden />
         </div>
       )}
 
