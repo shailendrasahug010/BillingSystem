@@ -51,6 +51,7 @@ import { useToast } from "../ui/Toast";
 import { useConfirm } from "../ui/Confirm";
 import { BrandMark, FirmLogo } from "../brand/Brand";
 import { ComfortButton, ComfortControls, HelpButton } from "./Comfort";
+import { PullToRefresh } from "./PullToRefresh";
 import { AccountMenu } from "./AccountMenu";
 import { setWelcomeBusiness } from "../../lib/lastSignIn";
 
@@ -687,6 +688,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           </div>
         )}
 
+        {/* Not on the bill screens: a pull there would only get in the way of typing a bill. */}
+        <PullToRefresh off={billing} />
         <main className={cn("mx-auto w-full max-w-[1920px] flex-1 px-4 pt-5 short:pb-8 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12", billing ? "pb-8" : "pb-32")}>{children}</main>
       </div>
 

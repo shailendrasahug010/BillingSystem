@@ -11,7 +11,7 @@ import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useToast } from "../../components/ui/Toast";
 import { customerById, supplierById, TODAY } from "../../data/db";
 import { refreshCustomer, refreshSupplier } from "../../data/live";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { isWaitingCustomer, offlineScope, queueEntry, unreachable, useOffline, workingOffline } from "../../offline/sync";
 import { searchCustomers } from "../invoice/CustomerPicker";
@@ -253,11 +253,11 @@ export function PaymentDialog({
             .filter(([, v]) => v > 0)
             .map(([documentId, v]) => ({ documentId, amount: v.toFixed(2) })),
         },
-        { idempotencyKey: key },
+        { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS },
       );
       if (promiseBody) {
         try {
-          await api.post("/collections/notes", promiseBody, { idempotencyKey: promiseKey });
+          await api.post("/collections/notes", promiseBody, { idempotencyKey: promiseKey, timeoutMs: QUICK_SAVE_MS });
         } catch (e) {
           if (unreachable(e)) await keepPromise(customerById.get(party!)?.businessName ?? "").catch(() => undefined);
           else toast({ tone: "danger", title: t("collect.promiseNotSaved") });

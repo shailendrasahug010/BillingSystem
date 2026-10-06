@@ -1,7 +1,7 @@
 import { customerById } from "../../data/db";
 import { customerRow, upsertCustomer, type CustomerRow } from "../../data/live";
 import type { Customer } from "../../data/types";
-import { api, newIdempotencyKey } from "../../lib/api";
+import { api, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { isWaitingCustomer, offlineScope, queueCustomerChange, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 
 /** The customer fields the quick form edits (the POST /customers body). */
@@ -82,7 +82,7 @@ export async function createCustomer(body: CustomerInput): Promise<{ customer: C
   const id = newIdempotencyKey();
   if (!workingOffline()) {
     try {
-      return { customer: shown(await api.post<Detail>("/customers", body, { idempotencyKey: id })), queued: false };
+      return { customer: shown(await api.post<Detail>("/customers", body, { idempotencyKey: id, timeoutMs: QUICK_SAVE_MS })), queued: false };
     } catch (e) {
       if (!unreachable(e)) throw e;
     }

@@ -130,12 +130,21 @@ export function refreshSession(): Promise<SessionResponse | null> {
   return refreshing;
 }
 
+/** How long a save waits for the server before it is kept on the device instead. */
+export const QUICK_SAVE_MS = 8_000;
+
 interface RequestOptions {
   query?: Query;
   body?: unknown;
   /** Makes a POST safe to retry: the server returns the first result for the same key. */
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /**
+   * Give up after this long without an answer and fail as "network" (as if the
+   * connection had dropped). For saves that can be kept on the device and sent
+   * again with the same Idempotency-Key: a weak signal then costs seconds, not minutes.
+   */
+  timeoutMs?: number;
   /** Return the response as a Blob (PDF and other files). */
   raw?: boolean;
   /** Send a file as it is (application/octet-stream) instead of JSON. */
@@ -152,17 +161,22 @@ async function request<T>(method: string, path: string, options: RequestOptions 
   if (accessToken) headers.authorization = `Bearer ${accessToken}`;
   if (options.idempotencyKey) headers["idempotency-key"] = options.idempotencyKey;
   let res: Response;
+  const timer = options.timeoutMs ? new AbortController() : null;
+  const timeout = timer ? setTimeout(() => timer.abort(), options.timeoutMs) : undefined;
+  const signal = timer && options.signal ? AbortSignal.any([timer.signal, options.signal]) : (timer?.signal ?? options.signal);
   try {
     res = await fetch(url(path, options.query), {
       method,
       headers,
       credentials: credentials(),
       ...(options.file ? { body: options.file } : options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-      ...(options.signal ? { signal: options.signal } : {}),
+      ...(signal ? { signal } : {}),
     });
   } catch (e) {
-    if ((e as Error).name === "AbortError") throw e;
+    if ((e as Error).name === "AbortError" && !timer?.signal.aborted) throw e;
     throw new ApiError(0, "network");
+  } finally {
+    clearTimeout(timeout);
   }
   if (options.raw && res.ok) return (await res.blob()) as T;
   const body = await parse(res);

@@ -9,7 +9,7 @@ import { ErrorNote } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { customerById, supplierById, TODAY, WORKSPACE } from "../../data/db";
 import { refreshCatalog, refreshCustomer, refreshSupplier } from "../../data/live";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { serverOrDevice, updateDeviceDocument } from "../../offline/documents";
 import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { invalidateMoney } from "../payments/PaymentDialog";
@@ -131,7 +131,7 @@ export function ReturnDialog({ kind, documentId, open, onOpenChange }: { kind: "
     };
     try {
       if (workingOffline()) return await keep();
-      const res = await api.post<{ noteNumber: string; grandTotal: string; warnings?: Array<{ code: string }> }>(`/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/returns`, body, { idempotencyKey: key });
+      const res = await api.post<{ noteNumber: string; grandTotal: string; warnings?: Array<{ code: string }> }>(`/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/returns`, body, { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS });
       await Promise.all([
         restock ? refreshCatalog() : Promise.resolve(),
         d.customerId ? refreshCustomer(d.customerId) : d.supplierId ? refreshSupplier(d.supplierId) : Promise.resolve(),

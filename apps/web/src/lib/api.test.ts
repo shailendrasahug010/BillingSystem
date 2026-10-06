@@ -47,4 +47,21 @@ describe("api client and the session refresh", () => {
     // One refresh for both.
     expect(calls.filter((c) => c.includes("/auth/refresh"))).toHaveLength(1);
   });
+
+  it("gives up on a save after its time limit as a dropped connection, so it can be kept on the device", async () => {
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+    );
+    await expect(api.post("/invoices", {}, { idempotencyKey: "k", timeoutMs: 20 })).rejects.toMatchObject({ status: 0, code: "network" });
+  });
+
+  it("still lets the caller cancel a timed request", async () => {
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+    );
+    const stop = new AbortController();
+    const sent = api.post("/invoices", {}, { timeoutMs: 5_000, signal: stop.signal });
+    stop.abort();
+    await expect(sent).rejects.toMatchObject({ name: "AbortError" });
+  });
 });

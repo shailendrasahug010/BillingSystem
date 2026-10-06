@@ -9,6 +9,8 @@ import { ensureDevice, removedDevices } from "../offline/device";
 import { clearDeviceDocuments, openDeviceDocuments, refreshDeviceDocuments } from "../offline/documents";
 import { wipeBusinessCopy } from "../offline/wipe";
 import { clearKeptDrafts } from "../features/invoice/keptDraft";
+import { clearKeptForms } from "../offline/keptForms";
+import { removePin } from "./pinLock";
 import { clearSnapshots, copyExpired, dropUnlockedSnapshots, hasSnapshot, lastSnapshotMeta, loadSnapshot, saveSnapshot, type Snapshot, type SnapshotMeta } from "../offline/snapshot";
 import { applyPendingEffects, clearOfflineScope, onSynced, refreshDevice, setOfflineMode, setOfflineScope, syncNow, useOffline } from "../offline/sync";
 import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPassword, vaultOpen } from "../offline/vault";
@@ -191,6 +193,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         void clearSnapshots();
         void clearDeviceDocuments();
         void clearKeptDrafts();
+        void clearKeptForms();
         lockVault();
         clearOfflineScope();
         resetWorkspace();
@@ -300,6 +303,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         void clearSnapshots();
         void clearDeviceDocuments();
         void clearKeptDrafts();
+        void clearKeptForms();
         lockVault();
         clearOfflineScope();
         offlineMode.current = false;
@@ -464,6 +468,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           await stopPush();
           await api.post("/auth/logout");
           markSignedOut();
+          // The phone may go to someone else now: their own PIN, not this one.
+          if (session) removePin(session.user.id);
         } finally {
           setSession(null);
           await enter(null);

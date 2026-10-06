@@ -8,7 +8,7 @@ import { Field, Input } from "../../components/ui/Field";
 import { ErrorNote } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { refreshCatalog, refreshCustomer } from "../../data/live";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { updateDeviceDocument } from "../../offline/documents";
 import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { invalidateMoney } from "../payments/PaymentDialog";
@@ -80,7 +80,7 @@ export function CancelInvoiceDialog({ bill, open, onOpenChange }: { bill: Cancel
     setError(null);
     try {
       if (workingOffline() || bill.notSent) return await keep();
-      await api.post(`/invoices/${bill.id}/cancel`, { reason: reason.trim() }, { idempotencyKey: key });
+      await api.post(`/invoices/${bill.id}/cancel`, { reason: reason.trim() }, { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS });
       await Promise.all([refreshCatalog(), refreshCustomer(bill.customerId)]).catch(() => undefined);
       invalidateMoney(qc);
       for (const k of ["invoice", "invoice-raw", "stock", "reports"]) void qc.invalidateQueries({ queryKey: [k] });

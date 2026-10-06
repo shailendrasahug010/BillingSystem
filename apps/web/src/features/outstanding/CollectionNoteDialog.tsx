@@ -9,7 +9,7 @@ import { Segmented } from "../../components/ui/misc";
 import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { TODAY } from "../../data/db";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { isWaitingCustomer, offlineScope, queueEntry, unreachable, useOffline } from "../../offline/sync";
 
@@ -106,7 +106,7 @@ export function CollectionNoteDialog({
     };
     try {
       if (offline.offlineMode || !offline.online || isWaitingCustomer(customer.id)) return await keep();
-      await api.post("/collections/notes", body, { idempotencyKey: key });
+      await api.post("/collections/notes", body, { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS });
       done(false);
     } catch (e) {
       if (unreachable(e)) {

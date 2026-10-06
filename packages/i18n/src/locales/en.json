@@ -1415,6 +1415,10 @@
       "skip": "Keep old rates",
       "updated_one": "Selling rate updated for {{count}} item",
       "updated_other": "Selling rates updated for {{count}} items"
+    },
+    "kept": {
+      "restored": "Unfinished purchase bill brought back",
+      "startNew": "Start a new bill"
     }
   },
   "inventory": {
@@ -2023,7 +2027,12 @@
       "printNote": "Delivery challan: goods sent before the bill. Not a tax invoice; the tax invoice follows."
     },
     "computerGenerated": "This is a computer-generated document.",
-    "noDemandHint": "Products on booked orders that are not billed yet add up here."
+    "noDemandHint": "Products on booked orders that are not billed yet add up here.",
+    "kept": {
+      "restored": "Unfinished order brought back",
+      "restoredQuote": "Unfinished quotation brought back",
+      "startNew": "Start new"
+    }
   },
   "expenses": {
     "title": "Expenses",
@@ -2674,7 +2683,11 @@
     "cancelWaiting": "Cancelled on this device, waiting to send",
     "removeTitle": "Remove this entry?",
     "signOutTitle": "Changes not synced yet",
-    "signOutAnyway": "Sign out anyway"
+    "signOutAnyway": "Sign out anyway",
+    "lowSpace": {
+      "title": "This device is almost out of space",
+      "body": "Bills saved without internet may not be kept. Free up some space (old photos, videos or apps)."
+    }
   },
   "pdf": {
     "page": "Page {{page}} of {{count}}"
@@ -3997,7 +4010,10 @@
     "notOpen": "Phones cannot open Digital Bahi on this computer yet. Close it and start it again with “Start Digital Bahi” (Start Digital Bahi.bat on Windows, Start Digital Bahi.command on a Mac): then phones on the same Wi-Fi can open it.",
     "copy": "Copy link",
     "copied": "Link copied",
-    "httpNote": "At this address the phone uses Digital Bahi in the browser. Installing it as an app and billing without internet need an https address."
+    "httpNote": "At this address the phone uses Digital Bahi in the browser. Installing it as an app and billing without internet need an https address.",
+    "pullToRefresh": "Pull down to refresh",
+    "releaseToRefresh": "Let go to refresh",
+    "refreshing": "Refreshing"
   },
   "invite": {
     "whatsapp": "Send invite on WhatsApp",
@@ -4064,5 +4080,32 @@
     "bankTitle": "Bank & UPI book",
     "allTitle": "Cash & bank book",
     "signature": "Checked by"
+  },
+  "pinLock": {
+    "title": "Enter your PIN",
+    "digits_one": "{{count}} digit typed",
+    "digits_other": "{{count}} digits typed",
+    "backspace": "Remove last digit",
+    "wrong": "Wrong PIN. Try again.",
+    "wait": "Too many wrong tries. Try again in {{seconds}} seconds.",
+    "bio": "Use fingerprint",
+    "forgot": "Forgot PIN? Use your password",
+    "password": "Your Digital Bahi password",
+    "passwordWrong": "This password is not right.",
+    "passwordNone": "Your password can't open this device yet. Sign out and sign in again.",
+    "open": "Open",
+    "usePin": "Use PIN instead",
+    "settingsTitle": "Lock this device",
+    "settingsHint": "Ask for a 4-digit PIN when the app opens and after it has been away, so nobody else can see your customers and dues. Just for you, on this device.",
+    "set": "Set a PIN",
+    "change": "Change PIN",
+    "remove": "Remove PIN",
+    "choose": "Choose a 4-digit PIN",
+    "again": "Type the same PIN again",
+    "mismatch": "The two PINs were different. Start again.",
+    "after": "Lock after the app has been away for",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "useBio": "Also open with fingerprint or face"
   }
 }

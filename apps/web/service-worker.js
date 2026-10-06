@@ -3,8 +3,8 @@
  * `PRECACHE` (every file of the build) are put in front of this file at build
  * time by vite.config.ts.
  *
- *  - The app's screens open without a network: the page is network-first with
- *    the last copy as fallback, built files (hashed, never change) cache-first.
+ *  - The app's screens open at once, with or without a network: the page and
+ *    the built files (hashed, never change) come from this version's cache.
  *  - Business data is never cached here: /api always goes to the server.
  *  - A new version installs in the background and takes over only when the
  *    user chooses "Reload" (or all windows were closed), so a half-typed
@@ -37,17 +37,25 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) return;
 
-  if (request.mode === "navigate") {
+  if (request.mode === "navigate" && url.origin === self.location.origin && !/\.[a-z0-9]+$/i.test(url.pathname)) {
+    // This version's own page, at once, even on a weak signal: it matches the
+    // files cached with it. A newer version is found by the update check
+    // (pwa.ts) and taken on "Reload". Only a device without the page waits.
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            void caches.open(CACHE).then((cache) => cache.put("/", copy));
-          }
-          return response;
-        })
-        .catch(() => caches.open(CACHE).then((cache) => cache.match("/")).then((hit) => hit ?? Response.error())),
+      caches
+        .open(CACHE)
+        .then((cache) => cache.match("/"))
+        .then(
+          (hit) =>
+            hit ??
+            fetch(request).then((response) => {
+              if (response.ok) {
+                const copy = response.clone();
+                void caches.open(CACHE).then((cache) => cache.put("/", copy));
+              }
+              return response;
+            }),
+        ),
     );
     return;
   }
@@ -69,6 +77,19 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin === self.location.origin) {
-    event.respondWith(caches.match(request).then((hit) => hit ?? fetch(request)));
+    event.respondWith(
+      caches.match(request).then(
+        (hit) =>
+          hit ??
+          fetch(request).then((response) => {
+            // A built file left out of the install (the PDF and barcode readers): kept once used, for offline.
+            if (response.ok && url.pathname.startsWith("/assets/")) {
+              const copy = response.clone();
+              void caches.open(CACHE).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          }),
+      ),
+    );
   }
 });

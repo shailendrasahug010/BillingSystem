@@ -2,7 +2,7 @@ import { queryClient } from "../../app/session";
 import { customerById } from "../../data/db";
 import { adjustStock } from "../../data/live";
 import { dropLiveInsight, touch } from "../../data/store";
-import { api } from "../../lib/api";
+import { api, QUICK_SAVE_MS } from "../../lib/api";
 import { zeroRatedBody, type DraftView } from "./useInvoiceDraft";
 
 export interface SavedInvoice {
@@ -52,7 +52,7 @@ export async function postInvoice(view: DraftView, idempotencyKey: string): Prom
       ...zeroRatedBody(view),
       clientTotals: { grandTotal: totals!.grandTotal.toFixed(2) },
     },
-    { idempotencyKey },
+    { idempotencyKey, timeoutMs: QUICK_SAVE_MS },
   );
   // Keep the cached workspace in step without reloading it.
   for (const item of res.items) {
