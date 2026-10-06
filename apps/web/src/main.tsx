@@ -7,6 +7,7 @@ import { initAppearance } from "./app/theme";
 import { initTextSize } from "./app/comfort";
 import { setupPwa } from "./lib/pwa";
 import { startNativeApp } from "./platform/app";
+import { startScrollFade } from "./lib/scrollFade";
 import "./styles/app.css";
 
 installErrorReporting();
@@ -14,6 +15,7 @@ initAppearance();
 initTextSize();
 setupPwa();
 startNativeApp();
+startScrollFade();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

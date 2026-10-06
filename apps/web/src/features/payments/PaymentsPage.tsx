@@ -75,6 +75,23 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
     if (action) setDialog({ direction: action === "collect" ? "in" : "out", partyId: partyId ?? null });
   }, [action, partyId]);
 
+  const statusColumn: Column<PaymentRow> = {
+    key: "status",
+    header: t("common.status"),
+    sortValue: (p) => (p.status === "cancelled" ? p.status : (p.chequeStatus ?? (Number(p.unallocatedAmount) > 0 ? "advance" : null))),
+    render: (p) =>
+      p.status === "cancelled" ? (
+        <Badge tone="danger">{p.chequeStatus === "bounced" ? t("payment.chequeStatus.bounced") : t("common.cancelled")}</Badge>
+      ) : p.chequeStatus ? (
+        <Badge tone={CHEQUE_TONE[p.chequeStatus] ?? "neutral"}>{t(`payment.chequeStatus.${p.chequeStatus}`)}</Badge>
+      ) : Number(p.unallocatedAmount) > 0 ? (
+        <Badge tone="accent">
+          {t("payment.advanceShort")} {money(p.unallocatedAmount)}
+        </Badge>
+      ) : null,
+  };
+  // Status only once some payment has one (a cheque, an advance, a cancelled receipt).
+  const hasStatus = list.rows.some((p) => p.status === "cancelled" || p.chequeStatus || Number(p.unallocatedAmount) > 0);
   const columns: Column<PaymentRow>[] = [
     { key: "date", header: t("common.date"), sortValue: (p) => p.paymentDate, render: (p) => <span className="text-ink-2">{dateMedium(p.paymentDate)}</span> },
     { key: "number", header: t("common.number"), sortValue: (p) => p.paymentNumber, render: (p) => <span className="font-medium text-ink">{p.paymentNumber}</span> },
@@ -100,21 +117,7 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         </span>
       ),
     },
-    {
-      key: "status",
-      header: t("common.status"),
-      sortValue: (p) => (p.status === "cancelled" ? p.status : (p.chequeStatus ?? (Number(p.unallocatedAmount) > 0 ? "advance" : null))),
-      render: (p) =>
-        p.status === "cancelled" ? (
-          <Badge tone="danger">{p.chequeStatus === "bounced" ? t("payment.chequeStatus.bounced") : t("common.cancelled")}</Badge>
-        ) : p.chequeStatus ? (
-          <Badge tone={CHEQUE_TONE[p.chequeStatus] ?? "neutral"}>{t(`payment.chequeStatus.${p.chequeStatus}`)}</Badge>
-        ) : Number(p.unallocatedAmount) > 0 ? (
-          <Badge tone="accent">
-            {t("payment.advanceShort")} {money(p.unallocatedAmount)}
-          </Badge>
-        ) : null,
-    },
+    ...(hasStatus ? [statusColumn] : []),
     {
       key: "amount",
       header: t("common.amount"),

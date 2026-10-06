@@ -179,7 +179,7 @@ function ExpenseList() {
           ]}
         />
       </FilterBar>
-      {totals.data && (
+      {totals.data && Number(totals.data.count) > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label={t("expenses.count")} value={totals.data.count} />
           <Stat label={t("expenses.amountBeforeGst")} value={money(totals.data.amount)} />
@@ -338,7 +338,7 @@ function ExpenseSummary() {
   const rowLabel = (r: SummaryRow) => (groupBy === "method" ? t(`paymentMethod.${r.label as "cash"}`) : (locale === "hi" && r.labelHi) || r.label);
   return (
     <div className="flex flex-col gap-4">
-      <PeriodBar period={period}>
+      <PeriodBar period={period} actions={<ExportButton path="/reports/expenses" query={query} filename={`expenses-${period.from}-${period.to}.csv`} />}>
         <Select aria-label={t("common.groupBy")} value={groupBy} onChange={(e) => setGroupBy(e.target.value as typeof groupBy)} className="md:w-48">
           {(["category", "month", "year", "method"] as const).map((g) => (
             <option key={g} value={g}>
@@ -346,9 +346,6 @@ function ExpenseSummary() {
             </option>
           ))}
         </Select>
-        <div className="md:ml-auto">
-          <ExportButton path="/reports/expenses" query={query} filename={`expenses-${period.from}-${period.to}.csv`} />
-        </div>
       </PeriodBar>
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable

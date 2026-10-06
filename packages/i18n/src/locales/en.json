@@ -73,7 +73,7 @@
     "days_other": "{{count}} days",
     "items_one": "{{count}} item",
     "items_other": "{{count}} items",
-    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_one": "Yesterday",
     "daysAgo_other": "{{count}} days ago",
     "showingCount": "Showing {{shown}} of {{total}}",
     "comingSoon": "Planned",
@@ -97,7 +97,8 @@
     "noAccessHint": "Your role does not include this screen. Ask the owner to add it if you need it.",
     "goHome": "Go to my screens",
     "remove": "Remove",
-    "connectHint": "Connect to the internet and this opens by itself."
+    "connectHint": "Connect to the internet and this opens by itself.",
+    "daysAgo_zero": "Today"
   },
   "nav": {
     "groupDaily": "Daily work",
@@ -313,6 +314,14 @@
       "topCustomers": "The customers who buy the most show here.",
       "companySales": "Sales by company or brand show here.",
       "attention": "No customer is overdue."
+    },
+    "nothingToday": "Nothing yet today: {{list}}",
+    "overdueLine_one": "{{count}} bill overdue, oldest {{days}} days",
+    "overdueLine_other": "{{count}} bills overdue, oldest {{days}} days",
+    "todayWords": {
+      "purchases": "purchases",
+      "expenses": "expenses",
+      "orders": "orders"
     }
   },
   "invoice": {
@@ -415,7 +424,7 @@
       "no": "No",
       "rcmNotIncluded": "GST under reverse charge is paid by the recipient and is not included in this total."
     },
-    "numberOnSave": "Assigned on save",
+    "numberOnSave": "Bill number given on save",
     "saveFailed": "Invoice not saved",
     "saving": "Saving…",
     "savedWithWarnings": "Saved with warnings",
@@ -562,7 +571,8 @@
         "upcoming": "Upcoming",
         "lapsed": "Lapsed",
         "irregular": "Occasional"
-      }
+      },
+      "none": "Suggestions show here once this shop has bought the same items a few times."
     },
     "showAll": "All {{count}}",
     "showLess": "Show less"
@@ -642,7 +652,8 @@
     "backToList": "Back to customers",
     "noneYet": "No customers yet",
     "noneYetHint": "Add the shops you sell to, or bring them in from Excel or Tally.",
-    "importButton": "Import from Excel or Tally"
+    "importButton": "Import from Excel or Tally",
+    "gstinOrType": "GSTIN / type"
   },
   "supplier": {
     "title": "Suppliers",
@@ -651,7 +662,7 @@
     "add": "Add supplier",
     "edit": "Edit supplier",
     "name": "Supplier",
-    "search": "Search supplier by name, code, GSTIN, mobile…",
+    "search": "Name, code, GSTIN or mobile",
     "companyName": "Legal name",
     "gstRegistration": "GST registration",
     "registration": {
@@ -686,7 +697,7 @@
   "product": {
     "title": "Products",
     "add": "Add product",
-    "search": "Search by name, code, barcode, brand…",
+    "search": "Name, code, barcode or brand",
     "name": "Product name",
     "code": "Product code",
     "sku": "SKU",
@@ -777,7 +788,8 @@
     "stock": {
       "out_of_stock": "Out of stock",
       "low": "Low stock",
-      "ok": "In stock"
+      "ok": "In stock",
+      "short": "Short by {{qty}}"
     },
     "expiry": {
       "expired": "Expired",
@@ -977,7 +989,8 @@
       "ptSpecialAmount": "Tax that month",
       "ptWomen": "Women: {{slabs}}",
       "ptAddSlab": "Add slab",
-      "ptUseBuiltIn": "Use the built-in slabs"
+      "ptUseBuiltIn": "Use the built-in slabs",
+      "short": "Salary"
     },
     "einvoice": "E-invoicing",
     "einvoiceHint": "Turnover above ₹5 crore: bills to registered buyers, SEZ units and abroad need an IRN (GST Reports → E-invoice).",
@@ -1317,7 +1330,7 @@
     "pay": "Pay supplier",
     "in": "Received",
     "out": "Paid",
-    "search": "Search by receipt number or reference",
+    "search": "Receipt number or reference",
     "reference": "Reference / UTR",
     "chequeNumber": "Cheque number",
     "chequeDate": "Cheque date",
@@ -2062,7 +2075,7 @@
     "paidTo": "Paid to",
     "billNumber": "Bill number",
     "saved": "Expense saved",
-    "search": "Search number, paid to, bill number or notes",
+    "search": "Number, paid to, bill or notes",
     "count": "Expenses",
     "empty": "No expenses in this view",
     "emptyHint": "Record rent, electricity, fuel and other costs to see where the money goes.",
@@ -2471,7 +2484,6 @@
     "was": "was {{value}}",
     "points": "{{value}} pts",
     "noComparison": "nothing before",
-    "moreNumbers": "{{count}} more numbers",
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",
     "times": "{{value}}×",

@@ -177,22 +177,26 @@ function AttendanceDay() {
   };
   return (
     <div className="flex flex-col gap-4">
-      <FilterBar>
+      <FilterBar
+        fit
+        actions={
+          canMark && (
+            <>
+              <Button
+                size="sm"
+                icon={<CheckCheck size={14} />}
+                onClick={() => setMarks((m) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { ...v, status: v.status ?? "present" }])))}
+              >
+                {t("people.markRestPresent")}
+              </Button>
+              <Button variant="primary" disabled={busy || changed.length === 0} onClick={() => void save()}>
+                {busy ? t("common.saving") : changed.length ? t("people.saveMarks", { count: changed.length }) : t("common.save")}
+              </Button>
+            </>
+          )
+        }
+      >
         <Input type="date" aria-label={t("common.date")} value={date} max={TODAY} onChange={(e) => setDate(e.target.value)} className="md:w-48" />
-        {canMark && (
-          <Button
-            size="sm"
-            icon={<CheckCheck size={14} />}
-            onClick={() => setMarks((m) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { ...v, status: v.status ?? "present" }])))}
-          >
-            {t("people.markRestPresent")}
-          </Button>
-        )}
-        {canMark && (
-          <Button variant="primary" className="md:ml-auto" disabled={busy || changed.length === 0} onClick={() => void save()}>
-            {busy ? t("common.saving") : changed.length ? t("people.saveMarks", { count: changed.length }) : t("common.save")}
-          </Button>
-        )}
       </FilterBar>
       {error ? <ErrorNote error={error} /> : null}
       <p className="text-[13px] text-ink-3">{t("people.attendanceHint")}</p>
@@ -286,7 +290,7 @@ function AttendanceRegister() {
   const days = q.data ? Number(q.data.to.slice(8, 10)) : 0;
   return (
     <div className="flex flex-col gap-4">
-      <FilterBar>
+      <FilterBar fit>
         <Input type="month" aria-label={t("common.period")} value={month} max={TODAY.slice(0, 7)} onChange={(e) => setMonth(e.target.value)} className="md:w-48" />
       </FilterBar>
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}

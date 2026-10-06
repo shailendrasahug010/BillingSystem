@@ -37,10 +37,13 @@ export interface InvoiceRow {
 type Payment = "all" | "open" | "unpaid" | "partial" | "paid";
 type Status = "all" | "posted" | "cancelled";
 
-const isOverdue = (r: InvoiceRow) => r.status === "posted" && Number(r.balanceDue) > 0.5 && Boolean(r.dueDate) && r.dueDate! < TODAY;
-const isDueSoon = (r: InvoiceRow) => r.status === "posted" && Number(r.balanceDue) > 0.5 && Boolean(r.dueDate) && r.dueDate! >= TODAY && r.dueDate! <= addDays(TODAY, 3);
+/** What a status chip needs to know about a bill (the list's row, or the bill's own page). */
+type BillState = Pick<InvoiceRow, "status" | "paymentStatus" | "dueDate" | "balanceDue">;
 
-export function InvoiceStatusBadge({ row }: { row: InvoiceRow }) {
+const isOverdue = (r: BillState) => r.status === "posted" && Number(r.balanceDue) > 0.5 && Boolean(r.dueDate) && r.dueDate! < TODAY;
+const isDueSoon = (r: BillState) => r.status === "posted" && Number(r.balanceDue) > 0.5 && Boolean(r.dueDate) && r.dueDate! >= TODAY && r.dueDate! <= addDays(TODAY, 3);
+
+export function InvoiceStatusBadge({ row }: { row: BillState }) {
   const { t } = useI18n();
   if (row.status === "cancelled") return <Badge tone="neutral">{t("common.cancelled")}</Badge>;
   if (isOverdue(row)) return <Badge tone="danger" dot>{t("status.payment.overdue")}</Badge>;

@@ -4,6 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
  * Line/area trend chart drawn in SVG. One y-axis only (both series are rupees),
  * 2px lines, a 10% area wash for the primary series, hairline grid, legend
  * above, crosshair + tooltip on hover/keyboard, and an optional table view.
+ * With `bars`, side-by-side bars per point instead (day by day, where a line
+ * would draw hills over the days with nothing).
  */
 export interface TrendSeries {
   key: string;
@@ -55,6 +57,7 @@ export function TrendChart({
   ariaLabel,
   showTable,
   tableHeader,
+  bars,
 }: {
   series: TrendSeries[];
   labels: string[];
@@ -65,6 +68,7 @@ export function TrendChart({
   ariaLabel: string;
   showTable?: boolean;
   tableHeader: string;
+  bars?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const gid = useId().replace(/:/g, "");
@@ -87,7 +91,9 @@ export function TrendChart({
   const max = useMemo(() => niceMax(Math.max(4, ...series.flatMap((s) => s.values))), [series]);
   // Nothing yet: only the ₹0 line, no made-up scale.
   const blank = series.every((s) => s.values.every((v) => !v));
-  const x = (i: number) => pad.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+  const band = n > 0 ? innerW / n : innerW;
+  const x = (i: number) => (bars ? pad.left + (i + 0.5) * band : pad.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW));
+  const barW = Math.max(2, Math.min(18, (band * 0.72) / Math.max(1, series.length)));
   const y = (v: number) => pad.top + innerH - (v / max) * innerH;
   const ticks = blank ? [0] : [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
   const labelEvery = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(innerW / 72))));
@@ -100,7 +106,7 @@ export function TrendChart({
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!rect || n === 0) return;
     const px = clientX - rect.left;
-    const idx = Math.round(((px - pad.left) / innerW) * (n - 1));
+    const idx = bars ? Math.floor((px - pad.left) / band) : Math.round(((px - pad.left) / innerW) * (n - 1));
     setHover(Math.min(n - 1, Math.max(0, idx)));
   };
 
@@ -187,15 +193,38 @@ export function TrendChart({
             <stop offset="100%" stopColor={series[0]?.color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        {series[0] && <path d={area(series[0].values)} fill={`url(#${gid}-area)`} className="chart-fade" />}
-        {series.map((s) => (
-          <path key={s.key} d={path(s.values)} pathLength={1} fill="none" stroke={s.color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" className="chart-draw" />
-        ))}
-        {/* End markers */}
-        {series.map((s) => (
-          <circle key={`end-${s.key}`} cx={x(n - 1)} cy={y(s.values[n - 1] ?? 0)} r={4} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
-        ))}
-        {hover !== null && (
+        {bars ? (
+          <g className="chart-fade">
+            {series.map((s, k) =>
+              s.values.map((v, i) =>
+                v > 0 ? (
+                  <rect
+                    key={`${s.key}-${i}`}
+                    x={x(i) - (barW * series.length) / 2 + k * barW + 0.5}
+                    y={y(v)}
+                    width={barW - 1}
+                    height={Math.max(1, y(0) - y(v))}
+                    rx={Math.min(3, barW / 3)}
+                    fill={s.color}
+                    opacity={hover === null || hover === i ? 1 : 0.55}
+                  />
+                ) : null,
+              ),
+            )}
+          </g>
+        ) : (
+          <>
+            {series[0] && <path d={area(series[0].values)} fill={`url(#${gid}-area)`} className="chart-fade" />}
+            {series.map((s) => (
+              <path key={s.key} d={path(s.values)} pathLength={1} fill="none" stroke={s.color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" className="chart-draw" />
+            ))}
+            {/* End markers */}
+            {series.map((s) => (
+              <circle key={`end-${s.key}`} cx={x(n - 1)} cy={y(s.values[n - 1] ?? 0)} r={4} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
+            ))}
+          </>
+        )}
+        {hover !== null && !bars && (
           <g>
             <line x1={tipX} x2={tipX} y1={pad.top} y2={pad.top + innerH} stroke="var(--border-strong)" strokeWidth={1} />
             {series.map((s) => (

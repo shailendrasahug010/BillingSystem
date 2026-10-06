@@ -90,13 +90,16 @@ function Ready({ onPlanned }: { onPlanned(id: string): void }) {
   const chosen = selected.map((id) => rows.find((r) => r.id === id)).filter((r): r is ReadyInvoice => Boolean(r));
   return (
     <div className="flex flex-col gap-4">
-      <FilterBar>
+      <FilterBar
+        actions={
+          allowed("dispatch.dispatch") && (
+            <Button variant="primary" icon={<Truck size={16} />} disabled={selected.length === 0} onClick={() => setPlanning(true)}>
+              {t("dispatch.planTrip", { count: selected.length })}
+            </Button>
+          )
+        }
+      >
         <span className="text-[13px] text-ink-2">{t("dispatch.readyHint")}</span>
-        {allowed("dispatch.dispatch") && (
-          <Button variant="primary" className="md:ml-auto" icon={<Truck size={16} />} disabled={selected.length === 0} onClick={() => setPlanning(true)}>
-            {t("dispatch.planTrip", { count: selected.length })}
-          </Button>
-        )}
       </FilterBar>
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable

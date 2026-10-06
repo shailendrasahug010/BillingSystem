@@ -38,7 +38,7 @@ export function ProfitReport({ settings, onChange }: ReportProps) {
   const totals = q.data?.totals;
   return (
     <div className="flex flex-col gap-4">
-      <PeriodBar period={period}>
+      <PeriodBar period={period} actions={<ExportButton path="/reports/profit" query={query} filename={`profit-${groupBy}-${period.from}-${period.to}.csv`} />}>
         <Select aria-label={t("common.groupBy")} value={groupBy} onChange={(e) => setGroupBy(e.target.value as ProfitGroup)} className="md:w-48">
           {PROFIT_GROUPS.map((g) => (
             <option key={g} value={g}>
@@ -46,9 +46,6 @@ export function ProfitReport({ settings, onChange }: ReportProps) {
             </option>
           ))}
         </Select>
-        <div className="md:ml-auto">
-          <ExportButton path="/reports/profit" query={query} filename={`profit-${groupBy}-${period.from}-${period.to}.csv`} />
-        </div>
       </PeriodBar>
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       {totals && (
@@ -187,7 +184,7 @@ export function ProductsReport({ settings, onChange }: ReportProps) {
   const counts = (m: ProductRow["movement"]) => (q.data?.rows ?? []).filter((r) => r.movement === m).length;
   return (
     <div className="flex flex-col gap-4">
-      <PeriodBar period={period}>
+      <PeriodBar period={period} actions={<ExportButton path="/reports/products" query={query} filename={`products-${period.from}-${period.to}.csv`} />}>
         <Select aria-label={t("analytics.movement")} value={movement} onChange={(e) => setMovement(e.target.value as typeof movement)} className="md:w-52">
           <option value="">
             {t("analytics.movement")}: {t("common.all")}
@@ -198,9 +195,6 @@ export function ProductsReport({ settings, onChange }: ReportProps) {
             </option>
           ))}
         </Select>
-        <div className="md:ml-auto">
-          <ExportButton path="/reports/products" query={query} filename={`products-${period.from}-${period.to}.csv`} />
-        </div>
       </PeriodBar>
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable

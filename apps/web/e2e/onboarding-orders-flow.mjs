@@ -86,6 +86,7 @@ await page.getByRole("option", { name: /Parle-G/ }).click();
 await dialog().getByLabel(/^Qty Parle-G/).fill("48");
 await dialog().getByRole("button", { name: "Save", exact: true }).click();
 await toast("Stock transferred");
+await page.getByRole("button", { name: "Filters" }).click();
 await page.getByLabel("Godown").selectOption({ label: "Shop Counter" });
 await page.getByRole("cell", { name: /48 PCS/ }).waitFor();
 log("transferred 48 pieces to the shop counter");

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { monthName } from "@digitalbahi/i18n";
 import { useI18n } from "../../app/i18n";
 import { Legend, TrendChart } from "../../components/charts/TrendChart";
 import { Badge, type Tone } from "../../components/ui/Badge";
@@ -119,7 +120,7 @@ const KPIS: Array<{ key: KpiKey; kind: "money" | "count" | "percent" | "days" | 
   { key: "daysOfInventory", kind: "days", up: false },
 ];
 
-/** The measures shown first; the rest wait behind "More numbers". */
+/** The measures shown first. */
 const MAIN_KPIS: KpiKey[] = ["netSales", "collections", "marginPercent", "receivables"];
 
 const ABC_TONE: Record<PartyRow["abc"], Tone> = { A: "good", B: "accent", C: "neutral" };
@@ -132,7 +133,9 @@ const STATUS_TONE: Record<PartyRow["status"], Tone> = { new: "accent", lost: "da
  * that may see profit.
  */
 export function InsightsReport({ settings, onChange }: ReportProps) {
-  const { t, money, compact, number, dateMedium } = useI18n();
+  const { t, money, compact, number, dateMedium, locale } = useI18n();
+  // "Nov 25" under the chart: "11/25" reads like a date.
+  const shortMonth = (month: string) => new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { month: "short", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`));
   const period = settingsPeriod(settings, onChange);
   const compare = settings.compare ?? "previous";
   const query = { from: period.from, to: period.to, compare };
@@ -143,7 +146,6 @@ export function InsightsReport({ settings, onChange }: ReportProps) {
     placeholderData: (prev) => prev,
   });
   const d = q.data;
-  const [allKpis, setAllKpis] = useState(false);
 
   const show = (kind: (typeof KPIS)[number]["kind"], v: string | null) => {
     if (v === null) return "—";
@@ -170,29 +172,12 @@ export function InsightsReport({ settings, onChange }: ReportProps) {
 
       <section aria-label={t("insights.measures")} className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
         {d
-          ? (() => {
-              const present = KPIS.filter((k) => d.kpis[k.key]);
-              const main = [...present.filter((k) => MAIN_KPIS.includes(k.key)), ...present.filter((k) => !MAIN_KPIS.includes(k.key))].slice(0, 4);
-              const shown = allKpis ? present : main;
-              return (
-                <>
-                  {shown.map((k) => {
-                    const m = d.kpis[k.key]!;
-                    return <KpiTile key={k.key} label={t(`insights.kpis.${k.key}`)} value={show(k.kind, m.value)} previous={show(k.kind, m.previous)} change={m.change} points={k.kind === "percent"} up={k.up} />;
-                  })}
-                  {present.length > main.length && (
-                    <button
-                      type="button"
-                      aria-expanded={allKpis}
-                      onClick={() => setAllKpis((v) => !v)}
-                      className="press flex min-h-[92px] items-center justify-center gap-1.5 rounded-[var(--radius-card)] border border-dashed border-line-strong bg-surface/60 p-3.5 text-[13px] font-semibold text-accent-ink hover:bg-surface"
-                    >
-                      {allKpis ? t("suggestions.showLess") : t("insights.moreNumbers", { count: present.length - main.length })}
-                    </button>
-                  )}
-                </>
-              );
-            })()
+          ? [...KPIS.filter((k) => MAIN_KPIS.includes(k.key)), ...KPIS.filter((k) => !MAIN_KPIS.includes(k.key))]
+              .filter((k) => d.kpis[k.key])
+              .map((k) => {
+                const m = d.kpis[k.key]!;
+                return <KpiTile key={k.key} label={t(`insights.kpis.${k.key}`)} value={show(k.kind, m.value)} previous={show(k.kind, m.previous)} change={m.change} points={k.kind === "percent"} up={k.up} />;
+              })
           : Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[92px] w-full" />)}
       </section>
 
@@ -205,8 +190,8 @@ export function InsightsReport({ settings, onChange }: ReportProps) {
             </div>
             <TrendChart
               ariaLabel={t("insights.trend")}
-              labels={d.trend.map((r) => r.month.slice(5) + "/" + r.month.slice(2, 4))}
-              tooltipLabels={d.trend.map((r) => r.month)}
+              labels={d.trend.map((r) => `${shortMonth(r.month)} ${r.month.slice(2, 4)}`)}
+              tooltipLabels={d.trend.map((r) => monthName(r.month, locale))}
               series={[
                 { key: "sales", label: t("insights.sales"), color: "var(--series-1)", values: d.trend.map((r) => Number(r.sales)) },
                 ...(d.trend[0]?.margin !== undefined ? [{ key: "margin", label: t("insights.margin"), color: "var(--series-2)", values: d.trend.map((r) => Number(r.margin)) }] : []),

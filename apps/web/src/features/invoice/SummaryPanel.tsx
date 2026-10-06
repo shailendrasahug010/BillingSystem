@@ -139,7 +139,8 @@ export function SummaryPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="eyebrow">{t("invoice.taxInvoice")}</p>
-            <p className="truncate font-mono text-[14px] font-medium text-ink">{invoiceNumber}</p>
+            {/* A real number in typewriter digits; "given on save" as plain words. */}
+            <p className={cn("truncate text-[14px] font-medium", /\d/.test(invoiceNumber) ? "font-mono text-ink" : "text-ink-2")}>{invoiceNumber}</p>
           </div>
           <div className="shrink-0 text-right text-[12px] leading-snug text-ink-3">
             <p>

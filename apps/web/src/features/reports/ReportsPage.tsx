@@ -214,7 +214,7 @@ function GroupedReport({ kind, settings, onChange }: { kind: keyof typeof GROUPS
   const totals = q.data?.totals;
   return (
     <div className="flex flex-col gap-4">
-      <PeriodBar period={period}>
+      <PeriodBar period={period} actions={<ExportButton path={`/reports/${kind}`} query={query} filename={`${kind}-${period.from}-${period.to}.csv`} />}>
         <Select aria-label={t("common.groupBy")} value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="md:w-48">
           {GROUPS[kind].map((g) => (
             <option key={g} value={g}>
@@ -222,9 +222,6 @@ function GroupedReport({ kind, settings, onChange }: { kind: keyof typeof GROUPS
             </option>
           ))}
         </Select>
-        <div className="md:ml-auto">
-          <ExportButton path={`/reports/${kind}`} query={query} filename={`${kind}-${period.from}-${period.to}.csv`} />
-        </div>
       </PeriodBar>
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable
@@ -311,7 +308,21 @@ function OutstandingReport({ settings, onChange }: ReportProps) {
   ];
   return (
     <div className="flex flex-col gap-4">
-      <FilterBar>
+      <FilterBar
+        fit
+        actions={
+          <>
+            <span className="num text-[13px] text-ink-3">
+              {q.data && (
+                <>
+                  {t("common.total")} <span className="font-semibold text-ink">{money(q.data.totals.total)}</span> · {t("reports.asOf", { date: dateMedium(q.data.asOf) })}
+                </>
+              )}
+            </span>
+            <ExportButton path="/reports/outstanding" query={query} filename={`outstanding-${party}.csv`} />
+          </>
+        }
+      >
         <Segmented
           size="sm"
           label={t("common.party")}
@@ -332,14 +343,6 @@ function OutstandingReport({ settings, onChange }: ReportProps) {
             { value: "invoice_date", label: t("reports.byBillDate") },
           ]}
         />
-        <span className="num text-[13px] text-ink-3 md:ml-auto">
-          {q.data && (
-            <>
-              {t("common.total")} <span className="font-semibold text-ink">{money(q.data.totals.total)}</span> · {t("reports.asOf", { date: dateMedium(q.data.asOf) })}
-            </>
-          )}
-        </span>
-        <ExportButton path="/reports/outstanding" query={query} filename={`outstanding-${party}.csv`} />
       </FilterBar>
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       <DataTable columns={columns} rows={q.data?.rows ?? []} rowKey={(r) => r.partyId} loading={q.isPending} minWidth={760} />

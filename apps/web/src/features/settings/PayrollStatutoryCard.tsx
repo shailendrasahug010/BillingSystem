@@ -75,7 +75,7 @@ export function PayrollStatutoryCard() {
   const section = "flex flex-col gap-3 border-b border-line py-4 last:border-b-0";
   return (
     <Card>
-      <CardHeader title={t("settings.statutory.title")} subtitle={canEdit ? t("settings.statutory.hint") : t("settings.readOnly")} />
+      <CardHeader title={t("settings.statutory.title")} short={t("settings.statutory.short")} subtitle={canEdit ? t("settings.statutory.hint") : t("settings.readOnly")} />
       <div className="px-4 pb-4 sm:px-5">
         {error ? <ErrorNote error={error} className="mt-3" /> : null}
         <section className={section} aria-label={t("payroll.statutory.pf")}>

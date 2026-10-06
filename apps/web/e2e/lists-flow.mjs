@@ -93,7 +93,7 @@ log("Name header: Shop 01 first, then Shop 60 first");
 
 // 4. Hide GSTIN; after a reload the sort and the hidden column are kept.
 await page.getByRole("button", { name: "Columns" }).click();
-await page.getByRole("checkbox", { name: "GSTIN" }).click();
+await page.getByRole("checkbox", { name: "GSTIN / type" }).click();
 await page.keyboard.press("Escape");
 check(!(await table.locator("th", { hasText: "GSTIN" }).count()), "GSTIN still shown");
 await page.screenshot({ path: `${OUT}/lists-1-customers.png` });

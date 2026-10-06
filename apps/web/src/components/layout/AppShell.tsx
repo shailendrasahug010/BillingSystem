@@ -149,7 +149,7 @@ export function SyncChip() {
       title={pending > 0 ? t("sync.pending", { count: pending }) : t("sync.synced")}
     >
       <Icon size={14} className={cn(online ? "text-good" : "text-warn", pending > 0 && online && "animate-spin")} />
-      <span className="hidden sm:inline">{label}</span>
+      {(!online || pending > 0) && <span className="hidden sm:inline">{label}</span>}
       {pending > 0 && <span className="num rounded-full bg-warn px-1.5 text-[11px] text-white">{pending}</span>}
     </span>
   );
@@ -633,7 +633,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           {/* On a phone: the mark and whose books these are. */}
           <div className={cn("flex min-w-0 items-center gap-1.5", (!autoHide || sideOpen) && "lg:hidden")}>
             <BrandMark compact />
-            <span className="truncate text-[14px] font-semibold text-ink sm:hidden" title={BUSINESS.name}>
+            {/* Up to two lines, so a longer name is read in full rather than cut to "Agrawal Distri…". */}
+            <span className="line-clamp-2 text-[13px] leading-[1.15] font-semibold break-words text-ink sm:hidden" title={BUSINESS.name}>
               {BUSINESS.name}
             </span>
           </div>
