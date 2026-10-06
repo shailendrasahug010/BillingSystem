@@ -7,6 +7,7 @@ import { CUSTOMERS, WALK_IN_ID } from "../../data/db";
 import { customerInsight } from "../../data/store";
 import type { Customer } from "../../data/types";
 import { cn } from "../../lib/cn";
+import { useMediaQuery } from "../../lib/useMediaQuery";
 
 export function searchCustomers(query: string, limit = 8): Customer[] {
   const q = normalizeSearchText(query);
@@ -39,6 +40,8 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
   ref,
 ) {
   const { t, money } = useI18n();
+  // A phone-wide box shows a shorter hint, so it is read in full rather than cut off.
+  const narrow = useMediaQuery("(max-width: 639px)");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -72,7 +75,7 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
           aria-controls={listId}
           aria-activedescendant={open && (results[active] || (onAdd && active === results.length)) ? `${listId}-${active}` : undefined}
           aria-label={t("invoice.searchCustomer")}
-          placeholder={t("invoice.searchCustomer")}
+          placeholder={narrow ? t("invoice.searchCustomerShort") : t("invoice.searchCustomer")}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
