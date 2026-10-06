@@ -28,7 +28,8 @@ import { allowed, BUSINESS, productById, supplierById, TODAY, WORKSPACE } from "
 import { useSearchableProducts } from "../../data/hooks";
 import { refreshCatalog, refreshSupplier } from "../../data/live";
 import { useStoreVersion } from "../../data/store";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
+import { useKeptForm } from "../../offline/keptForms";
 import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { cn } from "../../lib/cn";
 import { invalidateMoney, METHODS } from "../payments/PaymentDialog";
@@ -212,6 +213,41 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
   const fieldError = useFieldError(error);
   const supplier = supplierId ? supplierById.get(supplierId) : undefined;
 
+  // A bill half typed in (another screen and back, a reload, the app closed by the phone): brought back on the next visit.
+  const keptValue = useMemo(() => ({ supplierId, head, lines, pending, charges, warehouseId, paid }), [supplierId, head, lines, pending, charges, warehouseId, paid]);
+  const kept = useKeptForm(
+    "purchase",
+    keptValue,
+    lines.length + pending.length > 0,
+    ({ value }) => {
+      setSupplierId(value.supplierId && supplierById.has(value.supplierId) ? value.supplierId : null);
+      setHead(value.head);
+      setLines(value.lines.filter((l) => productById.has(l.productId)));
+      setPending(value.pending);
+      setCharges(value.charges);
+      if (godowns.some((w) => w.id === value.warehouseId)) setWarehouseId(value.warehouseId);
+      setPaid(value.paid);
+      toast({
+        tone: "info",
+        title: t("purchase.kept.restored"),
+        body: t("common.items", { count: value.lines.length + value.pending.length }),
+        action: {
+          label: t("purchase.kept.startNew"),
+          onClick: () => {
+            kept.drop();
+            setSupplierId(initialSupplier ?? null);
+            setHead((h) => ({ ...h, billNumber: "", billDate: TODAY, receivedDate: TODAY, notes: "" }));
+            setLines([]);
+            setPending([]);
+            setCharges([]);
+            setPaid({ amount: "", method: "cash", reference: "" });
+          },
+        },
+      });
+    },
+    !correction && !draft,
+  );
+
   const setLine = (k: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...patch } : l)));
   const addProduct = (productId: string) => {
     const p = productById.get(productId);
@@ -363,7 +399,7 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
     /** Kept on this device with the same key; stock comes in and the supplier is owed at once. */
     const keep = async () => {
       const scope = offlineScope();
-      const kept =
+      const queued =
         scope &&
         (await queueEntry({
           kind: "purchase",
@@ -387,7 +423,8 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
           }),
           body,
         }));
-      if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      if (!queued) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      kept.drop();
       toast({ tone: "offline", title: t("offline.savedHere"), body: `${t("purchase.saved")} · ${money(calc.totals!.grandTotal.toFixed(2))} · ${t("offline.sendsLater")}` });
       navigate({ name: "planned", module: "purchases" });
     };
@@ -398,8 +435,9 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
       const res = await api.post<{ id: string; purchaseNumber: string; grandTotal: string }>(
         "/purchases",
         body,
-        { idempotencyKey: key },
+        { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS },
       );
+      kept.drop();
       await Promise.all([refreshCatalog(), refreshSupplier(supplierId!)]).catch(() => undefined);
       invalidateMoney(qc);
       void qc.invalidateQueries({ queryKey: ["stock"] });

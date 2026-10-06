@@ -412,6 +412,11 @@ body,
   height: 100%;
 }
 
+/* The browser's own pull-down (a full page reload) is replaced by the app's, which only refreshes the data. */
+html {
+  overscroll-behavior-y: contain;
+}
+
 body {
   margin: 0;
   /* A soft glow of the accent behind the pages. */

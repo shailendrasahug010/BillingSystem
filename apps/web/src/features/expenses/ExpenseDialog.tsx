@@ -9,7 +9,7 @@ import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { BUSINESS, TODAY } from "../../data/db";
 import { EXPENSE_CATEGORIES } from "../../data/live";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { METHODS } from "../payments/PaymentDialog";
 
@@ -147,7 +147,7 @@ export function ExpenseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     };
     try {
       if (workingOffline()) return await keep();
-      const res = await api.post<{ expenseNumber: string; totalAmount: string }>("/expenses", body, { idempotencyKey: key });
+      const res = await api.post<{ expenseNumber: string; totalAmount: string }>("/expenses", body, { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS });
       void qc.invalidateQueries({ queryKey: ["expenses"] });
       void qc.invalidateQueries({ queryKey: ["reports"] });
       void qc.invalidateQueries({ queryKey: ["gst"] });

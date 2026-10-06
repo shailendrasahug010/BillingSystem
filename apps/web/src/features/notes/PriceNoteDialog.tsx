@@ -8,7 +8,7 @@ import { Segmented } from "../../components/ui/misc";
 import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { TODAY } from "../../data/db";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
 import { invalidateMoney } from "../payments/PaymentDialog";
 
@@ -103,7 +103,7 @@ export function PriceNoteDialog({
     setError(null);
     try {
       if (workingOffline()) return await keep();
-      const res = await api.post<{ noteNumber: string; grandTotal: string }>(`/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/price-notes`, body, { idempotencyKey: key });
+      const res = await api.post<{ noteNumber: string; grandTotal: string }>(`/${kind === "sale" ? "invoices" : "purchases"}/${documentId}/price-notes`, body, { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS });
       invalidateMoney(qc);
       for (const k of ["invoice", "invoice-raw", "purchase", "notes", "reports", "gst"]) void qc.invalidateQueries({ queryKey: [k] });
       toast({ tone: "success", title: t("notes.priceSaved"), body: `${res.noteNumber} · ${money(res.grandTotal)}` });

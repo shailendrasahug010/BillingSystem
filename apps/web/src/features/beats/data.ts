@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { TODAY } from "../../data/db";
 import { insightFrom, type InsightResponse } from "../../data/live";
 import { setLiveInsight } from "../../data/store";
-import { api, ApiError } from "../../lib/api";
+import { api, ApiError, QUICK_SAVE_MS } from "../../lib/api";
 import { uuid } from "../../lib/uuid";
 import { idbGet, idbPut } from "../../offline/idb";
 import {
@@ -308,7 +308,7 @@ export async function recordVisit(input: {
   };
   if (!workingOffline()) {
     try {
-      await api.post("/visits", body, { idempotencyKey: id });
+      await api.post("/visits", body, { idempotencyKey: id, timeoutMs: QUICK_SAVE_MS });
       return "sent";
     } catch (e) {
       if (!unreachable(e)) throw e;

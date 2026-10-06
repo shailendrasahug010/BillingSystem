@@ -42,7 +42,7 @@ jobs:
             flows: team-access-flow outstanding-flow beat-flow report-views-flow error-log-flow bank-statement-flow daily-summary-flow setup-repeat-flow voice-flow empty-error-flow comfort-flow
           - group: offline
             web: build
-            flows: offline-flow offline-work-flow device-wipe-flow
+            flows: offline-flow offline-work-flow device-wipe-flow reliability-flow
     services:
       postgres:
         image: postgres:16

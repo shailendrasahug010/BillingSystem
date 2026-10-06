@@ -2,6 +2,7 @@ import { translateError } from "@digitalbahi/i18n";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ScreenErrorBoundary } from "../components/ErrorBoundary";
 import { AppShell } from "../components/layout/AppShell";
+import { PinLockScreen } from "../components/layout/PinLock";
 import { Dialog } from "../components/ui/Dialog";
 import { Kbd, Skeleton } from "../components/ui/misc";
 import { Checkbox } from "../components/ui/Field";
@@ -23,6 +24,7 @@ import { Button } from "../components/ui/Button";
 import { useStoreVersion } from "../data/store";
 import { LIVE } from "../data/source";
 import { setErrorScreen } from "../lib/errorReport";
+import { useDeviceStorage } from "../lib/storage";
 import { SessionProvider, useSession } from "./session";
 import { I18nProvider, useI18n } from "./i18n";
 import { RouterProvider, useRouter, type Route } from "./router";
@@ -276,6 +278,7 @@ function Root() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [tally, setTally] = useState(tallyKeysOn);
+  useDeviceStorage();
 
   // A shortcut only for what the role may do (the screen would refuse it anyway).
   const go = (to: Route) => {
@@ -316,25 +319,28 @@ function Root() {
   if (route.name === "login") return LIVE ? null : <LoginPage />;
 
   return (
-    <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
-      {/* Each screen rises in as it opens (on a phone, slides in from the side it came from). */}
-      <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className={`animate-page screen-${direction}`}>
-        <ScreenErrorBoundary>
-          <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
-        </ScreenErrorBoundary>
-      </div>
-      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
-      <ShortcutsDialog
-        open={helpOpen}
-        onOpenChange={setHelpOpen}
-        tally={tally}
-        onTally={(on) => {
-          setTallyKeys(on);
-          setTally(on);
-        }}
-      />
-      {LIVE && <NativePush />}
-    </AppShell>
+    <>
+      <AppShell onOpenSearch={() => setSearchOpen(true)} onOpenShortcuts={() => setHelpOpen(true)}>
+        {/* Each screen rises in as it opens (on a phone, slides in from the side it came from). */}
+        <div key={route.name === "planned" ? `planned:${route.module}` : route.name} className={`animate-page screen-${direction}`}>
+          <ScreenErrorBoundary>
+            <Suspense fallback={<ScreenLoading />}>{blocked ? <NoAccess onHome={() => navigate(home)} /> : <Screen route={route} />}</Suspense>
+          </ScreenErrorBoundary>
+        </div>
+        <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
+        <ShortcutsDialog
+          open={helpOpen}
+          onOpenChange={setHelpOpen}
+          tally={tally}
+          onTally={(on) => {
+            setTallyKeys(on);
+            setTally(on);
+          }}
+        />
+        {LIVE && <NativePush />}
+      </AppShell>
+      <PinLockScreen />
+    </>
   );
 }
 

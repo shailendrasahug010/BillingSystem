@@ -4,6 +4,7 @@ import { translateError } from "@digitalbahi/i18n";
 import { validateEmail } from "@digitalbahi/core";
 import { useI18n } from "../../app/i18n";
 import { useSession } from "../../app/session";
+import { PinLockSettings } from "../../components/layout/PinLock";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Field, Input } from "../../components/ui/Field";
@@ -150,6 +151,8 @@ export function ProfilePage() {
           </div>
         </form>
       </Card>
+
+      <PinLockSettings />
     </div>
   );
 }

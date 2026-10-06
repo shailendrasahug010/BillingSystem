@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { searchProducts } from "@digitalbahi/core";
 import { Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
 import { Button, IconButton } from "../../components/ui/Button";
@@ -12,7 +12,8 @@ import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useToast } from "../../components/ui/Toast";
 import { customerById, productById, TODAY } from "../../data/db";
 import { useSearchableProducts } from "../../data/hooks";
-import { api, ApiError, newIdempotencyKey } from "../../lib/api";
+import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
+import { dropKeptForm, keepForm, loadKeptForm } from "../../offline/keptForms";
 import { isWaitingCustomer, offlineScope, queueEntry, unreachable, useOffline, workingOffline } from "../../offline/sync";
 import { searchCustomers } from "../invoice/CustomerPicker";
 import { rateFor } from "../invoice/useInvoiceDraft";
@@ -22,6 +23,15 @@ interface Line {
   unitId: string;
   qty: string;
   freeQty: string;
+}
+
+/** An order half typed in, kept on the device (see offline/keptForms.ts). */
+interface KeptOrder {
+  customerId: string | null;
+  lines: Line[];
+  delivery: string;
+  source: (typeof SOURCES)[number];
+  notes: string;
 }
 
 const QTY = /^\d{1,12}(\.\d{1,3})?$/;
@@ -65,6 +75,9 @@ export function OrderEntryDialog({
   const [key, setKey] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [restored, setRestored] = useState(false);
+  const saved = useRef(false);
+  const keptName = quotation ? "quotation" : "order";
   const fieldError = useFieldError(error);
   const offline = useOffline();
   const keepHere = offline.offlineMode || !offline.online || (Boolean(customerId) && isWaitingCustomer(customerId!));
@@ -76,9 +89,63 @@ export function OrderEntryDialog({
     setDelivery("");
     setNotes("");
     setError(null);
+    saved.current = false;
     setKey(newIdempotencyKey());
+    // An order half typed in before (the dialog closed, a reload): brought back when opened the same way.
+    setRestored(false);
+    if (initialLines?.length) return;
+    let active = true;
+    void loadKeptForm<KeptOrder>(keptName)
+      .then((kept) => {
+        if (!active) return;
+        const v = kept?.value;
+        if (v && (!initialCustomer || v.customerId === initialCustomer)) {
+          const ls = v.lines.filter((l) => productById.has(l.productId));
+          if (ls.length) {
+            setCustomerId(v.customerId && customerById.has(v.customerId) ? v.customerId : (initialCustomer ?? null));
+            setLines(ls);
+            setDelivery(v.delivery);
+            setSource(v.source);
+            setNotes(v.notes);
+            toast({
+              tone: "info",
+              title: quotation ? t("orders.kept.restoredQuote") : t("orders.kept.restored"),
+              body: t("common.items", { count: ls.length }),
+              action: {
+                label: t("orders.kept.startNew"),
+                onClick: () => {
+                  void dropKeptForm(keptName);
+                  setCustomerId(initialCustomer ?? null);
+                  setLines([]);
+                  setDelivery("");
+                  setNotes("");
+                },
+              },
+            });
+          }
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => active && setRestored(true));
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the lines to start with are read when it opens
   }, [open, initialCustomer]);
+
+  // Each change kept a moment later (only for an order opened without lines of its own).
+  useEffect(() => {
+    if (!open || !restored || initialLines?.length || saved.current) return;
+    if (lines.length === 0) {
+      void dropKeptForm(keptName);
+      return;
+    }
+    const value: KeptOrder = { customerId, lines, delivery, source, notes };
+    void keepForm(keptName, value, false);
+    const timer = setTimeout(() => void keepForm(keptName, value), 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialLines is read when it opens
+  }, [open, restored, customerId, lines, delivery, source, notes, keptName]);
 
   const customer = customerId ? (customerById.get(customerId) ?? null) : null;
   const factorOf = (l: Line) => {
@@ -139,13 +206,17 @@ export function OrderEntryDialog({
           body,
         }));
       if (!kept) throw new ApiError(0, "OFFLINE_NOT_KEPT");
+      saved.current = true;
+      void dropKeptForm(keptName);
       toast({ tone: "offline", title: t("offline.savedHere"), body: `${quotation ? t("orders.quotation.saved") : t("orders.saved")} · ${customer?.businessName ?? ""} · ${t("offline.sendsLater")}` });
       onSaved?.();
       onOpenChange(false);
     };
     try {
       if (keepHere || workingOffline()) return await keep();
-      const res = await api.post<{ id: string; orderNumber: string; grandTotal: string }>("/sales-orders", body, { idempotencyKey: key });
+      const res = await api.post<{ id: string; orderNumber: string; grandTotal: string }>("/sales-orders", body, { idempotencyKey: key, timeoutMs: QUICK_SAVE_MS });
+      saved.current = true;
+      void dropKeptForm(keptName);
       void qc.invalidateQueries({ queryKey: ["orders"] });
       toast({ tone: "success", title: quotation ? t("orders.quotation.saved") : t("orders.saved"), body: `${res.orderNumber} · ${money(res.grandTotal)}` });
       onSaved?.();

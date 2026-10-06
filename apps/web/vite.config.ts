@@ -28,8 +28,10 @@ function serviceWorker(): Plugin {
     generateBundle(_options, bundle) {
       const built = Object.keys(bundle)
         .filter((f) => f !== "index.html" && !f.endsWith(".map"))
-        // The PDF reader (about 1.8 MB) loads only when a PDF is imported; installs skip it.
-        .filter((f) => !/^assets\/pdf[.-]/.test(f))
+        // The PDF reader (about 1.8 MB) loads only when a PDF is imported, and the barcode
+        // reader (about 1.1 MB) only when a phone without its own scanner first scans:
+        // installs and updates skip them, and the service worker keeps each once used.
+        .filter((f) => !/^assets\/(pdf[.-]|zxing_reader)/.test(f))
         .map((f) => `/${f}`);
       const precache = ["/", ...built, ...publicFiles()].sort();
       const version = createHash("sha256").update(precache.join("\n")).digest("hex").slice(0, 12);
