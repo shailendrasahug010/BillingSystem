@@ -1,13 +1,13 @@
 import { translateError } from "@digitalbahi/i18n";
 import { addDays } from "@digitalbahi/core";
-import { ArrowLeft, Ellipsis, RotateCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
-import { Popover } from "radix-ui";
-import { Children, Fragment, isValidElement, useState, type ReactElement, type ReactNode } from "react";
+import { ArrowLeft, RotateCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { Children, useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { TODAY } from "../../data/db";
 import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { Button } from "./Button";
+import { NamedDates } from "./Field";
 
 export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
@@ -24,49 +24,9 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   );
 }
 
-/** The buttons of a fragment (or a list) one by one, the empty ones (a `false` from a permission check) left out. */
-function flatButtons(children: ReactNode): ReactElement[] {
-  return Children.toArray(children).flatMap((c) =>
-    isValidElement<{ children?: ReactNode }>(c) && c.type === Fragment ? flatButtons(c.props.children) : isValidElement(c) ? [c] : [],
-  );
-}
-
-/**
- * A page's buttons at the top right. On a computer all of them; on a phone the main one
- * (the primary button, else the last) with the rest under "⋯", so the list starts near the top.
- */
+/** A page's buttons at the top right, all of them in sight on every screen. */
 export function HeaderActions({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const buttons = flatButtons(children);
-  const all = <div className="flex flex-wrap gap-2">{children}</div>;
-  if (buttons.length <= 2) return all;
-  const main = buttons.find((b) => (b.props as { variant?: string }).variant === "primary") ?? buttons[buttons.length - 1]!;
-  const rest = buttons.filter((b) => b !== main);
-  return (
-    <>
-      <div className="hidden md:block">{all}</div>
-      <div className="flex w-full items-center gap-2 md:hidden">
-        <div className="min-w-0 flex-1 [&>*]:w-full">{main}</div>
-        <Popover.Root open={open} onOpenChange={setOpen}>
-          <Popover.Trigger className="press flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-line bg-surface text-ink-2 shadow-card" aria-label={t("common.more")} title={t("common.more")}>
-            <Ellipsis size={18} />
-          </Popover.Trigger>
-          <Popover.Portal>
-            {/* A tap on any of them closes the list (the dialog it opens belongs to the page). */}
-            <Popover.Content
-              align="end"
-              sideOffset={6}
-              onClick={() => setOpen(false)}
-              className="z-50 flex w-60 flex-col gap-1.5 rounded-xl border border-line bg-surface p-2 shadow-pop [&>*]:w-full [&>*]:justify-start"
-            >
-              {rest}
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
-      </div>
-    </>
-  );
+  return <div className="flex flex-wrap gap-2">{children}</div>;
 }
 
 export { DataTable, RowCard, type Column } from "./DataTable";
@@ -125,40 +85,73 @@ export function LoadMore({ hasMore, loading, onClick }: { hasMore: boolean; load
 }
 
 /**
- * The filter strip above a list. On a phone only the first filter (the
- * search) shows, with a Filters button for the rest, so the list starts
- * near the top; `quick` (date chips) stays in sight on every screen.
+ * Search first, then a "Filters" button for the rest, closed until it is tapped
+ * (on a computer too), so the list starts near the top. While closed, the button
+ * says how many filters are on. Quick chips (today, this week) sit beside the search;
+ * `actions` (export, plan a trip, run salary) stay in sight on the right. `fit` keeps
+ * the first box (a month, a period) as narrow as it is instead of the full row.
+ * `openOnComputer` starts open on a computer, for reports, where the grouping and
+ * dates are the point rather than a narrowing of a list.
  */
-/**
- * Search first, then a "Filters" button for the rest. On a computer the rest are open
- * from the start, on their own row, so the search box always keeps its width; on a
- * phone they open on a tap. Quick chips (today, this week) sit beside the search.
- */
-export function FilterBar({ children, quick }: { children: ReactNode; quick?: ReactNode }) {
+export function FilterBar({ children, quick, actions, fit, openOnComputer }: { children: ReactNode; quick?: ReactNode; actions?: ReactNode; fit?: boolean; openOnComputer?: boolean }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(min-width: 1024px)").matches);
+  const [open, setOpen] = useState(() => Boolean(openOnComputer) && typeof matchMedia !== "undefined" && matchMedia("(min-width: 1024px)").matches);
+  const [on, setOn] = useState(0);
+  const panel = useRef<HTMLDivElement>(null);
   const [first, ...rest] = Children.toArray(children).filter(Boolean);
+  // Count what is set in the hidden filters: a chosen option, a date, a pressed chip, a segment other than the first.
+  useEffect(() => {
+    const el = panel.current;
+    if (!el) return;
+    const count = () => {
+      let n = 0;
+      el.querySelectorAll("select").forEach((s) => (n += s.selectedIndex > 0 ? 1 : 0));
+      el.querySelectorAll<HTMLInputElement>("input:not([aria-hidden]):not([type=checkbox])").forEach((i) => (n += i.value ? 1 : 0));
+      el.querySelectorAll("input[type=checkbox]:checked, button[aria-pressed=true]").forEach(() => n++);
+      el.querySelectorAll('[role="radiogroup"]').forEach((g) => (n += g.querySelector('[role="radio"]')?.getAttribute("aria-checked") === "true" ? 0 : 1));
+      setOn(n);
+    };
+    count();
+    const watch = new MutationObserver(count);
+    watch.observe(el, { subtree: true, attributes: true, childList: true, characterData: true });
+    el.addEventListener("input", count);
+    el.addEventListener("change", count);
+    return () => {
+      watch.disconnect();
+      el.removeEventListener("input", count);
+      el.removeEventListener("change", count);
+    };
+  }, []);
   return (
     <div className="flex flex-col gap-2.5 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="min-w-[12rem] flex-1 [&>*]:w-full">{first}</div>
+        <div className={fit ? "w-full md:w-auto" : "min-w-0 flex-1 sm:min-w-[12rem] [&>*]:w-full"}>{first}</div>
         {rest.length > 0 && (
           <button
             type="button"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
             className={cn(
-              "press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium md:order-last",
-              open ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong",
+              "press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium max-sm:px-2.5 md:order-last",
+              open || on > 0 ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong",
             )}
           >
             <SlidersHorizontal size={15} aria-hidden />
-            {t("common.filters")}
+            {/* On a phone the button is its icon, so the search hint beside it is read in full. */}
+            <span className="max-sm:sr-only">{t("common.filters")}</span>
+            {on > 0 && <span className="num rounded-full bg-accent px-1.5 text-[11px] leading-[18px] text-ink-inverse">{on}</span>}
           </button>
         )}
         {quick && <div className="w-full min-w-0 md:w-auto">{quick}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 md:order-last md:ml-auto">{actions}</div>}
       </div>
-      {rest.length > 0 && open && <div className="flex flex-col gap-2 border-t border-line pt-2.5 md:flex-row md:flex-wrap md:items-center">{rest}</div>}
+      {rest.length > 0 && (
+        <NamedDates.Provider value>
+          <div ref={panel} hidden={!open} className="flex flex-col gap-2 border-t border-line pt-2.5 md:flex-row md:flex-wrap md:items-center">
+            {rest}
+          </div>
+        </NamedDates.Provider>
+      )}
     </div>
   );
 }

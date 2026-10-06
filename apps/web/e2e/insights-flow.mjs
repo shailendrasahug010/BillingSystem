@@ -123,8 +123,7 @@ try {
   if (!/37%/.test(margin) || !/-3 pts/.test(margin) || !/was 40%/.test(margin)) errors.push(`margin tile: ${margin}`);
   const owe = await tile("Customers owe");
   if (!/₹4,432/.test(owe)) errors.push(`receivables tile: ${owe}`);
-  // The first four measures show; the rest open with "More numbers".
-  await panel().getByRole("button", { name: /more numbers/ }).click();
+  // Every measure is in sight, the four main ones first.
   const stock = await tile("Stock value");
   if (!/₹7,910/.test(stock) || !/was ₹9,800/.test(stock)) errors.push(`stock tile: ${stock}`);
   const days = await tile("Days of stock");

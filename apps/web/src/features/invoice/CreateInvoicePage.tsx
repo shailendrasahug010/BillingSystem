@@ -550,7 +550,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
         <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
         <div className="flex items-center gap-2">
           <HoldButton state={held} hasLines={draft.lines.length > 0} />
-          <span className="font-mono text-[12.5px] text-ink-3">{numberLabel}</span>
+          <span className={cn("text-[12.5px] text-ink-3", /\d/.test(numberLabel) && "font-mono")}>{numberLabel}</span>
         </div>
       </div>
       <KeptDraftOffer state={kept} />

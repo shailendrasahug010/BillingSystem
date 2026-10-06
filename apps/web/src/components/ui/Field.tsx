@@ -1,5 +1,5 @@
 import { CalendarDays } from "lucide-react";
-import { forwardRef, useEffect, useId, useRef, useState, type ChangeEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { createContext, forwardRef, useContext, useEffect, useId, useRef, useState, type ChangeEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 import { cn } from "../../lib/cn";
 
 const control =
@@ -8,6 +8,9 @@ const control =
 // The border's colours, one set or the other (cn does not drop a class another overrides).
 const tone = "border-line hover:border-line-strong focus:border-accent focus:ring-accent/15";
 const invalidTone = "border-danger focus:border-danger focus:ring-danger/20";
+
+/** Inside a filter strip, a date box shows its name ("From", "To") in front, as there is no label above it. */
+export const NamedDates = createContext(false);
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   leading?: ReactNode;
@@ -96,12 +99,16 @@ const DateInput = forwardRef<HTMLInputElement, InputProps>(function DateInput(
   const outOfRange = Boolean(iso && ((typeof min === "string" && min && iso < min) || (typeof max === "string" && max && iso > max)));
   const unfinished = text !== "" && dmyToIso(text) === null;
   const height = inputSize === "sm" ? "h-8 text-[13px]" : inputSize === "lg" ? "h-12 text-[15px]" : "h-10 text-sm";
+  const named = useContext(NamedDates);
+  const name = named && typeof rest["aria-label"] === "string" ? rest["aria-label"] : null;
   return (
     <div className={cn("relative flex items-center", className)}>
+      {name && <span className="pointer-events-none absolute left-3 text-[12.5px] font-medium text-ink-3" aria-hidden>{name}</span>}
       <input
         ref={ref}
         id={id}
         type="text"
+        style={name ? { paddingLeft: `calc(${name.length}ch + 1.1rem)` } : undefined}
         inputMode="numeric"
         autoComplete="off"
         placeholder="DD/MM/YYYY"

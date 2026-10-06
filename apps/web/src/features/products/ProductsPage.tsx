@@ -22,7 +22,7 @@ import { ProductEditor } from "./ProductEditor";
 type Product = ReturnType<typeof useSearchableProducts>[number];
 
 export function ProductsPage() {
-  const { t, money, number, locale } = useI18n();
+  const { t, money, amount, number, locale } = useI18n();
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("");
   const [stock, setStock] = useState<"all" | "low" | "out">("all");
@@ -133,10 +133,10 @@ export function ProductsPage() {
           return (
             <RowCard
               title={locale === "hi" ? p.nameHi : p.name}
-              sub={[p.code, p.brand, money(p.rate)].filter(Boolean).join(" · ")}
-              value={stockInPacks(p.stock, p, (n) => number(n)) ?? `${number(p.stock)} ${p.unit}`}
-              tone={level === "out_of_stock" ? "danger" : level === "low" ? "warn" : undefined}
-              valueSub={level !== "ok" ? t(`status.stock.${level}`) : stockInPacks(p.stock, p, (n) => number(n)) ? `= ${number(p.stock)} ${p.unit}` : undefined}
+              sub={[p.code, p.brand, amount(p.rate)].filter(Boolean).join(" · ")}
+              value={p.stock < 0 ? t("status.stock.short", { qty: `${number(-p.stock)} ${p.unit}` }) : (stockInPacks(p.stock, p, (n) => number(n)) ?? `${number(p.stock)} ${p.unit}`)}
+              tone={p.stock < 0 ? "warn" : level === "out_of_stock" ? "danger" : level === "low" ? "warn" : undefined}
+              valueSub={p.stock < 0 ? undefined : level !== "ok" ? t(`status.stock.${level}`) : stockInPacks(p.stock, p, (n) => number(n)) ? `= ${number(p.stock)} ${p.unit}` : undefined}
             />
           );
         }}
@@ -171,8 +171,8 @@ export function ProductsPage() {
           ...(rows.some((p) => p.brand) ? [{ key: "brand", header: t("product.brand"), sortValue: (p: Product) => p.brand, className: "text-ink-2", render: (p: Product) => p.brand }] : []),
           { key: "hsn", header: t("product.hsn"), sortValue: (p) => p.hsn, className: "font-mono text-[12.5px] text-ink-2", render: (p) => p.hsn },
           { key: "gst", header: t("product.gstRate"), align: "right", sortValue: (p) => p.gstRate, render: (p) => (p.taxCategory.kind === "taxable" ? `${p.gstRate}%` : t("gst.nilRated")) },
-          { key: "mrp", header: t("product.mrp"), align: "right", sortValue: (p) => p.mrp, className: "text-ink-2", render: (p) => (p.mrp > 0 ? money(p.mrp) : "—") },
-          { key: "rate", header: t("product.sellingPrice"), align: "right", sortValue: (p) => p.rate, className: "text-ink", render: (p) => money(p.rate) },
+          { key: "mrp", header: t("product.mrp"), align: "right", sortValue: (p) => p.mrp, className: "text-ink-2", render: (p) => (p.mrp > 0 ? amount(p.mrp) : "—") },
+          { key: "rate", header: t("product.sellingPrice"), align: "right", sortValue: (p) => p.rate, className: "text-ink", render: (p) => amount(p.rate) },
           {
             key: "margin",
             header: t("product.margin"),
@@ -191,13 +191,20 @@ export function ProductsPage() {
               const level = stockLevel(p.stock, p.minStock);
               return (
                 <>
+                  {/* Sold more than was in stock: one amber "Short by 60 PCS" rather than -60, a red chip and nothing. */}
+                  {p.stock < 0 ? (
+                    <Badge tone="warn" className="h-6 text-[12px] font-semibold">
+                      {t("status.stock.short", { qty: `${number(-p.stock)} ${p.unit}` })}
+                    </Badge>
+                  ) : (
                   <p className={cn("font-semibold", level === "out_of_stock" ? "text-danger" : level === "low" ? "text-warn" : "text-ink")}>{stockInPacks(p.stock, p, (n) => number(n)) ?? `${number(p.stock)} ${p.unit}`}</p>
-                  {stockInPacks(p.stock, p, (n) => number(n)) && (
+                  )}
+                  {p.stock > 0 && stockInPacks(p.stock, p, (n) => number(n)) && (
                     <p className="text-[12px] text-ink-3">
                       = {number(p.stock)} {p.unit}
                     </p>
                   )}
-                  {level !== "ok" && (
+                  {level !== "ok" && p.stock >= 0 && (
                     <Badge tone={level === "out_of_stock" ? "danger" : "warn"} className="mt-0.5 h-5 text-[11px]">
                       {t(`status.stock.${level}`)}
                     </Badge>

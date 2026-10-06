@@ -78,10 +78,10 @@ export function ExportButton({ path, query, filename }: { path: string; query: R
   );
 }
 
-export function PeriodBar({ period, children }: { period: Period; children?: ReactNode }) {
+export function PeriodBar({ period, children, actions }: { period: Period; children?: ReactNode; actions?: ReactNode }) {
   const { t } = useI18n();
   return (
-    <FilterBar>
+    <FilterBar fit openOnComputer actions={actions}>
       <Select aria-label={t("common.period")} value={period.preset} onChange={(e) => period.choose(e.target.value as RangeKey | "custom")} className="md:w-52">
         {PRESETS.map((p) => (
           <option key={p} value={p}>

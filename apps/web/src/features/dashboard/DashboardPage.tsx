@@ -21,8 +21,6 @@ import {
   CalendarPlus,
   HandCoins,
   UserRoundPlus,
-  ChevronUp,
-  Ellipsis,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
@@ -167,7 +165,6 @@ export function DashboardPage() {
   const [range, setRange] = useState<RangeKey>("thisMonth");
   const [grain, setGrain] = useState<Grain>("daily");
   const [asTable, setAsTable] = useState(false);
-  const [allActions, setAllActions] = useState(false);
 
   const session = useSession();
   // Live: the sales dashboard only for roles that have it; the demo shows everything.
@@ -231,6 +228,18 @@ export function DashboardPage() {
     { label: t("dashboard.kpi.toDispatch"), n: view?.orders.toDispatch ?? 0, icon: <Truck size={16} />, tint: "teal" as Tint, route: { name: "planned", module: "dispatch" } as Route, show: allowed("order.view") || allowed("dispatch.view") },
   ].filter((row) => row.show);
 
+  // Today's purchase, expenses and orders, as far as the role sees them.
+  type TodayFigure = { label: string; value: number; tile: ReactNode };
+  const today: TodayFigure[] = shown
+    ? ([
+        view.today.purchases !== null && { label: t("dashboard.todayWords.purchases"), value: view.today.purchases, tile: <StatTile key="p" label={t("dashboard.kpi.todayPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view.today.purchases} format={(v) => money(v, 0)} />} /> },
+        view.today.expenses !== null && { label: t("dashboard.todayWords.expenses"), value: view.today.expenses, tile: <StatTile key="e" label={t("dashboard.kpi.todayExpenses")} tint="rose" icon={<BadgeIndianRupee size={17} />} value={<CountUp value={view.today.expenses} format={(v) => money(v, 0)} />} /> },
+        allowed("order.view") && { label: t("dashboard.todayWords.orders"), value: view.today.orders, tile: <StatTile key="o" label={t("dashboard.kpi.todayOrders")} tint="violet" icon={<ClipboardList size={17} />} value={<CountUp value={view.today.orders} format={(v) => String(Math.round(v))} />} onClick={() => navigate({ name: "planned", module: "orders" })} /> },
+      ] as Array<TodayFigure | false>).filter((f): f is TodayFigure => f !== false)
+    : [];
+  // A company card with only "no company" in it says nothing.
+  const brands = (view?.brands ?? []).filter((b) => b.label !== "—");
+
   const agingLabels: Record<string, string> = {
     notDue: t("dashboard.charts.notDue"),
     "0-30": "1–30",
@@ -279,14 +288,14 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <WelcomeCard />
+      <WelcomeCard billed={home?.setup?.invoices} />
       {home?.setup && <SetupGuide setup={home.setup} />}
       <BackupNote />
 
-      {/* Quick actions: the four used most, in one colour, and the rest behind "More". */}
+      {/* Quick actions in one colour, all of them in sight. */}
       {actions.length > 0 && <section aria-label={t("dashboard.quickActions")}>
         <div className="grid grid-cols-4 gap-x-1.5 gap-y-4 sm:flex sm:flex-wrap sm:gap-2.5">
-          {(allActions || actions.length <= 4 ? actions : actions.slice(0, 3)).map((a) => (
+          {actions.map((a) => (
             <button
               key={a.label}
               type="button"
@@ -308,17 +317,6 @@ export function DashboardPage() {
               <span className="line-clamp-2 text-[11.5px] leading-tight font-medium text-ink sm:text-[13.5px] sm:whitespace-nowrap">{a.label}</span>
             </button>
           ))}
-          {actions.length > 4 && (
-            <button
-              type="button"
-              aria-expanded={allActions}
-              onClick={() => setAllActions((v) => !v)}
-              className="press lift group flex min-w-0 flex-col items-center gap-1.5 text-center sm:flex-row sm:gap-2.5 sm:rounded-2xl sm:border sm:border-dashed sm:border-line-strong sm:bg-surface sm:py-1.5 sm:pr-3.5 sm:pl-1.5 sm:text-left"
-            >
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-surface-2 text-ink-2 sm:size-9 sm:rounded-xl">{allActions ? <ChevronUp size={19} /> : <Ellipsis size={19} />}</span>
-              <span className="line-clamp-2 text-[11.5px] leading-tight font-medium text-ink sm:text-[13.5px] sm:whitespace-nowrap">{allActions ? t("suggestions.showLess") : t("common.more")}</span>
-            </button>
-          )}
         </div>
       </section>}
 
@@ -353,9 +351,11 @@ export function DashboardPage() {
         <div className="stagger grid grid-cols-2 gap-3 md:grid-cols-3">
           {shown ? (
             <>
-              {view.today.purchases !== null && <StatTile label={t("dashboard.kpi.todayPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view.today.purchases} format={(v) => money(v, 0)} />} />}
-              {view.today.expenses !== null && <StatTile label={t("dashboard.kpi.todayExpenses")} tint="rose" icon={<BadgeIndianRupee size={17} />} value={<CountUp value={view.today.expenses} format={(v) => money(v, 0)} />} />}
-              {allowed("order.view") && <StatTile label={t("dashboard.kpi.todayOrders")} tint="violet" icon={<ClipboardList size={17} />} value={<CountUp value={view.today.orders} format={(v) => String(Math.round(v))} />} onClick={() => navigate({ name: "planned", module: "orders" })} />}
+              {/* Only the figures with something in them; the empty ones share one quiet line below. */}
+              {today.filter((f) => f.value > 0).map((f) => f.tile)}
+              {today.some((f) => f.value === 0) && (
+                <p className="col-span-2 text-[12.5px] text-ink-3 md:col-span-3">{t("dashboard.nothingToday", { list: today.filter((f) => f.value === 0).map((f) => f.label).join(", ") })}</p>
+              )}
             </>
           ) : (
             Array.from({ length: 3 }, (_, i) => (
@@ -410,7 +410,7 @@ export function DashboardPage() {
                 ]}
               />
               <span className="num text-[12.5px] text-ink-3">
-                {t("dashboard.charts.sales")} {compact(trend.sales.reduce((a, b) => a + b, 0))} · {t("dashboard.charts.collection")} {compact(trend.coll.reduce((a, b) => a + b, 0))}
+                {t("dashboard.charts.sales")} {money(trend.sales.reduce((a, b) => a + b, 0), 0)} · {t("dashboard.charts.collection")} {money(trend.coll.reduce((a, b) => a + b, 0), 0)}
               </span>
             </div>
             {shown ? (
@@ -426,6 +426,7 @@ export function DashboardPage() {
                 formatAxis={(v) => compact(v)}
                 showTable={asTable}
                 tableHeader={t("common.date")}
+                bars={grain === "daily"}
               />
             ) : (
               <Skeleton className="h-[240px] w-full" />
@@ -435,21 +436,21 @@ export function DashboardPage() {
 
         {/* Money + operations + stock */}
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className={cn("grid gap-3", view?.payable ? "grid-cols-2" : "grid-cols-1")}>
             <StatTile
               label={t("dashboard.kpi.receivable")}
               icon={<ArrowDownRight size={17} />}
               tint="green"
-              value={<CountUp value={view?.receivable.total ?? 0} format={(v) => compact(v)} />}
+              value={<CountUp value={view?.receivable.total ?? 0} format={(v) => money(v, 0)} />}
               tone={(view?.receivable.overdue ?? 0) > 0 ? "danger" : undefined}
-              foot={<span className="text-danger">{t("dashboard.kpi.overdue", { amount: compact(view?.receivable.overdue ?? 0) })}</span>}
+              foot={<span className="text-danger">{t("dashboard.kpi.overdue", { amount: money(view?.receivable.overdue ?? 0, 0) })}</span>}
               {...(canOpen({ name: "outstanding" }) ? { onClick: () => navigate({ name: "outstanding" }) } : canOpen({ name: "customers" }) ? { onClick: () => navigate({ name: "customers" }) } : {})}
             />
-            {view?.payable !== null && (
-              <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={17} />} tint="orange" value={<CountUp value={view?.payable ?? 0} format={(v) => compact(v)} />} {...(allowed("supplier.view") ? { onClick: () => navigate({ name: "planned", module: "suppliers" }) } : {})} />
+            {Boolean(view?.payable) && (
+              <StatTile label={t("dashboard.kpi.payable")} icon={<ArrowUpRight size={17} />} tint="orange" value={<CountUp value={view?.payable ?? 0} format={(v) => money(v, 0)} />} {...(allowed("supplier.view") ? { onClick: () => navigate({ name: "planned", module: "suppliers" }) } : {})} />
             )}
           </div>
-          {operations.length > 0 && <Card className="p-2">
+          {operations.some((row) => row.n > 0) && <Card className="p-2">
             <p className="eyebrow px-3 pt-2 pb-1">{t("dashboard.section.operations")}</p>
             {operations.map((row) => (
               <button
@@ -495,11 +496,11 @@ export function DashboardPage() {
         <p className="-mt-1 text-[12.5px] text-ink-3">
           {view ? `${date(view.range.from)} – ${date(view.range.to)}` : "\u00a0"}
         </p>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className={cn("grid grid-cols-1 gap-4", brands.length > 0 || !view ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
           <Card>
             <CardHeader title={t("dashboard.charts.topProducts")} />
             <div className="px-4 pt-3 pb-5 sm:px-5">
-              <BarList ariaLabel={t("dashboard.charts.topProducts")} items={view?.topProducts ?? []} empty={view ? t("dashboard.empty.topProducts") : undefined} format={(v) => compact(v)} />
+              <BarList ariaLabel={t("dashboard.charts.topProducts")} items={view?.topProducts ?? []} empty={view ? t("dashboard.empty.topProducts") : undefined} format={(v) => money(v, 0)} />
             </div>
           </Card>
           <Card>
@@ -508,17 +509,17 @@ export function DashboardPage() {
               <BarList
                 ariaLabel={t("dashboard.charts.topCustomers")}
                 items={view?.topCustomers ?? []} empty={view ? t("dashboard.empty.topCustomers") : undefined}
-                format={(v) => compact(v)}
+                format={(v) => money(v, 0)}
                 onSelect={(id) => navigate({ name: "customer", customerId: id })}
               />
             </div>
           </Card>
-          <Card>
+          {(brands.length > 0 || !view) && <Card>
             <CardHeader title={t("dashboard.charts.companySales")} />
             <div className="px-4 pt-3 pb-5 sm:px-5">
-              <BarList ariaLabel={t("dashboard.charts.companySales")} items={view?.brands ?? []} empty={view ? t("dashboard.empty.companySales") : undefined} format={(v) => compact(v)} />
+              <BarList ariaLabel={t("dashboard.charts.companySales")} items={brands} format={(v) => money(v, 0)} />
             </div>
-          </Card>
+          </Card>}
         </div>
       </section>
 
@@ -548,7 +549,7 @@ export function DashboardPage() {
                   <p className="truncate text-[14px] font-medium text-ink">{c.name}</p>
                   <p className="text-[12.5px] text-ink-3">
                     {c.city ? `${c.city} · ` : ""}
-                    {t("credit.overdue_invoices", { count: c.count, amount: c.overdue.toFixed(2), days: c.oldestDays })}
+                    {t("dashboard.overdueLine", { count: c.count, days: c.oldestDays })}
                   </p>
                 </button>
                 <span className="num hidden text-[14px] font-semibold text-danger sm:block">{money(c.overdue, 0)}</span>
@@ -565,10 +566,10 @@ export function DashboardPage() {
       <section aria-labelledby="month-h" className="flex flex-col gap-3">
         <h2 id="month-h" className="eyebrow">{t("dashboard.section.month")}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatTile label={t("dashboard.kpi.monthSales")} tint="blue" icon={<Receipt size={17} />} value={<CountUp value={view?.month.sales ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.sales ?? 0} previous={view?.month.salesPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
-          <StatTile label={t("dashboard.kpi.monthCollection")} tint="green" icon={<Wallet size={17} />} value={<CountUp value={view?.month.collections ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.collections ?? 0} previous={view?.month.collectionsPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          <StatTile label={t("dashboard.kpi.monthSales")} tint="blue" icon={<Receipt size={17} />} value={<CountUp value={view?.month.sales ?? 0} format={(v) => money(v, 0)} />} delta={<Delta current={view?.month.sales ?? 0} previous={view?.month.salesPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
+          <StatTile label={t("dashboard.kpi.monthCollection")} tint="green" icon={<Wallet size={17} />} value={<CountUp value={view?.month.collections ?? 0} format={(v) => money(v, 0)} />} delta={<Delta current={view?.month.collections ?? 0} previous={view?.month.collectionsPrev ?? 0} />} foot={t("dashboard.kpi.vsPrevious")} />
           {view?.month.purchases !== null && (
-            <StatTile label={t("dashboard.kpi.monthPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view?.month.purchases ?? 0} format={(v) => compact(v)} />} delta={<Delta current={view?.month.purchases ?? 0} previous={view?.month.purchasesPrev ?? 0} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
+            <StatTile label={t("dashboard.kpi.monthPurchase")} tint="teal" icon={<ShoppingCart size={17} />} value={<CountUp value={view?.month.purchases ?? 0} format={(v) => money(v, 0)} />} delta={<Delta current={view?.month.purchases ?? 0} previous={view?.month.purchasesPrev ?? 0} upIsGood={false} />} foot={t("dashboard.kpi.vsPrevious")} />
           )}
         </div>
       </section>

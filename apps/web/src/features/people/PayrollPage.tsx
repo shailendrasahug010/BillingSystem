@@ -88,11 +88,15 @@ export function PayrollPage() {
     <div className="flex flex-col gap-5">
       <PageHeader title={t("payroll.title")} subtitle={t("payroll.subtitle")} />
       {allowed("payroll.run") && (
-        <FilterBar>
+        <FilterBar
+          fit
+          actions={
+            <Button variant="primary" icon={<Play size={16} />} disabled={busy || !/^\d{4}-\d{2}$/.test(month)} onClick={() => void start()}>
+              {t("payroll.run", { month: /^\d{4}-\d{2}$/.test(month) ? monthLabel(month, locale) : "" })}
+            </Button>
+          }
+        >
           <Input type="month" aria-label={t("payroll.month")} value={month} max={TODAY.slice(0, 7)} onChange={(e) => setMonth(e.target.value)} className="md:w-48" />
-          <Button variant="primary" icon={<Play size={16} />} disabled={busy || !/^\d{4}-\d{2}$/.test(month)} onClick={() => void start()}>
-            {t("payroll.run", { month: /^\d{4}-\d{2}$/.test(month) ? monthLabel(month, locale) : "" })}
-          </Button>
         </FilterBar>
       )}
       {error ? <ErrorNote error={error} /> : null}

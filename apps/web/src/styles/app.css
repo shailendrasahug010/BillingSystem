@@ -468,6 +468,17 @@ h3 {
   -webkit-overflow-scrolling: touch;
 }
 
+/* A sideways row with more to see fades at that edge (marked by lib/scrollFade.ts). */
+.scroll-x[data-more="right"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+.scroll-x[data-more="left"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+}
+.scroll-x[data-more="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

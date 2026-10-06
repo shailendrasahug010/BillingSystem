@@ -19,7 +19,8 @@ export function SectionNav({ content, label }: { content: RefObject<HTMLElement 
     const root = content.current;
     if (!root) return;
     const read = () => {
-      const found = Array.from(root.querySelectorAll<HTMLHeadingElement>("h2")).map((h, i) => {
+      // Card titles only: the letterhead preview's firm name is not a section.
+      const found = Array.from(root.querySelectorAll<HTMLHeadingElement>("h2")).filter((h) => !h.closest("[data-letterhead]")).map((h, i) => {
         // A heading that appears later can take an earlier one's place in the order, so a
         // number already used is skipped rather than given out twice.
         if (!h.id) {
@@ -28,7 +29,7 @@ export function SectionNav({ content, label }: { content: RefObject<HTMLElement 
           h.id = `settings-section-${n}`;
         }
         h.style.scrollMarginTop = "96px";
-        return { id: h.id, label: h.textContent?.trim() ?? "" };
+        return { id: h.id, label: h.dataset.short ?? h.textContent?.trim() ?? "" };
       });
       setSections((before) => (before.length === found.length && before.every((s, i) => s.id === found[i]!.id && s.label === found[i]!.label) ? before : found));
     };

@@ -1,14 +1,21 @@
 import { PartyPopper } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { setWelcomeBusiness, welcomeBusiness } from "../../lib/lastSignIn";
 
-/** Right after sign-up: the business is ready, and the checklist below is where to start. Shown until closed. */
-export function WelcomeCard() {
+/** Right after sign-up: the business is ready, and the checklist below is where to start. Shown until closed or until the first bill is made. */
+export function WelcomeCard({ billed }: { billed?: boolean }) {
   const { t } = useI18n();
   const [business, setBusiness] = useState(welcomeBusiness);
-  if (!business) return null;
+  // Once a bill is made the card has done its job ("make your first bill" no longer fits).
+  useEffect(() => {
+    if (billed && business) {
+      setWelcomeBusiness(null);
+      setBusiness("");
+    }
+  }, [billed, business]);
+  if (!business || billed) return null;
   const close = () => {
     setWelcomeBusiness(null);
     setBusiness("");

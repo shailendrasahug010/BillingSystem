@@ -3,7 +3,7 @@ import { CATALOGS, DEFAULT_LOCALE, localeInfo, type Catalog, type LocaleCode } f
 
 /**
  * A small, dependency-free translator. The JSON follows i18next conventions
- * ({{name}} interpolation, _one/_other plural suffixes, {{value, currency}}
+ * ({{name}} interpolation, _zero/_one/_other plural suffixes, {{value, currency}}
  * formatting) so the catalogues can be moved to i18next/ICU tooling later
  * without rewriting them.
  *
@@ -68,7 +68,10 @@ export function createTranslator(locale: LocaleCode = DEFAULT_LOCALE): Translato
     const count = params?.count;
     if (typeof count === "number") {
       const category = plural.select(count);
+      // "_zero" for exactly nothing ("today" rather than "0 days ago"), in any language.
+      const zero = count === 0 ? (lookup(catalog, `${key}_zero`) ?? lookup(fallback, `${key}_zero`)) : undefined;
       const found =
+        zero ??
         lookup(catalog, `${key}_${category}`) ??
         lookup(catalog, `${key}_other`) ??
         lookup(fallback, `${key}_${category}`) ??

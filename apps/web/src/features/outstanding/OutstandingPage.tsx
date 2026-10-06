@@ -119,27 +119,28 @@ export function OutstandingPage() {
 
   return (
     <div className="stagger flex flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 sm:flex-wrap sm:items-end">
         <div className="min-w-0">
           <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[28px]">{t("collect.title")}</h1>
           <p className="text-[13px] text-ink-3">{t("collect.subtitle")}</p>
         </div>
-        <div className="flex flex-wrap gap-2" aria-label={t("common.download")}>
+        {/* On a phone the four are small icons beside the title, so they do not take a row of their own. */}
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5 sm:gap-2" aria-label={t("common.download")}>
           <Button size="sm" icon={<Printer size={15} />} disabled={rows.length === 0} onClick={() => window.print()}>
-            {t("common.print")}
+            <span className="max-sm:sr-only">{t("common.print")}</span>
           </Button>
           {remote && (
             <>
               <Button size="sm" icon={<FileText size={15} />} disabled={busy !== null || rows.length === 0} onClick={() => download("pdf")}>
-                {busy === "pdf" ? t("reports.preparing") : t("reports.exportPdf")}
+                <span className="max-sm:sr-only">{busy === "pdf" ? t("reports.preparing") : t("reports.exportPdf")}</span>
               </Button>
               <Button size="sm" icon={<FileSpreadsheet size={15} />} disabled={busy !== null || rows.length === 0} onClick={() => download("xlsx")}>
-                {busy === "xlsx" ? t("reports.preparing") : t("reports.exportXlsx")}
+                <span className="max-sm:sr-only">{busy === "xlsx" ? t("reports.preparing") : t("reports.exportXlsx")}</span>
               </Button>
             </>
           )}
           <Button size="sm" icon={<Download size={15} />} disabled={busy !== null || rows.length === 0} onClick={() => download("csv")}>
-            {t("reports.exportCsv")}
+            <span className="max-sm:sr-only">{t("reports.exportCsv")}</span>
           </Button>
         </div>
       </div>

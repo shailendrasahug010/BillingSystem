@@ -51,9 +51,8 @@ export function GstPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title={t("gstPage.title")} subtitle={t("gstPage.subtitle")} />
-      <FilterBar>
+      <FilterBar fit actions={<PeriodActions period={period} />}>
         <Input type="month" aria-label={t("common.period")} value={period} max={TODAY.slice(0, 7)} onChange={(e) => setPeriod(e.target.value)} className="md:w-48" />
-        <PeriodActions period={period} />
       </FilterBar>
       <Tabs.Root defaultValue="summary" className="flex flex-col gap-4">
         <Tabs.List className="scroll-x flex gap-1 border-b border-line" aria-label={t("gstPage.title")}>
@@ -151,8 +150,8 @@ function SummaryTab({ period }: { period: string }) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Tile label={t("gstPage.outputTax")} value={money(output)} />
-        <Tile label={t("gstPage.eligibleItc")} value={money(itc)} tone="good" />
-        <Tile label={t("gstPage.netEstimate")} value={money(Math.max(0, output - itc))} sub={output - itc < 0 ? t("gstPage.carryForward", { amount: money(itc - output) }) : t("gstPage.indicative")} tone={output - itc > 0 ? "danger" : undefined} />
+        <Tile label={t("gstPage.eligibleItc")} value={money(itc)} />
+        <Tile label={t("gstPage.netEstimate")} value={money(Math.max(0, output - itc))} sub={output - itc < 0 ? t("gstPage.carryForward", { amount: money(itc - output) }) : t("gstPage.indicative")} />
       </div>
 
       <Card>

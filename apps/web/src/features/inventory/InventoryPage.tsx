@@ -42,7 +42,7 @@ type Reason = (typeof REASONS)[number];
 const MOVEMENTS = new Set(["opening", "purchase", "purchase_return", "sale", "sale_return", "adjustment_in", "adjustment_out", "transfer_in", "transfer_out", "damaged", "expired", "free_in", "free_out", "consumption"]);
 
 export function InventoryPage() {
-  const { t, money, number } = useI18n();
+  const { t, money, amount, number } = useI18n();
   const [q, setQ] = useState("");
   const [level, setLevel] = useState<"all" | "low" | "out">("all");
   const [ledgerFor, setLedgerFor] = useState<StockRow | null>(null);
@@ -63,7 +63,8 @@ export function InventoryPage() {
   });
   const showValue = list.rows.some((r) => r.value !== undefined);
   const packs = (r: StockRow) => stockInPacks(r.qty, productById.get(r.productId), (n) => number(n));
-  const qtyTone = (r: StockRow) => (r.level === "out" ? "danger" : r.level === "low" ? "warn" : undefined);
+  const short = (r: StockRow) => Number(r.qty) < 0;
+  const qtyTone = (r: StockRow) => (short(r) ? "warn" : r.level === "out" ? "danger" : r.level === "low" ? "warn" : undefined);
   const totalValue = list.rows.reduce((s, r) => s + Number(r.value ?? 0), 0);
 
   const columns: Column<StockRow>[] = [
@@ -80,16 +81,25 @@ export function InventoryPage() {
     {
       key: "level",
       header: t("common.status"),
-      render: (r) => (r.level === "ok" ? <span className="text-ink-3">{t("status.stock.ok")}</span> : <Badge tone={r.level === "out" ? "danger" : "warn"}>{t(r.level === "out" ? "status.stock.out_of_stock" : "status.stock.low")}</Badge>),
+      // A chip only when there is something to act on; healthy rows stay quiet.
+      render: (r) =>
+        short(r) ? (
+          <Badge tone="warn">{t("status.stock.short", { qty: `${number(-Number(r.qty))} ${r.unit}` })}</Badge>
+        ) : r.level === "ok" ? null : (
+          <Badge tone={r.level === "out" ? "danger" : "warn"}>{t(r.level === "out" ? "status.stock.out_of_stock" : "status.stock.low")}</Badge>
+        ),
     },
-    { key: "min", header: t("product.minStock"), align: "right", render: (r) => <span className="text-ink-2">{r.minStock ? number(r.minStock) : "—"}</span> },
+    // Minimum stock only once some product has one.
+    ...(list.rows.some((r) => r.minStock && Number(r.minStock) > 0)
+      ? [{ key: "min", header: t("product.minStock"), align: "right" as const, render: (r: StockRow) => <span className="text-ink-2">{r.minStock ? number(r.minStock) : "—"}</span> }]
+      : []),
     {
       key: "qty",
       header: t("product.currentStock"),
       align: "right",
       render: (r) => (
         <div>
-          <p className={r.level === "out" ? "font-semibold text-danger" : r.level === "low" ? "font-semibold text-warn" : "font-semibold text-ink"}>{packs(r) ?? `${number(r.qty)} ${r.unit}`}</p>
+          <p className={short(r) ? "font-semibold text-warn" : r.level === "out" ? "font-semibold text-danger" : r.level === "low" ? "font-semibold text-warn" : "font-semibold text-ink"}>{packs(r) ?? `${number(r.qty)} ${r.unit}`}</p>
           {packs(r) && (
             <p className="text-[12px] text-ink-3">
               = {number(r.qty)} {r.unit}
@@ -100,8 +110,8 @@ export function InventoryPage() {
     },
     ...(showValue
       ? [
-          { key: "cost", header: t("inventory.avgCost"), align: "right" as const, render: (r: StockRow) => <span className="text-ink-2">{money(r.avgCost ?? 0)}</span> },
-          { key: "value", header: t("product.stockValue"), align: "right" as const, render: (r: StockRow) => money(r.value ?? 0) },
+          { key: "cost", header: t("inventory.avgCost"), align: "right" as const, render: (r: StockRow) => <span className="text-ink-2">{Number(r.avgCost ?? 0) > 0 ? amount(r.avgCost!) : "—"}</span> },
+          { key: "value", header: t("product.stockValue"), align: "right" as const, render: (r: StockRow) => (Number(r.qty) > 0 ? money(r.value ?? 0, 0) : "—") },
         ]
       : []),
   ];
@@ -203,8 +213,8 @@ export function InventoryPage() {
             mobile={(r) => (
               <RowCard
                 title={r.name}
-                sub={[r.code, r.level === "ok" ? null : t(r.level === "out" ? "status.stock.out_of_stock" : "status.stock.low"), showValue && r.value !== undefined ? `${t("product.stockValue")} ${money(r.value)}` : null].filter(Boolean).join(" · ")}
-                value={packs(r) ?? `${number(r.qty)} ${r.unit}`}
+                sub={[r.code, short(r) ? null : r.level === "ok" ? null : t(r.level === "out" ? "status.stock.out_of_stock" : "status.stock.low"), showValue && r.value !== undefined && Number(r.qty) > 0 ? `${t("product.stockValue")} ${money(r.value, 0)}` : null].filter(Boolean).join(" · ")}
+                value={short(r) ? t("status.stock.short", { qty: `${number(-Number(r.qty))} ${r.unit}` }) : (packs(r) ?? `${number(r.qty)} ${r.unit}`)}
                 tone={qtyTone(r)}
                 valueSub={packs(r) ? `= ${number(r.qty)} ${r.unit}` : undefined}
               />

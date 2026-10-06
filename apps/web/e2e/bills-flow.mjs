@@ -110,6 +110,8 @@ await page.reload();
 await page.getByRole("heading", { name: "Sales bills" }).waitFor({ timeout: 15000 });
 await page.getByText(number, { exact: true }).waitFor({ timeout: 15000 });
 await page.screenshot({ path: `${OUT}/bills-3-list.png` });
+// The filters wait behind their button.
+await page.getByRole("button", { name: "Filters" }).click();
 await page.getByRole("combobox", { name: "Payment" }).selectOption("paid");
 await page.waitForTimeout(800);
 check((await page.getByText(number, { exact: true }).count()) === 0, "an unpaid bill stays listed under Paid");

@@ -22,6 +22,7 @@ import { EMBEDDED } from "../../lib/embedded";
 import { findOfflineBill, kindOf, useOffline, type CancelEntry } from "../../offline/sync";
 import { ReturnsCard, type ReturnRow } from "../notes/NoteDialog";
 import { InvoiceDocument } from "./InvoiceDocument";
+import { InvoiceStatusBadge } from "./InvoicesPage";
 import { EInvoiceCard } from "./EInvoiceCard";
 import { ShippingBillCard } from "./ShippingBillCard";
 import { InvoiceReviewCard } from "./InvoiceReview";
@@ -154,9 +155,15 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
               {invoice.buyer.businessName} · <span className="num">{money(invoice.grandTotal)}</span>
             </p>
           </div>
-          <Badge tone={status === "paid" ? "good" : status === "partial" ? "warn" : status === "cancelled" ? "neutral" : "danger"} dot>
-            {status === "cancelled" ? t("status.document.cancelled") : t(`status.payment.${status}`)}
-          </Badge>
+          {/* The same chip as in the list of bills: due soon, overdue, paid... */}
+          <InvoiceStatusBadge
+            row={{
+              status: status === "cancelled" ? "cancelled" : "posted",
+              paymentStatus: status === "cancelled" ? "unpaid" : status,
+              dueDate: invoice.dueDate || null,
+              balanceDue: String(invoice.balance),
+            }}
+          />
           {invoice.zeroRated && <Badge tone="accent">{t(`invoice.export.types.${invoice.zeroRated.type}`)}</Badge>}
           {offlineKey && (
             <Badge tone="warn" icon={<CloudOff size={13} />}>

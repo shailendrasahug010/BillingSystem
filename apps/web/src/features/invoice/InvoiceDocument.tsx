@@ -176,7 +176,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
           <div key={label}>
             <p className="text-[10.5px] font-semibold tracking-wider text-[#4a5570] uppercase">{label}</p>
             <p className="text-[13px] font-semibold">{customer.businessName}</p>
-            <p>{customer.name}</p>
+            {customer.name && customer.name !== customer.businessName && <p>{customer.name}</p>}
             <p>
               {customer.address} {customer.pincode}
             </p>

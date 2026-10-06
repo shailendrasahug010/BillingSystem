@@ -150,7 +150,7 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
               </li>
             );
           })}
-          {results.length === 0 && <li className="px-3 py-4 text-center text-[13px] text-ink-3">{t("search.noResults", { query })}</li>}
+          {results.length === 0 && query.trim() && <li className="px-3 py-4 text-center text-[13px] text-ink-3">{t("search.noResults", { query })}</li>}
           {onAdd && (
             <li
               id={`${listId}-${results.length}`}

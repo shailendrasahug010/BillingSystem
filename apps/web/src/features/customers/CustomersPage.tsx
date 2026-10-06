@@ -184,7 +184,7 @@ export function CustomersPage() {
           },
           {
             key: "gstin",
-            header: t("customer.gstin"),
+            header: t("customer.gstinOrType"),
             sortValue: (r) => r.c.gstin,
             render: ({ c }) => (c.gstin ? <span className="font-mono text-[12px] text-ink-2">{c.gstin}</span> : <Badge tone={customerKind(c) === "export" ? "accent" : "neutral"}>{t(kindLabel(c))}</Badge>),
           },

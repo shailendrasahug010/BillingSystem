@@ -97,7 +97,7 @@ export function FirmHeader({ detail = "full" }: { detail?: "full" | "short" }) {
   const logo = useFirmLogo();
   const contact = detail === "full" ? [BUSINESS.phone, BUSINESS.email] : [BUSINESS.phone];
   return (
-    <div className="flex min-w-0 items-start gap-3">
+    <div className="flex min-w-0 items-start gap-3" data-letterhead>
       {logo && <img src={logo} alt="" className={cn("shrink-0 object-contain", detail === "full" ? "h-16 w-16" : "h-12 w-12")} />}
       <div className="min-w-0">
         <h2 className={cn("leading-tight font-bold text-[#0b2d72]", detail === "full" ? "text-[22px]" : "text-[18px]")} style={{ fontFamily: "var(--font-display)" }}>

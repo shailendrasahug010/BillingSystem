@@ -81,7 +81,7 @@ function PriceListPicker({ customerId, value }: { customerId: string; value: str
 }
 
 export function CustomerProfilePage({ customerId }: { customerId: string }) {
-  const { t, money, compact, date, locale } = useI18n();
+  const { t, money, date, locale } = useI18n();
   const { navigate } = useRouter();
   const version = useStoreVersion();
   const [editing, setEditing] = useState(false);
@@ -102,6 +102,12 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
     return <EmptyState icon={<SearchX size={24} />} title={t("customer.notFound")} hint={t("customer.notFoundHint")} action={<Button onClick={() => navigate({ name: "customers" })}>{t("customer.backToList")}</Button>} />;
   if (!insight) return <p className="text-[14px] text-ink-3" role="status">{t("common.loading")}</p>;
   const state = findState(customer.stateCode);
+  const place = [customer.address, customer.city && !customer.address?.includes(customer.city) ? customer.city : "", locale === "hi" ? state?.nameHi : state?.name, customer.pincode].map((v) => v?.trim()).filter(Boolean).join(", ");
+  const terms = [
+    customer.route && `${t("customer.route")}: ${customer.route}`,
+    customer.salesRep && `${t("customer.salesRep")}: ${customer.salesRep}`,
+    customer.creditDays > 0 && `${t("customer.creditDays")}: ${customer.creditDays}`,
+  ].filter(Boolean) as string[];
   const top = [...insight.stats.values()]
     .map((s) => ({ id: s.productId, label: productName(s.productId), amount: s.totalQty.toNumber() * (s.lastRate?.toNumber() ?? 0) }))
     .sort((a, b) => b.amount - a.amount)
@@ -130,7 +136,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-[24px] leading-tight font-semibold text-ink">{customer.businessName}</h1>
               <Badge tone={customer.type === "b2b" || customerKind(customer) === "export" ? "accent" : "neutral"}>{t(kindLabel(customer))}</Badge>
-              <Badge>{customer.category}</Badge>
+              {customer.category && <Badge>{customer.category}</Badge>}
               {customer.remindersOptOut && (
                 <>
                   <Badge tone="warn">{t("customer.remindersStopped")}</Badge>
@@ -141,20 +147,23 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
               )}
             </div>
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-ink-3">
-              <span>{customer.name}</span>
-              <span className="num inline-flex items-center gap-1">
-                <Phone size={12} /> {customer.mobile}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <MapPin size={12} /> {customer.address}, {locale === "hi" ? state?.nameHi : state?.name} {customer.pincode}
-              </span>
+              {/* Only what is filled in: no shop name twice, no stray commas. */}
+              {customer.name && customer.name !== customer.businessName && <span>{customer.name}</span>}
+              {customer.mobile && (
+                <span className="num inline-flex items-center gap-1">
+                  <Phone size={12} /> {customer.mobile}
+                </span>
+              )}
+              {place && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin size={12} /> {place}
+                </span>
+              )}
               {customer.gstin && <span className="font-mono text-[12px]">GSTIN {customer.gstin}</span>}
             </p>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-[12.5px] text-ink-3">
-              <span>
-                {t("customer.route")}: {customer.route} · {t("customer.salesRep")}: {customer.salesRep} · {t("customer.creditDays")}: {customer.creditDays}
-              </span>
-              {LIVE && WORKSPACE.priceLevels.length > 1 && <span aria-hidden>·</span>}
+              {terms.length > 0 && <span>{terms.join(" · ")}</span>}
+              {terms.length > 0 && LIVE && WORKSPACE.priceLevels.length > 1 && <span aria-hidden>·</span>}
               <PriceListPicker customerId={customer.id} value={customer.priceLevelId} />
             </p>
           </div>
@@ -195,7 +204,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {tile(t("customer.totalSales"), compact(insight.totalSales), `${insight.invoiceCount} ${t("customer.invoiceCount")}`)}
+        {tile(t("customer.totalSales"), money(insight.totalSales, 0), `${insight.invoiceCount} ${t("customer.invoiceCount")}`)}
         {tile(t("customer.outstanding"), money(insight.outstanding, 0), insight.overdue > 0 ? t("dashboard.kpi.overdue", { amount: money(insight.overdue, 0) }) : undefined, insight.overdue > 0 ? "danger" : undefined)}
         {tile(t("customer.avgOrderValue"), money(insight.avgOrderValue, 0))}
         {tile(t("customer.lastPurchase"), insight.lastPurchase ? date(insight.lastPurchase) : "—", insight.lastPurchase ? t("common.daysAgo", { count: daysBetween(insight.lastPurchase, TODAY) }) : undefined)}
@@ -223,11 +232,14 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           <Card>
             <CardHeader title={t("customer.mostPurchased")} />
             <div className="px-4 pt-3 pb-5 sm:px-5">
-              <BarList ariaLabel={t("customer.mostPurchased")} items={top} format={(v) => compact(v)} />
+              <BarList ariaLabel={t("customer.mostPurchased")} items={top} format={(v) => money(v, 0)} />
             </div>
           </Card>
           <Card>
             <CardHeader title={t("suggestions.reorder.title")} subtitle={t("suggestions.subtitle", { name: customer.businessName })} />
+            {reorder.length === 0 ? (
+              <p className="px-4 pt-3 pb-5 text-[13px] text-ink-3 sm:px-5">{t("suggestions.reorder.none")}</p>
+            ) : (
             <div className="scroll-x px-2 pt-2 pb-3">
               <table className="w-full text-[13px]">
                 <thead className="text-left text-ink-3">
@@ -255,6 +267,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
                 </tbody>
               </table>
             </div>
+            )}
           </Card>
         </Tabs.Content>
 
