@@ -1,7 +1,8 @@
 import { translateError } from "@digitalbahi/i18n";
 import { addDays } from "@digitalbahi/core";
-import { ArrowLeft, RotateCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
-import { Children, useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, Ellipsis, RotateCw, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { Popover } from "radix-ui";
+import { Children, Fragment, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { TODAY } from "../../data/db";
 import { ApiError } from "../../lib/api";
@@ -9,7 +10,7 @@ import { cn } from "../../lib/cn";
 import { Button } from "./Button";
 import { NamedDates } from "./Field";
 
-export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, back, phoneMenu }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: ReactNode; phoneMenu?: boolean }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
@@ -19,14 +20,55 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
           {subtitle && <div className="num text-[13px] text-ink-3">{subtitle}</div>}
         </div>
       </div>
-      {actions && <HeaderActions>{actions}</HeaderActions>}
+      {actions && <HeaderActions phoneMenu={phoneMenu}>{actions}</HeaderActions>}
     </div>
   );
 }
 
-/** A page's buttons at the top right, all of them in sight on every screen. */
-export function HeaderActions({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap gap-2">{children}</div>;
+/** The buttons of a fragment (or a list) one by one, the empty ones (a `false` from a permission check) left out. */
+function flatButtons(children: ReactNode): ReactElement[] {
+  return Children.toArray(children).flatMap((c) =>
+    isValidElement<{ children?: ReactNode }>(c) && c.type === Fragment ? flatButtons(c.props.children) : isValidElement(c) ? [c] : [],
+  );
+}
+
+/**
+ * A page's buttons at the top right, all of them in sight on every screen. With `phoneMenu`
+ * (customers, products, inventory), a phone shows the main one (the primary button, else the
+ * last) with the rest under "⋯", so the list starts near the top.
+ */
+export function HeaderActions({ children, phoneMenu }: { children: ReactNode; phoneMenu?: boolean }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const all = <div className="flex flex-wrap gap-2">{children}</div>;
+  const buttons = flatButtons(children);
+  if (!phoneMenu || buttons.length <= 2) return all;
+  const main = buttons.find((b) => (b.props as { variant?: string }).variant === "primary") ?? buttons[buttons.length - 1]!;
+  const rest = buttons.filter((b) => b !== main);
+  return (
+    <>
+      <div className="hidden md:block">{all}</div>
+      <div className="flex w-full items-center gap-2 md:hidden">
+        <div className="min-w-0 flex-1 [&>*]:w-full">{main}</div>
+        <Popover.Root open={open} onOpenChange={setOpen}>
+          <Popover.Trigger className="press flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-line bg-surface text-ink-2 shadow-card" aria-label={t("common.more")} title={t("common.more")}>
+            <Ellipsis size={18} />
+          </Popover.Trigger>
+          <Popover.Portal>
+            {/* A tap on any of them closes the list (the dialog it opens belongs to the page). */}
+            <Popover.Content
+              align="end"
+              sideOffset={6}
+              onClick={() => setOpen(false)}
+              className="z-50 flex w-60 flex-col gap-1.5 rounded-xl border border-line bg-surface p-2 shadow-pop [&>*]:w-full [&>*]:justify-start"
+            >
+              {rest}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+    </>
+  );
 }
 
 export { DataTable, RowCard, type Column } from "./DataTable";
@@ -91,9 +133,10 @@ export function LoadMore({ hasMore, loading, onClick }: { hasMore: boolean; load
  * `actions` (export, plan a trip, run salary) stay in sight on the right. `fit` keeps
  * the first box (a month, a period) as narrow as it is instead of the full row.
  * `openOnComputer` starts open on a computer, for reports, where the grouping and
- * dates are the point rather than a narrowing of a list.
+ * dates are the point rather than a narrowing of a list. `labelled` keeps the word
+ * "Filters" on a phone too.
  */
-export function FilterBar({ children, quick, actions, fit, openOnComputer }: { children: ReactNode; quick?: ReactNode; actions?: ReactNode; fit?: boolean; openOnComputer?: boolean }) {
+export function FilterBar({ children, quick, actions, fit, openOnComputer, labelled }: { children: ReactNode; quick?: ReactNode; actions?: ReactNode; fit?: boolean; openOnComputer?: boolean; labelled?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(() => Boolean(openOnComputer) && typeof matchMedia !== "undefined" && matchMedia("(min-width: 1024px)").matches);
   const [on, setOn] = useState(0);
@@ -132,13 +175,14 @@ export function FilterBar({ children, quick, actions, fit, openOnComputer }: { c
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
             className={cn(
-              "press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium max-sm:px-2.5 md:order-last",
+              "press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium md:order-last",
+              !labelled && "max-sm:px-2.5",
               open || on > 0 ? "border-accent bg-accent-soft text-accent-ink" : "border-line bg-surface text-ink-2 hover:border-line-strong",
             )}
           >
             <SlidersHorizontal size={15} aria-hidden />
             {/* On a phone the button is its icon, so the search hint beside it is read in full. */}
-            <span className="max-sm:sr-only">{t("common.filters")}</span>
+            <span className={labelled ? undefined : "max-sm:sr-only"}>{t("common.filters")}</span>
             {on > 0 && <span className="num rounded-full bg-accent px-1.5 text-[11px] leading-[18px] text-ink-inverse">{on}</span>}
           </button>
         )}

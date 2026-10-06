@@ -54,7 +54,7 @@ export function ProductsPage() {
             {t("common.showingCount", { shown: rows.length, total: PRODUCTS.length })} · {t("product.stockValue")} {money(stockValue, 0)}
           </p>
         </div>
-        <HeaderActions>
+        <HeaderActions phoneMenu>
           {LIVE && allowed("product.import") && (
             <Button icon={<FileUp size={16} />} onClick={() => setImporting(true)}>
               {t("imports.import")}
@@ -96,7 +96,7 @@ export function ProductsPage() {
         </HeaderActions>
       </div>
 
-      <FilterBar>
+      <FilterBar labelled>
         <Input id="product-filter" className="flex-1" leading={<Search size={16} />} placeholder={t("product.search")} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t("product.search")} />
         <Select aria-label={t("product.brand")} value={brand} onChange={(e) => setBrand(e.target.value)} className="md:w-56">
           <option value="">

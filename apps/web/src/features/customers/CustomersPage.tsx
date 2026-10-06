@@ -70,7 +70,7 @@ export function CustomersPage() {
             {t("common.showingCount", { shown: rows.length, total: CUSTOMERS.length })} · {t("customer.outstanding")} {money(totalOutstanding, 0)}
           </p>
         </div>
-        <HeaderActions>
+        <HeaderActions phoneMenu>
           {LIVE && allowed("customer.create") && (
             <Button icon={<FileUp size={16} />} onClick={() => setImporting(true)}>
               {t("imports.import")}
@@ -104,7 +104,7 @@ export function CustomersPage() {
         </HeaderActions>
       </div>
 
-      <FilterBar>
+      <FilterBar labelled>
           <Input id="customer-filter" className="flex-1" leading={<Search size={16} />} placeholder={t("customer.search")} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t("customer.search")} />
           <Select aria-label={t("customer.route")} value={route} onChange={(e) => setRoute(e.target.value)} className="md:w-56">
             <option value="">

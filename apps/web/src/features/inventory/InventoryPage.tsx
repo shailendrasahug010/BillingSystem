@@ -119,6 +119,7 @@ export function InventoryPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
+        phoneMenu
         title={t("inventory.title")}
         subtitle={showValue ? `${t("product.stockValue")} ${money(totalValue, 0)}` : undefined}
         actions={
@@ -178,7 +179,7 @@ export function InventoryPage() {
           )}
         </Tabs.List>
         <Tabs.Content value="stock" className="flex flex-col gap-4">
-          <FilterBar>
+          <FilterBar labelled>
             <Input className="flex-1" leading={<Search size={16} />} placeholder={t("product.search")} aria-label={t("product.search")} value={q} onChange={(e) => setQ(e.target.value)} />
             {godowns.length > 1 && (
               <Select aria-label={t("godowns.godown")} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="md:w-48">
