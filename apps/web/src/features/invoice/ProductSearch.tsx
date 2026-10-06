@@ -8,6 +8,7 @@ import { useSearchableProducts } from "../../data/hooks";
 import type { CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 import { cn } from "../../lib/cn";
+import { useMediaQuery } from "../../lib/useMediaQuery";
 import { parseSpokenItem, parseTypedItem } from "../../lib/spoken";
 import { VoiceButton } from "../../components/voice/VoiceButton";
 import { productById } from "../../data/db";
@@ -32,6 +33,8 @@ export const ProductSearch = forwardRef<
   { customer: Customer | null; insight: CustomerInsight | null; cartIds: string[]; onAdd(productId: string, how?: AddHow): void; large?: boolean; onScan?(): void }
 >(function ProductSearch({ customer, insight, cartIds, onAdd, large, onScan }, ref) {
   const { t, money, locale } = useI18n();
+  // A phone-wide box shows a shorter hint, so it is read in full rather than cut off.
+  const narrow = useMediaQuery("(max-width: 639px)");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -119,7 +122,7 @@ export const ProductSearch = forwardRef<
             aria-controls={listId}
             aria-activedescendant={open && rows[active] ? `${listId}-${active}` : undefined}
             aria-label={t("invoice.searchProduct")}
-            placeholder={t("invoice.searchProduct")}
+            placeholder={narrow ? t("invoice.searchProductShort") : t("invoice.searchProduct")}
             value={query}
             inputMode="search"
             onChange={(e) => {
