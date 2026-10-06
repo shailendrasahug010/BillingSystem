@@ -3,7 +3,8 @@ import {
   formatCurrency,
   formatCurrencyCompact,
   formatDate,
-  formatDateMedium,
+  formatDateTime,
+  formatDateWithWeekday,
   formatNumber,
   isCatalogLoaded,
   isLocaleCode,
@@ -18,11 +19,16 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 interface I18nValue extends Translator {
   setLocale(locale: LocaleCode): void;
   money(value: number | string, decimals?: 0 | 2): string;
+  /** An amount in a list: whole rupees (₹564), paise only when there are some (₹1,104.50). */
+  amount(value: number | string): string;
   compact(value: number | string): string;
   number(value: number | string, decimals?: number): string;
   date(iso: string): string;
+  /** The same 24/09/2026 as date (one date style across the app). */
   dateMedium(iso: string): string;
-  /** A timestamp in the business time zone: "24 Sept, 10:42 am". */
+  /** Tuesday, 24/09/2026: a day as a heading. */
+  dateWeekday(iso: string): string;
+  /** A moment in India time: "24/09/2026 10:42". */
   dateTime(iso: string): string;
 }
 
@@ -86,12 +92,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
           .catch(() => undefined);
       },
       money: (v, decimals = 2) => formatCurrency(v, locale, { decimals }),
+      amount: (v) => formatCurrency(v, locale, { decimals: Math.round(Number(v) * 100) % 100 === 0 ? 0 : 2 }),
       compact: (v) => formatCurrencyCompact(v, locale),
       number: (v, decimals = 3) => formatNumber(v, locale, decimals),
       date: (iso) => formatDate(iso),
-      dateMedium: (iso) => formatDateMedium(iso, locale),
-      dateTime: (iso) =>
-        new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }).format(new Date(iso)),
+      dateMedium: (iso) => formatDate(iso),
+      dateWeekday: (iso) => formatDateWithWeekday(iso, locale),
+      dateTime: (iso) => formatDateTime(iso),
     };
   }, [locale, extra]);
 

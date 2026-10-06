@@ -122,8 +122,8 @@ await owner.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 15000 }
 await o.nav("Business Reports");
 let menu = await o.menu();
 const listed = await menu.innerText();
-// (Section headings are shown in capitals; dates as in India, "5 Sept 2026".)
-for (const s of ["my views", "sales by company", "sales · last month · by customer", "festive margin", "profit · 15 aug 2026 – 5 sept 2026 · by customer"]) if (!listed.toLowerCase().includes(s)) errors.push(`menu lacks ${s}: ${listed}`);
+// (Section headings are shown in capitals; dates as DD/MM/YYYY.)
+for (const s of ["my views", "sales by company", "sales · last month · by customer", "festive margin", "profit · 15/08/2026 – 05/09/2026 · by customer"]) if (!listed.toLowerCase().includes(s)) errors.push(`menu lacks ${s}: ${listed}`);
 await owner.screenshot({ path: `${OUT}/report-views-1-menu.png` });
 await menu.getByRole("button", { name: /Sales by company/ }).click();
 await owner.getByText("View: Sales by company").waitFor();
@@ -134,7 +134,7 @@ menu = await o.menu();
 await menu.getByRole("button", { name: /Festive margin/ }).click();
 await owner.getByText("View: Festive margin").waitFor();
 const profitPanel = owner.getByRole("tabpanel");
-if ((await profitPanel.getByLabel("From", { exact: true }).inputValue()) !== "2026-08-15" || (await profitPanel.getByLabel("To", { exact: true }).inputValue()) !== "2026-09-05") errors.push("custom period not restored");
+if ((await profitPanel.getByLabel("From", { exact: true }).inputValue()) !== "15/08/2026" || (await profitPanel.getByLabel("To", { exact: true }).inputValue()) !== "05/09/2026") errors.push("custom period not restored");
 await owner.screenshot({ path: `${OUT}/report-views-2-open.png` });
 log("both views open again as saved");
 

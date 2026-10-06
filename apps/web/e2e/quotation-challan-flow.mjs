@@ -96,7 +96,7 @@ const heading = page.getByRole("heading", { level: 1 }).first();
 await heading.filter({ hasText: /QT\// }).waitFor({ timeout: 15000 });
 const quoteNumber = (await heading.textContent()).match(/QT\/[\d-]+\/\d+/)?.[0];
 check(Boolean(quoteNumber), `quotation number: ${await heading.textContent()}`);
-await page.getByText("valid until 31 Dec 2099").first().waitFor();
+await page.getByText("valid until 31/12/2099").first().waitFor();
 await page.screenshot({ path: `${OUT}/quote-1-quotation.png` });
 await page.getByRole("button", { name: "Print quotation" }).click();
 const quote = await printed();

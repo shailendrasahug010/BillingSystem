@@ -21,6 +21,8 @@ import {
   CalendarPlus,
   HandCoins,
   UserRoundPlus,
+  ChevronUp,
+  Ellipsis,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
@@ -158,13 +160,14 @@ function PlainFigure({ label, value, format, foot }: { label: string; value: num
  * the leave to decide, the salary run, the promises to pay due today.
  */
 export function DashboardPage() {
-  const { t, money, compact, date, dateMedium, locale } = useI18n();
+  const { t, money, compact, date, dateMedium, dateWeekday, locale } = useI18n();
   const { navigate } = useRouter();
   useStoreVersion();
   const ready = useDelayedReady(350);
   const [range, setRange] = useState<RangeKey>("thisMonth");
   const [grain, setGrain] = useState<Grain>("daily");
   const [asTable, setAsTable] = useState(false);
+  const [allActions, setAllActions] = useState(false);
 
   const session = useSession();
   // Live: the sales dashboard only for roles that have it; the demo shows everything.
@@ -236,9 +239,7 @@ export function DashboardPage() {
     "90+": "90+",
   };
 
-  const weekday = new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(
-    new Date(`${TODAY}T00:00:00Z`),
-  );
+  const weekday = dateWeekday(TODAY);
 
   return (
     <div className="stagger flex flex-col gap-6">
@@ -282,10 +283,10 @@ export function DashboardPage() {
       {home?.setup && <SetupGuide setup={home.setup} />}
       <BackupNote />
 
-      {/* Quick actions: a grid of icons on phones, a row of tiles on bigger screens. */}
+      {/* Quick actions: the four used most, in one colour, and the rest behind "More". */}
       {actions.length > 0 && <section aria-label={t("dashboard.quickActions")}>
         <div className="grid grid-cols-4 gap-x-1.5 gap-y-4 sm:flex sm:flex-wrap sm:gap-2.5">
-          {actions.map((a) => (
+          {(allActions || actions.length <= 4 ? actions : actions.slice(0, 3)).map((a) => (
             <button
               key={a.label}
               type="button"
@@ -299,7 +300,7 @@ export function DashboardPage() {
               <span
                 className={cn(
                   "flex size-12 shrink-0 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-105 sm:size-9 sm:rounded-xl",
-                  a.primary ? "bg-accent bg-accent-grad text-ink-inverse shadow-glow" : TINT[a.tint],
+                  a.primary ? "bg-accent bg-accent-grad text-ink-inverse shadow-glow" : "bg-accent-soft text-accent",
                 )}
               >
                 {a.icon}
@@ -307,6 +308,17 @@ export function DashboardPage() {
               <span className="line-clamp-2 text-[11.5px] leading-tight font-medium text-ink sm:text-[13.5px] sm:whitespace-nowrap">{a.label}</span>
             </button>
           ))}
+          {actions.length > 4 && (
+            <button
+              type="button"
+              aria-expanded={allActions}
+              onClick={() => setAllActions((v) => !v)}
+              className="press lift group flex min-w-0 flex-col items-center gap-1.5 text-center sm:flex-row sm:gap-2.5 sm:rounded-2xl sm:border sm:border-dashed sm:border-line-strong sm:bg-surface sm:py-1.5 sm:pr-3.5 sm:pl-1.5 sm:text-left"
+            >
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-surface-2 text-ink-2 sm:size-9 sm:rounded-xl">{allActions ? <ChevronUp size={19} /> : <Ellipsis size={19} />}</span>
+              <span className="line-clamp-2 text-[11.5px] leading-tight font-medium text-ink sm:text-[13.5px] sm:whitespace-nowrap">{allActions ? t("suggestions.showLess") : t("common.more")}</span>
+            </button>
+          )}
         </div>
       </section>}
 

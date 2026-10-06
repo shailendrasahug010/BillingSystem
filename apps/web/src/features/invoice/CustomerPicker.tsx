@@ -138,8 +138,7 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
                     {c.id === WALK_IN_ID && <span className="ml-2 text-[12px] font-normal text-ink-3">{t("invoice.walkIn")}</span>}
                   </p>
                   <p className="truncate text-[12.5px] text-ink-3">
-                    {c.name} · {c.city} · <span className="num">{c.mobile}</span>
-                    {c.gstin && <span className="font-mono"> · {c.gstin}</span>}
+                    {[c.name !== c.businessName && c.name, c.city, c.mobile, c.gstin].filter(Boolean).join(" · ")}
                   </p>
                 </div>
                 {ins.outstanding > 0.5 && (

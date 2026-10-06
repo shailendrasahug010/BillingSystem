@@ -79,7 +79,7 @@ await nav("Purchases");
 await page.getByRole("button", { name: "Import bill" }).click();
 await page.getByLabel("Choose bill file").setInputFiles(join(FIXTURES, "company-invoice.pdf"));
 await dialog().getByText("Bill 2500104410").waitFor({ timeout: 20000 });
-if (!(await dialog().innerText()).includes("24 Aug 2025")) errors.push("bill date not read");
+if (!(await dialog().innerText()).includes("24/08/2025")) errors.push("bill date not read");
 const summary = await dialog().innerText();
 if (!/16 items?/.test(summary)) errors.push(`dialog: ${summary.replace(/\s+/g, " ").slice(0, 300)}`);
 await page.screenshot({ path: `${OUT}/company-invoice-1-read.png` });

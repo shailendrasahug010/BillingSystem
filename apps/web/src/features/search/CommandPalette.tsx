@@ -74,7 +74,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       id: `c-${c.id}`,
       group: "customers",
       title: c.businessName,
-      sub: `${c.city} · ${c.mobile}${c.gstin ? ` · ${c.gstin}` : ""}`,
+      sub: [c.city, c.mobile, c.gstin].filter(Boolean).join(" · "),
       icon: <Users size={16} />,
       route: { name: "customer", customerId: c.id },
     }));

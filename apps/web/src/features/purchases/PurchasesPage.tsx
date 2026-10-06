@@ -36,7 +36,7 @@ export function PurchaseStatusBadge({ row }: { row: Pick<PurchaseRow, "status" |
 }
 
 export function PurchasesPage() {
-  const { t, money, dateMedium } = useI18n();
+  const { t, money, amount, dateMedium } = useI18n();
   const { navigate } = useRouter();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"all" | "posted" | "cancelled">("all");
@@ -74,8 +74,8 @@ export function PurchasesPage() {
     },
     { key: "supplier", header: t("nav.suppliers"), sortValue: (p) => p.partyName, render: (p) => <span className="text-ink">{p.partyName}</span> },
     { key: "status", header: t("common.status"), sortValue: (p) => (p.status === "cancelled" ? p.status : p.paymentStatus), render: (p) => <PurchaseStatusBadge row={p} /> },
-    { key: "total", header: t("common.total"), align: "right", sortValue: (p) => Number(p.grandTotal), render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(p.grandTotal)}</span> },
-    { key: "due", header: t("common.balance"), align: "right", sortValue: (p) => (p.status === "posted" ? Number(p.balanceDue) : null), render: (p) => (p.status === "posted" && Number(p.balanceDue) > 0 ? <span className="font-semibold text-ink">{money(p.balanceDue)}</span> : <span className="text-ink-3">—</span>) },
+    { key: "total", header: t("common.total"), align: "right", sortValue: (p) => Number(p.grandTotal), render: (p) => <span className={p.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{amount(p.grandTotal)}</span> },
+    { key: "due", header: t("common.balance"), align: "right", sortValue: (p) => (p.status === "posted" ? Number(p.balanceDue) : null), render: (p) => (p.status === "posted" && Number(p.balanceDue) > 0 ? <span className="font-semibold text-ink">{amount(p.balanceDue)}</span> : <span className="text-ink-3">—</span>) },
   ];
 
   const posted = rows.filter((p) => p.status === "posted");
@@ -162,9 +162,9 @@ export function PurchasesPage() {
           <RowCard
             title={p.partyName}
             sub={`${p.supplierInvoiceNumber} · ${dateMedium(p.supplierInvoiceDate)}`}
-            value={money(p.grandTotal)}
+            value={amount(p.grandTotal)}
             tone={p.status === "cancelled" ? "muted" : undefined}
-            valueSub={p.status === "posted" && Number(p.balanceDue) > 0 ? `${t("common.balance")} ${money(p.balanceDue)}` : <PurchaseStatusBadge row={p} />}
+            valueSub={p.status === "posted" && Number(p.balanceDue) > 0 ? `${t("common.balance")} ${amount(p.balanceDue)}` : <PurchaseStatusBadge row={p} />}
           />
         )}
         empty={

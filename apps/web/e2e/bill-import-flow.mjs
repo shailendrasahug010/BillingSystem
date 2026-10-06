@@ -87,7 +87,7 @@ await importBill();
 await page.getByText("3 of 5 items matched").waitFor();
 await page.getByText("2 items to match").waitFor();
 if ((await page.locator("#pu-bill").inputValue()) !== "SG/1021") errors.push("bill number not filled");
-if ((await page.locator("#pu-date").inputValue()) !== "2026-09-20") errors.push("bill date not filled");
+if ((await page.locator("#pu-date").inputValue()) !== "20/09/2026") errors.push("bill date not filled");
 await page.getByText("Shree Ganesh Agencies").first().waitFor();
 await page.screenshot({ path: `${OUT}/flow-bill-import-review.png`, fullPage: true });
 

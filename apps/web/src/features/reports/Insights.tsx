@@ -119,6 +119,9 @@ const KPIS: Array<{ key: KpiKey; kind: "money" | "count" | "percent" | "days" | 
   { key: "daysOfInventory", kind: "days", up: false },
 ];
 
+/** The measures shown first; the rest wait behind "More numbers". */
+const MAIN_KPIS: KpiKey[] = ["netSales", "collections", "marginPercent", "receivables"];
+
 const ABC_TONE: Record<PartyRow["abc"], Tone> = { A: "good", B: "accent", C: "neutral" };
 const STATUS_TONE: Record<PartyRow["status"], Tone> = { new: "accent", lost: "danger", growing: "good", declining: "warn" };
 
@@ -140,6 +143,7 @@ export function InsightsReport({ settings, onChange }: ReportProps) {
     placeholderData: (prev) => prev,
   });
   const d = q.data;
+  const [allKpis, setAllKpis] = useState(false);
 
   const show = (kind: (typeof KPIS)[number]["kind"], v: string | null) => {
     if (v === null) return "—";
@@ -164,13 +168,32 @@ export function InsightsReport({ settings, onChange }: ReportProps) {
       {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
       {d && <p className="text-[12.5px] text-ink-3">{t("insights.comparedPeriod", { from: dateMedium(d.compare.from), to: dateMedium(d.compare.to) })}</p>}
 
-      <section aria-label={t("insights.measures")} className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+      <section aria-label={t("insights.measures")} className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
         {d
-          ? KPIS.filter((k) => d.kpis[k.key]).map((k) => {
-              const m = d.kpis[k.key]!;
-              return <KpiTile key={k.key} label={t(`insights.kpis.${k.key}`)} value={show(k.kind, m.value)} previous={show(k.kind, m.previous)} change={m.change} points={k.kind === "percent"} up={k.up} />;
-            })
-          : Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-[92px] w-full" />)}
+          ? (() => {
+              const present = KPIS.filter((k) => d.kpis[k.key]);
+              const main = [...present.filter((k) => MAIN_KPIS.includes(k.key)), ...present.filter((k) => !MAIN_KPIS.includes(k.key))].slice(0, 4);
+              const shown = allKpis ? present : main;
+              return (
+                <>
+                  {shown.map((k) => {
+                    const m = d.kpis[k.key]!;
+                    return <KpiTile key={k.key} label={t(`insights.kpis.${k.key}`)} value={show(k.kind, m.value)} previous={show(k.kind, m.previous)} change={m.change} points={k.kind === "percent"} up={k.up} />;
+                  })}
+                  {present.length > main.length && (
+                    <button
+                      type="button"
+                      aria-expanded={allKpis}
+                      onClick={() => setAllKpis((v) => !v)}
+                      className="press flex min-h-[92px] items-center justify-center gap-1.5 rounded-[var(--radius-card)] border border-dashed border-line-strong bg-surface/60 p-3.5 text-[13px] font-semibold text-accent-ink hover:bg-surface"
+                    >
+                      {allKpis ? t("suggestions.showLess") : t("insights.moreNumbers", { count: present.length - main.length })}
+                    </button>
+                  )}
+                </>
+              );
+            })()
+          : Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[92px] w-full" />)}
       </section>
 
       {d && (
@@ -217,7 +240,7 @@ function KpiTile({ label, value, previous, change, points, up }: { label: string
           <Icon size={13} aria-hidden />
           {n === null ? t("insights.noComparison") : points ? t("insights.points", { value: `${n > 0 ? "+" : ""}${number(n, 1)}` }) : `${n > 0 ? "+" : ""}${number(n, 1)}%`}
         </span>
-        <span>{t("insights.was", { value: previous })}</span>
+        {n !== null && <span>{t("insights.was", { value: previous })}</span>}
       </p>
     </div>
   );

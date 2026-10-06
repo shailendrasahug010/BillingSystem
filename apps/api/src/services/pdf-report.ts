@@ -1,3 +1,4 @@
+import { formatDate } from "@digitalbahi/i18n";
 import { BLUE, drawFirm, drawFooters, HEAD_BG, INK, INK_2, LINE, newPdf, type Letterhead } from "./pdf-kit.js";
 
 export type { Letterhead } from "./pdf-kit.js";
@@ -23,11 +24,9 @@ export interface ReportPdfInput {
   totals?: Record<string, unknown> | null;
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** 2026-09-05 -> "5 Sep 2026". */
+/** 2026-09-05 -> "05/09/2026": the one date style of the app. */
 export function pdfDate(iso: string): string {
-  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
+  return formatDate(iso);
 }
 
 /** Indian digit grouping: 135684.5 -> "1,35,684.50" (2 decimals), "8.000" -> "8". */

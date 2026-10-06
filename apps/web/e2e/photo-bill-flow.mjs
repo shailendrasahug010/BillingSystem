@@ -124,7 +124,7 @@ await page.getByText("Imported from bill-photo.jpg").waitFor({ timeout: 15000 })
 await page.getByText("Read from a photo or scan: check every item").waitFor();
 await page.getByText("3 of 3 items matched").waitFor();
 if ((await page.locator("#pu-bill").inputValue()) !== "SB/118") errors.push("bill number not read from the photo");
-if ((await page.locator("#pu-date").inputValue()) !== "2026-09-21") errors.push("bill date not read from the photo");
+if ((await page.locator("#pu-date").inputValue()) !== "21/09/2026") errors.push("bill date not read from the photo");
 await page.getByText("Sample Biscuit Agency").first().waitFor();
 await page.screenshot({ path: `${OUT}/photo-bill-2-review.png`, fullPage: true });
 await page.getByRole("button", { name: "Save purchase" }).click();

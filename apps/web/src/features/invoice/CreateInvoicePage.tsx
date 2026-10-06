@@ -607,7 +607,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] font-medium text-ink">{c.businessName}</span>
                       <span className="block truncate text-[12.5px] text-ink-3">
-                        {c.city} · {c.route}
+                        {[c.city, c.route].filter(Boolean).join(" · ")}
                       </span>
                     </span>
                     <ArrowRight size={18} className="text-ink-3" />

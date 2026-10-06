@@ -81,15 +81,25 @@ export function formatDateTimeIst(iso: string): string {
   return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
-/** 24 Sep 2026 / 24 सित॰ 2026 */
-export function formatDateMedium(iso: string, locale: LocaleCode = "en"): string {
-  const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
-  return new Intl.DateTimeFormat(localeInfo(locale).intl, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+/**
+ * 24/09/2026 in every language: the app shows one date style everywhere
+ * (kept as its own name for the places that used to spell the month out).
+ */
+export function formatDateMedium(iso: string, _locale: LocaleCode = "en"): string {
+  return formatDate(iso);
+}
+
+/** Tuesday, 24/09/2026 / मंगलवार, 24/09/2026: a date with its weekday, as a page heading. */
+export function formatDateWithWeekday(iso: string, locale: LocaleCode = "en"): string {
+  const weekday = new Intl.DateTimeFormat(localeInfo(locale).intl, { weekday: "long", timeZone: "UTC" }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`));
+  return `${weekday}, ${formatDate(iso)}`;
+}
+
+/** 24/09/2026 14:05 in the given time zone (India by default): a moment, such as when a note was written. */
+export function formatDateTime(iso: string | Date, timeZone = "Asia/Kolkata"): string {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(typeof iso === "string" ? new Date(iso) : iso);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
 export function formatMonthShort(iso: string, locale: LocaleCode = "en"): string {

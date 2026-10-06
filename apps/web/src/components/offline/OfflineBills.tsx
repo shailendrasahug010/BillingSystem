@@ -56,12 +56,14 @@ export function OfflineChip() {
         className={cn(
           "inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium",
           offline ? "border-transparent bg-warn-soft text-warn" : "border-line bg-surface text-ink-2 hover:text-ink",
+          // On a phone the chip shows only when there is something to say: offline, or bills waiting.
+          !offline && waiting === 0 && !state.syncing && "max-sm:hidden",
         )}
         title={waiting > 0 ? t("sync.pending", { count: waiting }) : t("sync.synced")}
         aria-label={`${label}${waiting > 0 ? ` · ${t("sync.pending", { count: waiting })}` : ""}`}
       >
         <Icon size={14} className={cn(offline ? "text-warn" : "text-good", state.syncing && "animate-spin")} />
-        <span className="hidden sm:inline">{label}</span>
+        <span className={offline ? undefined : "hidden sm:inline"}>{label}</span>
         {waiting > 0 && <span className={cn("num rounded-full px-1.5 text-[11px] text-white", failed ? "bg-danger" : "bg-warn")}>{waiting}</span>}
       </button>
       <OfflineBillsDialog open={open} onOpenChange={setOpen} />

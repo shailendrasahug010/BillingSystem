@@ -16,6 +16,8 @@ import {
   Menu,
   Moon,
   Package,
+  PanelLeft,
+  PanelLeftClose,
   Pin,
   PinOff,
   Plus,
@@ -27,7 +29,7 @@ import {
   UserPlus,
   Wallet,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { GROUP_LABELS, homeRoute, menuModules, moduleForRoute, phaseBadge, type ModuleDef } from "../../app/modules";
 import { setSimpleMenu, useSimpleMenu } from "../../app/comfort";
 import { useI18n } from "../../app/i18n";
@@ -163,7 +165,7 @@ function NavItem({ mod, active, pinned, onPin, onClick }: { mod: ModuleDef; acti
         onClick={onClick}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "press flex h-10 w-full items-center gap-3 rounded-xl px-3 pr-9 text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-200",
+          "press flex h-10 w-full items-center gap-3 rounded-xl px-3 pr-9 text-left text-[13.5px] lg:h-[34px] transition-[background-color,color,box-shadow] duration-200",
           active ? "animate-pill bg-accent bg-accent-grad font-semibold text-ink-inverse shadow-glow" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
         )}
       >
@@ -219,6 +221,41 @@ function useMenuPrefs(): [MenuPrefs, (change: (p: MenuPrefs) => MenuPrefs) => vo
   return [prefs, update];
 }
 const toggle = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
+
+/**
+ * On a computer the menu hides itself so the screen has the room, and slides out when the
+ * mouse reaches the left edge. "Keep menu open" brings back the fixed menu. Browsers driven
+ * by the browser tests start with it kept open, so their menu clicks find it in place.
+ */
+const AUTO_HIDE_KEY = "digitalbahi:menu-auto-hide";
+const autoHideListeners = new Set<() => void>();
+function readAutoHide(): boolean {
+  try {
+    const v = localStorage.getItem(AUTO_HIDE_KEY);
+    if (v !== null) return v === "1";
+  } catch {
+    // Storage blocked: the default below.
+  }
+  return !(typeof navigator !== "undefined" && navigator.webdriver);
+}
+function setAutoHide(on: boolean) {
+  try {
+    localStorage.setItem(AUTO_HIDE_KEY, on ? "1" : "0");
+  } catch {
+    // A private window: kept until the page closes.
+  }
+  autoHideListeners.forEach((l) => l());
+}
+function useAutoHide(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      autoHideListeners.add(l);
+      return () => autoHideListeners.delete(l);
+    },
+    readAutoHide,
+    readAutoHide,
+  );
+}
 
 /** With the simple menu on: the way back to everything. */
 function FullMenuButton({ userId }: { userId: string | null | undefined }) {
@@ -352,6 +389,54 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const billing = route.name === "invoice-new" || route.name === "purchase-new";
   const [moreOpen, setMoreOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const autoHide = useAutoHide();
+  const [sideOpen, setSideOpen] = useState(false);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const escaped = useRef(false);
+  useEffect(() => {
+    if (!autoHide) return;
+    const away = (e: MouseEvent) => e.clientX > 16 && (escaped.current = false);
+    window.addEventListener("mousemove", away);
+    return () => window.removeEventListener("mousemove", away);
+  }, [autoHide]);
+  const stopClosing = () => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = undefined;
+  };
+  const openSide = () => {
+    stopClosing();
+    setSideOpen(true);
+  };
+  // A short wait before closing, so a mouse that slips off the edge for a moment doesn't shut it.
+  const closeSide = () => {
+    if (closeTimer.current !== undefined) return;
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = undefined;
+      setSideOpen(false);
+    }, 250);
+  };
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  // A new screen hides the menu again; so does Esc.
+  const routeKey = JSON.stringify(route);
+  useEffect(() => setSideOpen(false), [routeKey]);
+  useEffect(() => {
+    if (!sideOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Put away with Esc: not out again until the mouse has left the edge and come back.
+      escaped.current = true;
+      setSideOpen(false);
+    };
+    // The mouse going back to the screen, past the menu's edge, hides it; coming back keeps it.
+    const onMove = (e: MouseEvent) => (e.clientX > 280 ? closeSide() : stopClosing());
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousemove", onMove);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousemove", onMove);
+    };
+  }, [sideOpen]);
+  const hidden = autoHide && !sideOpen;
   const pendingOrders = ORDERS.filter((o) => o.status === "pending").length;
   const session = useSession();
   const toast = useToast();
@@ -459,9 +544,27 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   ).filter((b): b is NonNullable<typeof b> => Boolean(b) && !b!.hidden);
 
   return (
-    <div className="animate-fade min-h-full lg:grid lg:grid-cols-[256px_1fr]">
+    <div className={cn("animate-fade min-h-full lg:grid", autoHide ? "lg:grid-cols-[1fr]" : "lg:grid-cols-[256px_1fr]")}>
+      {autoHide && (
+        // The left edge: resting the mouse here brings the menu out.
+        <div
+          aria-hidden
+          onMouseEnter={() => !escaped.current && openSide()}
+          onMouseLeave={() => (escaped.current = false)}
+          className="group/edge fixed inset-y-0 left-0 z-40 hidden w-3 lg:block">
+          <span className="absolute top-1/2 left-1 h-14 w-1 -translate-y-1/2 rounded-full bg-ink-3/35 transition-colors group-hover/edge:bg-accent" />
+        </div>
+      )}
       {/* Desktop sidebar: the menu on the accent-tinted navy. */}
-      <aside className="on-dark bg-side sticky top-0 hidden h-screen flex-col lg:flex">
+      <aside
+        onFocus={autoHide ? openSide : undefined}
+        onBlur={autoHide ? (e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && closeSide() : undefined}
+        className={cn(
+          "on-dark bg-side hidden h-screen flex-col lg:flex",
+          autoHide ? "fixed inset-y-0 left-0 z-50 w-[256px] transition-transform duration-200 ease-out" : "sticky top-0",
+          hidden && "pointer-events-none -translate-x-full",
+        )}
+      >
         <div className="flex h-16 items-center px-4">
           <BrandMark tagline />
         </div>
@@ -491,6 +594,19 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
           </div>
           <button
             type="button"
+            onClick={() => {
+              setAutoHide(!autoHide);
+              setSideOpen(false);
+            }}
+            aria-pressed={!autoHide}
+            aria-label={autoHide ? t("nav.keepOpen") : t("nav.autoHide")}
+            title={autoHide ? t("nav.keepOpen") : t("nav.autoHide")}
+            className="press inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-3 hover:text-ink"
+          >
+            {autoHide ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+          <button
+            type="button"
             onClick={onOpenShortcuts}
             className="press inline-flex size-8 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-3 hover:text-ink"
             aria-label={t("shortcuts.title")}
@@ -501,19 +617,24 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-col">
+      {/* With the menu out, the page moves over to make room for it rather than sitting under it. */}
+      <div className={cn("flex min-w-0 flex-col", autoHide && "lg:transition-[padding] lg:duration-200 lg:ease-out", autoHide && sideOpen && "lg:pl-[256px]")}>
         {/* Top bar */}
         <header data-overlay="top" className="glass sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-14 items-center gap-2 border-b border-line/60 px-4 lg:h-16 lg:px-6">
           <button
             type="button"
-            className="press -ml-1 inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 lg:hidden"
-            onClick={() => setMoreOpen(true)}
+            className={cn("press -ml-1 inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2", !autoHide && "lg:hidden")}
+            onClick={() => (autoHide && window.matchMedia("(min-width: 1024px)").matches ? openSide() : setMoreOpen(true))}
             aria-label={t("nav.more")}
           >
             <Menu size={20} />
           </button>
-          <div className="lg:hidden">
+          {/* On a phone: the mark and whose books these are. */}
+          <div className={cn("flex min-w-0 items-center gap-1.5", (!autoHide || sideOpen) && "lg:hidden")}>
             <BrandMark compact />
+            <span className="truncate text-[14px] font-semibold text-ink sm:hidden" title={BUSINESS.name}>
+              {BUSINESS.name}
+            </span>
           </div>
           <button
             type="button"

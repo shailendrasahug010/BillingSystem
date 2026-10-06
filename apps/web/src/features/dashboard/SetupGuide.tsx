@@ -48,6 +48,7 @@ export function SetupGuide({ setup }: { setup: HomeData["setup"] }) {
   const open = useOpen();
   const [hidden, setHidden] = useState(readHidden);
   const [printer, setPrinter] = useState(() => Boolean(printerSettings().printer));
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => onPrinterChange(() => setPrinter(Boolean(printerSettings().printer))), []);
 
   if (!setup || hidden) return null;
@@ -63,6 +64,9 @@ export function SetupGuide({ setup }: { setup: HomeData["setup"] }) {
   ];
   const done = steps.filter((s) => s.done).length;
   if (done === steps.length) return null;
+  // Once billing has started the guide shrinks to one line (what is next), so the day's work comes first.
+  const compact = setup.invoices && !expanded;
+  const next = steps.find((s) => !s.done);
   const hide = () => {
     try {
       localStorage.setItem(hiddenKey(), "1");
@@ -72,8 +76,34 @@ export function SetupGuide({ setup }: { setup: HomeData["setup"] }) {
     setHidden(true);
   };
 
+  const bar = (
+    <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done} aria-label={t("setup.title")}>
+      <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${(done / steps.length) * 100}%` }} />
+    </div>
+  );
+
   return (
     <Card aria-labelledby="setup-title" data-setup-guide>
+      {compact ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <p className="text-[14px] text-ink">
+              <span id="setup-title" className="font-semibold">{t("setup.title")}</span>
+              <span className="text-ink-3"> · {t("setup.progress", { done, total: steps.length })}</span>
+              {next && <span className="text-ink-2"> · {t(`setup.steps.${next.key}.title`)}</span>}
+            </p>
+            <div className="max-w-xs">{bar}</div>
+          </div>
+          <button type="button" onClick={() => setExpanded(true)} className="press inline-flex h-9 items-center gap-1 rounded-lg px-3 text-[13px] font-semibold text-accent-ink hover:bg-accent-soft">
+            {t("setup.continue")}
+            <ChevronRight size={15} aria-hidden />
+          </button>
+          <button type="button" onClick={hide} className="press rounded-lg p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label={t("setup.hide")} title={t("setup.hide")}>
+            <X size={18} />
+          </button>
+        </div>
+      ) : (
+      <>
       <CardHeader
         title={<span id="setup-title">{t("setup.title")}</span>}
         subtitle={t("setup.progress", { done, total: steps.length })}
@@ -83,12 +113,10 @@ export function SetupGuide({ setup }: { setup: HomeData["setup"] }) {
           </button>
         }
       />
-      <div className="px-4 pt-3 sm:px-5">
-        <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done} aria-label={t("setup.title")}>
-          <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${(done / steps.length) * 100}%` }} />
-        </div>
-      </div>
-      <ol className="grid grid-cols-1 gap-1 p-2 sm:grid-cols-2 sm:p-3">
+      <div className="px-4 pt-3 sm:px-5">{bar}</div>
+      </>
+      )}
+      <ol hidden={compact} className={compact ? "hidden" : "grid grid-cols-1 gap-1 p-2 sm:grid-cols-2 sm:p-3"}>
         {steps.map((s) => (
           <li key={s.key}>
             <button

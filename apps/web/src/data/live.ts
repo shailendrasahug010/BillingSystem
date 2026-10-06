@@ -83,6 +83,7 @@ export interface CustomerRow {
   gstin: string | null;
   balance: string;
   overdue: string;
+  lastInvoiceOn?: string | null;
   creditLimit: string | null;
   creditDays: number;
   routeId: string | null;
@@ -132,6 +133,7 @@ function mapCustomer(c: CustomerRow, routeName: Map<string, string>): Customer {
     gstRegistration: c.gstRegistration ?? (c.gstin ? "regular" : "consumer"),
     balance: Number(c.balance),
     overdue: Number(c.overdue),
+    lastInvoiceOn: c.lastInvoiceOn ?? null,
     messageLocale: c.messageLocale ?? null,
     remindersOptOut: c.remindersOptOut ?? false,
     remindersOptOutAt: c.remindersOptOutAt ?? null,
