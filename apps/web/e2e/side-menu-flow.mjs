@@ -1,6 +1,6 @@
 /**
  * The menu on a computer hides itself and comes out at the left edge: hidden on the bill
- * screen, out when the mouse rests on the edge, hidden again after picking a screen or moving
+ * screen, out when the mouse rests on the edge (the page moving over to make room), hidden again after picking a screen or moving
  * back to the work, and fixed in place again with "Keep the menu open" (kept after a reload).
  * Phones keep their own menu.
  *
@@ -58,6 +58,9 @@ try {
   await page.mouse.move(150, 400);
   await page.waitForTimeout(400);
   check((await left()) === 0, "menu went away with the mouse still on it");
+  // The bill moves over to make room rather than sitting under the menu.
+  const searchLeft = (await page.getByPlaceholder("Search customer by name, mobile, GSTIN or code").boundingBox())?.x ?? 0;
+  check(searchLeft > 256, `menu out: the bill sits under the menu (search box at x ${searchLeft})`);
   await page.screenshot({ path: `${OUT}/side-menu-2-out.png` });
 
   // 3. Picking a screen opens it and puts the menu away.

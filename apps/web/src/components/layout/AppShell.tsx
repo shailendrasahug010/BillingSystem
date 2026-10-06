@@ -392,6 +392,13 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const autoHide = useAutoHide();
   const [sideOpen, setSideOpen] = useState(false);
   const closeTimer = useRef<number | undefined>(undefined);
+  const escaped = useRef(false);
+  useEffect(() => {
+    if (!autoHide) return;
+    const away = (e: MouseEvent) => e.clientX > 16 && (escaped.current = false);
+    window.addEventListener("mousemove", away);
+    return () => window.removeEventListener("mousemove", away);
+  }, [autoHide]);
   const stopClosing = () => {
     window.clearTimeout(closeTimer.current);
     closeTimer.current = undefined;
@@ -414,7 +421,12 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   useEffect(() => setSideOpen(false), [routeKey]);
   useEffect(() => {
     if (!sideOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSideOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Put away with Esc: not out again until the mouse has left the edge and come back.
+      escaped.current = true;
+      setSideOpen(false);
+    };
     // The mouse going back to the screen, past the menu's edge, hides it; coming back keeps it.
     const onMove = (e: MouseEvent) => (e.clientX > 280 ? closeSide() : stopClosing());
     window.addEventListener("keydown", onKey);
@@ -535,7 +547,11 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
     <div className={cn("animate-fade min-h-full lg:grid", autoHide ? "lg:grid-cols-[1fr]" : "lg:grid-cols-[256px_1fr]")}>
       {autoHide && (
         // The left edge: resting the mouse here brings the menu out.
-        <div aria-hidden onMouseEnter={openSide} className="group/edge fixed inset-y-0 left-0 z-40 hidden w-3 lg:block">
+        <div
+          aria-hidden
+          onMouseEnter={() => !escaped.current && openSide()}
+          onMouseLeave={() => (escaped.current = false)}
+          className="group/edge fixed inset-y-0 left-0 z-40 hidden w-3 lg:block">
           <span className="absolute top-1/2 left-1 h-14 w-1 -translate-y-1/2 rounded-full bg-ink-3/35 transition-colors group-hover/edge:bg-accent" />
         </div>
       )}
@@ -545,8 +561,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         onBlur={autoHide ? (e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && closeSide() : undefined}
         className={cn(
           "on-dark bg-side hidden h-screen flex-col lg:flex",
-          autoHide ? "fixed inset-y-0 left-0 z-50 w-[256px] shadow-lift transition-transform duration-200 ease-out" : "sticky top-0",
-          hidden && "pointer-events-none -translate-x-full !shadow-none",
+          autoHide ? "fixed inset-y-0 left-0 z-50 w-[256px] transition-transform duration-200 ease-out" : "sticky top-0",
+          hidden && "pointer-events-none -translate-x-full",
         )}
       >
         <div className="flex h-16 items-center px-4">
@@ -601,7 +617,8 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-col">
+      {/* With the menu out, the page moves over to make room for it rather than sitting under it. */}
+      <div className={cn("flex min-w-0 flex-col", autoHide && "lg:transition-[padding] lg:duration-200 lg:ease-out", autoHide && sideOpen && "lg:pl-[256px]")}>
         {/* Top bar */}
         <header data-overlay="top" className="glass sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-14 items-center gap-2 border-b border-line/60 px-4 lg:h-16 lg:px-6">
           <button
@@ -613,7 +630,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             <Menu size={20} />
           </button>
           {/* On a phone: the mark and whose books these are. */}
-          <div className={cn("flex min-w-0 items-center gap-1.5", !autoHide && "lg:hidden")}>
+          <div className={cn("flex min-w-0 items-center gap-1.5", (!autoHide || sideOpen) && "lg:hidden")}>
             <BrandMark compact />
             <span className="truncate text-[14px] font-semibold text-ink sm:hidden" title={BUSINESS.name}>
               {BUSINESS.name}
