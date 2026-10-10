@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { WEB_APP_CSP } from "@digitalbahi/core";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assertWebApp, registerWebApp } from "../src/lib/webApp.js";
@@ -47,6 +48,17 @@ describe("web app served by the API", () => {
       expect(res.headers["cache-control"]).toBe("no-cache");
       expect(res.body).toContain("<title>Digital Bahi</title>");
     }
+  });
+
+  it("sends the same Content-Security-Policy as the Caddyfile and the browser tests' preview", async () => {
+    for (const url of ["/", "/customers", "/assets/index-Ab12.js", "/sw.js"]) {
+      expect((await get(url)).headers["content-security-policy"]).toBe(WEB_APP_CSP);
+    }
+    const caddyfile = await readFile(new URL("../../../deploy/Caddyfile", import.meta.url), "utf8");
+    expect(caddyfile).toContain(`Content-Security-Policy "${WEB_APP_CSP}"`);
+    // Scripts only from the app itself: nothing inline, no other site.
+    expect(WEB_APP_CSP).toContain("script-src 'self' 'wasm-unsafe-eval'");
+    expect(WEB_APP_CSP).not.toContain("'unsafe-eval'");
   });
 
   it("keeps hashed files a year, and the service worker and manifest never", async () => {

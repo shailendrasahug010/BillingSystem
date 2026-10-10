@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { WEB_APP_CSP } from "../../packages/core/src/security/csp";
 
 const here = import.meta.dirname;
 
@@ -73,4 +74,8 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: { include: ["read-excel-file/browser", "pdfjs-dist/legacy/build/pdf.mjs", "barcode-detector/ponyfill"] },
   // Same-origin /api in development too, so the refresh-token cookie behaves as in production.
   server: { port: 5173, proxy: { "/api": { target: process.env.API_URL ?? "http://localhost:3000", changeOrigin: false } } },
+  // The production build is previewed (the offline browser tests) with the Content-Security-Policy
+  // it has behind Caddy or the API, so anything the policy would block shows up there. Not in
+  // development: Vite's dev server runs inline scripts of its own.
+  preview: { headers: { "Content-Security-Policy": WEB_APP_CSP } },
 }));

@@ -115,7 +115,7 @@ Logged actions include: invoice create/update/cancel/print/share, price override
 
 ## 10. Application security practices
 
-* Security headers: strict Content-Security-Policy (no inline scripts in production), `X-Content-Type-Options`, `Referrer-Policy`, `frame-ancestors 'none'`.
+* **Built — security headers.** The web app's pages carry one Content-Security-Policy wherever they are served from (`WEB_APP_CSP` in `packages/core/src/security/csp.ts`, sent by `deploy/Caddyfile`, by the API on a one-computer install, and by `vite preview` in the browser tests). Scripts come only from the app's own origin: no inline scripts, no `eval` (pdf.js 6 does without it); the exceptions are WebAssembly for the barcode reader, inline styles, and `data:`/`blob:` for images, workers and the frame that prints a PDF. `frame-ancestors 'self'`, `object-src` limited to the app and `blob:`, no `upgrade-insecure-requests` (a one-computer install is reached over plain http on the shop's Wi-Fi). Also `X-Content-Type-Options`, `Referrer-Policy`, and a `Permissions-Policy` that allows the camera (barcodes), microphone (voice search) and location only for the app itself.
 * CSRF: refresh endpoint uses `SameSite=Strict` cookies + origin check; all other endpoints use bearer tokens (not cookies).
 * CORS: allow-listed origins only.
 * Error log: request bodies, passwords, tokens and query values are never written (a database error keeps the query text without its values); the web app's source maps are built "hidden" and moved to the API, so the public site does not serve the source; `POST /client-errors` is rate-limited, size-limited and notes the person only from a valid token.
