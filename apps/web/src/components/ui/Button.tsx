@@ -9,7 +9,7 @@ const variants: Record<ButtonVariant, string> = {
   secondary: "bg-surface text-ink border border-line shadow-card hover:border-line-strong hover:bg-surface-2",
   ghost: "text-ink-2 hover:bg-surface-2 hover:text-ink",
   soft: "bg-accent-soft text-accent-ink hover:brightness-95",
-  danger: "bg-danger text-white shadow-card hover:brightness-110",
+  danger: "bg-danger text-ink-inverse shadow-card hover:brightness-110",
 };
 
 // Touch targets: md is 40px, lg (mobile primary actions) is 48px.
@@ -65,7 +65,7 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        "press inline-flex size-9 items-center justify-center rounded-[var(--radius-control)] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink",
+        "press touch-40 inline-flex size-9 items-center justify-center rounded-[var(--radius-control)] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink",
         className,
       )}
       {...rest}

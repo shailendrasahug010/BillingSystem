@@ -1,7 +1,7 @@
 import { CloudOff, Download, FileSpreadsheet, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { useRouter } from "../../app/router";
+import { hashFor, useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Field";
@@ -158,6 +158,7 @@ export function PurchasesPage() {
         rowKey={(p) => p.id}
         loading={!noServer && list.loading}
         onRowClick={(p) => navigate({ name: "purchase-view", purchaseId: p.id })}
+        rowHref={(p) => hashFor({ name: "purchase-view", purchaseId: p.id })}
         mobile={(p) => (
           <RowCard
             title={p.partyName}

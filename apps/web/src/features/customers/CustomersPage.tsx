@@ -2,7 +2,7 @@ import { daysBetween } from "@digitalbahi/core";
 import { ChevronRight, Download, FileUp, Search, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { useRouter } from "../../app/router";
+import { hashFor, useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
@@ -142,6 +142,7 @@ export function CustomersPage() {
         rows={rows}
         rowKey={(r) => r.c.id}
         onRowClick={(r) => navigate({ name: "customer", customerId: r.c.id })}
+        rowHref={(r) => hashFor({ name: "customer", customerId: r.c.id })}
         pageSize={50}
         minWidth={760}
         empty={

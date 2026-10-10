@@ -66,7 +66,7 @@ export function OfflineChip() {
         <Icon size={14} className={cn(offline ? "text-warn" : "text-good", state.syncing && "animate-spin")} />
         {/* Online needs no words: a small green cloud, with the word only when there is news. */}
         {(offline || state.syncing) && <span>{label}</span>}
-        {waiting > 0 && <span className={cn("num rounded-full px-1.5 text-[11px] text-white", failed ? "bg-danger" : "bg-warn")}>{waiting}</span>}
+        {waiting > 0 && <span className={cn("num rounded-full px-1.5 text-[11px] text-ink-inverse", failed ? "bg-danger" : "bg-warn")}>{waiting}</span>}
       </button>
       <OfflineBillsDialog open={open} onOpenChange={setOpen} />
     </>

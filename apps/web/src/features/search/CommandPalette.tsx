@@ -122,7 +122,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-[rgb(8_20_22/0.45)] backdrop-blur-[2px]" />
-        <D.Content className="fixed top-[8vh] left-1/2 z-50 w-[calc(100%-32px)] max-w-xl -translate-x-1/2 overflow-hidden rounded-2xl border border-line bg-surface shadow-pop animate-pop">
+        <D.Content className="fixed top-[calc(var(--app-vh)*0.08)] left-1/2 z-50 w-[calc(100%-32px)] max-w-xl -translate-x-1/2 overflow-hidden rounded-2xl border border-line bg-surface shadow-pop animate-pop">
           <D.Title className="sr-only">{t("shortcuts.search")}</D.Title>
           <D.Description className="sr-only">{t("search.placeholder")}</D.Description>
           <div className="flex items-center gap-3 border-b border-line px-4">
@@ -160,7 +160,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               size={18}
             />
           </div>
-          <div className="max-h-[60vh] overflow-y-auto p-2">
+          <div className="max-h-[calc(var(--app-vh)*0.6)] overflow-y-auto p-2">
             {items.length === 0 && <p className="px-3 py-8 text-center text-[13px] text-ink-3">{t("search.noResults", { query })}</p>}
             {groups.map((g) => {
               const list = items.filter((i) => i.group === g);

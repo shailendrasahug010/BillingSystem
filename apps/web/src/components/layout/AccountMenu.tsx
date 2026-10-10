@@ -30,7 +30,7 @@ export function AccountMenu({ onSignOut }: { onSignOut(): void }) {
           type="button"
           aria-label={t("auth.account")}
           title={user.name}
-          className={cn("press ml-0.5 inline-flex size-9 items-center justify-center rounded-full font-display text-[12.5px] font-semibold ring-2 ring-surface transition-shadow hover:ring-accent/30", tintFor(user.name))}
+          className={cn("press touch-40 ml-0.5 inline-flex size-9 items-center justify-center rounded-full font-display text-[12.5px] font-semibold ring-2 ring-surface transition-shadow hover:ring-accent/30", tintFor(user.name))}
         >
           {initialsOf(user.name)}
         </button>

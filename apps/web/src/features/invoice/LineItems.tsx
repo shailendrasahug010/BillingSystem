@@ -1,7 +1,11 @@
 import type { DocumentTotals } from "@digitalbahi/core";
-import { Copy, Minus, Plus, Replace, ShoppingBasket, Trash, TriangleAlert } from "lucide-react";
+import { Copy, Minus, Pencil, Plus, Replace, ShoppingBasket, Trash, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useI18n } from "../../app/i18n";
+import { prefersLessMotion } from "../../app/comfort";
+import { Button } from "../../components/ui/Button";
+import { Dialog } from "../../components/ui/Dialog";
+import { Field, Input, Select } from "../../components/ui/Field";
 import { EmptyState } from "../../components/ui/misc";
 import { allowed, PRODUCTS, productById } from "../../data/db";
 import { inStockAlternative } from "./alternatives";
@@ -220,6 +224,127 @@ function QuickQty({ product, line, units, onPick }: { product: Product; line: Dr
 
 const QUICK_COUNTS = [1, 2, 3, 5, 10, 12, 24];
 
+/** A number field that keeps what is typed ("12.") and commits each valid number, as NumberCell does. */
+function SheetNumber({ id, value, decimals = 2, onCommit }: { id: string; value: number; decimals?: number; onCommit(v: number): void }) {
+  const [text, setText] = useState(String(value));
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(String(value));
+  }, [value]);
+  return (
+    <Input
+      id={id}
+      inputMode="decimal"
+      value={text}
+      className="[&_input]:text-right [&_input]:tabular-nums"
+      onFocus={(e) => {
+        focused.current = true;
+        e.currentTarget.select();
+      }}
+      onBlur={() => {
+        focused.current = false;
+        setText(String(value));
+      }}
+      onChange={(e) => {
+        const raw = e.target.value.replace(/[^0-9.]/g, "");
+        setText(raw);
+        const n = Number(raw);
+        if (raw !== "" && Number.isFinite(n)) onCommit(Math.round(n * 10 ** decimals) / 10 ** decimals);
+      }}
+    />
+  );
+}
+
+/**
+ * A line on a phone, opened from its price: quantity and unit, the rate (for roles allowed to
+ * change prices), discount and free pieces, as the computer's table has them, and Remove.
+ * Changes apply as they are typed, like the table's cells.
+ */
+function LineSheet({
+  line,
+  lines,
+  amount,
+  canChangeRate,
+  onUpdate,
+  onUnit,
+  onRemove,
+  onClose,
+}: {
+  line: DraftLine;
+  lines: DraftLine[];
+  amount: string;
+  canChangeRate: boolean;
+  onUpdate(patch: Partial<Pick<DraftLine, "qty" | "freeQty" | "rate" | "discountPercent">>): void;
+  onUnit(unitId: string | null): void;
+  onRemove(): void;
+  onClose(): void;
+}) {
+  const { t, money, locale } = useI18n();
+  const p = productById.get(line.productId)!;
+  const units = saleUnits(p);
+  const id = (field: string) => `line-${line.key}-${field}`;
+  return (
+    <Dialog
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={locale === "hi" ? p.nameHi : p.name}
+      description={`${p.code} · GST ${p.gstRate}%`}
+      closeLabel={t("common.close")}
+      footer={
+        <>
+          <Button
+            variant="ghost"
+            className="mr-auto text-danger hover:text-danger"
+            icon={<Trash size={16} />}
+            onClick={() => {
+              onClose();
+              onRemove();
+            }}
+          >
+            {t("invoice.remove")}
+          </Button>
+          <Button variant="primary" onClick={onClose}>
+            {t("common.done")}
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+        <Field label={t("invoice.qty")} htmlFor={id("qty")}>
+          <SheetNumber id={id("qty")} value={line.qty} decimals={3} onCommit={(v) => onUpdate({ qty: v })} />
+        </Field>
+        <Field label={t("invoice.unit")} htmlFor={id("unit")}>
+          {units.length > 1 ? (
+            <Select id={id("unit")} value={line.unitId ?? ""} onChange={(e) => onUnit(e.target.value || null)}>
+              {units.map((u) => (
+                <option key={u.unitId ?? ""} value={u.unitId ?? ""}>
+                  {u.factor === 1 ? u.symbol : `${u.symbol} (${u.factor} ${p.unit})`}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Input id={id("unit")} value={p.unit} readOnly disabled />
+          )}
+        </Field>
+        <Field label={t("invoice.rate")} htmlFor={id("rate")} {...(canChangeRate ? {} : { hint: t("invoice.rateFixed") })}>
+          {canChangeRate ? <SheetNumber id={id("rate")} value={line.rate} onCommit={(v) => onUpdate({ rate: v })} /> : <Input id={id("rate")} value={money(line.rate)} readOnly disabled />}
+        </Field>
+        <Field label={t("invoice.discount")} htmlFor={id("disc")}>
+          <SheetNumber id={id("disc")} value={line.discountPercent} onCommit={(v) => onUpdate({ discountPercent: Math.min(100, v) })} />
+        </Field>
+        <Field label={t("invoice.free")} htmlFor={id("free")} hint={t("invoice.freeHint")}>
+          <SheetNumber id={id("free")} value={line.freeQty} decimals={3} onCommit={(v) => onUpdate({ freeQty: v })} />
+        </Field>
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[13px] font-medium text-ink-2">{t("invoice.amount")}</p>
+          <p className="num flex h-10 items-center justify-end text-[18px] font-semibold text-ink">{amount}</p>
+        </div>
+      </div>
+      <LineWarnings line={line} lines={lines} />
+    </Dialog>
+  );
+}
+
 /**
  * Scrolls an element into view clear of what stays on screen over the page:
  * the bars marked data-overlay (the top bar and the pinned search above, the
@@ -269,9 +394,8 @@ export function LineItems({
   const discountRefs = useRef(new Map<string, HTMLInputElement>());
   // The line just added or added to, lit for a moment (on a phone, where its quantity is not focused).
   const [lit, setLit] = useState<string | null>(null);
-  // On a phone, the line whose free quantity was asked for (its field shows while it is 0).
-  const [freeOpen, setFreeOpen] = useState<string | null>(null);
-  const focusFree = useRef<string | null>(null);
+  // On a phone, the line whose sheet is open (rate, discount, free, unit).
+  const [editing, setEditing] = useState<string | null>(null);
   // On a phone, the line whose one-tap counts show: the one whose quantity is being typed.
   const [picking, setPicking] = useState<string | null>(null);
   // Keyboard billing: product search -> Enter -> qty -> Enter -> rate -> Enter -> product search.
@@ -306,7 +430,7 @@ export function LineItems({
       }
     } else {
       const row = rowRefs.current.get(focusKey);
-      if (row) reveal(row, "smooth");
+      if (row) reveal(row, prefersLessMotion() ? "auto" : "smooth");
       setLit(focusKey);
     }
     onFocused();
@@ -344,9 +468,16 @@ export function LineItems({
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 text-[14.5px] leading-snug font-medium text-ink">{name}</p>
                 <div className="flex w-[8.5rem] shrink-0 items-center rounded-xl border border-line bg-surface">
-                  <button type="button" className="flex size-10 shrink-0 items-center justify-center text-ink-2" aria-label={`−1 ${p.name}`} onClick={() => (line.qty > 1 ? onUpdate(line.key, { qty: line.qty - 1 }) : onRemove(line.key))}>
-                    <Minus size={17} />
-                  </button>
+                  {/* At one, the button says what it does: it takes the line off (and the message that follows offers Undo). */}
+                  {line.qty > 1 ? (
+                    <button type="button" className="flex size-10 shrink-0 items-center justify-center text-ink-2" aria-label={`−1 ${p.name}`} onClick={() => onUpdate(line.key, { qty: line.qty - 1 })}>
+                      <Minus size={17} />
+                    </button>
+                  ) : (
+                    <button type="button" className="flex size-10 shrink-0 items-center justify-center text-ink-3 hover:text-danger" aria-label={`${t("invoice.remove")}: ${p.name}`} onClick={() => onRemove(line.key)}>
+                      <Trash size={16} />
+                    </button>
+                  )}
                   <NumberCell
                     value={line.qty}
                     label={`${t("invoice.qty")} ${p.name}`}
@@ -362,51 +493,25 @@ export function LineItems({
                   </button>
                 </div>
               </div>
-              <div className="mt-0.5 flex items-center gap-2">
-                <p className="num min-w-0 flex-1 truncate text-[12.5px] text-ink-3">
-                  {money(line.rate)} × {line.qty} {unitSymbolOf(p, line.unitId)} · GST {p.gstRate}%
-                </p>
-                {/* Free pieces (10+1): a small button until there are some, so the price keeps its room. */}
-                {line.freeQty > 0 || freeOpen === line.key ? (
-                  <label className="flex shrink-0 items-center gap-1 text-[12px] text-good">
-                    {t("invoice.free")}
-                    <span className="w-11 shrink-0">
-                      <NumberCell
-                        value={line.freeQty}
-                        decimals={3}
-                        label={`${t("invoice.free")} ${p.name}`}
-                        inputRef={(el) => {
-                          // Opened by its button: the cursor goes in once.
-                          if (el && focusFree.current === line.key) {
-                            focusFree.current = null;
-                            el.focus();
-                          }
-                        }}
-                        onCommit={(v) => onUpdate(line.key, { freeQty: v })}
-                        onEnter={onBackToSearch}
-                        className="h-8 border-line px-1 text-[13px] font-semibold text-good"
-                      />
-                    </span>
-                  </label>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      focusFree.current = line.key;
-                      setFreeOpen(line.key);
-                    }}
-                    className="h-8 shrink-0 rounded-lg px-1.5 text-[12px] font-medium text-accent"
-                    aria-label={`${t("invoice.free")} ${p.name}`}
-                  >
-                    +{t("invoice.free")}
-                  </button>
-                )}
-                {units.length > 1 && <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} className="h-8 text-[13px]" />}
+              {/*
+                The price row opens the line's sheet (unit, rate, discount, free, Remove): a phone's
+                row has room for the price and the amount, not for five controls beside them.
+              */}
+              <button
+                type="button"
+                onClick={() => setEditing(line.key)}
+                aria-label={`${t("invoice.lineEdit")}: ${p.name}`}
+                className="mt-0.5 flex h-8 w-full items-center gap-2 rounded-lg text-left active:bg-surface-2"
+              >
+                <span className="num min-w-0 flex-1 truncate text-[12.5px] text-ink-3">
+                  {money(line.rate)} × {line.qty} {unitSymbolOf(p, line.unitId)}
+                  {line.discountPercent > 0 && <span className="text-ink-2"> · {t("invoice.offPercent", { value: line.discountPercent })}</span>}
+                  {line.freeQty > 0 && <span className="text-good"> · {t("invoice.plusFree", { qty: line.freeQty })}</span>}
+                  {line.discountPercent === 0 && line.freeQty === 0 && <> · GST {p.gstRate}%</>}
+                </span>
                 <span className="num text-[15px] font-semibold text-ink">{r ? money(r.total.toNumber()) : "—"}</span>
-                <button type="button" onClick={() => onRemove(line.key)} className="-mr-1.5 flex size-8 items-center justify-center rounded-lg text-ink-3 hover:text-danger" aria-label={`${t("invoice.remove")}: ${p.name}`}>
-                  <Trash size={16} />
-                </button>
-              </div>
+                <Pencil size={14} className="shrink-0 text-accent" aria-hidden />
+              </button>
               {picking === line.key && (
                 <QuickQty
                   product={p}
@@ -424,6 +529,23 @@ export function LineItems({
             </li>
           );
         })}
+        {(() => {
+          const open = editing ? lines.find((l) => l.key === editing) : undefined;
+          if (!open) return null;
+          const r = resultFor(open.key);
+          return (
+            <LineSheet
+              line={open}
+              lines={lines}
+              amount={r ? money(r.total.toNumber()) : "—"}
+              canChangeRate={canChangeRate}
+              onUpdate={(patch) => onUpdate(open.key, patch)}
+              onUnit={(unitId) => onUnit(open.key, unitId)}
+              onRemove={() => onRemove(open.key)}
+              onClose={() => setEditing(null)}
+            />
+          );
+        })()}
       </ul>
     );
   }

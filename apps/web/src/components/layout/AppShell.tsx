@@ -29,7 +29,7 @@ import {
   UserPlus,
   Wallet,
 } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { GROUP_LABELS, homeRoute, menuModules, moduleForRoute, phaseBadge, type ModuleDef } from "../../app/modules";
 import { setSimpleMenu, useSimpleMenu } from "../../app/comfort";
 import { useI18n } from "../../app/i18n";
@@ -54,6 +54,7 @@ import { ComfortButton, ComfortControls, HelpButton } from "./Comfort";
 import { PullToRefresh } from "./PullToRefresh";
 import { AccountMenu } from "./AccountMenu";
 import { setWelcomeBusiness } from "../../lib/lastSignIn";
+import { setExitHint } from "../../platform/app";
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
@@ -78,7 +79,7 @@ export function LanguageToggle({ className }: { className?: string }) {
           aria-checked={locale === code}
           onClick={() => setLocale(code)}
           className={cn(
-            "press h-7 min-w-9 rounded-full px-2.5 text-[12.5px] font-semibold transition-colors",
+            "press h-7 min-w-9 rounded-full px-2.5 text-[12.5px] font-semibold transition-colors pointer-coarse:h-9 pointer-coarse:min-w-11",
             locale === code ? "bg-surface text-ink shadow-card" : "text-ink-3 hover:text-ink",
           )}
         >
@@ -98,7 +99,7 @@ function ThemeToggle({ className }: { className?: string }) {
     <button
       type="button"
       // Callers may hide it on phones ("hidden sm:inline-flex"); only add a display when they don't.
-      className={cn("press size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 hover:text-ink", /(^|\s)hidden(\s|$)/.test(className ?? "") ? "" : "inline-flex", className)}
+      className={cn("press touch-40 size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 hover:text-ink", /(^|\s)hidden(\s|$)/.test(className ?? "") ? "" : "inline-flex", className)}
       aria-label={isDark ? t("common.lightTheme") : t("common.darkTheme")}
       title={t("common.theme")}
       onClick={() => applyTheme(isDark ? "light" : "dark")}
@@ -150,7 +151,7 @@ export function SyncChip() {
     >
       <Icon size={14} className={cn(online ? "text-good" : "text-warn", pending > 0 && online && "animate-spin")} />
       {(!online || pending > 0) && <span className="hidden sm:inline">{label}</span>}
-      {pending > 0 && <span className="num rounded-full bg-warn px-1.5 text-[11px] text-white">{pending}</span>}
+      {pending > 0 && <span className="num rounded-full bg-warn px-1.5 text-[11px] text-ink-inverse">{pending}</span>}
     </span>
   );
 }
@@ -442,6 +443,11 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   const session = useSession();
   const toast = useToast();
   const confirm = useConfirm();
+  // The Android app: Back on the first screen asks for a second press before closing the app (platform/app.ts).
+  useEffect(() => {
+    setExitHint((ms) => toast({ tone: "info", title: t("app.backAgainToExit"), life: ms, group: "exit-hint" }));
+    return () => setExitHint(null);
+  }, [toast, t]);
   /** Signing out needs the server; bills still waiting stay on the device for the next sign-in. */
   const signOut = async () => {
     const { offlineMode, online, entries } = getOfflineState();
@@ -545,7 +551,11 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
   ).filter((b): b is NonNullable<typeof b> => Boolean(b) && !b!.hidden);
 
   return (
-    <div className={cn("animate-fade min-h-full lg:grid", autoHide ? "lg:grid-cols-[1fr]" : "lg:grid-cols-[256px_1fr]")}>
+    <div
+      className={cn("animate-fade min-h-full lg:grid", autoHide ? "lg:grid-cols-[1fr]" : "lg:grid-cols-[256px_1fr]")}
+      // The menu's width while it takes room beside the page, for what is fixed to the screen (the bill's total bar).
+      style={{ "--side-w": hidden ? "0px" : "256px" } as CSSProperties}
+    >
       {autoHide && (
         // The left edge: resting the mouse here brings the menu out.
         <div
@@ -561,7 +571,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
         onFocus={autoHide ? openSide : undefined}
         onBlur={autoHide ? (e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && closeSide() : undefined}
         className={cn(
-          "on-dark bg-side hidden h-screen flex-col lg:flex",
+          "on-dark bg-side hidden h-app-screen flex-col pt-[var(--inset-top)] lg:flex",
           autoHide ? "fixed inset-y-0 left-0 z-50 w-[256px] transition-transform duration-200 ease-out" : "sticky top-0",
           hidden && "pointer-events-none -translate-x-full",
         )}
@@ -621,18 +631,24 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
       {/* With the menu out, the page moves over to make room for it rather than sitting under it. */}
       <div className={cn("flex min-w-0 flex-col", autoHide && "lg:transition-[padding] lg:duration-200 lg:ease-out", autoHide && sideOpen && "lg:pl-[256px]")}>
         {/* Top bar */}
-        <header data-overlay="top" className="glass sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-14 items-center gap-2 border-b border-line/60 px-4 lg:h-16 lg:px-6">
+        {/* Under the phone's status bar too (the Android app runs under it from Android 15): the bar's icons sit on the top bar's colour. */}
+        <header
+          data-overlay="top"
+          className="glass sticky top-0 z-30 flex h-[calc(3.5rem+var(--inset-top))] items-center gap-2 border-b border-line/60 pt-[var(--inset-top)] pr-[max(1rem,var(--inset-right))] pl-[max(1rem,var(--inset-left))] lg:h-[calc(4rem+var(--inset-top))] lg:px-6"
+        >
           <button
             type="button"
-            className={cn("press -ml-1 inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2", !autoHide && "lg:hidden")}
+            className={cn("press touch-40 -ml-1 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2", !autoHide && "lg:hidden")}
             onClick={() => (autoHide && window.matchMedia("(min-width: 1024px)").matches ? openSide() : setMoreOpen(true))}
             aria-label={t("nav.more")}
           >
             <Menu size={20} />
           </button>
-          {/* On a phone: the mark and whose books these are. */}
+          {/* On a phone: the mark and whose books these are; on the narrowest (360 px) the firm's name alone, so it is read in full. */}
           <div className={cn("flex min-w-0 items-center gap-1.5", (!autoHide || sideOpen) && "lg:hidden")}>
-            <BrandMark compact />
+            <span className="contents max-[379px]:hidden">
+              <BrandMark compact />
+            </span>
             {/* Up to two lines, so a longer name is read in full rather than cut to "Agrawal Distri…". */}
             <span className="line-clamp-2 text-[13px] leading-[1.15] font-semibold break-words text-ink sm:hidden" title={BUSINESS.name}>
               {BUSINESS.name}
@@ -642,7 +658,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             type="button"
             onClick={onOpenSearch}
             aria-label={t("search.placeholder")}
-            className="press ml-auto flex h-9 items-center gap-2 rounded-full border border-line/70 bg-surface-2/80 px-2.5 text-left text-[13px] text-ink-3 transition-colors hover:border-line-strong hover:bg-surface sm:ml-1 sm:min-w-0 sm:flex-1 sm:px-3.5 lg:max-w-md"
+            className="press touch-40 ml-auto flex h-9 items-center gap-2 rounded-full border border-line/70 bg-surface-2/80 px-2.5 text-left text-[13px] text-ink-3 transition-colors hover:border-line-strong hover:bg-surface sm:ml-1 sm:min-w-0 sm:flex-1 sm:px-3.5 lg:max-w-md"
           >
             <Search size={16} className="shrink-0" />
             <span className="hidden min-w-0 flex-1 truncate sm:block">{t("search.placeholder")}</span>
@@ -659,7 +675,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
             {LIVE && allowed("notification.view") && <NotificationBell />}
             {!LIVE && allowed("notification.view") && <button
               type="button"
-              className="press relative inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2"
+              className="press touch-40 relative inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2"
               aria-label={t("nav.notifications")}
               onClick={() => navigate({ name: "planned", module: "notifications" })}
             >
@@ -674,7 +690,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
               >
                 <Plus size={16} />
                 {t("invoice.new")}
-                <Kbd keys="mod+i" className="opacity-80 [&_kbd]:border-white/30 [&_kbd]:bg-white/15 [&_kbd]:text-white" />
+                <Kbd keys="mod+i" className="[&_kbd]:border-ink-inverse/40 [&_kbd]:bg-transparent [&_kbd]:text-ink-inverse" />
               </button>
             )}
             {LIVE && <AccountMenu onSignOut={() => void signOut()} />}
@@ -691,13 +707,26 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
 
         {/* Not on the bill screens: a pull there would only get in the way of typing a bill. */}
         <PullToRefresh off={billing} />
-        <main className={cn("mx-auto w-full max-w-[1920px] flex-1 px-4 pt-5 short:pb-8 sm:px-5 lg:px-8 lg:pt-7 lg:pb-12", billing ? "pb-8" : "pb-32")}>{children}</main>
+        {/*
+          Its sides clear of a camera notch when a phone is held sideways (--inset-left/right, app.css).
+          overflow-x-clip: a screen sliding in from the side does not widen a phone's page for a moment
+          (clip, not hidden, so what is sticky inside still sticks).
+        */}
+        <main
+          className={cn(
+            "mx-auto w-full max-w-[1920px] flex-1 overflow-x-clip pt-5 short:pb-8 lg:px-8 lg:pt-7 lg:pb-12",
+            "pr-[max(1rem,var(--inset-right))] pl-[max(1rem,var(--inset-left))] sm:pr-[max(1.25rem,var(--inset-right))] sm:pl-[max(1.25rem,var(--inset-left))]",
+            billing ? "pb-8" : "pb-32",
+          )}
+        >
+          {children}
+        </main>
       </div>
 
       {/* Phones: a floating tab bar with the Create button in the middle (not on the bill screen, which has its own bar with the total and Save). */}
       <nav
         data-overlay="bottom"
-        className={cn("glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] border border-line/70 shadow-pop short:hidden lg:hidden", billing && "hidden")}
+        className={cn("glass fixed inset-x-3 bottom-[calc(var(--inset-bottom)+10px)] z-30 grid h-16 grid-cols-5 rounded-[22px] border border-line/70 shadow-pop short:hidden lg:hidden", billing && "hidden")}
         style={{ gridTemplateColumns: `repeat(${bottomItems.length}, minmax(0, 1fr))` }}
         aria-label="Primary"
       >

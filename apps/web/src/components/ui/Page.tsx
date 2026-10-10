@@ -4,6 +4,7 @@ import { ArrowLeft, Ellipsis, RotateCw, SlidersHorizontal, TriangleAlert } from 
 import { Popover } from "radix-ui";
 import { Children, Fragment, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
+import { useShortcuts } from "../../app/shortcuts";
 import { TODAY } from "../../data/db";
 import { ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
@@ -134,14 +135,29 @@ export function LoadMore({ hasMore, loading, onClick }: { hasMore: boolean; load
  * the first box (a month, a period) as narrow as it is instead of the full row.
  * `openOnComputer` starts open on a computer, for reports, where the grouping and
  * dates are the point rather than a narrowing of a list. `labelled` keeps the word
- * "Filters" on a phone too.
+ * "Filters" on a phone too. "/" anywhere on the screen (not while typing) goes to
+ * the search, as on many sites.
  */
 export function FilterBar({ children, quick, actions, fit, openOnComputer, labelled }: { children: ReactNode; quick?: ReactNode; actions?: ReactNode; fit?: boolean; openOnComputer?: boolean; labelled?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(() => Boolean(openOnComputer) && typeof matchMedia !== "undefined" && matchMedia("(min-width: 1024px)").matches);
   const [on, setOn] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
+  const searchBox = useRef<HTMLDivElement>(null);
   const [first, ...rest] = Children.toArray(children).filter(Boolean);
+  useShortcuts([
+    {
+      id: "focus-filter",
+      keys: "/",
+      handler: () => {
+        // Not into the page under an open dialog.
+        if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+        const field = searchBox.current?.querySelector<HTMLInputElement | HTMLSelectElement>("input:not([type=checkbox]):not([type=radio]):not([aria-hidden]), select");
+        field?.focus();
+        if (field instanceof HTMLInputElement) field.select();
+      },
+    },
+  ]);
   // Count what is set in the hidden filters: a chosen option, a date, a pressed chip, a segment other than the first.
   useEffect(() => {
     const el = panel.current;
@@ -168,7 +184,9 @@ export function FilterBar({ children, quick, actions, fit, openOnComputer, label
   return (
     <div className="flex flex-col gap-2.5 rounded-[var(--radius-card)] border border-line bg-surface p-3 shadow-card">
       <div className="flex flex-wrap items-center gap-2">
-        <div className={fit ? "w-full md:w-auto" : "min-w-0 flex-1 sm:min-w-[12rem] [&>*]:w-full"}>{first}</div>
+        <div ref={searchBox} className={fit ? "w-full md:w-auto" : "min-w-0 flex-1 sm:min-w-[12rem] [&>*]:w-full"}>
+          {first}
+        </div>
         {rest.length > 0 && (
           <button
             type="button"
@@ -242,7 +260,7 @@ export const TAB_TRIGGER =
 export function BackButton({ onClick }: { onClick(): void }) {
   const { t } = useI18n();
   return (
-    <button type="button" onClick={onClick} className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 hover:text-ink" aria-label={t("common.back")}>
+    <button type="button" onClick={onClick} className="touch-40 inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 hover:text-ink" aria-label={t("common.back")}>
       <ArrowLeft size={18} />
     </button>
   );

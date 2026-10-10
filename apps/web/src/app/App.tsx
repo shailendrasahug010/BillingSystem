@@ -184,6 +184,7 @@ function ShortcutsDialog({ open, onOpenChange, tally, onTally }: { open: boolean
     ["alt+1", t("shortcuts.addSuggestion")],
     [INVOICE_SHORTCUTS.save, t("shortcuts.saveInvoice")],
     [INVOICE_SHORTCUTS.saveAndPrint, t("shortcuts.saveAndPrint")],
+    ["/", t("shortcuts.focusFilter")],
     ["escape", t("shortcuts.closeDialog")],
     ["?", t("shortcuts.help")],
   ];

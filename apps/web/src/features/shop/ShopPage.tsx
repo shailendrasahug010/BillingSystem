@@ -222,7 +222,7 @@ function ShopPage({ shopKey }: { shopKey: string }) {
                 type="button"
                 aria-pressed={category === c}
                 onClick={() => setCategory(c)}
-                className={cn("press shrink-0 rounded-full border px-3 py-1.5 text-[13px]", category === c ? "border-accent bg-accent text-white" : "border-line bg-surface text-ink-2")}
+                className={cn("press shrink-0 rounded-full border px-3 py-1.5 text-[13px]", category === c ? "border-accent bg-accent text-ink-inverse" : "border-line bg-surface text-ink-2")}
               >
                 {c ?? t("common.all")}
               </button>
@@ -323,7 +323,7 @@ function ShopPage({ shopKey }: { shopKey: string }) {
         )}
       </div>
       {lines.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur" style={{ paddingBottom: "max(12px, var(--inset-bottom))" }}>
           <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
             <div>
               <p className="text-[13px] text-ink-3">{t("shop.items", { count: lines.length })}</p>
@@ -451,7 +451,7 @@ function ReviewDialog({
 
 function Shell({ header, children }: { header?: ReactNode; children: ReactNode }) {
   return (
-    <div className="min-h-dvh bg-canvas">
+    <div className="min-h-app-screen bg-canvas">
       {header && (
         <header className="border-b border-line bg-surface px-4 py-3">
           <div className="mx-auto max-w-2xl">{header}</div>

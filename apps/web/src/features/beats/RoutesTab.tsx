@@ -230,7 +230,7 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose(): vo
                   type="button"
                   aria-pressed={on}
                   onClick={() => setDays((ds) => (on ? ds.filter((x) => x !== d) : [...ds, d]))}
-                  className={cn("press h-9 min-w-12 rounded-full border px-3 text-[13px] font-medium", on ? "border-accent bg-accent text-white" : "border-line bg-surface text-ink-2 hover:border-line-strong")}
+                  className={cn("press h-9 min-w-12 rounded-full border px-3 text-[13px] font-medium", on ? "border-accent bg-accent text-ink-inverse" : "border-line bg-surface text-ink-2 hover:border-line-strong")}
                 >
                   {weekdayName(d, locale, "short")}
                 </button>

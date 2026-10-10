@@ -10,7 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Avatar } from "../../components/ui/misc";
-import { DataTable, ErrorNote, PageHeader, TAB_TRIGGER, useFieldError } from "../../components/ui/Page";
+import { DataTable, ErrorNote, PageHeader, RowCard, TAB_TRIGGER, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BUSINESS } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
@@ -105,6 +105,17 @@ export function UsersPage() {
             loading={members.isPending}
             rowKey={(m) => m.id}
             onRowClick={(m) => !m.isOwner && setMember(m)}
+            // On a phone: who, how they sign in, their role and whether they still can.
+            mobile={(m) => (
+              <>
+                <Avatar name={m.name} className="size-9 shrink-0 text-[12px]" />
+                <RowCard
+                  title={m.name}
+                  sub={[m.mobile, m.username, m.isOwner ? t("users.owner") : m.role.name].filter(Boolean).join(" · ")}
+                  valueSub={m.isActive ? <Badge tone="good">{t("common.active")}</Badge> : <Badge tone="danger">{t("common.inactive")}</Badge>}
+                />
+              </>
+            )}
             columns={[
               {
                 key: "name",
@@ -138,6 +149,14 @@ export function UsersPage() {
             loading={roles.isPending}
             rowKey={(r) => r.id}
             onRowClick={(r) => setRole(r)}
+            mobile={(r) => (
+              <RowCard
+                title={roleName(r)}
+                sub={r.grants.includes("*") ? t("users.everything") : t("users.permissionCount", { count: r.grants.length })}
+                value={r.memberCount}
+                valueSub={t("users.members")}
+              />
+            )}
             columns={[
               {
                 key: "name",

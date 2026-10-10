@@ -1,8 +1,8 @@
 import { translateError } from "@digitalbahi/i18n";
-import { ArrowLeft, ArrowRight, Camera, Check, Printer, Save, ScanBarcode, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, Loader2, Printer, Save, ScanBarcode, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { useRouter } from "../../app/router";
+import { useBackStep, useRouter } from "../../app/router";
 import { ariaShortcut, INVOICE_SHORTCUTS, useShortcuts } from "../../app/shortcuts";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
@@ -166,6 +166,8 @@ function useSave(view: DraftView) {
   const { navigate } = useRouter();
   const [saved, setSaved] = useState<SavedNotice | null>(null);
   const saving = useRef(false);
+  // A bill on its way to the server: its Save button says so (a slow line can take a few seconds).
+  const [busy, setBusy] = useState(false);
   const idempotencyKey = useRef(newIdempotencyKey());
 
   const afterSave = useCallback(
@@ -221,14 +223,16 @@ function useSave(view: DraftView) {
     [view, toast, t, money, navigate],
   );
 
+  /** Saves the bill; true once it is saved (on the server or on the device), false when it was not. */
   const save = useCallback(
-    (mode: "save" | "print" | "share") => {
+    (mode: "save" | "print" | "share"): Promise<boolean> => {
       const { totals, customer, draft, dueDate } = view;
-      if (!totals || !customer) return;
-      if (isBlocked(view)) return;
+      if (!totals || !customer) return Promise.resolve(false);
+      if (isBlocked(view)) return Promise.resolve(false);
       if (LIVE) {
-        if (saving.current) return;
+        if (saving.current) return Promise.resolve(false);
         saving.current = true;
+        setBusy(true);
         const key = idempotencyKey.current;
         const offline = (invoice: SavedInvoice) => ({ invoice, offline: true });
         // Offline, or the connection dropped on the way: keep the bill on the device (same key, so never twice).
@@ -242,25 +246,27 @@ function useSave(view: DraftView) {
                 throw e;
               },
             );
-        attempt
+        return attempt
           .then(({ invoice, offline: savedOffline }) => {
             idempotencyKey.current = newIdempotencyKey();
             afterSave(invoice, mode, savedOffline);
+            return true;
           })
           .catch((e: unknown) => {
             if (e instanceof OfflineNotReady) {
               toast({ tone: "offline", title: t("invoice.saveFailed"), body: t("offline.notReady") });
-              return;
+              return false;
             }
             const err = e instanceof ApiError ? e : new ApiError(0, "generic");
             // A definite rejection will not change on retry: start a fresh key for the corrected bill.
             if (err.status >= 400 && err.status < 500) idempotencyKey.current = newIdempotencyKey();
             toast({ tone: err.code === "network" ? "offline" : "danger", title: t("invoice.saveFailed"), body: translateError(i18n, err) });
+            return false;
           })
           .finally(() => {
             saving.current = false;
+            setBusy(false);
           });
-        return;
       }
       const paid = Math.min(totals.amountPaid.toNumber(), totals.grandTotal.toNumber());
       const invoice = saveInvoice(
@@ -279,11 +285,45 @@ function useSave(view: DraftView) {
         paid > 0 ? { date: draft.date, customerId: customer.id, amount: paid, method: draft.method, reference: "" } : undefined,
       );
       afterSave({ id: invoice.id, number: invoice.number, date: invoice.date, total: invoice.total, paid: invoice.paid, lineCount: invoice.lines.length, warnings: [] }, mode, !getSyncState().online);
+      return Promise.resolve(true);
     },
     [view, toast, t, i18n, afterSave],
   );
-  return { save, saved, closeSaved: () => setSaved(null) };
+  return { save, busy, saved, closeSaved: () => setSaved(null) };
 }
+
+/**
+ * Takes a line off the bill, and says so with Undo (a bin is easily tapped by mistake on a phone):
+ * the line comes back where it was, on this bill only.
+ */
+function useRemoveLine(view: DraftView) {
+  const { t, locale } = useI18n();
+  const toast = useToast();
+  const { dispatch, bill } = view;
+  const latest = useRef(view.draft);
+  latest.current = view.draft;
+  return useCallback(
+    (key: string) => {
+      const { lines, customerId } = latest.current;
+      const index = lines.findIndex((l) => l.key === key);
+      const line = lines[index];
+      if (!line) return;
+      dispatch({ type: "remove", key });
+      const p = productById.get(line.productId);
+      const from = bill.current;
+      toast({
+        tone: "info",
+        group: "invoice-line-removed",
+        title: t("invoice.removedLine", { name: p ? (locale === "hi" ? p.nameHi : p.name) : "" }),
+        action: { label: t("common.undo"), onClick: () => bill.current === from && dispatch({ type: "unremove", line, index, customerId }) },
+      });
+    },
+    [dispatch, bill, toast, t, locale],
+  );
+}
+
+/** A Save button's icon while the bill is on its way: a turning wheel (its name stays, for screen readers and tests). */
+const saveIcon = (busy: boolean, size: number) => (busy ? <Loader2 size={size} className="animate-spin" /> : <Save size={size} />);
 
 function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }) {
   const i18n = useI18n();
@@ -295,7 +335,8 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
   const [adding, setAdding] = useState<string | null>(null);
   // null: the suggestions fold into one row once the bill has lines; true / false once the user chose.
   const [suggestionsOpen, setSuggestionsOpen] = useState<boolean | null>(null);
-  const { save, saved, closeSaved } = useSave(view);
+  const { save, busy, saved, closeSaved } = useSave(view);
+  const removeLine = useRemoveLine(view);
   const held = useHeldBills(view);
   const { draft, dispatch, customer, insight, totals, error, credit } = view;
   const numberLabel = useNextNumberLabel(draft.date);
@@ -303,6 +344,14 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
   const canSave = Boolean(totals && customer) && !blocked;
   const strip = suggestionsOpen === null ? draft.lines.length > 0 : !suggestionsOpen;
   useStoreVersion();
+  // While the total bar shows at the foot (below 1280 px), messages appear above it, not over Save (app.css).
+  const barShown = draft.lines.length > 0;
+  useEffect(() => {
+    if (!barShown) return;
+    const root = document.documentElement;
+    root.setAttribute("data-total-bar", "");
+    return () => root.removeAttribute("data-total-bar");
+  }, [barShown]);
   // The letters of the units this bill's products come in ("B BOX, S STRIP"), typed after a quantity.
   const unitLetters = [
     ...new Set(
@@ -400,7 +449,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
           )}
 
           {/* Stays under the top bar while the lines scroll: the search, and the suggestions once folded into a row. */}
-          <div data-overlay="top" className="sticky top-14 z-20 -mx-2 flex flex-col gap-2 bg-bg/85 px-2 py-2 backdrop-blur-md lg:top-16">
+          <div data-overlay="top" className="sticky top-[calc(3.5rem+var(--inset-top))] z-20 -mx-2 flex flex-col gap-2 bg-bg/85 px-2 py-2 backdrop-blur-md lg:top-[calc(4rem+var(--inset-top))]">
             <ProductSearch ref={productRef} customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, how) => dispatch({ type: "add", productId: id, ...how })} onScan={() => setScanOpen(true)} />
             {strip && suggestions(true)}
           </div>
@@ -431,7 +480,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
               onFocused={onFocused}
               onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
               onUnit={(key, unitId) => dispatch({ type: "unit", key, unitId })}
-              onRemove={(key) => dispatch({ type: "remove", key })}
+              onRemove={removeLine}
               onReplace={(key, productId) => dispatch({ type: "replace", key, productId })}
               onBackToSearch={() => productRef.current?.focus()}
             />
@@ -439,14 +488,15 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
         </div>
 
         <div className="xl:sticky xl:top-20">
-          <SummaryPanel view={view} invoiceNumber={numberLabel} onSave={save} blocked={blocked} sticky />
+          <SummaryPanel view={view} invoiceNumber={numberLabel} onSave={save} blocked={blocked} busy={busy} sticky />
         </div>
       </div>
 
       {/* Below 1280 px the summary is under the lines: the total and Save stay at the foot of the screen. */}
-      {draft.lines.length > 0 && (
+      {barShown && (
         <>
-          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:right-8 lg:bottom-4 lg:left-[calc(256px+2rem)] xl:hidden">
+          {/* --side-w: the menu's width while it takes room beside the page (0 while it is hidden away; AppShell). */}
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+var(--inset-bottom))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:right-8 lg:bottom-4 lg:left-[calc(var(--side-w,256px)+2rem)] lg:transition-[left] lg:duration-200 xl:hidden">
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
@@ -457,7 +507,7 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
                   {t("common.print")}
                 </Button>
               )}
-              <Button variant="primary" icon={<Save size={16} />} disabled={!canSave} onClick={() => save("save")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.save)}>
+              <Button variant="primary" icon={saveIcon(busy, 16)} disabled={!canSave} aria-busy={busy || undefined} onClick={() => save("save")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.save)}>
                 {t("common.save")}
               </Button>
             </div>
@@ -484,7 +534,8 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
 /** Phone flow: Customer → Products → Review & pay, big targets, sticky total. */
 function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }) {
   const { t, money, locale } = useI18n();
-  const { save, saved, closeSaved } = useSave(view);
+  const { save, busy, saved, closeSaved } = useSave(view);
+  const removeLine = useRemoveLine(view);
   const [step, setStep] = useState(view.customer ? 1 : 0);
   const [scanOpen, setScanOpen] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
@@ -501,11 +552,16 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
   // null: the suggestions fold into one row once the bill has lines; true / false once the user chose.
   const [suggestionsOpen, setSuggestionsOpen] = useState<boolean | null>(null);
   const strip = suggestionsOpen === null ? draft.lines.length > 0 : !suggestionsOpen;
-  // Saved from the review: back to the start for the next bill.
+  // Saved from the review: back to the start for the next bill. Not saved: the bill stays open here to try again.
   const saveFromReview = (mode: "save" | "print" | "share") => {
-    save(mode);
-    setStep(0);
+    void save(mode).then((ok) => ok && setStep(0));
   };
+  // The phone's Back goes a step back in the bill (Review → Products → Customer), then leaves it.
+  useBackStep(() => {
+    if (step === 0) return false;
+    setStep(step - 1);
+    return true;
+  });
   const toSave = (mode: "save" | "print") => {
     if (!totals) return;
     if (step === 2) saveFromReview(mode);
@@ -546,12 +602,13 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-[21px] font-semibold text-ink">{t("invoice.quick")}</h1>
-        <div className="flex items-center gap-2">
-          <HoldButton state={held} hasLines={draft.lines.length > 0} />
-          <span className={cn("text-[12.5px] text-ink-3", /\d/.test(numberLabel) && "font-mono")}>{numberLabel}</span>
+      {/* The bill's number under the title, so neither wraps on a narrow phone (360 px) beside Hold. */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[21px] leading-tight font-semibold text-ink">{t("invoice.quick")}</h1>
+          <p className={cn("truncate text-[12.5px] text-ink-3", /\d/.test(numberLabel) && "font-mono")}>{numberLabel}</p>
         </div>
+        <HoldButton state={held} hasLines={draft.lines.length > 0} />
       </div>
       <KeptDraftOffer state={kept} />
       <HeldBillsBar state={held} />
@@ -630,7 +687,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
             </span>
             <span className="text-[13px] font-medium text-accent">{t("invoice.changeCustomer")}</span>
           </button>
-          <div data-overlay="top" className="sticky top-14 z-20 -mx-4 bg-bg/85 px-4 py-2 backdrop-blur-md">
+          <div data-overlay="top" className="sticky top-[calc(3.5rem+var(--inset-top))] z-20 -mx-4 bg-bg/85 px-4 py-2 backdrop-blur-md">
             <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, how) => dispatch({ type: "add", productId: id, ...how })} onScan={() => setScanOpen(true)} />
           </div>
           <SuggestionsPanel
@@ -659,12 +716,12 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
               onFocused={onFocused}
               onUpdate={(key, patch) => dispatch({ type: "update", key, patch })}
               onUnit={(key, unitId) => dispatch({ type: "unit", key, unitId })}
-              onRemove={(key) => dispatch({ type: "remove", key })}
+              onRemove={removeLine}
               onReplace={(key, productId) => dispatch({ type: "replace", key, productId })}
               onBackToSearch={() => productRef.current?.focus()}
             />
           </section>
-          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+var(--inset-bottom))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
             <div className="mx-auto flex max-w-xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-ink-3">{t("invoice.lineCount", { count: draft.lines.length, qty: totals ? totals.totalQty.toString() : "0" })}</p>
@@ -699,15 +756,15 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
               })}
             </ul>
           </section>
-          <SummaryPanel view={view} invoiceNumber={numberLabel} onSave={saveFromReview} blocked={isBlocked(view)} />
+          <SummaryPanel view={view} invoiceNumber={numberLabel} onSave={saveFromReview} blocked={isBlocked(view)} busy={busy} />
           {/* Save without scrolling to the end: the total and Save stay at the bottom of the screen. */}
-          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
+          <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+var(--inset-bottom))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
             <div className="mx-auto flex max-w-xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] text-ink-3">{t("invoice.grandTotal")}</p>
                 <p className="num font-display text-[22px] leading-tight font-semibold text-ink">{money(totals?.grandTotal.toNumber() ?? 0)}</p>
               </div>
-              <Button variant="primary" size="lg" icon={<Save size={18} />} disabled={!totals || isBlocked(view)} onClick={() => saveFromReview("save")}>
+              <Button variant="primary" size="lg" icon={saveIcon(busy, 18)} disabled={!totals || isBlocked(view)} aria-busy={busy || undefined} onClick={() => saveFromReview("save")}>
                 {t("invoice.save")}
               </Button>
             </div>

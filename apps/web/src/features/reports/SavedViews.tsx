@@ -58,7 +58,7 @@ export function ViewsMenu({ views, activeId, onOpen }: { views: SavedView[]; act
         <Button icon={<Bookmark size={16} />}>{views.length ? t("reportViews.menuCount", { count: views.length }) : t("reportViews.menu")}</Button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content align="end" sideOffset={6} className="z-50 max-h-[70vh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 text-[13.5px] shadow-pop" aria-label={t("reportViews.menu")}>
+        <Popover.Content align="end" sideOffset={6} className="z-50 max-h-[calc(var(--app-vh)*0.7)] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 text-[13.5px] shadow-pop" aria-label={t("reportViews.menu")}>
           {views.length === 0 && <p className="px-3 py-3 text-ink-3">{t("reportViews.none")}</p>}
           {mine.length > 0 && <p className="px-3 pt-2 pb-1 text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">{t("reportViews.mine")}</p>}
           {mine.map(item)}

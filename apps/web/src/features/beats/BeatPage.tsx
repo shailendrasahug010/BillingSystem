@@ -267,10 +267,10 @@ function PlaceChip({ label, shops, active, onClick, pin }: { label: string; shop
       onClick={onClick}
       className={cn(
         "press flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors",
-        active ? "border-accent bg-accent text-white shadow-card" : "border-line bg-surface text-ink hover:border-line-strong",
+        active ? "border-accent bg-accent text-ink-inverse shadow-card" : "border-line bg-surface text-ink hover:border-line-strong",
       )}
     >
-      {pin && <MapPin size={13} className={active ? "text-white/80" : "text-ink-3"} aria-hidden />}
+      {pin && <MapPin size={13} className={active ? "text-ink-inverse/80" : "text-ink-3"} aria-hidden />}
       {label}
       <span className={cn("num rounded-full px-1.5 text-[11px] font-medium", active ? "bg-white/20" : "bg-surface-2 text-ink-3")}>{`${called}/${shops.length}`}</span>
     </button>
@@ -279,7 +279,7 @@ function PlaceChip({ label, shops, active, onClick, pin }: { label: string; shop
 
 function Amount({ label, value, format }: { label: string; value: number; format(v: number): string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-2xl border border-white/15 bg-black/10 px-3 py-2">
       <span className="truncate text-[12px] font-medium text-ink-2">{label}</span>
       <span className="num truncate font-display text-[17px] leading-tight font-semibold text-ink sm:text-[20px]">
         <CountUp value={value} format={format} />

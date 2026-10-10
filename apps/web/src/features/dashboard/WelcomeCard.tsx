@@ -23,7 +23,7 @@ export function WelcomeCard({ billed }: { billed?: boolean }) {
   return (
     <section aria-labelledby="welcome-title" data-welcome-card className="animate-page relative overflow-hidden rounded-2xl border border-good/25 bg-gradient-to-br from-good-soft via-surface to-accent-soft px-5 py-4 shadow-card">
       <div className="flex flex-wrap items-center gap-4">
-        <span className="animate-logo inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-good text-white shadow-glow" aria-hidden>
+        <span className="animate-logo inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-good text-ink-inverse shadow-glow" aria-hidden>
           <PartyPopper size={24} />
         </span>
         <div className="min-w-[12rem] flex-1">

@@ -874,7 +874,7 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
       </div>
 
       {/* On a phone or tablet the total and Save stay at the foot of the screen, where the tab bar was. */}
-      <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom,0px))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:hidden">
+      <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+var(--inset-bottom))] z-20 rounded-2xl border border-line/70 px-4 py-2.5 shadow-pop short:bottom-3 lg:hidden">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[12px] text-ink-3">{lines.length ? t("common.items", { count: lines.length }) : t("purchase.noLines")}</p>

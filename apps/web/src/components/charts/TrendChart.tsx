@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 /**
  * Line/area trend chart drawn in SVG. One y-axis only (both series are rupees),
@@ -75,6 +75,11 @@ export function TrendChart({
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
 
+  // Its width before the first paint (the 640 to start with would stick out of a phone's screen for a moment), then as it changes.
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (el?.clientWidth) setWidth(Math.max(280, el.clientWidth));
+  }, []);
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;

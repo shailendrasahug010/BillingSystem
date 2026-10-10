@@ -1,7 +1,7 @@
 import { Download, Factory, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { useRouter } from "../../app/router";
+import { hashFor, useRouter } from "../../app/router";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Field";
 import { EmptyState, Segmented } from "../../components/ui/misc";
@@ -107,6 +107,7 @@ export function SuppliersPage() {
         rows={rows}
         rowKey={(s) => s.id}
         onRowClick={(s) => navigate({ name: "supplier", supplierId: s.id })}
+        rowHref={(s) => hashFor({ name: "supplier", supplierId: s.id })}
         mobile={(s) => (
           <RowCard
             title={supplierLabel(s)}

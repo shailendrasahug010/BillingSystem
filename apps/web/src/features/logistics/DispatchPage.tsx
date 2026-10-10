@@ -9,7 +9,7 @@ import { Button, IconButton } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { EmptyState, Segmented, Skeleton } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, Stat, TAB_TRIGGER, useFieldError } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, RowCard, Stat, TAB_TRIGGER, useFieldError } from "../../components/ui/Page";
 import { PrintPortal } from "../../components/ui/PrintPortal";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, TODAY, WORKSPACE } from "../../data/db";
@@ -295,6 +295,19 @@ function Trips({ onOpen }: { onOpen(id: string): void }) {
         rowKey={(r) => r.id}
         loading={list.loading}
         onRowClick={(r) => onOpen(r.id)}
+        // On a phone: the trip, its vehicle and driver, and how far the deliveries have got.
+        mobile={(r) => (
+          <RowCard
+            title={r.dispatchNumber}
+            sub={[dateMedium(r.dispatchDate), r.vehicleNumber, r.driverName].filter(Boolean).join(" · ")}
+            value={money(r.value)}
+            valueSub={
+              <Badge tone={TRIP_TONE[r.status]}>
+                {t(`dispatch.status.${r.status}`)} · {r.done}/{r.stops}
+              </Badge>
+            }
+          />
+        )}
         minWidth={720}
         empty={<EmptyState title={t("dispatch.noTrips")} hint={t("dispatch.noTripsHint")} />}
         columns={[

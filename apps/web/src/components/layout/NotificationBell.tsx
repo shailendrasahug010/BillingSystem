@@ -35,10 +35,10 @@ export function NotificationBell() {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button type="button" className="press relative inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2" aria-label={label} title={label}>
+        <button type="button" className="press touch-40 relative inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2" aria-label={label} title={label}>
           <Bell size={18} />
           {count > 0 && (
-            <span className="absolute top-0.5 right-0.5 min-w-[17px] rounded-full bg-danger px-1 text-center text-[10px] leading-[17px] font-semibold text-white tabular-nums ring-2 ring-surface" aria-hidden data-testid="unread-badge">
+            <span className="absolute top-0.5 right-0.5 min-w-[17px] rounded-full bg-danger px-1 text-center text-[10px] leading-[17px] font-semibold text-ink-inverse tabular-nums ring-2 ring-surface" aria-hidden data-testid="unread-badge">
               {count > 99 ? "99+" : count}
             </span>
           )}
@@ -50,7 +50,7 @@ export function NotificationBell() {
           sideOffset={8}
           collisionPadding={12}
           aria-label={t("notifications.title")}
-          className="z-50 flex max-h-[min(34rem,80vh)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-pop"
+          className="z-50 flex max-h-[min(34rem,calc(var(--app-vh)*0.8))] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-pop"
         >
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">
             <p className="font-display text-[15px] font-semibold text-ink">{t("notifications.title")}</p>
