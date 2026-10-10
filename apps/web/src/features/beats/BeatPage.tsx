@@ -267,10 +267,10 @@ function PlaceChip({ label, shops, active, onClick, pin }: { label: string; shop
       onClick={onClick}
       className={cn(
         "press flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors",
-        active ? "border-accent bg-accent text-white shadow-card" : "border-line bg-surface text-ink hover:border-line-strong",
+        active ? "border-accent bg-accent text-ink-inverse shadow-card" : "border-line bg-surface text-ink hover:border-line-strong",
       )}
     >
-      {pin && <MapPin size={13} className={active ? "text-white/80" : "text-ink-3"} aria-hidden />}
+      {pin && <MapPin size={13} className={active ? "text-ink-inverse/80" : "text-ink-3"} aria-hidden />}
       {label}
       <span className={cn("num rounded-full px-1.5 text-[11px] font-medium", active ? "bg-white/20" : "bg-surface-2 text-ink-3")}>{`${called}/${shops.length}`}</span>
     </button>

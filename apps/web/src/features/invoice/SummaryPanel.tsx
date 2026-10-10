@@ -1,5 +1,5 @@
 import { findState, PAYMENT_METHODS, type PaymentMethod } from "@digitalbahi/core";
-import { Printer, Save } from "lucide-react";
+import { Loader2, Printer, Save, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { ariaShortcut, INVOICE_SHORTCUTS } from "../../app/shortcuts";
@@ -10,6 +10,7 @@ import { allowed, BUSINESS, WORKSPACE } from "../../data/db";
 import { cn } from "../../lib/cn";
 import { lutValidOn, type DraftView } from "./useInvoiceDraft";
 import { stateName } from "../../lib/states";
+import { useMediaQuery } from "../../lib/useMediaQuery";
 import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 
 function Row({ label, value, strong, muted, negative }: { label: ReactNode; value: string; strong?: boolean; muted?: boolean; negative?: boolean }) {
@@ -113,12 +114,15 @@ export function SummaryPanel({
   invoiceNumber,
   onSave,
   blocked,
+  busy = false,
   sticky = false,
 }: {
   view: DraftView;
   invoiceNumber: string;
   onSave(mode: "save" | "print" | "share"): void;
   blocked: boolean;
+  /** The bill is on its way to the server: Save shows a turning wheel (a second tap does nothing). */
+  busy?: boolean;
   sticky?: boolean;
 }) {
   const { t, money, date, locale } = useI18n();
@@ -129,10 +133,23 @@ export function SummaryPanel({
   const cannotSave = !totals || !customer || blocked;
   // The keys on the buttons, for keyboards (not on phones).
   const keyHint = "hidden sm:inline-flex";
+  // Payment modes big enough for a thumb on touch screens.
+  const touch = useMediaQuery("(pointer: coarse)");
+  // A balance left on a credit bill is normal: red only when the credit check warns or blocks.
+  const balanceTone =
+    totals && totals.excessPaid.gt(0)
+      ? "text-good"
+      : totals && totals.balanceDue.gt(0)
+        ? view.credit?.level === "block"
+          ? "text-danger"
+          : view.credit?.level === "warn"
+            ? "text-warn"
+            : "text-ink"
+        : "text-good";
 
   return (
     <aside
-      className={cn("flex flex-col rounded-[var(--radius-card)] border border-line/80 bg-surface shadow-card", sticky && "xl:max-h-[calc(100dvh-6rem)]")}
+      className={cn("flex flex-col rounded-[var(--radius-card)] border border-line/80 bg-surface shadow-card", sticky && "xl:max-h-app-summary")}
       aria-label={t("invoice.summary")}
     >
       <div className={cn("flex flex-col gap-3 p-4", sticky && "xl:min-h-0 xl:flex-1 xl:overflow-y-auto")}>
@@ -226,10 +243,10 @@ export function SummaryPanel({
               {t("invoice.fullyPaid")}
             </Button>
           </div>
-          <PaymentModes size="sm" value={draft.method} onChange={(m) => dispatch({ type: "method", value: m })} />
+          <PaymentModes size={touch ? "lg" : "sm"} value={draft.method} onChange={(m) => dispatch({ type: "method", value: m })} />
           <div className="flex items-baseline justify-between text-[13.5px]">
             <span className="text-ink-2">{totals && totals.excessPaid.gt(0) ? t("invoice.advance") : t("invoice.balance")}</span>
-            <span className={cn("num font-semibold", totals && totals.balanceDue.gt(0) ? "text-danger" : "text-good")}>
+            <span className={cn("num font-semibold", balanceTone)}>
               {money(totals ? (totals.excessPaid.gt(0) ? totals.excessPaid.toNumber() : totals.balanceDue.toNumber()) : 0)}
             </span>
           </div>
@@ -237,9 +254,16 @@ export function SummaryPanel({
       </div>
 
       <div className="flex flex-col gap-2 border-t border-line p-3">
-        <Button variant="primary" size="lg" block icon={<Save size={18} />} disabled={cannotSave} onClick={() => onSave("save")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.save)}>
+        {/* Save is off for a credit block: say why next to it, not only in the customer's card. */}
+        {blocked && (
+          <p className="flex items-start gap-1.5 rounded-lg bg-danger-soft px-2.5 py-1.5 text-[12.5px] leading-snug text-danger" role="note">
+            <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden />
+            {t("credit.blocked")}
+          </p>
+        )}
+        <Button variant="primary" size="lg" block icon={busy ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} disabled={cannotSave} aria-busy={busy || undefined} onClick={() => onSave("save")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.save)}>
           {t("invoice.save")}
-          <Kbd keys={INVOICE_SHORTCUTS.save} className={cn(keyHint, "ml-1 [&_kbd]:border-white/30 [&_kbd]:bg-white/15 [&_kbd]:text-white")} />
+          <Kbd keys={INVOICE_SHORTCUTS.save} className={cn(keyHint, "ml-1 [&_kbd]:border-ink-inverse/30 [&_kbd]:bg-ink-inverse/15 [&_kbd]:text-ink-inverse")} />
         </Button>
         {(allowed("invoice.print") || allowed("invoice.share")) && (
           <div className="flex gap-2">

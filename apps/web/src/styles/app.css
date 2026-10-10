@@ -31,7 +31,7 @@
   /* Ink */
   --ink: #0b1630;
   --ink-2: #45506a;
-  --ink-3: #69758f;
+  --ink-3: #5f6b85;
   --ink-inverse: #ffffff;
 
   /* Brand (accent: royal blue; --accent-2 is its gradient partner) */
@@ -90,7 +90,7 @@
   /* Gradients: primary buttons, the dashboard banner, the menu. */
   --accent-grad: linear-gradient(135deg, var(--accent) 0%, color-mix(in oklab, var(--accent) 62%, var(--accent-2)) 100%);
   --hero-grad:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--accent-2) 55%, transparent) 0%, transparent 55%),
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--accent-2) 22%, transparent) 0%, transparent 55%),
     linear-gradient(135deg, color-mix(in oklab, var(--accent) 88%, #050b1a) 0%, var(--accent) 55%, color-mix(in oklab, var(--accent) 60%, var(--accent-2)) 100%);
   --side-bg: linear-gradient(180deg, color-mix(in oklab, var(--accent) 34%, #06102a) 0%, color-mix(in oklab, var(--accent) 16%, #050b1c) 100%);
   --page-glow-1: color-mix(in oklab, var(--accent) 10%, transparent);
@@ -103,6 +103,19 @@
   --font-sans: "IBM Plex Sans", "IBM Plex Sans Devanagari", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
   --leading-body: 1.5;
+
+  /* Text size (Aa): <html> is zoomed, and a zoom scales vh/dvh too, so heights tied to the
+     screen use --app-vh (the visible height in the zoomed page's own pixels). */
+  --app-zoom: 1;
+  --app-vh: calc(100dvh / var(--app-zoom));
+
+  /* The phone's own bars over the page (a notch; the Android app runs under its status and gesture
+     bars from Android 15): what to keep clear at each edge. The app's web view before Chromium 140
+     has no env() values; Capacitor gives them as --safe-area-inset-* on <html> instead. */
+  --inset-top: calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) / var(--app-zoom));
+  --inset-bottom: calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) / var(--app-zoom));
+  --inset-left: calc(var(--safe-area-inset-left, env(safe-area-inset-left, 0px)) / var(--app-zoom));
+  --inset-right: calc(var(--safe-area-inset-right, env(safe-area-inset-right, 0px)) / var(--app-zoom));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -237,7 +250,7 @@
   --accent-hover: #065f46;
   --accent-soft: #d8f4e8;
   --accent-ink: #065f46;
-  --accent-2: #10b981;
+  --accent-2: #078a63;
   --info: #047857;
   --info-soft: #d8f4e8;
 }
@@ -255,7 +268,7 @@
   --accent-hover: #9a3412;
   --accent-soft: #fdeadb;
   --accent-ink: #9a3412;
-  --accent-2: #f59e0b;
+  --accent-2: #c2570c;
   --info: #c2410c;
   --info-soft: #fdeadb;
 }
@@ -264,7 +277,7 @@
   --accent-hover: #155e75;
   --accent-soft: #d7f0f5;
   --accent-ink: #155e75;
-  --accent-2: #06b6d4;
+  --accent-2: #0b809d;
   --info: #0e7490;
   --info-soft: #d7f0f5;
 }
@@ -412,6 +425,22 @@ body,
   height: 100%;
 }
 
+@utility h-app-screen {
+  height: var(--app-vh);
+}
+@utility min-h-app-screen {
+  min-height: var(--app-vh);
+}
+@utility max-h-app-sheet {
+  max-height: calc(var(--app-vh) * 0.92);
+}
+@utility max-h-app-table {
+  max-height: calc(var(--app-vh) - 220px);
+}
+@utility max-h-app-summary {
+  max-height: calc(var(--app-vh) - 6rem);
+}
+
 /* The browser's own pull-down (a full page reload) is replaced by the app's, which only refreshes the data. */
 html {
   overscroll-behavior-y: contain;
@@ -487,6 +516,15 @@ h3 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+/* "Less motion" in the Aa sheet (app/comfort.ts), for people whose device does not ask for it. */
+:root[data-motion="less"] *,
+:root[data-motion="less"] *::before,
+:root[data-motion="less"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 @keyframes pop-in {
@@ -792,6 +830,71 @@ h3 {
   backdrop-filter: saturate(1.6) blur(16px);
 }
 
+/*
+ * Touch screens (phones, tablets, the Android app): no backdrop blur. The bill screen has up
+ * to five blurred layers over a scrolling list (top bar, pinned search, total bar, tab bar,
+ * toasts), which budget phones' GPUs redraw on every frame. Nearly solid bars instead.
+ */
+@media (pointer: coarse) {
+  .glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: color-mix(in oklab, var(--surface) 95%, transparent);
+  }
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  [data-overlay].backdrop-blur-md {
+    background-color: var(--bg);
+  }
+}
+
+/* Messages sit above a bill's total bar where it floats at the foot of a small laptop's screen. */
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  :root[data-total-bar] .toast-stack {
+    bottom: 6.5rem;
+  }
+}
+
+/*
+ * A touch target of at least 40 x 40 px around a smaller control (an icon button in a crowded
+ * bar), without changing how it looks or the row's height: an invisible ring that takes the tap.
+ * In the components layer, so a control's own position (absolute, fixed) still wins.
+ */
+@layer components {
+  @media (pointer: coarse) {
+    .touch-40 {
+      position: relative;
+    }
+    .touch-40::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 40px);
+      height: max(100%, 40px);
+      transform: translate(-50%, -50%);
+    }
+  }
+}
+
+/*
+ * iPhone and iPad (the installed web app): Safari zooms the page into any field whose text
+ * is under 16 px. Fields there use 16 px; Android and computers keep the designed sizes.
+ */
+@supports (-webkit-touch-callout: none) {
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+}
+
 /* A light dotted texture for banners. */
 .dots {
   background-image: radial-gradient(rgb(255 255 255 / 0.16) 1px, transparent 1px);
@@ -817,6 +920,9 @@ h3 {
   --accent-soft: rgb(255 255 255 / 0.12);
   --accent-ink: #ffffff;
   color: var(--ink);
+}
+.bg-hero.on-dark {
+  --ink-2: #eef2fa;
 }
 
 /* Charts draw themselves in. */

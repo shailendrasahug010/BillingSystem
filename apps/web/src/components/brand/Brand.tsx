@@ -32,8 +32,9 @@ export function BrandMark({ compact, inverse, tagline }: { compact?: boolean; in
   const { t } = useI18n();
   return (
     <div className="flex items-center gap-2">
+      {/* max-w-none: a max-width of 100% would let a squeezed row shrink the mark to nothing (the firm's name then ran over it). */}
       <span className={cn("flex shrink-0 items-center justify-center", inverse && "rounded-lg bg-white px-1 py-0.5")}>
-        <img src={DIGITAL_BAHI_MARK} alt={compact ? "Digital Bahi" : ""} width={48} height={32} className="h-8 w-12 object-contain" />
+        <img src={DIGITAL_BAHI_MARK} alt={compact ? "Digital Bahi" : ""} width={48} height={32} className="h-8 w-12 max-w-none object-contain" />
       </span>
       {!compact && (
         <span className="flex min-w-0 flex-col">

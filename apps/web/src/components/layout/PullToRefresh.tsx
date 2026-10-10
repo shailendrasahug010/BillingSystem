@@ -71,7 +71,7 @@ export function PullToRefresh({ off }: { off?: boolean }) {
   if (!busy && distance < 8) return null;
   const ready = distance >= PULL;
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top,0px)+12px)] z-40 flex justify-center" role="status" aria-live="polite" aria-label={busy ? t("phone.refreshing") : ready ? t("phone.releaseToRefresh") : t("phone.pullToRefresh")}>
+    <div className="pointer-events-none fixed inset-x-0 top-[calc(var(--inset-top)+12px)] z-40 flex justify-center" role="status" aria-live="polite" aria-label={busy ? t("phone.refreshing") : ready ? t("phone.releaseToRefresh") : t("phone.pullToRefresh")}>
       <span
         className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-surface text-accent-ink shadow-pop transition-transform"
         style={{ transform: `translateY(${busy ? 24 : distance * 0.6}px)` }}

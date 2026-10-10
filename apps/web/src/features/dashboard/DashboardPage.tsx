@@ -125,7 +125,7 @@ function StatTile({
 /** Today's sales or collection in the banner. */
 function HeroFigure({ label, value, format, previous, foot }: { label: string; value: number; format(v: number): string; previous: number; foot: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm md:min-w-[190px]">
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 md:min-w-[190px]">
       <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
       <span className="num font-display text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[30px]">
         <CountUp value={value} format={format} />
@@ -141,7 +141,7 @@ function HeroFigure({ label, value, format, previous, foot }: { label: string; v
 /** A banner figure without a comparison (roles without the sales dashboard). */
 function PlainFigure({ label, value, format, foot }: { label: string; value: number; format(v: number): string; foot?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm md:min-w-[190px]">
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 md:min-w-[190px]">
       <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
       <span className="num font-display text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[30px]">
         <CountUp value={value} format={format} />
@@ -278,7 +278,7 @@ export function DashboardPage() {
           ) : (
             <div className="grid grid-cols-2 gap-3 md:flex">
               {[0, 1].map((i) => (
-                <div key={i} className="flex flex-col gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 md:min-w-[190px]">
+                <div key={i} className="flex flex-col gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 md:min-w-[190px]">
                   <Skeleton className="w-24" />
                   <Skeleton className="h-7 w-28" />
                 </div>
@@ -375,7 +375,8 @@ export function DashboardPage() {
           <CardHeader
             title={t("dashboard.charts.salesTrend")}
             action={
-              <div className="flex items-center gap-2">
+              // Wraps on a narrow phone (or at a larger text size) rather than pushing the page sideways.
+              <div className="flex max-w-full flex-wrap items-center gap-2">
                 <Segmented
                   size="sm"
                   label={t("dashboard.charts.salesTrend")}

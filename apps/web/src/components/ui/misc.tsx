@@ -2,6 +2,7 @@ import { TriangleAlert, Inbox, RotateCw } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
 import { shortcutLabel } from "../../app/shortcuts";
+import { prefersLessMotion } from "../../app/comfort";
 import { Button } from "./Button";
 
 export function Kbd({ keys, className }: { keys: string; className?: string }) {
@@ -95,7 +96,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             "press rounded-full font-medium transition-[background-color,color,box-shadow] duration-200",
-            size === "sm" ? "h-7 px-3 text-[12px]" : "h-8 px-3.5 text-[13px]",
+            size === "sm" ? "h-7 px-3 text-[12px] pointer-coarse:h-9" : "h-8 px-3.5 text-[13px] pointer-coarse:h-10",
             value === o.value ? "bg-surface text-accent-ink shadow-card ring-1 ring-line/60" : "text-ink-3 hover:text-ink",
           )}
         >
@@ -141,13 +142,13 @@ export function Avatar({ name, className }: { name: string; className?: string }
 /**
  * A number that counts up to its value when it first appears (and glides to
  * a new value when it changes), ending on exactly the formatted value.
- * Reduced motion shows it at once.
+ * Reduced motion (the device's, or Less motion in the Aa sheet) shows it at once.
  */
 export function CountUp({ value, format, duration = 900 }: { value: number; format(v: number): string; duration?: number }) {
   const [shown, setShown] = useState(0);
   const [from, setFrom] = useState(0);
   useEffect(() => {
-    const reduce = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = prefersLessMotion();
     if (reduce || typeof requestAnimationFrame === "undefined") {
       setShown(value);
       return;

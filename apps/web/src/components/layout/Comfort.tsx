@@ -1,7 +1,7 @@
 import { CATALOGS, type TranslationKey } from "@digitalbahi/i18n";
 import { CircleHelp, Type } from "lucide-react";
 import { useState } from "react";
-import { applyTextSize, setSimpleMenu, TEXT_SIZES, useSimpleMenu, useTextSize } from "../../app/comfort";
+import { applyLessMotion, applyTextSize, setSimpleMenu, TEXT_SIZES, useLessMotion, useSimpleMenu, useTextSize } from "../../app/comfort";
 import { useI18n } from "../../app/i18n";
 import { moduleForRoute } from "../../app/modules";
 import { useRouter } from "../../app/router";
@@ -9,13 +9,14 @@ import { Dialog } from "../ui/Dialog";
 import { Checkbox } from "../ui/Field";
 import { Segmented } from "../ui/misc";
 
-const ROUND = "press inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 hover:text-ink";
+const ROUND = "press touch-40 inline-flex size-9 items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 hover:text-ink";
 
-/** Text size and the simple menu, for whoever is using this device. */
+/** Text size, the simple menu and less motion, for whoever is using this device. */
 export function ComfortControls({ userId }: { userId: string | null | undefined }) {
   const { t } = useI18n();
   const size = useTextSize();
   const simple = useSimpleMenu(userId);
+  const lessMotion = useLessMotion();
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
@@ -28,6 +29,10 @@ export function ComfortControls({ userId }: { userId: string | null | undefined 
       <div className="flex flex-col gap-1">
         <Checkbox label={<span className="font-medium text-ink">{t("comfort.simpleMenu")}</span>} checked={simple} onChange={(on) => setSimpleMenu(userId, on)} />
         <p className="pl-6 text-[12.5px] text-ink-3">{t("comfort.simpleMenuHint")}</p>
+      </div>
+      <div className="flex flex-col gap-1">
+        <Checkbox label={<span className="font-medium text-ink">{t("comfort.lessMotion")}</span>} checked={lessMotion} onChange={applyLessMotion} />
+        <p className="pl-6 text-[12.5px] text-ink-3">{t("comfort.lessMotionHint")}</p>
       </div>
     </div>
   );

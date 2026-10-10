@@ -9,6 +9,7 @@ import type { CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 import { cn } from "../../lib/cn";
 import { useMediaQuery } from "../../lib/useMediaQuery";
+import { useRoomBelow } from "../../lib/useRoomBelow";
 import { parseSpokenItem, parseTypedItem } from "../../lib/spoken";
 import { VoiceButton } from "../../components/voice/VoiceButton";
 import { productById } from "../../data/db";
@@ -40,6 +41,9 @@ export const ProductSearch = forwardRef<
   const [active, setActive] = useState(0);
   const [browsed, setBrowsed] = useState(false);
   const listId = useId();
+  // The list stops above a phone's keyboard, so its last products can be reached.
+  const [listEl, setListEl] = useState<HTMLUListElement | null>(null);
+  const room = useRoomBelow(listEl, 420);
   const searchable = useSearchableProducts();
   // The list closes a moment after the field loses focus (so a click on it lands); coming back cancels that.
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -184,7 +188,14 @@ export const ProductSearch = forwardRef<
       </div>
 
       {open && rows.length > 0 && (
-        <ul id={listId} role="listbox" aria-label={query.trim() ? undefined : t("invoice.topToday")} className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[420px] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-pop">
+        <ul
+          ref={setListEl}
+          id={listId}
+          role="listbox"
+          aria-label={query.trim() ? undefined : t("invoice.topToday")}
+          style={{ maxHeight: room }}
+          className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[420px] overflow-y-auto overscroll-contain rounded-xl border border-line bg-surface p-1.5 shadow-pop"
+        >
           {!query.trim() && (
             <li role="presentation" className="px-3 pt-1.5 pb-1 text-[12px] font-medium text-ink-3">
               {t("invoice.topToday")}

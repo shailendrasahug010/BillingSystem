@@ -199,7 +199,32 @@ function startRoute(): { route: Route; step: number } {
 
 /** Back to the screen before (the Android app's back button); false when there is none. */
 let backFn: (() => boolean) | null = null;
-export const goBack = (): boolean => backFn?.() ?? false;
+
+/**
+ * Steps a screen takes back within itself before it is left (the phone bill: Review → Products →
+ * Customer), the newest first; each says whether it took one.
+ */
+const backSteps: Array<() => boolean> = [];
+
+/** The Android app's back button: a step back within the screen, else the screen before; false when neither. */
+export const goBack = (): boolean => {
+  for (let i = backSteps.length - 1; i >= 0; i -= 1) if (backSteps[i]!()) return true;
+  return backFn?.() ?? false;
+};
+
+/** A step back inside this screen for the phone's Back button: true when it took one, false to leave the screen. */
+export function useBackStep(step: () => boolean): void {
+  const latest = useRef(step);
+  latest.current = step;
+  useEffect(() => {
+    const take = () => latest.current();
+    backSteps.push(take);
+    return () => {
+      const i = backSteps.indexOf(take);
+      if (i >= 0) backSteps.splice(i, 1);
+    };
+  }, []);
+}
 
 export function RouterProvider({ children }: { children: ReactNode }) {
   const [start] = useState(startRoute);

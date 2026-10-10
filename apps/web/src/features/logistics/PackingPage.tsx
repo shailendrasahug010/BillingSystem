@@ -8,7 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { EmptyState, Skeleton } from "../../components/ui/misc";
-import { DataTable, ErrorNote, LoadMore, PageHeader, TAB_TRIGGER } from "../../components/ui/Page";
+import { DataTable, ErrorNote, LoadMore, PageHeader, RowCard, TAB_TRIGGER } from "../../components/ui/Page";
 import { PrintPortal } from "../../components/ui/PrintPortal";
 import { useToast } from "../../components/ui/Toast";
 import { allowed } from "../../data/db";
@@ -79,6 +79,15 @@ function Queue() {
         loading={q.isPending}
         minWidth={720}
         onRowClick={allowed("packing.pack") ? (o) => setPacking(o) : undefined}
+        // On a phone (packing is done standing at the racks): the shop, the order, and what is left to pack.
+        mobile={(o) => (
+          <RowCard
+            title={o.customerName}
+            sub={[o.orderNumber, t(`status.order.${o.status as "confirmed"}`), o.city].filter(Boolean).join(" · ")}
+            value={`${o.lines.filter((l) => Number(l.remaining) > 0).length} / ${o.lines.length}`}
+            valueSub={t("packing.itemsLeft")}
+          />
+        )}
         empty={<EmptyState title={t("packing.emptyQueue")} hint={t("packing.emptyQueueHint")} />}
         columns={[
           {
@@ -364,6 +373,15 @@ function Slips() {
         rowKey={(r) => r.id}
         loading={list.loading}
         onRowClick={(r) => setOpenId(r.id)}
+        mobile={(r) => (
+          <RowCard
+            title={r.customerName}
+            sub={`${r.packingNumber} · ${r.orderNumber}${r.packedAt ? ` · ${dateTime(r.packedAt)}` : ""}`}
+            value={r.boxCount}
+            valueSub={r.status === "cancelled" ? t("packing.unpacked") : t("packing.boxCount")}
+            {...(r.status === "cancelled" ? { tone: "muted" as const } : {})}
+          />
+        )}
         minWidth={680}
         empty={<EmptyState title={t("packing.noSlips")} hint={t("packing.noSlipsHint")} />}
         columns={[

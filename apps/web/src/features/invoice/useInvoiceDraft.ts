@@ -23,7 +23,7 @@ import {
   zeroRatedKindFor,
   zeroRatedTypeOf,
 } from "@digitalbahi/core";
-import { useMemo, useReducer, type Dispatch } from "react";
+import { useCallback, useMemo, useReducer, useRef, type Dispatch } from "react";
 import { BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
 import { useCustomerInsight } from "../../data/hooks";
 import { storeAssociations, useStoreVersion, type CustomerInsight } from "../../data/store";
@@ -72,6 +72,8 @@ type Action =
   | { type: "update"; key: string; patch: Partial<Omit<DraftLine, "key" | "productId" | "unitId">> }
   | { type: "unit"; key: string; unitId: string | null }
   | { type: "remove"; key: string }
+  /** Undo of a remove: the line back where it was (`customerId`: the bill's customer when it was taken off). */
+  | { type: "unremove"; line: DraftLine; index: number; customerId: string | null }
   | { type: "received"; value: string }
   | { type: "method"; value: PaymentMethod }
   | { type: "focused" }
@@ -187,6 +189,18 @@ function reducer(state: Draft, action: Action): Draft {
     }
     case "remove":
       return { ...state, lines: state.lines.filter((l) => l.key !== action.key) };
+    case "unremove": {
+      const { line } = action;
+      const product = productById.get(line.productId);
+      // Back on the bill meanwhile (added again in that unit): it stays as it is, not twice.
+      if (!product || state.lines.some((l) => l.key === line.key || (l.productId === line.productId && l.unitId === line.unitId))) return state;
+      // Another customer chosen since: at that customer's price, as the bill's other lines were re-priced.
+      const customer = state.customerId ? customerById.get(state.customerId) ?? null : null;
+      const back = state.customerId === action.customerId ? line : { ...line, rate: rateFor(product, customer, line.unitId) };
+      const lines = [...state.lines];
+      lines.splice(Math.min(action.index, lines.length), 0, back);
+      return { ...state, lines };
+    }
     case "received":
       return { ...state, received: action.value };
     case "method":
@@ -259,10 +273,20 @@ export interface DraftView {
   zeroRated: { kind: ZeroRatedKind; withPayment: boolean; type: ZeroRatedType } | null;
   /** What the suggestions offered and what was taken, sent with the saved bill. */
   feedback: SuggestionFeedback;
+  /**
+   * Which bill this is on the screen: one more with each reset (saved, put on hold) and each bill
+   * brought back, so an Undo offered for one bill does nothing to the next.
+   */
+  bill: { readonly current: number };
 }
 
 export function useInvoiceDraft(initialCustomerId: string | null = null): DraftView {
-  const [draft, dispatch] = useReducer(reducer, initialCustomerId, initialDraft);
+  const [draft, apply] = useReducer(reducer, initialCustomerId, initialDraft);
+  const bill = useRef(0);
+  const dispatch = useCallback<Dispatch<Action>>((action) => {
+    if (action.type === "reset" || action.type === "restore") bill.current += 1;
+    apply(action);
+  }, []);
   const version = useStoreVersion();
   const customer = draft.customerId ? customerById.get(draft.customerId) ?? null : null;
   const insight = useCustomerInsight(customer?.id ?? null);
@@ -366,5 +390,6 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
     dueDate: addDays(draft.date, customer?.creditDays ?? 0),
     zeroRated,
     feedback,
+    bill,
   };
 }

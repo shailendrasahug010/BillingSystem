@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
 import { cn } from "../../lib/cn";
 import { Button } from "./Button";
@@ -65,7 +65,9 @@ const STICKY_FROM = 20;
  * sortValue sort from their header; with an id the table remembers its sort
  * and offers a Columns menu to hide columns; pageSize shows the rows in steps
  * (a list of thousands of shops stays quick); mobile renders each row as a
- * card on phones instead of the table.
+ * card on phones instead of the table. Rows that open something are reached
+ * by keyboard too (Tab, then ↑ ↓, Enter), and with rowHref a Ctrl-click or a
+ * middle click opens the row in a new tab, as a link would.
  */
 export function DataTable<T>({
   id,
@@ -80,6 +82,7 @@ export function DataTable<T>({
   pageSize,
   mobile,
   caption,
+  rowHref,
 }: {
   id?: string;
   columns: Column<T>[];
@@ -94,6 +97,8 @@ export function DataTable<T>({
   mobile?(row: T): ReactNode;
   /** Left of the Columns menu, e.g. how many rows there are. */
   caption?: ReactNode;
+  /** The address of the screen a row opens (hashFor), for opening it in a new tab. */
+  rowHref?(row: T): string;
 }) {
   const { t } = useI18n();
   const [prefs, setPrefsState] = useState<Prefs>(() => readPrefs(id));
@@ -122,6 +127,35 @@ export function DataTable<T>({
   }, [rows, sortColumn, prefs.sort]);
   const visible = sorted.length > limit ? sorted.slice(0, limit) : sorted;
   const sticky = visible.length > STICKY_FROM;
+  // The rows rise in when the list first shows, not again with each sort, filter or letter typed.
+  const shown = !loading && rows.length > 0;
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!shown || settled) return;
+    const timer = window.setTimeout(() => setSettled(true), 700);
+    return () => window.clearTimeout(timer);
+  }, [shown, settled]);
+
+  const openInTab = (row: T) => rowHref && window.open(rowHref(row), "_blank", "noopener");
+  const rowClick = (e: MouseEvent, row: T) => {
+    if (rowHref && (e.ctrlKey || e.metaKey || e.shiftKey)) openInTab(row);
+    else onRowClick!(row);
+  };
+  const rowKeys = (e: KeyboardEvent<HTMLTableRowElement>, row: T) => {
+    // Keys pressed on a field or button in the row are that one's own.
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (e.key === "Enter" && rowHref && (e.ctrlKey || e.metaKey)) openInTab(row);
+      else onRowClick!(row);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const next = (e.key === "ArrowDown" ? e.currentTarget.nextElementSibling : e.currentTarget.previousElementSibling) as HTMLElement | null;
+      if (next) {
+        e.preventDefault();
+        next.focus();
+      }
+    }
+  };
 
   const toggleSort = (key: string) => {
     const now = prefs.sort?.key === key ? prefs.sort.dir : null;
@@ -169,7 +203,7 @@ export function DataTable<T>({
         (empty ?? <EmptyState title={t("empty.generic")} />)
       ) : (
         <>
-          <div className={cn("scroll-x", mobile && "hidden md:block", sticky && "lg:max-h-[calc(100dvh-220px)] lg:overflow-y-auto")}>
+          <div className={cn("scroll-x", mobile && "hidden md:block", sticky && "lg:max-h-app-table lg:overflow-y-auto")}>
             <table className="w-full text-[13.5px]" style={{ minWidth }}>
               <thead>
                 <tr className="border-b border-line text-left text-[11.5px] font-semibold tracking-wide text-ink-3 uppercase">
@@ -198,12 +232,20 @@ export function DataTable<T>({
                   })}
                 </tr>
               </thead>
-              <tbody className="num rows-in">
+              <tbody className={cn("num", !settled && "rows-in")}>
                 {visible.map((row) => (
                   <tr
                     key={rowKey(row)}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    className={cn("border-b border-line/70 transition-colors last:border-b-0", onRowClick && "cursor-pointer hover:bg-accent-soft/40")}
+                    tabIndex={onRowClick ? 0 : undefined}
+                    onClick={onRowClick ? (e) => rowClick(e, row) : undefined}
+                    onKeyDown={onRowClick ? (e) => rowKeys(e, row) : undefined}
+                    // A middle click opens the row in a new tab (no scrolling wheel-mode on the way).
+                    onMouseDown={rowHref ? (e) => e.button === 1 && e.preventDefault() : undefined}
+                    onAuxClick={rowHref ? (e) => e.button === 1 && openInTab(row) : undefined}
+                    className={cn(
+                      "border-b border-line/70 transition-colors last:border-b-0",
+                      onRowClick && "cursor-pointer hover:bg-accent-soft/40 focus-visible:bg-accent-soft/50 focus-visible:-outline-offset-2",
+                    )}
                   >
                     {shownColumns.map((c, i) => (
                       <td key={c.key} className={cn("py-3 align-top", cellPad(i, shownColumns.length), c.align === "right" && "text-right", c.className)}>
@@ -217,7 +259,7 @@ export function DataTable<T>({
             </table>
           </div>
           {mobile && (
-            <ul className="rows-in divide-y divide-line md:hidden">
+            <ul className={cn("divide-y divide-line md:hidden", !settled && "rows-in")}>
               {visible.map((row) => (
                 <li key={rowKey(row)}>
                   {onRowClick ? (

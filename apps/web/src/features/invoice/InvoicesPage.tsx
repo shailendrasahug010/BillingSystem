@@ -2,7 +2,7 @@ import { addDays } from "@digitalbahi/core";
 import { CloudOff, Download, Plus, Repeat, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { useRouter } from "../../app/router";
+import { hashFor, useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
@@ -255,6 +255,7 @@ export function InvoicesPage() {
         loading={LIVE && !noServer && list.loading}
         minWidth={760}
         onRowClick={(r) => navigate({ name: "invoice-view", invoiceId: r.id })}
+        rowHref={(r) => hashFor({ name: "invoice-view", invoiceId: r.id })}
         mobile={(r) => (
           <RowCard
             title={r.partyName}

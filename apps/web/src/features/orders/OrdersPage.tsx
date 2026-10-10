@@ -3,12 +3,12 @@ import { ClipboardPlus, FileText, Search } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { useRouter } from "../../app/router";
+import { hashFor, useRouter } from "../../app/router";
 import { Badge, type Tone } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Field";
 import { EmptyState, ProgressBar, Segmented } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, RowCard, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { allowed, TODAY } from "../../data/db";
 import { api } from "../../lib/api";
 import { usePaged } from "../../lib/usePaged";
@@ -91,6 +91,18 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
     { key: "delivery", header: t("orders.deliveryDate"), sortValue: (o) => o.expectedDeliveryDate, render: (o) => <span className="text-ink-2">{o.expectedDeliveryDate ? dateMedium(o.expectedDeliveryDate) : "—"}</span> },
     { key: "total", header: t("common.total"), align: "right", sortValue: (o) => Number(o.grandTotal), render: (o) => <span className={o.status === "cancelled" ? "text-ink-3 line-through" : "font-medium text-ink"}>{money(o.grandTotal)}</span> },
   ];
+  // On a phone: a card a row, the shop and its amount first (the table would need sideways scrolling).
+  const card = (o: OrderRow, label: string, note: string) => (
+    <RowCard
+      title={o.partyName}
+      sub={`${label} · ${note}`}
+      value={money(o.grandTotal)}
+      {...(o.status === "cancelled" ? { tone: "muted" as const } : {})}
+      valueSub={<Badge tone={ORDER_TONE[o.status]}>{t(`status.order.${o.status}`)}</Badge>}
+    />
+  );
+  const open = (o: OrderRow) => navigate({ name: "order-view", orderId: o.id });
+  const href = (o: OrderRow) => hashFor({ name: "order-view", orderId: o.id });
 
   return (
     <div className="flex flex-col gap-5">
@@ -147,7 +159,9 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
             rows={list.rows}
             rowKey={(o) => o.id}
             loading={list.loading}
-            onRowClick={(o) => navigate({ name: "order-view", orderId: o.id })}
+            onRowClick={open}
+            rowHref={href}
+            mobile={(o) => card(o, o.orderNumber, dateMedium(o.orderDate))}
             minWidth={820}
             empty={<EmptyState title={t("orders.empty")} hint={t("orders.emptyHint")} />}
           />
@@ -173,7 +187,9 @@ export function OrdersPage({ newOrder, customerId }: { newOrder?: boolean; custo
             rows={quotes.rows}
             rowKey={(o) => o.id}
             loading={quotes.loading}
-            onRowClick={(o) => navigate({ name: "order-view", orderId: o.id })}
+            onRowClick={open}
+            rowHref={href}
+            mobile={(o) => card(o, o.quotationNumber ?? o.orderNumber, o.validUntil ? t("orders.quotation.validUntilShort", { date: dateMedium(o.validUntil) }) : dateMedium(o.orderDate))}
             minWidth={680}
             empty={<EmptyState title={t("orders.quotation.empty")} hint={t("orders.quotation.emptyHint")} />}
           />

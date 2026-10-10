@@ -51,8 +51,16 @@ All colours are CSS custom properties on `:root`; the dark theme redefines only 
 | Radius | Controls 12 px, cards 18 px, sheets 28 px, pills and tabs full |
 | Elevation | `shadow-card` (resting cards), `shadow-lift` (a tile under the pointer), `shadow-pop` (menus, dialogs, toasts), `shadow-glow` (accent buttons) |
 | Tints | Seven soft icon colours (`--tint-blue … --tint-amber`, light and dark) for KPI tiles, quick actions, menu tiles and initials; decoration only, never state |
-| Motion | Screens rise in (360 ms), cards follow one after another (`stagger`), tiles lift under the pointer, buttons give way when pressed, sheets slide up on phones, chart lines draw in and bars grow, dashboard figures count up; all of it off under `prefers-reduced-motion` |
-| Breakpoints | `sm 640` · `md 768` · `lg 1024` (sidebar appears, quick invoice becomes the full invoice screen) · `xl 1280` · `2xl 1536` |
+| Motion | Screens rise in (360 ms), cards follow one after another (`stagger`), tiles lift under the pointer, buttons give way when pressed, sheets slide up on phones, chart lines draw in and bars grow, dashboard figures count up; a list's rows rise in when it first shows, not again on each sort or letter typed in its search. All of it is off under `prefers-reduced-motion`, and with **Less motion** (the *Aa* menu; `data-motion="less"` on `<html>`, kept per device) |
+| Breakpoints | `sm 640` (dialogs stop being bottom sheets) · `md 768` (the full invoice screen instead of the phone's quick invoice; tables instead of phone cards) · `lg 1024` (sidebar appears) · `xl 1280` (the invoice summary beside the lines) · `2xl 1536` |
+
+Layout variables (also on `:root`), for anything sized to the screen or fixed to its edges:
+
+| Variable | Use |
+|---|---|
+| `--app-zoom`, `--app-vh` | **Text size** (*Aa*) zooms `<html>`, and a zoom scales `vh` too, so heights tied to the screen use `--app-vh` (the utilities `h-app-screen`, `min-h-app-screen`, `max-h-app-sheet`, `max-h-app-table`, `max-h-app-summary`), never `100vh` |
+| `--inset-top` / `-bottom` / `-left` / `-right` | What the phone's own bars and notch cover (`env(safe-area-inset-*)`, or Capacitor's `--safe-area-inset-*` in the Android app, whose web view before Chromium 140 has no `env()` values). The top bar extends under the status bar; floating bars, sheets and toasts sit above the gesture bar; the page's sides clear a notch when the phone is held sideways |
+| `--side-w` | The menu's width while it takes room beside the page (0 while auto-hidden): bars fixed to the screen's foot start after it |
 
 ## 4. Components
 
@@ -60,17 +68,17 @@ All colours are CSS custom properties on `:root`; the dark theme redefines only 
 |---|---|
 | **Button** | `primary` (accent gradient with a soft glow), `secondary`, `soft`, `ghost`, `danger`; sizes 32 / 40 / 48 px (48 px for primary actions on phones); optional icon and keyboard hint; every button scales down slightly when pressed |
 | **Input / Select / Field** | Label always visible (no placeholder-only fields); hint or specific error under the field; leading icon; `invalid` state; numeric inputs keep what the user typed (`12.`) and commit valid numbers |
-| **Combobox** (customer / product search) | ARIA combobox + listbox, arrow keys, Enter to choose, results show the information needed to choose correctly (outstanding for customers; stock, price and "bought 12×" for products) |
+| **Combobox** (customer / product search) | ARIA combobox + listbox, arrow keys, Enter to choose, results show the information needed to choose correctly (outstanding for customers; stock, price and "bought 12×" for products); the list stops above a phone's keyboard (`useRoomBelow`), so its last results can be reached |
 | **Badge** | Neutral, accent, good, warn, danger; optional dot; one mapping from workflow state to tone (`lib/status.ts`) |
 | **Card / CardHeader** | Used by role, not everywhere: grouped content, lists, charts |
 | **Stat tile** | Label · tinted icon (with a faint glow of its colour in the corner) · value that counts up (tabular, compact) · delta chip vs previous period (colour by whether up is good) · optional footnote; lifts under the pointer when it leads to a list |
 | **Dashboard banner** | Accent gradient with a dot texture: date, greeting, firm, and today's sales and collection counting up with their change since yesterday |
 | **Avatar** | Initials on one of the tint colours, the same colour for the same name every time (customers, firm, user) |
-| **Dialog** | Radix dialog: focus trap, Esc closes, titled; becomes a **bottom sheet on phones** (grab handle, slides up), a centred card with a blurred backdrop on bigger screens |
-| **Toast** | Result of an action with an optional follow-up action ("Invoice INV/26-27/00670 saved · Details"); offline saves say so |
+| **Dialog** | Radix dialog: focus trap, Esc closes, titled; becomes a **bottom sheet on phones** (grab handle, slides up; pulled down by its handle or title it closes, let go early it springs back), a centred card with a blurred backdrop on bigger screens; no taller than the visible screen at any text size (`max-h-app-sheet`) |
+| **Toast** | Result of an action with an optional follow-up action ("Invoice INV/26-27/00670 saved · Details"); offline saves say so. Stays 5 s, 8 s with a button (Undo, Details), 10 s for a problem (announced at once, `role="alert"`; the rest politely); waits while the pointer rests on it or a key has moved into it (10 s at most); has its own close button. A newer toast of the same `group` replaces the older one (one Undo at a time). On a laptop under 1280 px it rises above the invoice's total bar |
 | **Segmented control** | Mutually exclusive views (daily/weekly/monthly, B2B/B2C), as a pill |
 | **Tabs** | Profile sections |
-| **Data table** | Sticky header, right-aligned tabular numbers, row click opens detail, horizontal scroll inside its own container on small screens, card list alternative on phones; production version adds column chooser, virtualised rows (TanStack), bulk select and export |
+| **Data table** | Sticky header, right-aligned tabular numbers, row click opens detail, horizontal scroll inside its own container on small screens, a card a row on phones (`mobile`, with `RowCard`: what it is on the left, the figure that matters on the right); sort and a column chooser remembered per table. Rows that open something take the keyboard (Tab to a row, ↑ ↓ between rows, Enter opens), and with `rowHref` a Ctrl-click or middle click opens the row in a new tab, as a link would |
 | **Empty / loading / error states** | Every list has all three: skeletons that match the final layout, an empty state that says what to do next, an error state with retry |
 | **Progress / meter** | Credit used; the track is a lighter step of the same hue |
 | **Kbd** | Shortcut hints next to actions on desktop |
@@ -88,10 +96,12 @@ All colours are CSS custom properties on `:root`; the dark theme redefines only 
 * **Content**: max 1480 px wide; list screens use full width; forms and settings a readable column.
 
 ### Phone (< 1024 px)
-* **Top bar**: menu, brand, search, sync, notifications (language, theme and colour are in the *More* sheet).
+* **Top bar**: menu, brand, search, sync, notifications (language, theme and colour are in the *More* sheet). It reaches up under the phone's status bar (the Android app runs edge to edge from Android 15), whose icons follow the app's light or dark theme rather than the phone's.
+* **Back** (Android app): closes an open sheet or dialog, then steps back inside the screen (the quick invoice: Review → Products → Customer), then goes back a screen; on the first screen a second press within 2 s closes the app ("Press Back again to close the app").
 * **Tab bar**: a floating frosted bar — Home · Customers · **Create (+)** (a raised gradient button) · Products · More; the open tab shows its icon in an accent pill. *Create* opens a sheet of quick actions as a grid of coloured icons (invoice, order, collect payment, add customer, purchase, product). *More* opens a launcher: the firm on the accent gradient, language / theme / colour, then every module as a coloured tile, grouped.
 * **Dashboard**: the banner with today's figures, then quick actions as a four-column grid of round icons (as in the payment apps people already use), then the tiles.
 * Primary actions sit in a floating bar (e.g. invoice total + Next), above the tab bar and the safe-area inset.
+* **Quick invoice lines**: the name and the quantity stepper (− becomes a bin at 1), then one row with the price, any discount or free pieces, and the amount; tapping that row opens the line's sheet (quantity, unit, rate for roles that may change it, discount, free, Remove). Removing a line offers **Undo**; a Save that fails leaves the bill open on Review to try again.
 
 ## 6. Patterns
 
@@ -99,7 +109,7 @@ All colours are CSS custom properties on `:root`; the dark theme redefines only 
 |---|---|
 | Forms | Only fields needed now; everything else defaulted and editable on the profile. Validate on blur, then as the user types; messages name the problem ("This GSTIN has a typo (check digit does not match)") |
 | Smart defaults | GSTIN fills the state; the customer's rate list, credit days and place of supply fill the invoice; payment "Fully paid" in one tap |
-| Confirmation | Reversible actions do not ask; they offer undo or cancel. Destructive or financial actions confirm with the consequence ("Cancel INV/26-27/00412? Stock and the customer balance will be reversed."). Restore from backup requires typing the business name and re-entering the password |
+| Confirmation | Reversible actions do not ask; they offer undo or cancel (a line taken off a bill: "Removed Parle-G 100g · Undo"). Destructive or financial actions confirm with the consequence ("Cancel INV/26-27/00412? Stock and the customer balance will be reversed."). Restore from backup requires typing the business name and re-entering the password |
 | Warnings vs blocks | Policies set to *warn* show inline and let the user continue; *block* disables Save and explains who can override |
 | Numbers | Right-aligned, tabular; currency symbol on totals, not on every cell of dense tables |
 | Search | Always forgiving: punctuation and spacing ignored ("parleg" → Parle-G), local-language aliases ("namak" / "नमक" → Tata Salt) |
@@ -119,11 +129,13 @@ Shortcuts use physical keys (`KeyboardEvent.code`), so they work with Hindi keyb
 | Receive payment (collection) | **Alt + C** | Ctrl + C is Copy; overriding it would stop users copying GSTINs and amounts |
 | Jump to customer / product search (invoice) | **F3 / F2** | |
 | Add suggestion 1–9 (invoice) | **Alt + 1…9** | |
-| Save invoice | **Ctrl + Enter** | |
+| Save invoice | **Ctrl + S** (or **Ctrl + Enter**) | on the bill being made |
+| Save and print invoice | **Ctrl + P** | on the bill being made only: there it prints the bill, not the screen |
+| Search the list on screen | **/** | any screen with a list's search box (not while typing) |
 | Close dialog | **Esc** | |
 | Shortcut help | **?** | |
 
-A **Tally-style preset** (F8 sales, F9 purchase, F6 receipt, F5 payment) is planned as a setting for accountants coming from Tally (Phase 3).
+A **Tally-style preset** (F8 sales, F9 purchase, F6 receipt, F5 payment, F7 expense) is on by default for accountants coming from Tally; it can be switched off in the shortcut help (**?**).
 
 ## 8. Localisation
 
@@ -157,4 +169,4 @@ A **Tally-style preset** (F8 sales, F9 purchase, F6 receipt, F5 payment) is plan
 
 ## 9. Accessibility
 
-WCAG 2.2 AA target: 4.5:1 text contrast in both themes, visible focus rings, full keyboard operation, ARIA combobox/listbox/tabs/dialog semantics from Radix, labelled icon buttons, touch targets ≥ 40 px (48 px on primary phone actions), `prefers-reduced-motion` respected, charts with keyboard crosshair and a table view.
+WCAG 2.2 AA target: 4.5:1 text contrast in both themes and every accent (white on each accent's primary button, small text on the dashboard banner; `--ink-3` is `#5F6B85` in the light theme for that reason), visible focus rings, full keyboard operation, ARIA combobox/listbox/tabs/dialog semantics from Radix, labelled icon buttons, touch targets ≥ 40 px (48 px on primary phone actions; small icon buttons carry `touch-40`, which widens what a finger can hit to 40 px on touch screens without changing their look), text on accent and danger fills uses `text-ink-inverse` (never a fixed white, so it holds in the dark theme), inputs at 16 px on iPhones (Safari zooms into smaller ones), `prefers-reduced-motion` and **Less motion** respected, blur turned off on touch screens (frosted glass becomes a near-solid surface: cheaper to draw and easier to read), charts with keyboard crosshair and a table view.

@@ -104,15 +104,15 @@ export function OutstandingPage() {
         onClick={() => set({ place: key, route: "" })}
         className={cn(
           "press flex shrink-0 flex-col items-start rounded-2xl border px-3.5 py-2 text-left transition-colors",
-          active ? "border-accent bg-accent text-white shadow-card" : "border-line bg-surface text-ink hover:border-line-strong",
+          active ? "border-accent bg-accent text-ink-inverse shadow-card" : "border-line bg-surface text-ink hover:border-line-strong",
         )}
       >
         <span className="flex items-center gap-1.5 text-[13px] font-semibold whitespace-nowrap">
-          {key !== null && <MapPin size={13} className={active ? "text-white/80" : "text-ink-3"} aria-hidden />}
+          {key !== null && <MapPin size={13} className={active ? "text-ink-inverse/80" : "text-ink-3"} aria-hidden />}
           {label}
           <span className={cn("rounded-full px-1.5 text-[11px] font-medium", active ? "bg-white/20" : "bg-surface-2 text-ink-3")}>{count}</span>
         </span>
-        <span className={cn("num text-[12px]", active ? "text-white/85" : "text-ink-3")}>{money(amount, 0)}</span>
+        <span className={cn("num text-[12px]", active ? "text-ink-inverse/85" : "text-ink-3")}>{money(amount, 0)}</span>
       </button>
     );
   };

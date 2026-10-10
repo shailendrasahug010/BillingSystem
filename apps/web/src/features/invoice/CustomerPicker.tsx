@@ -8,6 +8,7 @@ import { customerInsight } from "../../data/store";
 import type { Customer } from "../../data/types";
 import { cn } from "../../lib/cn";
 import { useMediaQuery } from "../../lib/useMediaQuery";
+import { useRoomBelow } from "../../lib/useRoomBelow";
 
 export function searchCustomers(query: string, limit = 8): Customer[] {
   const q = normalizeSearchText(query);
@@ -46,6 +47,9 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listId = useId();
+  // The list stops above a phone's keyboard, so its last customers can be reached.
+  const [listEl, setListEl] = useState<HTMLUListElement | null>(null);
+  const room = useRoomBelow(listEl, 360);
   const results = useMemo(() => searchCustomers(query), [query]);
   // The list closes a moment after the field loses focus (so a click on it lands); coming back cancels that.
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -116,9 +120,11 @@ export const CustomerPicker = forwardRef<HTMLInputElement, { onSelect(id: string
       </div>
       {open && (
         <ul
+          ref={setListEl}
           id={listId}
           role="listbox"
-          className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[360px] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-pop"
+          style={{ maxHeight: room }}
+          className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[360px] overflow-y-auto overscroll-contain rounded-xl border border-line bg-surface p-1.5 shadow-pop"
         >
           {results.map((c, i) => {
             const ins = customerInsight(c.id);

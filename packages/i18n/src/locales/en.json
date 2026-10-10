@@ -8,7 +8,8 @@
     "updateReady": "A new version of Digital Bahi is ready.",
     "reload": "Reload now",
     "brandTagline": "Aapke Business ka Digital Hisab",
-    "madeWith": "Made with {{brand}}"
+    "madeWith": "Made with {{brand}}",
+    "backAgainToExit": "Press Back again to close the app"
   },
   "common": {
     "save": "Save",
@@ -97,6 +98,7 @@
     "noAccessHint": "Your role does not include this screen. Ask the owner to add it if you need it.",
     "goHome": "Go to my screens",
     "remove": "Remove",
+    "undo": "Undo",
     "connectHint": "Connect to the internet and this opens by itself.",
     "daysAgo_zero": "Today"
   },
@@ -352,6 +354,12 @@
     "tax": "Tax",
     "amount": "Amount",
     "remove": "Remove item",
+    "lineEdit": "Change rate, discount or free",
+    "rateFixed": "Set by this customer's rate list.",
+    "freeHint": "Given free on a scheme (10 + 1), in this line's unit.",
+    "offPercent": "{{value}}% off",
+    "plusFree": "+{{qty}} free",
+    "removedLine": "Removed {{name}}",
     "hsn": "HSN",
     "batch": "Batch",
     "expiry": "Exp",
@@ -845,6 +853,7 @@
     "focusCustomer": "Jump to customer",
     "saveInvoice": "Save invoice",
     "addSuggestion": "Add suggestion 1–9",
+    "focusFilter": "Search the list on screen",
     "closeDialog": "Close dialog",
     "help": "Show shortcuts",
     "saveAndPrint": "Save and print",
@@ -3917,6 +3926,8 @@
     "textSizeHint": "Makes everything bigger on this device.",
     "simpleMenu": "Simple menu",
     "simpleMenuHint": "Only the everyday screens: bills, payments, customers and stock. Search (Ctrl+K) still finds everything. Just for you, on this device.",
+    "lessMotion": "Less motion",
+    "lessMotionHint": "Screens, rows and numbers appear at once instead of sliding in and counting up. Just on this device.",
     "showFullMenu": "Show full menu",
     "help": "Help for this screen"
   },

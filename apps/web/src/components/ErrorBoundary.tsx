@@ -81,7 +81,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, State> 
   override render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="grid min-h-dvh place-items-center bg-bg p-6">
+      <div className="grid min-h-app-screen place-items-center bg-bg p-6">
         <div className="flex max-w-md flex-col items-center gap-3 text-center" role="alert">
           <h1 className="text-[20px] font-semibold text-ink">Digital Bahi stopped working · डिजिटल बही रुक गई</h1>
           <p className="text-[14px] text-ink-2">Something went wrong. It has been noted so it can be fixed. Reload to continue. · कुछ गड़बड़ हुई। इसे दर्ज कर लिया गया है। जारी रखने के लिए फिर से लोड करें।</p>

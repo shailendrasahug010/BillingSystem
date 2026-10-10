@@ -6,7 +6,7 @@ import { Landmark, MapPin, Pencil, Phone, ShoppingCart, Wallet } from "lucide-re
 import { Tabs } from "radix-ui";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
-import { useRouter } from "../../app/router";
+import { hashFor, useRouter } from "../../app/router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Avatar, EmptyState, Skeleton } from "../../components/ui/misc";
@@ -187,6 +187,7 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
             loading={purchases.isPending && allowed("purchase.view")}
             rowKey={(p) => p.id}
             onRowClick={(p) => navigate({ name: "purchase-view", purchaseId: p.id })}
+            rowHref={(p) => hashFor({ name: "purchase-view", purchaseId: p.id })}
             empty={<EmptyState title={t("purchase.empty")} hint={t("supplier.noPurchasesHint")} />}
             columns={[
               { key: "date", header: t("purchase.billDate"), render: (p) => <span className="text-ink-2">{dateMedium(p.supplierInvoiceDate)}</span> },

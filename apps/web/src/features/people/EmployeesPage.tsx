@@ -7,7 +7,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Field";
 import { EmptyState, Segmented } from "../../components/ui/misc";
-import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, TAB_TRIGGER, type Column } from "../../components/ui/Page";
+import { DataTable, ErrorNote, FilterBar, LoadMore, PageHeader, RowCard, TAB_TRIGGER, type Column } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, TODAY } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
@@ -115,7 +115,24 @@ function EmployeeList() {
         />
       </FilterBar>
       {list.error ? <ErrorNote error={list.error} onRetry={() => void list.refetch()} /> : null}
-      <DataTable id="employees" columns={columns} rows={list.rows} rowKey={(e) => e.id} loading={list.loading} onRowClick={(e) => setOpenId(e.id)} minWidth={760} empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />} />
+      <DataTable
+        id="employees"
+        columns={columns}
+        rows={list.rows}
+        rowKey={(e) => e.id}
+        loading={list.loading}
+        onRowClick={(e) => setOpenId(e.id)}
+        // On a phone: who, their code and post, and whether they are working here now.
+        mobile={(e) => (
+          <RowCard
+            title={e.name}
+            sub={[e.employeeCode, e.designation ?? e.departmentName].filter(Boolean).join(" · ")}
+            valueSub={<Badge tone={STATUS_TONE[e.status]}>{t(`people.status.${e.status}`)}</Badge>}
+          />
+        )}
+        minWidth={760}
+        empty={<EmptyState title={t("people.empty")} hint={t("people.emptyHint")} />}
+      />
       <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />
       <EmployeeDetailDialog employeeId={openId} onClose={() => setOpenId(null)} />
     </div>
@@ -125,12 +142,12 @@ function EmployeeList() {
 type Status = "present" | "absent" | "half_day" | "leave" | "holiday" | "week_off";
 const STATUSES: Status[] = ["present", "absent", "half_day", "leave", "holiday", "week_off"];
 const STATUS_STYLE: Record<Status, string> = {
-  present: "bg-good text-white",
-  absent: "bg-danger text-white",
-  half_day: "bg-warn text-white",
-  leave: "bg-accent text-white",
-  holiday: "bg-ink-3 text-white",
-  week_off: "bg-ink-3 text-white",
+  present: "bg-good text-ink-inverse",
+  absent: "bg-danger text-ink-inverse",
+  half_day: "bg-warn text-ink-inverse",
+  leave: "bg-accent text-ink-inverse",
+  holiday: "bg-ink-3 text-ink-inverse",
+  week_off: "bg-ink-3 text-ink-inverse",
 };
 
 interface DayRow {

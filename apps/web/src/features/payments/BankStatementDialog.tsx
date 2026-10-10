@@ -186,7 +186,7 @@ export function BankStatementDialog({ open, onOpenChange }: { open: boolean; onO
         </div>
         <ErrorNote error={error} />
         {rows && (
-          <ul className="flex max-h-[60vh] flex-col divide-y divide-line overflow-y-auto rounded-xl border border-line" aria-label={t("bank.lines")}>
+          <ul className="flex max-h-[calc(var(--app-vh)*0.6)] flex-col divide-y divide-line overflow-y-auto rounded-xl border border-line" aria-label={t("bank.lines")}>
             {rows.map((r) => {
               const inflow = r.line.amount > 0;
               const label = partyLabel(r);

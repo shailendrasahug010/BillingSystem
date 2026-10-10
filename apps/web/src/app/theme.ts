@@ -1,4 +1,6 @@
+import { SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { useSyncExternalStore } from "react";
+import { isNative } from "../platform/native";
 
 export type ThemeChoice = "system" | "light" | "dark";
 /** The accent colour (Settings → Appearance); "royal" is the Digital Bahi blue. */
@@ -45,12 +47,33 @@ export function readAccent(): AccentChoice {
   return read<AccentChoice>(ACCENT_KEY, ACCENTS.map((a) => a.key), "royal");
 }
 
+/** The page in its dark colours now: chosen so, or following a phone or computer set to dark. */
+function showsDark(): boolean {
+  const chosen = document.documentElement.getAttribute("data-theme");
+  if (chosen) return chosen === "dark";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
+/**
+ * The Android app's status bar (clock, battery) and gesture bar over the page, which runs under
+ * them: light icons on the dark theme, dark ones on the light, whatever the phone itself is set to.
+ */
+function syncSystemBars(): void {
+  if (!isNative()) return;
+  try {
+    void SystemBars.setStyle({ style: showsDark() ? SystemBarsStyle.Dark : SystemBarsStyle.Light }).catch(() => undefined);
+  } catch {
+    /* an app build without the plugin: its bars stay as Android sets them */
+  }
+}
+
 /** "system" removes the attribute so prefers-color-scheme decides. */
 export function applyTheme(choice: ThemeChoice): void {
   const root = document.documentElement;
   if (choice === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", choice);
   save(KEY, choice);
+  syncSystemBars();
   listeners.forEach((l) => l());
 }
 
@@ -68,6 +91,8 @@ export function applyAccent(choice: AccentChoice): void {
 export function initAppearance(): void {
   applyTheme(readTheme());
   applyAccent(readAccent());
+  // The phone switching to dark or light (on "system"): the app's bars follow the page.
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", syncSystemBars);
 }
 
 const subscribe = (l: () => void) => {
