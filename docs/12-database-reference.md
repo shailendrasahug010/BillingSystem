@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 100 |
-| Columns | 1666 |
-| Foreign keys | 269 |
-| Unique constraints | 46 |
-| Check constraints | 61 |
-| Indexes (besides primary keys and unique constraints) | 130 |
+| Tables | 103 |
+| Columns | 1714 |
+| Foreign keys | 277 |
+| Unique constraints | 48 |
+| Check constraints | 67 |
+| Indexes (besides primary keys and unique constraints) | 136 |
 | Triggers | 73 |
 | Tables with row-level security | 94 |
-| Enums | 39 |
+| Enums | 40 |
 | Functions | 16 |
-| Migrations | 34 (last: `0033_order_link_account`) |
+| Migrations | 35 (last: `0034_payment_links`) |
 
 ## How the database is set up
 
@@ -47,6 +47,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **System: audit log, notifications, outbox, sync, backups:** [`audit_logs`](#audit_logs), [`notifications`](#notifications), [`notification_receipts`](#notification_receipts), [`push_tokens`](#push_tokens), [`reminder_rules`](#reminder_rules), [`outbox_events`](#outbox_events), [`sync_mutations`](#sync_mutations), [`sync_changes`](#sync_changes), [`backups`](#backups), [`backup_schedules`](#backup_schedules), [`report_views`](#report_views)
 * **Analytics (derived, rebuildable):** [`customer_product_stats`](#customer_product_stats), [`product_associations`](#product_associations), [`customer_stats`](#customer_stats), [`analytics_runs`](#analytics_runs), [`suggestion_feedback`](#suggestion_feedback), [`sales_daily_product`](#sales_daily_product), [`sales_daily_customer`](#sales_daily_customer)
 * **WhatsApp and email:** [`messaging_settings`](#messaging_settings), [`messages`](#messages)
+* **gateways:** [`payment_gateway_settings`](#payment_gateway_settings), [`payment_links`](#payment_links), [`gateway_payments`](#gateway_payments)
 * [Enums](#enums) · [Functions](#functions) · [Migrations](#migrations)
 
 ## Platform and tenancy
@@ -139,7 +140,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 91 tables by `business_id`
+* Referenced by: 94 tables by `business_id`
 
 ### `settings`
 
@@ -683,7 +684,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 * Trigger `customers_set_updated_at`: before update, each row → `set_updated_at()`
 * Trigger `customers_sync_change`: after insert or delete or update, each row → `track_sync_change('customer', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`customer_addresses`](#customer_addresses).customer_id, [`customer_visits`](#customer_visits).customer_id, [`sales_orders`](#sales_orders).customer_id, [`invoices`](#invoices).customer_id, [`recurring_invoices`](#recurring_invoices).customer_id, [`order_links`](#order_links).customer_id, [`credit_debit_notes`](#credit_debit_notes).customer_id, [`payments`](#payments).customer_id, [`party_ledger_entries`](#party_ledger_entries).customer_id, [`collection_notes`](#collection_notes).customer_id, [`customer_product_stats`](#customer_product_stats).customer_id, [`customer_stats`](#customer_stats).customer_id, [`suggestion_feedback`](#suggestion_feedback).customer_id, [`sales_daily_customer`](#sales_daily_customer).customer_id
+* Referenced by: [`customer_addresses`](#customer_addresses).customer_id, [`customer_visits`](#customer_visits).customer_id, [`sales_orders`](#sales_orders).customer_id, [`invoices`](#invoices).customer_id, [`recurring_invoices`](#recurring_invoices).customer_id, [`order_links`](#order_links).customer_id, [`credit_debit_notes`](#credit_debit_notes).customer_id, [`payments`](#payments).customer_id, [`party_ledger_entries`](#party_ledger_entries).customer_id, [`collection_notes`](#collection_notes).customer_id, [`customer_product_stats`](#customer_product_stats).customer_id, [`customer_stats`](#customer_stats).customer_id, [`suggestion_feedback`](#suggestion_feedback).customer_id, [`sales_daily_customer`](#sales_daily_customer).customer_id, [`payment_links`](#payment_links).customer_id
 
 ### `customer_addresses`
 
@@ -1563,7 +1564,7 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 * Trigger `invoices_period_lock`: before update, each row → `invoices_period_lock_guard()`
 * Trigger `invoices_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`invoice_items`](#invoice_items).invoice_id, [`invoice_revisions`](#invoice_revisions).invoice_id, [`dispatch_orders`](#dispatch_orders).invoice_id, [`recurring_invoices`](#recurring_invoices).last_invoice_id, [`recurring_invoices`](#recurring_invoices).source_invoice_id, [`credit_debit_notes`](#credit_debit_notes).invoice_id, [`payment_allocations`](#payment_allocations).invoice_id, [`suggestion_feedback`](#suggestion_feedback).invoice_id
+* Referenced by: [`invoice_items`](#invoice_items).invoice_id, [`invoice_revisions`](#invoice_revisions).invoice_id, [`dispatch_orders`](#dispatch_orders).invoice_id, [`recurring_invoices`](#recurring_invoices).last_invoice_id, [`recurring_invoices`](#recurring_invoices).source_invoice_id, [`credit_debit_notes`](#credit_debit_notes).invoice_id, [`payment_allocations`](#payment_allocations).invoice_id, [`suggestion_feedback`](#suggestion_feedback).invoice_id, [`payment_links`](#payment_links).invoice_id
 
 ### `invoice_items`
 
@@ -1984,7 +1985,7 @@ Cash drawer, bank accounts, UPI handles: where money actually lands (cash book /
 * Unique `payment_accounts_name_uq`: `(business_id, name)`
 * Trigger `payment_accounts_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`payments`](#payments).payment_account_id, [`expenses`](#expenses).payment_account_id
+* Referenced by: [`payments`](#payments).payment_account_id, [`expenses`](#expenses).payment_account_id, [`payment_gateway_settings`](#payment_gateway_settings).payment_account_id
 
 ### `payments`
 
@@ -2037,7 +2038,7 @@ Money in (customer collection) or out (supplier payment, salary, refund). Posted
 * Trigger `payments_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `payments_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`payment_allocations`](#payment_allocations).payment_id, [`employee_advances`](#employee_advances).payment_id, [`salary_slips`](#salary_slips).payment_id
+* Referenced by: [`payment_allocations`](#payment_allocations).payment_id, [`employee_advances`](#employee_advances).payment_id, [`salary_slips`](#salary_slips).payment_id, [`gateway_payments`](#gateway_payments).payment_id
 
 ### `payment_allocations`
 
@@ -2962,6 +2963,93 @@ Every WhatsApp and email sent (or tried) to a customer or supplier.
 * Index `messages_queued_idx`: btree `(business_id, status)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
+## gateways
+
+### `payment_gateway_settings`
+
+Online payments through a payment gateway the business has an account with (Razorpay or Cashfree): its keys, kept encrypted with the API's field cipher and never returned, and how its payment links behave.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | **Unique.** → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `provider` | varchar(20) | ✓ | `'none'` | none \| razorpay \| cashfree |
+| `environment` | varchar(10) | ✓ | `'test'` | test \| live: the gateway's test (sandbox) or live account. |
+| `key_id` | varchar(100) |  |  | Razorpay key id, or Cashfree app id (client id). |
+| `key_secret` | text |  |  | Razorpay key secret, or Cashfree secret key (encrypted). |
+| `webhook_secret` | text |  |  | Razorpay webhook secret (encrypted); Cashfree signs its webhooks with the secret key. |
+| `webhook_key` | varchar(40) |  |  | **Unique.** The random key in the address the gateway reports payments to (/webhooks/payments/&lt;key>). |
+| `payment_account_id` | uuid |  |  | → [`payment_accounts`](#payment_accounts).id. Account the gateway pays the money into: receipts made from online payments go to it. |
+| `upi_only` | boolean | ✓ | `false` | Links take UPI only (no card or net-banking fees). |
+| `link_expiry_days` | integer | ✓ | `15` | Days a payment link can be paid. |
+| `links_in_reminders` | boolean | ✓ | `true` | Payment reminders carry a link to pay the balance online. |
+| `last_webhook_at` | timestamptz |  |  | When the gateway last reported a payment (or anything) to the webhook address. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+
+* Check `payment_gateway_settings_environment_chk`: `(environment::text = ANY (ARRAY['test'::character varying, 'live'::character varying]::text[]))`
+* Check `payment_gateway_settings_expiry_chk`: `(link_expiry_days >= 1 AND link_expiry_days <= 180)`
+* Check `payment_gateway_settings_provider_chk`: `(provider::text = ANY (ARRAY['none'::character varying, 'razorpay'::character varying, 'cashfree'::character varying]::text[]))`
+
+### `payment_links`
+
+A payment link sent to a customer: for one bill, or for what they owe. Paying it (the gateway's webhook, or the API checking open links) makes a receipt for the customer, applied to that bill first.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `provider` | varchar(20) | ✓ |  | razorpay \| cashfree |
+| `environment` | varchar(10) | ✓ |  | test \| live, as the gateway was set up when the link was made. |
+| `customer_id` | uuid | ✓ |  | → [`customers`](#customers).id. The customer asked to pay. |
+| `invoice_id` | uuid |  |  | → [`invoices`](#invoices).id. The bill it is for; null: the customer's balance. |
+| `amount` | numeric(15,2) | ✓ |  | Amount asked. |
+| `amount_paid` | numeric(15,2) | ✓ | `0` | Amount the gateway has received on it so far. |
+| `description` | text | ✓ |  | What the customer sees on the gateway's page. |
+| `provider_link_id` | varchar(80) | ✓ |  | The gateway's id for the link (Razorpay plink_…, Cashfree link id). |
+| `url` | text | ✓ |  | The address the customer opens to pay. |
+| `status` | [payment_link_status](#enum-payment_link_status) | ✓ | `'created'` | created, partly_paid, paid, expired or cancelled. |
+| `expires_at` | timestamptz | ✓ |  | After this the gateway refuses payments on it. |
+| `source` | varchar(10) | ✓ | `'staff'` | staff (sent from a bill or customer), reminder (put in a payment reminder) or shop (asked for on the shop's order page). |
+| `paid_at` | timestamptz |  |  | When it was paid in full. |
+| `last_checked_at` | timestamptz |  |  | When the API last asked the gateway how the link stands. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+
+* Check `payment_links_amount_chk`: `(amount > 0::numeric AND amount_paid >= 0::numeric)`
+* Check `payment_links_source_chk`: `(source::text = ANY (ARRAY['staff'::character varying, 'reminder'::character varying, 'shop'::character varying]::text[]))`
+* Index `payment_links_customer_idx`: btree `(business_id, customer_id, created_at)`
+* Index `payment_links_invoice_idx`: btree `(business_id, invoice_id)`
+* Index `payment_links_open_idx`: btree `(business_id, status, expires_at)`
+* Index `payment_links_provider_uq`: unique, btree `(provider, provider_link_id)`
+* Referenced by: [`gateway_payments`](#gateway_payments).link_id
+
+### `gateway_payments`
+
+A payment the gateway received on a link, and the receipt it was recorded as. One row per gateway payment id, so a payment reported twice (webhook and a status check, or a retried webhook) is recorded once.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `link_id` | uuid | ✓ |  | → [`payment_links`](#payment_links).id. The link paid. |
+| `provider` | varchar(20) | ✓ |  | razorpay \| cashfree |
+| `provider_payment_id` | varchar(80) | ✓ |  | The gateway's id for the payment (Razorpay pay_…, Cashfree payment id). |
+| `amount` | numeric(15,2) | ✓ |  | Amount paid. |
+| `method` | [payment_method](#enum-payment_method) | ✓ |  | How the customer paid: upi, card, bank_transfer (net banking) or other. |
+| `reference` | varchar(40) |  |  | UPI or bank reference (UTR / RRN) when the gateway gives one. |
+| `paid_at` | timestamptz | ✓ |  | When the customer paid. |
+| `payment_id` | uuid |  |  | → [`payments`](#payments).id. The receipt it was recorded as. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+
+* Check `gateway_payments_amount_chk`: `(amount > 0::numeric)`
+* Index `gateway_payments_link_idx`: btree `(link_id)`
+* Index `gateway_payments_provider_uq`: unique, btree `(provider, provider_payment_id)`
+
 ## Enums
 
 ### Enum `adjustment_reason`
@@ -3140,11 +3228,17 @@ Values: `in`, `out`
 
 Used by: [`payments`](#payments).direction
 
+### Enum `payment_link_status`
+
+Values: `created`, `partly_paid`, `paid`, `expired`, `cancelled`
+
+Used by: [`payment_links`](#payment_links).status
+
 ### Enum `payment_method`
 
 Values: `cash`, `upi`, `bank_transfer`, `cheque`, `card`, `other`
 
-Used by: [`payments`](#payments).method, [`expenses`](#expenses).payment_method
+Used by: [`payments`](#payments).method, [`expenses`](#expenses).payment_method, [`gateway_payments`](#gateway_payments).method
 
 ### Enum `payment_status`
 
@@ -3227,4 +3321,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links`

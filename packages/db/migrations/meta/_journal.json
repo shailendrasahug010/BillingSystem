@@ -239,6 +239,13 @@
       "when": 1791618098497,
       "tag": "0033_order_link_account",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791658535245,
+      "tag": "0034_payment_links",
+      "breakpoints": true
     }
   ]
 }
