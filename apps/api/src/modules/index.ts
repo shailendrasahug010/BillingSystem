@@ -16,6 +16,7 @@ import { gstModule } from "./gst/routes.js";
 import { gstr2bModule } from "./gst/gstr2b.js";
 import { healthModule } from "./health.js";
 import { identityModule } from "./identity/routes.js";
+import { twoStepModule } from "./identity/twoStep.js";
 import { inventoryModule } from "./inventory/routes.js";
 import { ocrModule } from "./imports/ocr.js";
 import { importsModule } from "./imports/routes.js";
@@ -56,6 +57,7 @@ export const MODULES: ApiModule[] = [
   healthModule,
   clientErrorsModule,
   identityModule,
+  twoStepModule,
   teamModule,
   auditLogModule,
   businessModule,

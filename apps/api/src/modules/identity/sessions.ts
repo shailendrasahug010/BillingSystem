@@ -1,10 +1,11 @@
-import type { BusinessSummary, SessionResponse } from "@digitalbahi/contracts";
+import type { BusinessSummary, SessionResponse, SignedInSession } from "@digitalbahi/contracts";
 import { schema, type Database, type Executor } from "@digitalbahi/db";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { uuidv7 } from "uuidv7";
+import { audit } from "../../lib/audit.js";
 import type { AppDeps } from "../../lib/context.js";
-import { withUser } from "../../lib/db.js";
+import { withTenant, withUser } from "../../lib/db.js";
 import { ApiError, forbidden } from "../../lib/errors.js";
 import { newOpaqueToken, sha256 } from "../../lib/security.js";
 
@@ -109,6 +110,36 @@ export async function startSession(
 export const isNativeClient = (request: FastifyRequest) => request.headers["x-client"] === "native";
 
 /**
+ * Opens a session for a person whose sign-in is complete (password or OTP,
+ * and the authenticator app's code when two-step sign-in is on) and records
+ * the login. `method` says how: password, otp, password+totp, otp+recovery…
+ */
+export async function signIn(
+  deps: AppDeps,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  user: UserRow,
+  requested?: string,
+  method = "password",
+): Promise<SessionResponse> {
+  const now = deps.clock.now().toISOString();
+  const businesses = await listBusinesses(deps.db, user.id);
+  const business = pickBusiness(businesses, requested, user.lastBusinessId);
+  const session = await deps.db.transaction(async (tx) => {
+    await tx
+      .update(schema.users)
+      .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: now, ...(business ? { lastBusinessId: business.id } : {}) })
+      .where(eq(schema.users.id, user.id));
+    return startSession(tx, deps, request, user.id, business?.id ?? null);
+  });
+  if (business) {
+    const actor = { businessId: business.id, userId: user.id, userName: user.name, ip: request.ip, userAgent: request.headers["user-agent"] ?? null, requestId: request.id };
+    await withTenant(deps.db, { businessId: business.id, userId: user.id }, (tx) => audit(tx, actor, { action: "auth.login", changes: { method } }));
+  }
+  return sessionResponse(deps, request, reply, { user, familyId: session.familyId, business, businesses, refreshToken: session.refreshToken });
+}
+
+/**
  * Builds the login/refresh/switch response. Browsers receive the refresh token
  * only as an HttpOnly, SameSite=Strict cookie scoped to /api/v1/auth; native
  * apps (X-Client: native) receive it in the body and keep it in secure storage.
@@ -196,9 +227,10 @@ export type RotateResult =
 /**
  * Exchanges a refresh token for a new one (rotation). Presenting an already
  * rotated token after the grace window means it was copied: the whole family
- * is revoked and every device using it must sign in again.
+ * is revoked and every device using it must sign in again. `seen`: where the
+ * refresh came from, kept on the new token for the list of signed-in devices.
  */
-export async function rotateRefreshToken(deps: AppDeps, token: string): Promise<RotateResult> {
+export async function rotateRefreshToken(deps: AppDeps, token: string, seen?: { ip: string; userAgent: string | null }): Promise<RotateResult> {
   const now = deps.clock.now();
   return deps.db.transaction(async (tx): Promise<RotateResult> => {
     const [row] = await tx
@@ -230,12 +262,44 @@ export async function rotateRefreshToken(deps: AppDeps, token: string): Promise<
       businessId: row.businessId,
       tokenHash: next.hash,
       deviceId: row.deviceId,
-      ip: row.ip,
-      userAgent: row.userAgent,
+      ip: seen?.ip ?? row.ip,
+      userAgent: seen ? (seen.userAgent?.slice(0, 500) ?? row.userAgent) : row.userAgent,
       expiresAt: refreshExpiry(deps),
     });
     return { ok: true, userId: row.userId, familyId: row.familyId, businessId: row.businessId, refreshToken: next.token };
   });
+}
+
+/**
+ * The person's signed-in sessions (one per sign-in on a phone, browser or
+ * computer), most recently used first: where each signed in, and the device
+ * and address it last refreshed from (every few minutes while it is open).
+ */
+export async function listSessions(db: Database, userId: string, currentId: string, now: Date): Promise<SignedInSession[]> {
+  const res = await db.execute<{ family_id: string; signed_in_at: string; last_seen_at: string; user_agent: string | null; ip: string | null }>(sql`
+    with active as (
+      select distinct family_id from refresh_tokens
+      where user_id = ${userId} and revoked_at is null and rotated_at is null and expires_at > ${now.toISOString()}::timestamptz
+    )
+    select t.family_id,
+           min(t.created_at) as signed_in_at,
+           max(t.created_at) as last_seen_at,
+           (array_agg(t.user_agent order by t.created_at desc))[1] as user_agent,
+           (array_agg(t.ip order by t.created_at desc))[1] as ip
+    from refresh_tokens t
+    join active a on a.family_id = t.family_id
+    where t.user_id = ${userId}
+    group by t.family_id
+    order by max(t.created_at) desc
+    limit 50`);
+  return res.rows.map((r) => ({
+    id: r.family_id,
+    current: r.family_id === currentId,
+    userAgent: r.user_agent,
+    ip: r.ip,
+    signedInAt: new Date(r.signed_in_at).toISOString(),
+    lastSeenAt: new Date(r.last_seen_at).toISOString(),
+  }));
 }
 
 /** Points the session at another business (so refreshes keep it). */

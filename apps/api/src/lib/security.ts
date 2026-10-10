@@ -52,13 +52,30 @@ export interface AccessClaims {
   sessionId: string;
 }
 
+/** Sign-in half done: the password or the OTP was right, the code from the authenticator app is still to come. */
+export interface TwoStepClaims {
+  userId: string;
+  /** The business asked for at sign-in, if any. */
+  businessId: string | null;
+  /** How the first step was done: password or otp. */
+  method: string;
+}
+
 export interface TokenService {
   signAccess(claims: AccessClaims): Promise<string>;
   verifyAccess(token: string): Promise<AccessClaims>;
   accessTtlSeconds: number;
+  /** A short-lived token for the second step of a sign-in; it opens nothing else. */
+  signTwoStep(claims: TwoStepClaims): Promise<string>;
+  verifyTwoStep(token: string): Promise<TwoStepClaims>;
+  twoStepTtlSeconds: number;
 }
 
 const AUDIENCE = "digitalbahi-api";
+/** A different audience: a half-done sign-in's token is never taken as an access token, nor the other way round. */
+const TWO_STEP_AUDIENCE = "digitalbahi-two-step";
+/** Time to open the authenticator app and type its code. */
+const TWO_STEP_TTL_SECONDS = 300;
 
 export async function createTokenService(config: Config): Promise<TokenService> {
   let privateKey: CryptoKey;
@@ -91,6 +108,26 @@ export async function createTokenService(config: Config): Promise<TokenService> 
       });
       if (!payload.sub || !payload.sid) throw new Error("malformed token");
       return { userId: payload.sub, businessId: payload.bid ?? null, sessionId: payload.sid };
+    },
+    twoStepTtlSeconds: TWO_STEP_TTL_SECONDS,
+    async signTwoStep(c) {
+      return new SignJWT({ bid: c.businessId, m: c.method })
+        .setProtectedHeader({ alg: "EdDSA" })
+        .setSubject(c.userId)
+        .setIssuer(config.jwt.issuer)
+        .setAudience(TWO_STEP_AUDIENCE)
+        .setIssuedAt()
+        .setExpirationTime(`${TWO_STEP_TTL_SECONDS}s`)
+        .sign(privateKey);
+    },
+    async verifyTwoStep(token) {
+      const { payload } = await jwtVerify<JWTPayload & { bid?: string | null; m?: string }>(token, publicKey, {
+        issuer: config.jwt.issuer,
+        audience: TWO_STEP_AUDIENCE,
+        algorithms: ["EdDSA"],
+      });
+      if (!payload.sub || !payload.m) throw new Error("malformed token");
+      return { userId: payload.sub, businessId: payload.bid ?? null, method: payload.m };
     },
   };
 }

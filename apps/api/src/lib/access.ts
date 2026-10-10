@@ -13,6 +13,8 @@ export interface Access {
   isOwner: boolean;
   timeZone: string;
   businessStatus: string;
+  /** The business asks this role for two-step sign-in and the person has not turned it on: its routes wait until they do. */
+  twoStepMissing: boolean;
 }
 
 /**
@@ -26,6 +28,28 @@ const cache = new Map<string, { at: number; value: Access | null }>();
 export function invalidateAccess(businessId?: string): void {
   if (!businessId) return cache.clear();
   for (const key of cache.keys()) if (key.endsWith(`:${businessId}`)) cache.delete(key);
+}
+
+/** One person's access in every business (two-step sign-in turned on or off). */
+export function invalidateUserAccess(userId: string): void {
+  for (const key of cache.keys()) if (key.startsWith(`${userId}:`)) cache.delete(key);
+}
+
+/**
+ * Sessions ended from the person's list of signed-in devices: their access
+ * tokens stop working at once in this process instead of when they expire
+ * (other API processes refuse them at their next refresh).
+ */
+const ended = new Map<string, number>();
+
+export function endSessions(sessionIds: readonly string[], accessTtlSeconds: number, now = Date.now()): void {
+  for (const [id, until] of ended) if (until <= now) ended.delete(id);
+  for (const id of sessionIds) ended.set(id, now + accessTtlSeconds * 1000);
+}
+
+function sessionEnded(sessionId: string, now = Date.now()): boolean {
+  const until = ended.get(sessionId);
+  return until !== undefined && until > now;
 }
 
 export async function loadAccess(db: Database, userId: string, businessId: string, now = Date.now()): Promise<Access | null> {
@@ -42,17 +66,22 @@ export async function loadAccess(db: Database, userId: string, businessId: strin
       time_zone: string;
       status: string;
       grants: string[] | null;
+      two_step_missing: boolean;
     }>(sql`
       select u.name as user_name, r.key as role_key, bm.is_owner, bm.is_active as member_active, u.is_active as user_active,
              b.time_zone, b.status,
-             array_remove(array_agg(rp."grant"), null) as grants
+             array_remove(array_agg(rp."grant"), null) as grants,
+             u.mfa_enabled_at is null and exists (
+               select 1 from settings s
+               where s.business_id = b.id and s.key = 'security.two_step_roles' and s.value @> jsonb_build_array(r.key)
+             ) as two_step_missing
       from business_members bm
       join users u on u.id = bm.user_id
       join roles r on r.id = bm.role_id
       join businesses b on b.id = bm.business_id
       left join role_permissions rp on rp.role_id = r.id
       where bm.user_id = ${userId} and bm.business_id = ${businessId}
-      group by u.name, r.key, bm.is_owner, bm.is_active, u.is_active, b.time_zone, b.status`);
+      group by u.name, u.mfa_enabled_at, r.key, bm.is_owner, bm.is_active, u.is_active, b.id, b.time_zone, b.status`);
     const row = res.rows[0];
     if (!row || !row.member_active || !row.user_active) return null;
     return {
@@ -63,6 +92,7 @@ export async function loadAccess(db: Database, userId: string, businessId: strin
       isOwner: row.is_owner,
       timeZone: row.time_zone,
       businessStatus: row.status,
+      twoStepMissing: row.two_step_missing,
     } satisfies Access;
   });
   cache.set(key, { at: now, value });
@@ -81,6 +111,7 @@ export function authenticate(deps: AppDeps): Handler {
     } catch {
       throw unauthorized("TOKEN_INVALID");
     }
+    if (sessionEnded(request.user.sessionId)) throw unauthorized("SESSION_REVOKED");
   };
 }
 
@@ -95,6 +126,7 @@ export function requireBusiness(deps: AppDeps): Handler {
     if (access.businessStatus === "suspended" || access.businessStatus === "closed") {
       throw new ApiError(403, "BUSINESS_SUSPENDED");
     }
+    if (access.twoStepMissing) throw new ApiError(403, "TWO_STEP_SETUP_REQUIRED");
     request.ctx = {
       userId: user.userId,
       userName: access.userName,

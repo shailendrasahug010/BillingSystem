@@ -7,7 +7,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | | Count |
 |---|---|
 | Tables | 100 |
-| Columns | 1662 |
+| Columns | 1665 |
 | Foreign keys | 269 |
 | Unique constraints | 46 |
 | Check constraints | 61 |
@@ -16,7 +16,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Tables with row-level security | 94 |
 | Enums | 39 |
 | Functions | 16 |
-| Migrations | 32 (last: `0031_order_links`) |
+| Migrations | 33 (last: `0032_two_step_sign_in`) |
 
 ## How the database is set up
 
@@ -80,7 +80,7 @@ A login identity. One user can belong to several businesses with different roles
 | `password_hash` | text |  |  | argon2id hash. Never selected by default in API queries. |
 | `preferred_locale` | varchar(10) | ✓ | `'en'` | Language of the app and of messages to this person: en or hi. |
 | `is_active` | boolean | ✓ | `true` | Inactive rows are kept for history but no longer offered for new entries. |
-| `mfa_secret_enc` | text |  |  | Reserved for two-factor sign-in (not used yet). |
+| `mfa_secret_enc` | text |  |  | The authenticator app's secret for two-step sign-in (field-encrypted). Set when the person starts turning it on; it counts only once mfa_enabled_at is set. |
 | `failed_login_count` | integer | ✓ | `0` | Wrong passwords in a row; at 5 the account is locked for 15 minutes. Reset by a successful sign-in. |
 | `locked_until` | timestamptz |  |  | Sign-in is refused until this time after too many wrong passwords. |
 | `last_login_at` | timestamptz |  |  | Last successful sign-in. |
@@ -90,6 +90,9 @@ A login identity. One user can belong to several businesses with different roles
 | `last_business_id` | uuid |  |  | Business opened by default at the next login. |
 | `username` | varchar(30) |  |  | Optional user ID to sign in with (lower case), set when a business adds its staff. |
 | `device_key` | text |  |  | Locks the copy of the business kept on this person's devices for offline work (field-encrypted; handed only to a signed-in session). |
+| `mfa_enabled_at` | timestamptz |  |  | When two-step sign-in was turned on (a code from an authenticator app after the password or OTP); null: off. |
+| `mfa_recovery_codes` | jsonb |  |  | SHA-256 of each recovery code not used yet (one signs in once in place of the app's code). |
+| `mfa_last_step` | integer |  |  | The 30-second step of the last code from the app that was accepted: a code works once. |
 
 * Index `users_email_uq`: unique, btree `(email)`
 * Index `users_mobile_uq`: unique, btree `(mobile)`
@@ -3223,4 +3226,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in`

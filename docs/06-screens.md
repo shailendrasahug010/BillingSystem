@@ -9,7 +9,8 @@ Each screen lists who uses it, what it shows, what it lets the user do, the rule
 * **Layout:** brand panel (desktop only) + form. Language toggle before sign-in.
 * **Fields:** mobile number or email, password, "keep me signed in on this device"; *Sign in with OTP instead*; *Forgot password*.
 * **After login:** if the user belongs to more than one business, a business chooser (legal name + GSTIN); otherwise straight to the dashboard (or to the last screen used).
-* **Rules:** 5 failed attempts → temporary lock + OTP; new device → OTP confirmation; admin roles can require TOTP.
+* **Rules:** 5 failed attempts → temporary lock + OTP; new device → OTP confirmation.
+* **Two-step sign-in — Built:** with it on, the password or OTP is followed by the authenticator app's 6-digit code (it sends itself at the sixth digit), or a recovery code (*Lost your phone? Use a recovery code*); too slow (5 minutes) goes back to the first step. *My profile* turns it on (password → QR code, or the key to type, and on a phone a link that opens the app on that phone → the app's first code → 10 recovery codes to copy or save, ticked as kept), makes new recovery codes and turns it off; it also lists the **signed-in devices** ("Chrome on Windows", "Digital Bahi app on Android", this device marked; signed in, last active, address) with *Sign out* for each and *Sign out all other devices*. The owner chooses which roles must use it (Settings → *Two-step sign-in for roles*); a member of such a role who has not turned it on sees a screen that turns it on before the business opens. Team shows who has it on, and *Turn off two-step sign-in* for a member who lost their phone and codes.
 * **Phone:** single column, 48 px fields, numeric keyboard for mobile/OTP.
 
 ## 2. Dashboard — **Built**

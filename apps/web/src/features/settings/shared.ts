@@ -36,6 +36,8 @@ export interface Settings {
   "invoice.payment_details"?: PaymentDetails;
   "invoice.unit_letters"?: Record<string, string> | null;
   "invoice.default_unit"?: string | null;
+  /** Roles (by key) that must use two-step sign-in. */
+  "security.two_step_roles"?: string[];
 }
 export type PaymentDetails = { bankName: string; accountNumber: string; ifsc: string; upiId: string };
 

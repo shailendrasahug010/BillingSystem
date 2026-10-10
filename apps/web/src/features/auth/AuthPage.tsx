@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Check, CircleCheck, CloudOff, Eye, EyeOff, Languages, KeyRound, Loader2, LockKeyhole, MessageCircle, Smartphone, UserRound } from "lucide-react";
+import { ArrowLeft, Building2, Check, CircleCheck, CloudOff, Eye, EyeOff, Languages, KeyRound, Loader2, LockKeyhole, MessageCircle, ShieldCheck, Smartphone, UserRound } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { UpdateBanner } from "../../components/layout/UpdateBanner";
 import { useI18n } from "../../app/i18n";
@@ -15,7 +15,7 @@ import { ServerLine } from "./ServerSetup";
 import { clearSignedOut, lastSignIn, lastSignInName, rememberSignIn, setWelcomeBusiness, wasSignedOut } from "../../lib/lastSignIn";
 import { cn } from "../../lib/cn";
 import { tintFor } from "../../components/ui/misc";
-import { initialsOf, maskMobile, OtpBoxes, PasswordStrength, useCountdown } from "./parts";
+import { initialsOf, maskMobile, OtpBoxes, PasswordStrength, SecondStepField, useCountdown } from "./parts";
 
 type Mode = "password" | "otp" | "signup" | "reset";
 
@@ -100,6 +100,80 @@ export function PasswordInput(props: InputProps) {
   );
 }
 
+/** A sign-in half done: the password or OTP was right, the authenticator app's code is next. */
+interface TwoStepChallenge {
+  token: string;
+  /** The password typed (to open the copy kept on this device later), when signing in with one. */
+  password?: string;
+  /** What to remember for the next sign-in once it is done (the number, email or user ID). */
+  remember: string;
+}
+
+/** The second step of a sign-in with two-step sign-in on. */
+function TwoStepSignIn({ challenge, onBack }: { challenge: TwoStepChallenge; onBack(expired: boolean): void }) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const session = useSession();
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const submit = async (typed = code) => {
+    if (busy || !typed.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await session.loginTwoStep(challenge.token, typed.trim(), challenge.password);
+      rememberSignIn(challenge.remember);
+    } catch (e) {
+      const err = e instanceof ApiError ? e : new ApiError(0, "generic");
+      // Too long on this step (or it was turned off meanwhile): the first step again.
+      if (err.code === "TWO_STEP_EXPIRED") return onBack(true);
+      setError(err);
+      setCode("");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const atCode = error?.field === "code" ? translateError(i18n, error) : null;
+  return (
+    <>
+      <div className="flex items-start gap-3">
+        <span className="mt-1 inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden>
+          <ShieldCheck size={22} />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-[28px] leading-tight font-semibold text-ink">{t("twoStep.signInTitle")}</h1>
+          <p className="mt-1 text-[14px] text-ink-3">{t("twoStep.signInHelp")}</p>
+        </div>
+      </div>
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+        noValidate
+      >
+        <SecondStepField id="auth-two-step" value={code} onChange={setCode} onComplete={(c) => void submit(c)} error={atCode} />
+        {error && !error.field && (
+          <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger" role="alert">
+            {translateError(i18n, error)}
+          </p>
+        )}
+        <Button type="submit" variant="primary" size="lg" block disabled={busy || !code.trim()} aria-busy={busy} icon={busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : undefined}>
+          {t("auth.verifyAndSignIn")}
+        </Button>
+      </form>
+      <div className="flex flex-col items-center gap-2 text-[13.5px]">
+        <button type="button" className="text-accent hover:underline" onClick={() => onBack(false)}>
+          {t("auth.backToSignIn")}
+        </button>
+        <p className="max-w-xs text-center text-[12.5px] text-ink-3">{t("twoStep.lostPhone")}</p>
+      </div>
+    </>
+  );
+}
+
 /**
  * Sign in (password or OTP), self-service sign-up that creates the business,
  * and password reset by OTP. Errors come back as codes and are shown in the
@@ -156,6 +230,7 @@ export function AuthPage() {
   const [step, setStep] = useState<0 | 1>(0);
   // The form was sent once: its fields show what is missing from then on.
   const [tried, setTried] = useState(false);
+  const [challenge, setChallenge] = useState<TwoStepChallenge | null>(null);
   const [remembered, setRemembered] = useState(lastSignIn);
   const [rememberedName, setRememberedName] = useState(() => (lastSignIn() ? lastSignInName() : ""));
   const [form, setForm] = useState({
@@ -216,6 +291,15 @@ export function AuthPage() {
       await fn();
     } catch (e) {
       const err = e instanceof ApiError ? e : new ApiError(0, "generic");
+      // Two-step sign-in is on: the authenticator app's code comes next.
+      if (err.code === "TWO_STEP_REQUIRED" && typeof err.params.token === "string") {
+        setChallenge({
+          token: err.params.token,
+          remember: mode === "password" ? form.identifier.trim() : form.mobile.trim(),
+          ...(mode === "password" ? { password: form.password } : {}),
+        });
+        return;
+      }
       // Asked for a code too soon: the Resend button counts down the wait.
       const wait = Number(err.params?.retryAfter);
       if (err.code === "OTP_TOO_SOON" && wait > 0) {
@@ -390,6 +474,21 @@ export function AuthPage() {
         : mode === "otp"
           ? t("auth.otpSubtitle")
           : t("auth.subtitle");
+
+  if (challenge)
+    return (
+      <AuthLayout>
+        <TwoStepSignIn
+          challenge={challenge}
+          onBack={(expired) => {
+            setChallenge(null);
+            setForm((f) => ({ ...f, password: "", otp: "" }));
+            setOtpSent(false);
+            setNotice(expired ? t("twoStep.expired") : null);
+          }}
+        />
+      </AuthLayout>
+    );
 
   return (
     <AuthLayout>

@@ -26,6 +26,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   "suggestions.auto_tune": true,
   "backup.schedule": { frequency: "daily", time: "02:00", retainDays: 30 },
   "offline.wipe_after_days": 30,
+  // No role is asked for two-step sign-in until the owner chooses.
+  "security.two_step_roles": [],
   "gst.lut": null,
   "einvoice.enabled": false,
   "ewaybill.threshold": 50000,

@@ -47,7 +47,7 @@ jobs:
             flows: einvoice-flow export-sez-flow rcm-return-flow price-lists-flow payroll-statutory-flow backup-flow bill-company-invoice-flow photo-bill-flow
           - group: more
             web: dev
-            flows: auto-reminders-flow messaging-flow notifications-flow purchase-history-flow insights-flow branding-flow thermal-print-flow barcode-camera-flow
+            flows: auto-reminders-flow messaging-flow notifications-flow purchase-history-flow insights-flow branding-flow thermal-print-flow barcode-camera-flow two-step-flow
           - group: offline
             web: build
             flows: offline-flow offline-work-flow device-wipe-flow reliability-flow offline-sync-flow weak-network-flow android-app-flow

@@ -53,8 +53,17 @@ export const users = pgTable(
     /** Business opened by default at the next login. */
     lastBusinessId: uuid(),
     isActive: boolean().notNull().default(true),
-    /** Reserved for two-factor sign-in (not used yet). */
+    /**
+     * The authenticator app's secret for two-step sign-in (field-encrypted). Set when the person starts
+     * turning it on; it counts only once mfa_enabled_at is set.
+     */
     mfaSecretEnc: text(),
+    /** When two-step sign-in was turned on (a code from an authenticator app after the password or OTP); null: off. */
+    mfaEnabledAt: tstz(),
+    /** SHA-256 of each recovery code not used yet (one signs in once in place of the app's code). */
+    mfaRecoveryCodes: jsonb().$type<string[]>(),
+    /** The 30-second step of the last code from the app that was accepted: a code works once. */
+    mfaLastStep: integer(),
     /** Wrong passwords in a row; at 5 the account is locked for 15 minutes. Reset by a successful sign-in. */
     failedLoginCount: integer().notNull().default(0),
     /** Sign-in is refused until this time after too many wrong passwords. */

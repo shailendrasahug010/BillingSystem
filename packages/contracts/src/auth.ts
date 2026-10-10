@@ -64,6 +64,47 @@ export const ChangePasswordBody = z.strictObject({
   newPassword: z.string().min(8).max(128),
 });
 
+/** A code from the authenticator app (6 digits) or one of the recovery codes ("k7m2p-x9q4r"). */
+const TwoStepCode = z.string().trim().min(6).max(24);
+
+/** Turning two-step sign-in on: the first code from the app, which proves it was set up right. */
+export const TwoStepEnableBody = z.strictObject({ code: z.string().trim().regex(/^\d{6}$/) });
+
+/** New recovery codes (the old ones stop working). */
+export const TwoStepCodeBody = z.strictObject({ code: TwoStepCode });
+
+/** Turning two-step sign-in off takes the password and a code. */
+export const TwoStepOffBody = z.strictObject({ password: z.string().min(1).max(128), code: TwoStepCode });
+
+/** The second step of a sign-in: the token from the first step's answer (TWO_STEP_REQUIRED) and the code. */
+export const TwoStepLoginBody = z.strictObject({ token: z.string().min(20).max(2000), code: TwoStepCode });
+
+export interface TwoStepStatus {
+  enabled: boolean;
+  enabledAt: string | null;
+  /** Recovery codes not used yet. */
+  recoveryCodesLeft: number;
+}
+
+/** What the authenticator app is set up with: the secret (to type by hand) and the same as a QR code's text. */
+export interface TwoStepSetup {
+  secret: string;
+  uri: string;
+}
+
+/** One sign-in on a phone, browser or computer that is still signed in. */
+export interface SignedInSession {
+  id: string;
+  /** The session this request comes from. */
+  current: boolean;
+  /** The browser or app, as it describes itself. */
+  userAgent: string | null;
+  ip: string | null;
+  signedInAt: string;
+  /** Its last refresh (every few minutes while it is open). */
+  lastSeenAt: string;
+}
+
 /** Native clients (Android/Windows) send the refresh token in the body; browsers use the cookie. */
 export const RefreshBody = z.strictObject({ refreshToken: z.string().min(20).max(200).optional() }).nullish();
 
@@ -121,4 +162,9 @@ export interface MeResponse {
   permissions: string[];
   settings: Record<string, unknown>;
   today: string;
+  /**
+   * The business asks this person's role for two-step sign-in and they have not turned it on: until they
+   * do, its screens stay closed (no permissions or settings come with this answer).
+   */
+  twoStepRequired?: boolean;
 }
