@@ -4,6 +4,7 @@ import { WarehousesCard } from "./WarehousesCard";
 import { PriceListsCard } from "./PriceListsCard";
 import { SeriesCard } from "./SeriesCard";
 import { MessagingCard } from "./MessagingCard";
+import { PaymentGatewayCard } from "./PaymentGatewayCard";
 import { DevicesCard } from "./DevicesCard";
 import { PrinterCard } from "./PrinterCard";
 import { PayrollStatutoryCard } from "./PayrollStatutoryCard";
@@ -25,6 +26,7 @@ export function LiveSettings() {
       <PriceListsCard />
       <SeriesCard />
       <MessagingCard />
+      <PaymentGatewayCard />
       <DevicesCard />
       <SignInSecurityCard />
       <TallyCard />

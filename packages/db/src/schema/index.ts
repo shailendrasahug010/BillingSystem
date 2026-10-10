@@ -21,3 +21,4 @@ export * from "./gst.js";
 export * from "./system.js";
 export * from "./analytics.js";
 export * from "./messaging.js";
+export * from "./gateways.js";

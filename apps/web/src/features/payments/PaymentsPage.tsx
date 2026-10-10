@@ -23,6 +23,8 @@ import { usePaged } from "../../lib/usePaged";
 import { WaitingStrip } from "../../components/offline/OfflineBills";
 import { BankStatementDialog } from "./BankStatementDialog";
 import { CashBook } from "./CashBook";
+import { OnlineLinks } from "./PayLink";
+import { LIVE } from "../../data/source";
 import { invalidateMoney, METHODS, PaymentDialog } from "./PaymentDialog";
 import { SendButton } from "../../components/messaging/SendDialog";
 import { PdfActions } from "../../components/ui/PdfActions";
@@ -192,6 +194,11 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
           <Tabs.Trigger value="cashbook" className={TAB_TRIGGER}>
             {t("cashBook.title")}
           </Tabs.Trigger>
+          {LIVE && (
+            <Tabs.Trigger value="online" className={TAB_TRIGGER} data-tab="online">
+              {t("payLink.tab")}
+            </Tabs.Trigger>
+          )}
         </Tabs.List>
         <Tabs.Content value="payments" className="flex flex-col gap-4">
           <WaitingStrip kinds={["payment"]} />
@@ -249,6 +256,11 @@ export function PaymentsPage({ action, partyId }: { action?: "collect" | "pay"; 
         <Tabs.Content value="cashbook">
           <CashBook />
         </Tabs.Content>
+        {LIVE && (
+          <Tabs.Content value="online">
+            <OnlineLinks />
+          </Tabs.Content>
+        )}
       </Tabs.Root>
 
       {dialog && (

@@ -28,8 +28,31 @@ const VERSION = 1;
 const MAGIC = Buffer.from("DBBK");
 const MAX_JSON_BYTES = 1024 * 1024 * 1024;
 
-/** Tables with business rows that are not part of a backup. */
-const LEFT_OUT = new Set(["businesses", "business_members", "refresh_tokens", "otp_challenges", "sync_mutations", "sync_changes", "notifications", "notification_receipts", "push_tokens", "outbox_events", "backups", "backup_schedules", "devices", "report_views"]);
+/**
+ * Tables with business rows that are not part of a backup. A restore makes a
+ * copy beside the business it came from, so rows keyed across all businesses
+ * stay out too: a shop's order link and the gateway's payment links and
+ * payments belong to the original (the receipts made from them are kept).
+ */
+const LEFT_OUT = new Set([
+  "businesses",
+  "business_members",
+  "refresh_tokens",
+  "otp_challenges",
+  "sync_mutations",
+  "sync_changes",
+  "notifications",
+  "notification_receipts",
+  "push_tokens",
+  "outbox_events",
+  "backups",
+  "backup_schedules",
+  "devices",
+  "report_views",
+  "order_links",
+  "payment_links",
+  "gateway_payments",
+]);
 /** Global tables a restored row may point to as they are. */
 const GLOBAL = new Set(["states", "permissions"]);
 
@@ -133,6 +156,7 @@ export async function makeBackup(tx: Tx, businessId: string, now: Date, passphra
     if (info.name === "roles") roleIds = rows.map((r) => r.id as string);
     // Secrets stay out; the status callback key belongs to this business's address alone.
     if (info.name === "messaging_settings") rows = rows.map((r) => ({ ...r, whatsappSecret: null, smtpPassword: null, whatsappAppSecret: null, whatsappStatusKey: null }));
+    if (info.name === "payment_gateway_settings") rows = rows.map((r) => ({ ...r, keySecret: null, webhookSecret: null, webhookKey: null, lastWebhookAt: null }));
     data[info.name] = rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, toJsonValue(v)])));
     counts[info.name] = rows.length;
   }

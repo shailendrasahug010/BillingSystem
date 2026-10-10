@@ -30,6 +30,7 @@ const ICONS: Record<string, LucideIcon> = {
   repeat_bills_made: Repeat,
   repeat_bill_failed: Repeat,
   reminders_stopped: BellOff,
+  payment_received_online: BadgeIndianRupee,
 };
 
 const TINTS: Record<Severity, string> = {

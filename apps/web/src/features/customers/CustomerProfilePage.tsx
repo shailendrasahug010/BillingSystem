@@ -21,6 +21,7 @@ import { ApiError } from "../../lib/api";
 import { useToast } from "../../components/ui/Toast";
 import { AddCustomerDialog } from "./AddCustomerDialog";
 import { OrderLinkButton } from "../orders/OrderLink";
+import { PayLinkButton } from "../payments/PayLink";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
 import { formatDate, translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
@@ -191,6 +192,9 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
             <Button icon={<Wallet size={16} />} onClick={() => navigate(LIVE ? { name: "planned", module: "payments", action: "collect", partyId: customer.id } : { name: "planned", module: "payments" })}>
               {t("dashboard.actions.receivePayment")}
             </Button>
+          )}
+          {LIVE && allowed("payment.collect") && insight.outstanding > 0.5 && (
+            <PayLinkButton customerId={customer.id} customerName={customer.businessName} mobile={customer.mobile ?? null} due={insight.outstanding.toFixed(2)} />
           )}
           {LIVE && allowed("order.create") && <OrderLinkButton customerId={customer.id} customerName={customer.name} mobile={customer.mobile ?? null} />}
           {LIVE && allowed("order.create") && (

@@ -1297,7 +1297,17 @@
     "TWO_STEP_NOT_STARTED": "Start again: scan the newest QR code and type its code.",
     "TWO_STEP_OFF": "Two-step sign-in is off.",
     "TWO_STEP_SETUP_REQUIRED": "Your business asks for two-step sign-in. Turn it on in My profile to carry on.",
-    "TWO_STEP_OWNER_FIRST": "Turn on two-step sign-in for yourself first (My profile), so asking it of your role cannot shut you out."
+    "TWO_STEP_OWNER_FIRST": "Turn on two-step sign-in for yourself first (My profile), so asking it of your role cannot shut you out.",
+    "PAYMENT_GATEWAY_NOT_SET_UP": "Online payments are not set up. Choose a payment gateway and save its keys in Settings → Online payments.",
+    "PAYMENT_LINK_NOTHING_DUE": "Nothing is due, so there is nothing to ask for.",
+    "PAYMENT_LINK_EXCEEDS_DUE": "A link cannot ask for more than is due ({{due, currency}}).",
+    "PAYMENT_LINK_TOO_SMALL": "A payment link must be for at least ₹1.",
+    "PAYMENT_LINK_CLOSED": "This link is no longer open (it is paid, cancelled or has run out).",
+    "PAYMENT_LINK_NEEDS_MOBILE": "Cashfree needs the customer's mobile number on the link. Add it to the customer first.",
+    "GATEWAY_AUTH_FAILED": "The payment gateway refused the keys. Check the key id, the secret, and test or live in Settings → Online payments.",
+    "GATEWAY_REFUSED": "The payment gateway refused: {{reason}}",
+    "GATEWAY_UNREACHABLE": "The payment gateway could not be reached. Try again in a minute.",
+    "GATEWAY_KEYS_REQUIRED": "Enter the gateway's key id and secret."
   },
   "validation": {
     "required": "This field is required",
@@ -2870,7 +2880,8 @@
     "skippedOptedOut_other": "{{count}} left out: asked not to get reminders",
     "optedOut": "No reminders",
     "dailySummary_one": "{{business}}, {{date}}: sales {{sales}} ({{count}} bill), collected {{collected}}, paid out {{paid}}, expenses {{expenses}}. Customers owe {{receivable}}, of which {{overdue}} is overdue. — Digital Bahi",
-    "dailySummary_other": "{{business}}, {{date}}: sales {{sales}} ({{count}} bills), collected {{collected}}, paid out {{paid}}, expenses {{expenses}}. Customers owe {{receivable}}, of which {{overdue}} is overdue. — Digital Bahi"
+    "dailySummary_other": "{{business}}, {{date}}: sales {{sales}} ({{count}} bills), collected {{collected}}, paid out {{paid}}, expenses {{expenses}}. Customers owe {{receivable}}, of which {{overdue}} is overdue. — Digital Bahi",
+    "payOnline": "Pay online: {{url}}"
   },
   "backup": {
     "title": "Backup & Restore",
@@ -3415,7 +3426,8 @@
       "offline_review": "Bill {{number}} for {{customer}} ({{total, currency}}), made offline, is held for review",
       "offline_reviewed": "Your bill {{number}} for {{customer}} was reviewed by {{reviewer}}",
       "customer_edit_replaced": "Your change to {{customer}} ({{fields}}) was replaced by {{editor}}'s change, made offline after it",
-      "reminders_stopped": "{{customer}} asked to stop payment reminders (replied STOP on WhatsApp)"
+      "reminders_stopped": "{{customer}} asked to stop payment reminders (replied STOP on WhatsApp)",
+      "payment_received_online": "{{customer}} paid {{amount, currency}} online (receipt {{number}})"
     },
     "review": {
       "price_changed": "{{product}} was billed at {{billed, currency}}; the rate list says {{list, currency}}.",
@@ -3907,7 +3919,12 @@
       "left": "{{amount}} due",
       "paid": "Paid",
       "billPdf": "Bill {{number}} as PDF",
-      "payments": "Payments received"
+      "payments": "Payments received",
+      "payOnline": "Pay online",
+      "payOnlineHint": "UPI, card or net banking. Your payment is recorded by itself.",
+      "payBill": "Pay",
+      "payBillLabel": "Pay bill {{number}} online",
+      "opening": "Opening the payment page…"
     }
   },
   "gstr2b": {
@@ -4242,5 +4259,113 @@
     "endOthersBody_other": "{{count}} other devices are signed out at once. This one stays signed in.",
     "endedOthers_one": "{{count}} device signed out",
     "endedOthers_other": "{{count}} devices signed out"
+  },
+  "gateway": {
+    "title": "Online payments",
+    "hint": "Take payments by UPI, card or net banking through your own Razorpay or Cashfree account. A paid link is recorded as a receipt by itself. Keys are kept encrypted and never shown again.",
+    "testMode": "This server makes test links itself: nothing is charged and no gateway is called.",
+    "provider": "Payment gateway",
+    "providers": {
+      "none": "None: UPI QR code only",
+      "razorpay": "Razorpay",
+      "cashfree": "Cashfree"
+    },
+    "noneHint": "Bills, the shop's page and \"Ask to pay\" show your UPI QR code (from the payment details on bills). Record those payments when they reach your bank, or import the bank statement.",
+    "environment": "Account",
+    "environments": {
+      "test": "Test (sandbox)",
+      "live": "Live"
+    },
+    "keyId": "Key id",
+    "appId": "App id",
+    "keySecret": "Key secret",
+    "secretKey": "Secret key",
+    "webhookSecret": "Webhook secret",
+    "secretSet": "Saved. Leave empty to keep it.",
+    "webhookTitle": "Payment updates from the gateway",
+    "webhookRazorpay": "In Razorpay's dashboard (Accounts & Settings → Webhooks), add this address for the events payment_link.paid, payment_link.partially_paid, payment_link.expired and payment_link.cancelled, with a secret of your choice; type the same secret here.",
+    "webhookCashfree": "In Cashfree's dashboard (Developers → Webhooks), add this address for payment link events. Cashfree signs them with your secret key.",
+    "webhookUrl": "Webhook address",
+    "lastWebhook": "Last update from the gateway: {{date}}",
+    "noWebhook": "No update from the gateway yet. Until one comes, open links are checked every few minutes.",
+    "account": "Money goes to",
+    "accountNone": "Not chosen",
+    "accountHint": "The bank account the gateway pays into: receipts from online payments are recorded in it.",
+    "upiOnly": "UPI only (no card or net-banking charges)",
+    "expiryDays": "Links can be paid for (days)",
+    "inReminders": "Add a pay link to payment reminders",
+    "inRemindersHint": "Email, SMS without a DLT template, and WhatsApp without a template: a template's words are fixed.",
+    "test": "Test the keys",
+    "testOk": "{{provider}} accepted the keys",
+    "saved": "Online payments saved"
+  },
+  "payLink": {
+    "button": "Ask to pay",
+    "hint": "A link (or QR code) the customer pays by UPI, card or net banking",
+    "title": "Ask {{name}} to pay",
+    "forBill": "Bill {{number}}: {{amount}} due",
+    "forBalance": "Balance: {{amount}} due",
+    "amount": "Amount to ask for",
+    "make": "Make payment link",
+    "making": "Making the link…",
+    "scan": "Scan to pay",
+    "address": "Payment link",
+    "copy": "Copy",
+    "copied": "Link copied",
+    "copyFailed": "Could not copy. Select the link and copy it.",
+    "send": "Send on WhatsApp",
+    "messageBill": "Namaste {{name}}, please pay {{amount}} for bill {{number}} from {{business}}. Pay online by UPI, card or net banking: {{url}}",
+    "messageBalance": "Namaste {{name}}, please pay {{amount}} due to {{business}}. Pay online by UPI, card or net banking: {{url}}",
+    "waiting": "Waiting for the payment. This checks by itself every few seconds.",
+    "check": "Check now",
+    "paidTitle": "Paid {{amount}}",
+    "paidReceipts": "Recorded as receipt {{numbers}}",
+    "paidToast": "{{name}} paid {{amount}} online",
+    "expires": "Can be paid until {{date}}",
+    "testLink": "Test link: nothing is charged.",
+    "cancel": "Cancel link",
+    "cancelTitle": "Cancel this payment link?",
+    "cancelBody": "{{name}} can no longer pay with it. Payments already made on it stay recorded.",
+    "cancelled": "Payment link cancelled",
+    "status": {
+      "created": "Open",
+      "partly_paid": "Part paid",
+      "paid": "Paid",
+      "expired": "Run out",
+      "cancelled": "Cancelled"
+    },
+    "source": {
+      "staff": "Sent from the app",
+      "reminder": "In a reminder",
+      "shop": "From the shop's page"
+    },
+    "upiTitle": "Pay by UPI",
+    "upiScan": "Scan with any UPI app to pay {{amount}} to {{upi}}",
+    "upiNote": "A payment to your UPI ID is not confirmed by itself: record it when it reaches you, or import the bank statement.",
+    "upiMessageBill": "Namaste {{name}}, please pay {{amount}} for bill {{number}} from {{business}} by UPI: {{upi}}",
+    "upiMessageBalance": "Namaste {{name}}, please pay {{amount}} due to {{business}} by UPI: {{upi}}",
+    "record": "Record payment",
+    "setUp": "To have payments recorded by themselves, set up Razorpay or Cashfree in Settings → Online payments.",
+    "openSettings": "Open Settings",
+    "noUpi": "Add your UPI ID to the payment details on bills (Settings) to show a UPI QR code here.",
+    "tab": "Online",
+    "empty": "No payment links yet. Make one with \"Ask to pay\" on a bill or a customer.",
+    "search": "Search customer or bill",
+    "filters": {
+      "open": "Open",
+      "paid": "Paid",
+      "all": "All"
+    },
+    "col": {
+      "made": "Made",
+      "customer": "Customer",
+      "for": "For",
+      "amount": "Amount",
+      "paid": "Received",
+      "status": "Status",
+      "expires": "Until"
+    },
+    "balance": "Balance",
+    "reused": "This is the link made before for the same amount (still open)."
   }
 }

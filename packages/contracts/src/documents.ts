@@ -164,6 +164,8 @@ export interface ShopAccount {
   payments: Array<{ number: string | null; date: string; amount: string; method: string }>;
   /** Where to pay by UPI (the business's own UPI ID, from its payment details), if it has one. */
   upi: { id: string; name: string } | null;
+  /** The business takes payments online (its payment gateway is set up): the page offers "Pay online". */
+  online: boolean;
 }
 
 export const OrderListQuery = PageQuery.extend({

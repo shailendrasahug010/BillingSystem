@@ -33,6 +33,7 @@ import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 import { copyBill, type CopiedLine } from "./copyBill";
 import { RepeatBillButton } from "./RepeatBill";
 import { PaymentDialog } from "../payments/PaymentDialog";
+import { PayLinkButton } from "../payments/PayLink";
 import { loadKeptDraft, type KeptDraft } from "./keptDraft";
 
 /** Bills already sent to the printer from Save & print (going back to one does not print it again). */
@@ -201,6 +202,9 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
             <Button icon={<Wallet size={16} />} onClick={() => setCollecting(true)}>
               {t("dashboard.actions.receivePayment")}
             </Button>
+          )}
+          {collectable && live.data && (
+            <PayLinkButton customerId={live.data.customerId} customerName={invoice.buyer.businessName} mobile={mobile ?? null} invoiceId={live.data.id} invoiceNumber={invoice.number} due={invoice.balance.toFixed(2)} />
           )}
           {copyLines && copyLines.length > 0 && (
             <Button icon={<Copy size={16} />} title={t("invoice.copy.title")} onClick={startCopy}>

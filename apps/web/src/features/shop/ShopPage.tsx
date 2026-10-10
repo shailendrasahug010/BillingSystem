@@ -392,6 +392,12 @@ function AccountCard({ shopKey, account, customerName }: { shopKey: string; acco
   const pdf = useShopPdf(shopKey);
   const owes = Number(account.balance);
   const pay = account.upi && owes > 0 ? upiPayLink({ upiId: account.upi.id, name: account.upi.name, amount: owes, note: customerName }) : null;
+  // The business's payment gateway: its page opens here, and the payment is recorded by itself.
+  const payOnline = useMutation({
+    mutationFn: (invoiceId: string | null) => api.post<{ url: string }>(`/shop/${shopKey}/pay`, invoiceId ? { invoiceId } : {}),
+    onSuccess: (r) => window.location.assign(r.url),
+  });
+  const online = Boolean(account.online) && owes > 0;
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4" aria-labelledby="shop-account" data-shop-account>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -405,14 +411,26 @@ function AccountCard({ shopKey, account, customerName }: { shopKey: string; acco
           {Number(account.overdue) > 0 && <p className="text-[13px] font-medium text-danger">{t("shop.account.overdue", { amount: money(account.overdue) })}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          {pay && touch && (
+          {online && (
+            <Button
+              variant="primary"
+              icon={payOnline.isPending && payOnline.variables === null ? <Loader2 size={16} className="animate-spin" /> : <IndianRupee size={16} />}
+              disabled={payOnline.isPending}
+              title={t("shop.account.payOnlineHint")}
+              onClick={() => payOnline.mutate(null)}
+              data-pay-online
+            >
+              {payOnline.isPending ? t("shop.account.opening") : t("shop.account.payOnline")}
+            </Button>
+          )}
+          {pay && touch && !online && (
             <a href={pay} className="press inline-flex h-10 items-center gap-2 rounded-[var(--radius-control)] bg-accent bg-accent-grad px-4 text-sm font-medium text-ink-inverse shadow-glow" data-pay>
               <IndianRupee size={16} aria-hidden />
               {t("shop.account.pay", { amount: money(account.balance) })}
             </a>
           )}
           {pay && (
-            <Button icon={<QrIcon size={16} />} variant={touch ? "secondary" : "primary"} aria-expanded={qr} onClick={() => setQr((v) => !v)}>
+            <Button icon={<QrIcon size={16} />} variant={touch || online ? "secondary" : "primary"} aria-expanded={qr} onClick={() => setQr((v) => !v)}>
               {touch ? t("shop.account.showQr") : t("shop.account.pay", { amount: money(account.balance) })}
             </Button>
           )}
@@ -431,7 +449,8 @@ function AccountCard({ shopKey, account, customerName }: { shopKey: string; acco
           </div>
         </div>
       )}
-      <ErrorNote error={pdf.error} />
+      {online && <p className="text-[12.5px] text-ink-3">{t("shop.account.payOnlineHint")}</p>}
+      <ErrorNote error={pdf.error ?? payOnline.error} />
       {account.bills.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <h3 className="text-[13px] font-semibold text-ink">{t("shop.account.bills")}</h3>
@@ -454,6 +473,19 @@ function AccountCard({ shopKey, account, customerName }: { shopKey: string; acco
                       <span className="text-[12px] text-good">{t("shop.account.paid")}</span>
                     )}
                   </span>
+                  {account.online && Number(b.due) > 0 && (
+                    <button
+                      type="button"
+                      className="press inline-flex h-9 items-center gap-1 rounded-lg border border-accent px-2.5 text-[13px] font-medium text-accent"
+                      aria-label={t("shop.account.payBillLabel", { number: b.number ?? "" })}
+                      disabled={payOnline.isPending}
+                      onClick={() => payOnline.mutate(b.id)}
+                      data-pay-bill={b.number ?? b.id}
+                    >
+                      {payOnline.isPending && payOnline.variables === b.id ? <Loader2 size={14} className="animate-spin" /> : <IndianRupee size={14} />}
+                      {t("shop.account.payBill")}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="press grid size-9 place-items-center rounded-lg border border-line text-ink-2"
