@@ -98,6 +98,8 @@ describe.skipIf(!hasDatabase)("two-step sign-in and signed-in devices", () => {
   });
 
   it("asks for the app's code after the password or the OTP; a code works once, and so does a recovery code", async () => {
+    // The next 30 seconds: the code shown now went into turning it on, and a code works once.
+    advance(30_000);
     const first = await call(t.app, "POST", "/auth/login", { body: { identifier: owner.mobile, password: owner.password } });
     expect(first.status).toBe(401);
     expect(first.body.error.code).toBe("TWO_STEP_REQUIRED");
