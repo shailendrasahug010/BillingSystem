@@ -98,6 +98,44 @@ describe.skipIf(!hasDatabase)("order links", () => {
     expect((await call(t.app, "GET", "/shop/not-a-key", {})).status).toBe(400);
   });
 
+  it("shows the shop its own bills, what it owes, its statement and where to pay, when the link does", async () => {
+    // New links show it unless asked not to.
+    expect((await get(`/customers/${ids.shop}/order-link`)).body.showsAccount).toBe(true);
+    const payTo = { bankName: "", accountNumber: "", ifsc: "", upiId: "link.traders@okaxis" };
+    expect((await call(t.app, "PUT", "/settings/invoice.payment_details", { token: owner.token, body: { value: payTo } })).status).toBe(200);
+    const bill = await post("/invoices", { customerId: ids.shop, lines: [{ productId: ids.soap, qty: "2" }] });
+    expect(bill.status).toBe(201);
+    expect((await post("/payments", { direction: "in", customerId: ids.shop, amount: "36", method: "cash" })).status).toBe(201);
+
+    const account = (await shop(ids.key!).page()).body.account;
+    // 2 soaps at 100 with 18% GST: 236, less 36 paid.
+    expect(account).toMatchObject({ balance: "200.00", overdue: "0.00", upi: { id: "link.traders@okaxis", name: "Link Traders" } });
+    expect(account.bills).toEqual([expect.objectContaining({ id: bill.body.id, number: bill.body.invoiceNumber, total: "236.00", due: "200.00", overdue: false })]);
+    expect(account.payments).toEqual([expect.objectContaining({ amount: "36.00", method: "cash" })]);
+
+    const pdf = (path: string) => t.app.inject({ method: "GET", url: `/api/v1/shop/${ids.key}${path}` });
+    const statement = await pdf("/statement/pdf");
+    expect(statement.statusCode).toBe(200);
+    expect(statement.headers["content-type"]).toBe("application/pdf");
+    expect((await pdf(`/invoices/${bill.body.id}/pdf`)).statusCode).toBe(200);
+    // Another shop's bill is not given out.
+    const verma = (await post("/customers", { name: "Verma Stores", stateCode: "23" })).body.id;
+    const theirs = await post("/invoices", { customerId: verma, lines: [{ productId: ids.soap, qty: "1" }] });
+    expect((await pdf(`/invoices/${theirs.body.id}/pdf`)).statusCode).toBe(404);
+
+    // Not shown any more: none of it.
+    const off = await call(t.app, "PATCH", `/customers/${ids.shop}/order-link`, { token: owner.token, body: { showsAccount: false } });
+    expect(off.status).toBe(200);
+    expect(off.body).toMatchObject({ key: ids.key, showsAccount: false });
+    expect((await shop(ids.key!).page()).body.account).toBeNull();
+    expect((await pdf("/statement/pdf")).statusCode).toBe(404);
+    expect((await pdf(`/invoices/${bill.body.id}/pdf`)).statusCode).toBe(404);
+    // A link made without it.
+    const plain = await post(`/customers/${verma}/order-link`, { showsAccount: false });
+    expect(plain.body.showsAccount).toBe(false);
+    expect((await shop(plain.body.key).page()).body.account).toBeNull();
+  });
+
   it("stops opening when turned off, or when the shop is made inactive", async () => {
     expect((await call(t.app, "DELETE", `/customers/${ids.shop}/order-link`, { token: owner.token })).status).toBe(204);
     expect((await shop(ids.key!).page()).status).toBe(410);

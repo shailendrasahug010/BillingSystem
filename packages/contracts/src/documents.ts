@@ -149,6 +149,23 @@ export const ShopOrderBody = z.strictObject({
   notes: z.string().trim().max(500).optional(),
 });
 
+/** A shop's order link: whether its page also shows the shop's bills, what it owes and a way to pay. */
+export const OrderLinkBody = z.strictObject({ showsAccount: z.boolean() });
+
+/** What a shop sees of its own account on its order link. */
+export interface ShopAccount {
+  /** What it owes now (all bills less payments and returns). */
+  balance: string;
+  /** The part of it past the bills' due dates. */
+  overdue: string;
+  /** Its latest bills, newest first. */
+  bills: Array<{ id: string; number: string | null; date: string; dueDate: string | null; total: string; due: string; overdue: boolean }>;
+  /** Its latest payments, newest first. */
+  payments: Array<{ number: string | null; date: string; amount: string; method: string }>;
+  /** Where to pay by UPI (the business's own UPI ID, from its payment details), if it has one. */
+  upi: { id: string; name: string } | null;
+}
+
 export const OrderListQuery = PageQuery.extend({
   status: z.enum(["draft", "pending", "confirmed", "packing", "packed", "dispatched", "delivered", "cancelled", "open", "all"]).default("all"),
   customerId: z.uuid().optional(),

@@ -77,7 +77,7 @@ try {
   const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
   const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
   const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).data.map((c) => [c.name, c.id]));
-  await api("POST", "/products", token, {
+  const soapItem = await api("POST", "/products", token, {
     name: "Lux Soap 100g",
     taxCategoryId: taxes["GST 18%"],
     baseUnitId: units.PCS,
@@ -154,6 +154,24 @@ try {
   await row.click();
   await page.getByText("Deliver on Monday").first().waitFor({ timeout: 10000 });
   log("owner: the order is under Sales Orders, Pending, from the order link, with its note");
+
+  // 5b. The shop's own account on its link: what it owes, its bill, a UPI link to pay, its statement.
+  await api("PUT", "/settings/invoice.payment_details", token, { value: { bankName: "", accountNumber: "", ifsc: "", upiId: "jain.dist@okaxis" } });
+  // 10 soaps at ₹40 with 18% GST: ₹472; ₹100 paid.
+  const bill = await api("POST", "/invoices", token, { customerId: shop.id, lines: [{ productId: soapItem.id, qty: "10" }] });
+  await api("POST", "/payments", token, { direction: "in", customerId: shop.id, amount: "100", method: "cash" });
+  await shopPage.reload();
+  const account = shopPage.locator("[data-shop-account]");
+  await account.locator("[data-balance]").getByText("₹372.00").waitFor({ timeout: 15000 });
+  const pay = await account.locator("[data-pay]").getAttribute("href");
+  if (!pay?.startsWith("upi://pay?pa=jain.dist%40okaxis&pn=Jain%20Distributors&am=372.00")) errors.push(`pay link: ${pay}`);
+  await account.locator(`[data-bill="${bill.invoiceNumber}"]`).getByText("₹372.00 due").waitFor();
+  const download = shopPage.waitForEvent("download");
+  await account.getByRole("button", { name: "Statement (PDF)" }).click();
+  if (!(await download).suggestedFilename().endsWith(".pdf")) errors.push("statement: not a PDF");
+  if (!(await fits(shopPage))) errors.push("the shop's account scrolls sideways on a phone");
+  await account.screenshot({ path: `${OUT}/link-2b-account.png` });
+  log("shop: owes ₹372 on its bill, a UPI link for it, its statement as a PDF");
 
   // 6. Hindi.
   await shopPage.getByRole("button", { name: "हिन्दी" }).click();

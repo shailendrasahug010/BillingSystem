@@ -1,5 +1,7 @@
+import type { ShopAccount } from "@digitalbahi/contracts";
+import { upiPayLink } from "@digitalbahi/core";
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Link2Off, Minus, Phone, Plus, Search, ShoppingCart } from "lucide-react";
+import { CheckCircle2, FileText, IndianRupee, Link2Off, Loader2, Minus, Phone, Plus, QrCode as QrIcon, Search, ShoppingCart } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { uuid } from "../../lib/uuid";
 import { useI18n } from "../../app/i18n";
@@ -9,8 +11,11 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input } from "../../components/ui/Field";
 import { EmptyState } from "../../components/ui/misc";
 import { ErrorNote } from "../../components/ui/Page";
+import { QrCode } from "../../components/ui/QrCode";
 import { api, ApiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
+import { downloadBlob } from "../../lib/download";
+import { useMediaQuery } from "../../lib/useMediaQuery";
 
 interface ShopUnit {
   unitId: string;
@@ -45,6 +50,8 @@ interface ShopData {
   customer: { name: string };
   products: ShopProduct[];
   orders: ShopOrder[];
+  /** The shop's own bills, what it owes and where to pay, when the business shows them on the link. */
+  account?: ShopAccount | null;
 }
 interface Quote {
   taxable: string;
@@ -165,7 +172,7 @@ function ShopPage({ shopKey }: { shopKey: string }) {
       </Shell>
     );
   }
-  const { business, customer, orders } = page.data;
+  const { business, customer, orders, account } = page.data;
 
   return (
     <Shell
@@ -203,6 +210,7 @@ function ShopPage({ shopKey }: { shopKey: string }) {
           <h1 className="text-[22px] font-semibold tracking-tight text-ink">{t("shop.title", { name: customer.name })}</h1>
           <p className="text-[13px] text-ink-3">{t("shop.subtitle")}</p>
         </div>
+        {account && <AccountCard shopKey={shopKey} account={account} customerName={customer.name} />}
         <div className="relative">
           <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-3" aria-hidden />
           <input
@@ -352,6 +360,133 @@ function ShopPage({ shopKey }: { shopKey: string }) {
     </Shell>
   );
 
+}
+
+/** Saves a PDF the page asks the server for (the shop's statement, one of its bills). */
+function useShopPdf(shopKey: string) {
+  const { locale } = useI18n();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const save = async (id: string, path: string, filename: string) => {
+    setBusy(id);
+    setError(null);
+    try {
+      downloadBlob(filename, await api.blob(`/shop/${shopKey}${path}`, { locale }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return { busy, error, save };
+}
+
+/**
+ * What the shop owes and how to pay it, its latest bills (each as a PDF) and
+ * payments, and its statement: on its order link when the business shows them.
+ */
+function AccountCard({ shopKey, account, customerName }: { shopKey: string; account: ShopAccount; customerName: string }) {
+  const { t, money, dateMedium } = useI18n();
+  const touch = useMediaQuery("(pointer: coarse)");
+  const [qr, setQr] = useState(false);
+  const pdf = useShopPdf(shopKey);
+  const owes = Number(account.balance);
+  const pay = account.upi && owes > 0 ? upiPayLink({ upiId: account.upi.id, name: account.upi.name, amount: owes, note: customerName }) : null;
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4" aria-labelledby="shop-account" data-shop-account>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="shop-account" className="text-[13px] font-medium text-ink-3">
+            {t("shop.account.title")}
+          </h2>
+          <p className={cn("num font-display text-[26px] leading-tight font-semibold", owes > 0 ? "text-ink" : "text-good")} data-balance>
+            {owes > 0 ? money(account.balance) : owes < 0 ? t("shop.account.advance", { amount: money(-owes) }) : t("shop.account.nothingDue")}
+          </p>
+          {Number(account.overdue) > 0 && <p className="text-[13px] font-medium text-danger">{t("shop.account.overdue", { amount: money(account.overdue) })}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {pay && touch && (
+            <a href={pay} className="press inline-flex h-10 items-center gap-2 rounded-[var(--radius-control)] bg-accent bg-accent-grad px-4 text-sm font-medium text-ink-inverse shadow-glow" data-pay>
+              <IndianRupee size={16} aria-hidden />
+              {t("shop.account.pay", { amount: money(account.balance) })}
+            </a>
+          )}
+          {pay && (
+            <Button icon={<QrIcon size={16} />} variant={touch ? "secondary" : "primary"} aria-expanded={qr} onClick={() => setQr((v) => !v)}>
+              {touch ? t("shop.account.showQr") : t("shop.account.pay", { amount: money(account.balance) })}
+            </Button>
+          )}
+          <Button icon={pdf.busy === "statement" ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />} disabled={pdf.busy !== null} onClick={() => void pdf.save("statement", "/statement/pdf", "statement.pdf")}>
+            {t("shop.account.statement")}
+          </Button>
+        </div>
+      </div>
+      {pay && qr && (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-surface-2/50 p-4 text-center sm:flex-row sm:text-left" data-pay-qr>
+          <QrCode text={pay} size={168} label={t("shop.account.qrLabel")} />
+          <div className="text-[13px] text-ink-2">
+            <p className="font-medium text-ink">{t("shop.account.scan", { amount: money(account.balance) })}</p>
+            <p className="font-mono text-[12.5px] text-ink-3">{account.upi!.id}</p>
+            <p className="mt-1 text-[12.5px] text-ink-3">{t("shop.account.payNote")}</p>
+          </div>
+        </div>
+      )}
+      <ErrorNote error={pdf.error} />
+      {account.bills.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-[13px] font-semibold text-ink">{t("shop.account.bills")}</h3>
+          <ul className="flex flex-col divide-y divide-line rounded-xl border border-line">
+            {account.bills.map((b) => (
+              <li key={b.id} className="flex items-center justify-between gap-3 px-3 py-2 text-[13.5px]" data-bill={b.number ?? b.id}>
+                <span className="min-w-0">
+                  <span className="block font-medium text-ink">{b.number ?? "—"}</span>
+                  <span className="text-[12.5px] text-ink-3">
+                    {dateMedium(b.date)}
+                    {Number(b.due) > 0 && b.dueDate ? ` · ${t("shop.account.dueOn", { date: dateMedium(b.dueDate) })}` : ""}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="text-right">
+                    <span className="num block text-ink">{money(b.total)}</span>
+                    {Number(b.due) > 0 ? (
+                      <span className={cn("num text-[12px]", b.overdue ? "font-medium text-danger" : "text-ink-3")}>{t("shop.account.left", { amount: money(b.due) })}</span>
+                    ) : (
+                      <span className="text-[12px] text-good">{t("shop.account.paid")}</span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="press grid size-9 place-items-center rounded-lg border border-line text-ink-2"
+                    aria-label={t("shop.account.billPdf", { number: b.number ?? "" })}
+                    disabled={pdf.busy !== null}
+                    onClick={() => void pdf.save(b.id, `/invoices/${b.id}/pdf`, `${(b.number ?? "bill").replace(/[^A-Za-z0-9-]+/g, "-")}.pdf`)}
+                  >
+                    {pdf.busy === b.id ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {account.payments.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-[13px] font-semibold text-ink">{t("shop.account.payments")}</h3>
+          <ul className="flex flex-col divide-y divide-line rounded-xl border border-line">
+            {account.payments.map((p, i) => (
+              <li key={`${p.number ?? ""}-${i}`} className="flex items-center justify-between gap-3 px-3 py-2 text-[13.5px]">
+                <span className="text-ink-2">
+                  {dateMedium(p.date)}
+                  {p.number ? <span className="text-ink-3"> · {p.number}</span> : null}
+                </span>
+                <span className="num text-good">{money(p.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function ReviewDialog({

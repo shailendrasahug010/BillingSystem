@@ -1,0 +1,1 @@
+ALTER TABLE "order_links" ADD COLUMN "shows_account" boolean DEFAULT false NOT NULL;

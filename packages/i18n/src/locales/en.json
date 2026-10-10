@@ -661,7 +661,13 @@
     "noneYet": "No customers yet",
     "noneYetHint": "Add the shops you sell to, or bring them in from Excel or Tally.",
     "importButton": "Import from Excel or Tally",
-    "gstinOrType": "GSTIN / type"
+    "gstinOrType": "GSTIN / type",
+    "statement": {
+      "title": "Account statement",
+      "billed": "Billed",
+      "received": "Received / returned",
+      "receivable": "Receivable"
+    }
   },
   "supplier": {
     "title": "Suppliers",
@@ -1869,7 +1875,8 @@
     "attachPdf": "{{name}} is downloaded: attach it in WhatsApp (📎 → Document).",
     "purchase": "Purchase bill {{number}} of {{date}} from {{party}}: {{amount}}, balance {{balance}}. – {{business}}",
     "purchaseSubject": "Purchase bill {{number}} – {{business}}",
-    "statement": "Account statement of {{party}} from {{from}} to {{to}}: {{amount}} payable. – {{business}}"
+    "statement": "Account statement of {{party}} from {{from}} to {{to}}: {{amount}} payable. – {{business}}",
+    "customerStatement": "Account statement of {{party}} from {{from}} to {{to}}: {{amount}} due. – {{business}}"
   },
   "audit": {
     "title": "Audit log",
@@ -3822,6 +3829,8 @@
     "hint": "A private page where this shop sees its own rates and orders from its phone. Orders wait under Sales Orders for you to confirm.",
     "title": "Order link for {{name}}",
     "about": "Make a link and send it to the shop on WhatsApp. They open it with no app or sign-in, see your products at their own rates, and place orders. Each order comes to Sales Orders as Pending.",
+    "showsAccount": "Also show the shop its bills, what it owes, its statement and a Pay button",
+    "showsAccountHint": "Anyone with the link sees what it shows, so send it only to the shop.",
     "make": "Make the link",
     "address": "Link",
     "copy": "Copy",
@@ -3881,7 +3890,25 @@
     "placedHint": "{{business}} will confirm it. You can see where it stands below.",
     "yourOrders": "Your orders",
     "offTitle": "This order link is off",
-    "offHint": "It was turned off or replaced. Ask the business that sent it for a new link."
+    "offHint": "It was turned off or replaced. Ask the business that sent it for a new link.",
+    "account": {
+      "title": "Your account",
+      "nothingDue": "Nothing due",
+      "advance": "{{amount}} paid in advance",
+      "overdue": "{{amount}} overdue",
+      "pay": "Pay {{amount}}",
+      "showQr": "UPI QR code",
+      "qrLabel": "UPI QR code to pay",
+      "scan": "Scan with any UPI app to pay {{amount}}",
+      "payNote": "Once the business records your payment, it shows here.",
+      "statement": "Statement (PDF)",
+      "bills": "Your bills",
+      "dueOn": "due {{date}}",
+      "left": "{{amount}} due",
+      "paid": "Paid",
+      "billPdf": "Bill {{number}} as PDF",
+      "payments": "Payments received"
+    }
   },
   "gstr2b": {
     "title": "Match with GSTR-2B",

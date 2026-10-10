@@ -6,7 +6,7 @@ import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
 import { Button } from "../../components/ui/Button";
 import { useConfirm } from "../../components/ui/Confirm";
 import { Dialog } from "../../components/ui/Dialog";
-import { Input } from "../../components/ui/Field";
+import { Checkbox, Input } from "../../components/ui/Field";
 import { ErrorNote } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
 import { BUSINESS } from "../../data/db";
@@ -19,6 +19,8 @@ interface LinkState {
   createdAt?: string;
   lastUsedAt?: string | null;
   ordersPlaced?: number;
+  /** The page also shows the shop its bills, what it owes, its statement and a Pay button. */
+  showsAccount?: boolean;
 }
 
 /** The address a shop opens: this server's own web app at its order page. */
@@ -34,10 +36,16 @@ export function OrderLinkButton({ customerId, customerName, mobile }: { customer
   const confirm = useConfirm();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  // For a new link: show the shop its account too (on unless unticked).
+  const [account, setAccount] = useState(true);
   const key = ["order-link", customerId];
   const link = useQuery({ queryKey: key, queryFn: () => api.get<LinkState>(`/customers/${customerId}/order-link`), enabled: open });
   const make = useMutation({
-    mutationFn: () => api.post<LinkState>(`/customers/${customerId}/order-link`),
+    mutationFn: () => api.post<LinkState>(`/customers/${customerId}/order-link`, { showsAccount: link.data?.key ? (link.data.showsAccount ?? false) : account }),
+    onSuccess: (r) => qc.setQueryData(key, r),
+  });
+  const shows = useMutation({
+    mutationFn: (showsAccount: boolean) => api.patch<LinkState>(`/customers/${customerId}/order-link`, { showsAccount }),
     onSuccess: (r) => qc.setQueryData(key, r),
   });
   const off = useMutation({
@@ -96,7 +104,7 @@ export function OrderLinkButton({ customerId, customerName, mobile }: { customer
         }
       >
         <div className="flex flex-col gap-4">
-          <ErrorNote error={link.error ?? make.error ?? off.error} />
+          <ErrorNote error={link.error ?? make.error ?? off.error ?? shows.error} />
           {link.isPending ? (
             <p className="text-[13px] text-ink-3" role="status">
               {t("common.loading")}
@@ -115,6 +123,12 @@ export function OrderLinkButton({ customerId, customerName, mobile }: { customer
                 {t("orderLink.placed", { count: current.ordersPlaced ?? 0 })}
                 {current.lastUsedAt ? ` · ${t("orderLink.lastOrder", { date: dateTime(current.lastUsedAt) })}` : ""}
               </p>
+              <Checkbox
+                label={t("orderLink.showsAccount")}
+                checked={current.showsAccount ?? false}
+                disabled={shows.isPending}
+                onChange={(v) => shows.mutate(v)}
+              />
               <button
                 type="button"
                 className="press inline-flex items-center gap-1.5 self-start text-[13px] text-accent hover:underline"
@@ -126,11 +140,15 @@ export function OrderLinkButton({ customerId, customerName, mobile }: { customer
               </button>
             </>
           ) : (
-            <div className="flex items-start gap-3 rounded-xl bg-accent-soft px-3.5 py-3 text-[13px] text-accent-ink">
-              <Store size={18} className="mt-0.5 shrink-0" aria-hidden />
-              <p>{t("orderLink.about")}</p>
-            </div>
+            <>
+              <div className="flex items-start gap-3 rounded-xl bg-accent-soft px-3.5 py-3 text-[13px] text-accent-ink">
+                <Store size={18} className="mt-0.5 shrink-0" aria-hidden />
+                <p>{t("orderLink.about")}</p>
+              </div>
+              <Checkbox label={t("orderLink.showsAccount")} checked={account} onChange={setAccount} />
+            </>
           )}
+          <p className="text-[12.5px] text-ink-3">{t("orderLink.showsAccountHint")}</p>
         </div>
       </Dialog>
     </>
