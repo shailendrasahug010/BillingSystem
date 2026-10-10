@@ -52,7 +52,14 @@ jobs:
         run: pnpm lint
 
       - name: Unit and database tests
-        run: pnpm test
+        # A failure with no line of the project's code in its stack (a database error, a
+        # timeout) gets no annotation from Vitest; the script makes one from the log.
+        run: |
+          set -o pipefail
+          pnpm test 2>&1 | tee "$RUNNER_TEMP/tests.log" || {
+            node .github/annotate-test-failures.mjs "$RUNNER_TEMP/tests.log"
+            exit 1
+          }
 
       - name: Migrations match the schema
         run: |
