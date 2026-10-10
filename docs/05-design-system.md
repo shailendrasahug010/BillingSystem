@@ -32,11 +32,12 @@ All colours are CSS custom properties on `:root`; the dark theme redefines only 
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--bg` | `#F3F6F6` | `#0C1618` | Page |
-| `--surface` / `-2` / `-3` | `#FFFFFF` / `#EEF3F3` / `#E3EAEB` | `#122023` / `#172A2E` / `#1F363A` | Cards, inputs, hovers |
-| `--border` / `-strong` | `#D7E0E1` / `#B9C7C9` | `#25393D` / `#37525A` | Dividers, control borders |
-| `--ink` / `-2` / `-3` | `#0F2629` / `#4A5F62` / `#6F8487` | `#E6EFF0` / `#A8BABD` / `#7F9497` | Primary, secondary, muted text |
-| `--accent` (+ `-hover`, `-soft`, `-ink`) | `#0B6E82` | `#3CB4CA` | Primary actions, selection, focus |
+| `--bg` | `#F4F6FB` | `#080E1B` | Page |
+| `--surface` / `-2` / `-3` | `#FFFFFF` / `#F1F4FA` / `#E5EAF3` | `#0F1728` / `#151F34` / `#1C2842` | Cards, inputs, hovers |
+| `--border` / `-strong` | `#E0E6F0` / `#C2CCDC` | `#1F2B45` / `#33456B` | Dividers, control borders |
+| `--ink` / `-2` / `-3` | `#0B1630` / `#45506A` / `#5F6B85` | `#E8EDF7` / `#AAB5CA` / `#7F8EAA` | Primary, secondary, muted text |
+| `--ink-inverse` | `#FFFFFF` | `#0B1220` | Text on accent and status fills (never a fixed white) |
+| `--accent` (+ `-hover`, `-soft`, `-ink`), `--accent-2` | `#1450B4`, partner `#2F8CF0` | `#7AA7FF`, partner `#5CC8FF` | Primary actions, selection, focus; the other accents redefine these (`data-accent`) |
 | `--good` / `-soft` | `#0B7A3E` / `#E1F3E8` | `#4CC987` / `#12301F` | Paid, on time, in stock |
 | `--warn` / `-soft` | `#8A5A00` / `#FCEFD2` | `#F2BD4F` / `#36290C` | Due, low stock, credit warning |
 | `--danger` / `-soft` | `#B42318` / `#FDE7E4` | `#F2837A` / `#3D1714` | Overdue, out of stock, blocked, destructive |
