@@ -99,6 +99,16 @@ export class GatewayError extends Error {
   }
 }
 
+/** A gateway's answer as JSON; null when it is empty or not JSON. */
+export function parseJson(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 /** Rupees ("12.50") to paise (1250) and back, without floating point. */
 export function toPaise(rupees: string): number {
   const [whole, frac = ""] = rupees.split(".");

@@ -27,6 +27,7 @@ interface Seen {
 /** A stand-in for a gateway's API: answers by method and path, and keeps what it was asked. */
 function standIn(routes: Record<string, (req: Seen) => { status?: number; body: unknown }>) {
   const seen: Seen[] = [];
+  const table = new Map(Object.entries(routes));
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     let raw = "";
     req.on("data", (c: Buffer) => (raw += c.toString("utf8")));
@@ -34,7 +35,7 @@ function standIn(routes: Record<string, (req: Seen) => { status?: number; body: 
       const path = (req.url ?? "").split("?")[0]!;
       const asked: Seen = { method: req.method ?? "", path: req.url ?? "", headers: req.headers, body: raw ? (JSON.parse(raw) as Record<string, unknown>) : null };
       seen.push(asked);
-      const route = routes[`${req.method} ${path}`] ?? Object.entries(routes).find(([k]) => k.endsWith("*") && `${req.method} ${path}`.startsWith(k.slice(0, -1)))?.[1];
+      const route = table.get(`${req.method} ${path}`);
       const answer = route ? route(asked) : { status: 404, body: { message: "not found" } };
       res.writeHead(answer.status ?? 200, { "content-type": "application/json" });
       res.end(JSON.stringify(answer.body));

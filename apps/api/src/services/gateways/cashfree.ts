@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { GatewayError, methodOf, rupees, type GatewayClient, type GatewayKeys, type LinkState, type LinkStatus, type NewLink, type ReceivedPayment, type WebhookNotice } from "./types.js";
+import { GatewayError, methodOf, parseJson, rupees, type GatewayClient, type GatewayKeys, type LinkState, type LinkStatus, type NewLink, type ReceivedPayment, type WebhookNotice } from "./types.js";
 
 /**
  * Cashfree Payment Links (https://docs.cashfree.com/reference/pg-new-apis-endpoint):
@@ -113,12 +113,7 @@ export class CashfreeClient implements GatewayClient {
       throw new GatewayError("GATEWAY_UNREACHABLE", `Cashfree could not be reached: ${(e as Error).message}`, (e as Error).message);
     }
     const text = await res.text();
-    let json: unknown = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
-    }
+    const json = parseJson(text);
     if (res.status === 401 || res.status === 403) throw new GatewayError("GATEWAY_AUTH_FAILED", "Cashfree refused the app id or secret key", String(res.status));
     if (!res.ok) {
       const reason = String(obj(json).message ?? text ?? res.status).slice(0, 300);

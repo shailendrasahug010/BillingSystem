@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { fromPaise, GatewayError, methodOf, toPaise, type GatewayClient, type GatewayKeys, type LinkState, type LinkStatus, type NewLink, type ReceivedPayment, type WebhookNotice } from "./types.js";
+import { fromPaise, GatewayError, methodOf, parseJson, toPaise, type GatewayClient, type GatewayKeys, type LinkState, type LinkStatus, type NewLink, type ReceivedPayment, type WebhookNotice } from "./types.js";
 
 /**
  * Razorpay Payment Links (https://razorpay.com/docs/api/payments/payment-links/):
@@ -92,12 +92,7 @@ export class RazorpayClient implements GatewayClient {
       throw new GatewayError("GATEWAY_UNREACHABLE", `Razorpay could not be reached: ${(e as Error).message}`, (e as Error).message);
     }
     const text = await res.text();
-    let json: unknown = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
-    }
+    const json = parseJson(text);
     if (res.status === 401) throw new GatewayError("GATEWAY_AUTH_FAILED", "Razorpay refused the key id or secret", "401");
     if (!res.ok) {
       const reason = String(obj(obj(json).error).description ?? text ?? res.status).slice(0, 300);

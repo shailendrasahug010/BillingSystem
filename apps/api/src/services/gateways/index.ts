@@ -48,32 +48,33 @@ export class FakeGateways implements Gateways {
   }
 
   client(provider: GatewayName): GatewayClient {
-    const self = this;
+    const links = this.links;
+    const key = (id: string) => this.key(provider, id);
     const guard = (keys: GatewayKeys) => {
       if (keys.keySecret === FAKE_BAD_SECRET) throw new GatewayError("GATEWAY_AUTH_FAILED", "The test gateway refused the keys", "401");
     };
     return {
-      async createLink(keys: GatewayKeys, link: NewLink) {
+      createLink: async (keys: GatewayKeys, link: NewLink) => {
         guard(keys);
         if (provider === "cashfree" && !(link.customer.mobile ?? "").replace(/\D/g, "").match(/[6-9]\d{9}$/)) {
           throw new GatewayError("GATEWAY_REFUSED", "Cashfree needs the customer's mobile number", "customer_phone");
         }
         const providerLinkId = provider === "razorpay" ? `plink_test${link.referenceId.replace(/-/g, "").slice(-14)}` : link.referenceId;
-        self.links.set(self.key(provider, providerLinkId), { amount: link.amount, status: "created", amountPaid: "0.00", payments: [] });
+        links.set(key(providerLinkId), { amount: link.amount, status: "created", amountPaid: "0.00", payments: [] });
         return { providerLinkId, url: `https://pay.example.test/${provider}/${providerLinkId}` };
       },
-      async fetchLink(keys: GatewayKeys, providerLinkId: string) {
+      fetchLink: async (keys: GatewayKeys, providerLinkId: string) => {
         guard(keys);
-        const link = self.links.get(self.key(provider, providerLinkId));
+        const link = links.get(key(providerLinkId));
         if (!link) throw new GatewayError("GATEWAY_REFUSED", "No such link at the test gateway", "404");
         return { status: link.status, amountPaid: link.amountPaid, payments: [...link.payments] };
       },
-      async cancelLink(keys: GatewayKeys, providerLinkId: string) {
+      cancelLink: async (keys: GatewayKeys, providerLinkId: string) => {
         guard(keys);
-        const link = self.links.get(self.key(provider, providerLinkId));
+        const link = links.get(key(providerLinkId));
         if (link && link.status !== "paid") link.status = "cancelled";
       },
-      async check(keys: GatewayKeys) {
+      check: async (keys: GatewayKeys) => {
         guard(keys);
       },
     };
