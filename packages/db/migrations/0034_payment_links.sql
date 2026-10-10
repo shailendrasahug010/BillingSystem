@@ -77,4 +77,39 @@ CREATE INDEX "gateway_payments_link_idx" ON "gateway_payments" USING btree ("lin
 CREATE UNIQUE INDEX "payment_links_provider_uq" ON "payment_links" USING btree ("provider","provider_link_id");--> statement-breakpoint
 CREATE INDEX "payment_links_customer_idx" ON "payment_links" USING btree ("business_id","customer_id","created_at");--> statement-breakpoint
 CREATE INDEX "payment_links_invoice_idx" ON "payment_links" USING btree ("business_id","invoice_id");--> statement-breakpoint
-CREATE INDEX "payment_links_open_idx" ON "payment_links" USING btree ("business_id","status","expires_at");
+CREATE INDEX "payment_links_open_idx" ON "payment_links" USING btree ("business_id","status","expires_at");--> statement-breakpoint
+-- Online payments, per business.
+ALTER TABLE payment_gateway_settings ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON payment_gateway_settings USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE payment_links ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON payment_links USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE gateway_payments ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON gateway_payments USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+-- The business a gateway's webhook is for, found by the random key in its address before the business is known.
+CREATE FUNCTION payment_gateway_business(p_key text) RETURNS TABLE (business_id uuid, time_zone text)
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+  AS $$
+    SELECT g.business_id, b.time_zone FROM payment_gateway_settings g
+    JOIN businesses b ON b.id = g.business_id
+    WHERE g.webhook_key = p_key AND b.status IN ('trial', 'active')
+  $$;
+--> statement-breakpoint
+-- The businesses with open payment links not asked about in the last minute (the check runs across businesses).
+CREATE FUNCTION payment_links_to_check(p_now timestamptz, p_limit integer) RETURNS TABLE (business_id uuid, time_zone text)
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+  AS $$
+    SELECT b.id, b.time_zone FROM businesses b
+    WHERE b.status IN ('trial', 'active')
+      AND EXISTS (
+        SELECT 1 FROM payment_links l
+        WHERE l.business_id = b.id AND l.status IN ('created', 'partly_paid')
+          AND coalesce(l.last_checked_at, l.created_at) < p_now - interval '1 minute'
+      )
+    ORDER BY b.id LIMIT p_limit
+  $$;
