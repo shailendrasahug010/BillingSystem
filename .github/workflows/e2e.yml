@@ -3,8 +3,10 @@ name: Browser tests
 # The browser scripts in apps/web/e2e against a real API and database: the
 # API in development mode (sign-up codes shown on screen), the web app from
 # Vite's dev server, and for the offline scripts from the production build
-# (the service worker only runs there). Split in four groups that run side
-# by side; screenshots and the API's log are kept when a group fails.
+# (the service worker only runs there). Every script in apps/web/e2e runs, in
+# six groups side by side. A script that fails shows the end of its output
+# (and of the API's log) as an annotation on the pull request; screenshots
+# and the full logs are kept as the run's artifacts.
 
 on:
   pull_request:
@@ -40,9 +42,15 @@ jobs:
           - group: field
             web: dev
             flows: team-access-flow outstanding-flow beat-flow report-views-flow error-log-flow bank-statement-flow daily-summary-flow setup-repeat-flow voice-flow empty-error-flow comfort-flow
+          - group: money
+            web: dev
+            flows: einvoice-flow export-sez-flow rcm-return-flow price-lists-flow payroll-statutory-flow backup-flow bill-company-invoice-flow photo-bill-flow
+          - group: more
+            web: dev
+            flows: auto-reminders-flow messaging-flow notifications-flow purchase-history-flow insights-flow branding-flow thermal-print-flow barcode-camera-flow
           - group: offline
             web: build
-            flows: offline-flow offline-work-flow device-wipe-flow reliability-flow
+            flows: offline-flow offline-work-flow device-wipe-flow reliability-flow offline-sync-flow weak-network-flow android-app-flow
     services:
       postgres:
         image: postgres:16
@@ -107,13 +115,29 @@ jobs:
       - name: Run ${{ matrix.group }}
         run: |
           mkdir -p "$OUT"
+          # The Android app's script serves the app at https://localhost (port 443) like Capacitor does.
+          sudo sysctl -q -w net.ipv4.ip_unprivileged_port_start=0
+          # A failed script's last lines as an annotation, readable on the pull request itself.
+          annotate() {
+            msg=$(tail -n "$3" "$2" | cut -c1-300 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | awk 'BEGIN { ORS = "%0A" } { print }')
+            echo "::error title=$1::$msg"
+          }
           failed=""
           for f in ${{ matrix.flows }}; do
             echo "::group::$f"
-            if timeout 600 node "apps/web/e2e/$f.mjs"; then echo "passed: $f"; else failed="$failed $f"; fi
+            if timeout 600 node "apps/web/e2e/$f.mjs" 2>&1 | tee "$OUT/$f.log"; then
+              echo "passed: $f"
+            else
+              failed="$failed $f"
+              annotate "$f failed" "$OUT/$f.log" 40
+            fi
             echo "::endgroup::"
           done
-          if [ -n "$failed" ]; then echo "::error::failed:$failed"; exit 1; fi
+          if [ -n "$failed" ]; then
+            annotate "API log (end)" api.log 30
+            echo "::error::failed:$failed"
+            exit 1
+          fi
 
       - name: Keep screenshots and logs
         if: failure()

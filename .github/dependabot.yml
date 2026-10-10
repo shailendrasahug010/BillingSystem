@@ -1,0 +1,37 @@
+# Dependency updates as pull requests (CI checks each one). Minor and patch
+# updates come together in one pull request a week; major updates are left
+# for a person to plan. Security updates are separate and come as needed.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gradle
+    directory: "/apps/mobile/android"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      android:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

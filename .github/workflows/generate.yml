@@ -1,0 +1,82 @@
+name: Generate files
+
+# For working where Node packages can't be installed (an AI coding session, a
+# tablet): on a claude/ branch, a commit whose message contains
+#   [generate:short_name]  writes the database migration for a schema change
+#                          (packages/db/migrations/00NN_short_name.sql) and the
+#                          database reference (docs/12-database-reference.md);
+#   [generate]             writes only the database reference (after editing a
+#                          migration by hand, e.g. to add row-level security);
+#   [lockfile]             updates pnpm-lock.yaml after a package.json change.
+# The files are committed back to the branch. CI then checks them as usual.
+
+on:
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: contains(github.event.head_commit.message, '[generate') || contains(github.event.head_commit.message, '[lockfile]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      MESSAGE: ${{ github.event.head_commit.message }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: |
+          case "$MESSAGE" in
+            *"[lockfile]"*) pnpm install --no-frozen-lockfile ;;
+            *) pnpm install --frozen-lockfile ;;
+          esac
+
+      - name: Migration and database reference
+        if: contains(github.event.head_commit.message, '[generate')
+        run: |
+          name=$(printf '%s' "$MESSAGE" | grep -o '\[generate:[a-z0-9_]*\]' | head -n 1 | sed -e 's/^\[generate://' -e 's/\]$//' || true)
+          if [ -n "$name" ]; then
+            pnpm --filter @digitalbahi/db exec drizzle-kit generate --name "$name"
+          fi
+          pnpm db:docs
+
+      - name: Commit the generated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A packages/db/migrations docs/12-database-reference.md pnpm-lock.yaml
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          git commit -m "Generated files for ${GITHUB_SHA::7}"
+          git push
