@@ -20,7 +20,8 @@ const SORTS: Sort[] = ["amount", "overdue", "oldest", "promise", "name"];
 
 function Figure({ label, value, format, sub }: { label: string; value: number; format(v: number): string; sub?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
+    // Darker than the banner, not lighter, so its small text keeps 4.5:1 (as on the dashboard).
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-black/10 px-4 py-3">
       <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
       <span className="num truncate font-display text-[22px] leading-tight font-semibold tracking-tight text-ink sm:text-[28px]">
         <CountUp value={value} format={format} />

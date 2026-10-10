@@ -263,7 +263,7 @@ export function SummaryPanel({
         )}
         <Button variant="primary" size="lg" block icon={busy ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} disabled={cannotSave} aria-busy={busy || undefined} onClick={() => onSave("save")} aria-keyshortcuts={ariaShortcut(INVOICE_SHORTCUTS.save)}>
           {t("invoice.save")}
-          <Kbd keys={INVOICE_SHORTCUTS.save} className={cn(keyHint, "ml-1 [&_kbd]:border-ink-inverse/30 [&_kbd]:bg-ink-inverse/15 [&_kbd]:text-ink-inverse")} />
+          <Kbd keys={INVOICE_SHORTCUTS.save} className={cn(keyHint, "ml-1 [&_kbd]:border-ink-inverse/40 [&_kbd]:bg-transparent [&_kbd]:text-ink-inverse")} />
         </Button>
         {(allowed("invoice.print") || allowed("invoice.share")) && (
           <div className="flex gap-2">

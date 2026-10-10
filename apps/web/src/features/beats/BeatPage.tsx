@@ -279,7 +279,7 @@ function PlaceChip({ label, shops, active, onClick, pin }: { label: string; shop
 
 function Amount({ label, value, format }: { label: string; value: number; format(v: number): string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-2xl border border-white/15 bg-black/10 px-3 py-2">
       <span className="truncate text-[12px] font-medium text-ink-2">{label}</span>
       <span className="num truncate font-display text-[17px] leading-tight font-semibold text-ink sm:text-[20px]">
         <CountUp value={value} format={format} />

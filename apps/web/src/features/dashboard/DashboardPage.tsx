@@ -57,7 +57,7 @@ function Delta({ current, previous, upIsGood = true, onDark }: { current: number
     <span
       className={cn(
         "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[12px] font-semibold",
-        onDark ? "bg-white/15 text-white" : good ? "bg-good-soft text-good" : "bg-danger-soft text-danger",
+        onDark ? "bg-black/20 text-white" : good ? "bg-good-soft text-good" : "bg-danger-soft text-danger",
       )}
       title={t("dashboard.kpi.vsPrevious")}
     >
@@ -122,10 +122,14 @@ function StatTile({
   );
 }
 
-/** Today's sales or collection in the banner. */
+/**
+ * Today's sales or collection in the banner. Its panel and the change chip darken the banner a
+ * little rather than lighten it, so the small text on them keeps 4.5:1 at the gradient's light
+ * end, in every accent.
+ */
 function HeroFigure({ label, value, format, previous, foot }: { label: string; value: number; format(v: number): string; previous: number; foot: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 md:min-w-[190px]">
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-black/10 px-4 py-3 md:min-w-[190px]">
       <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
       <span className="num font-display text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[30px]">
         <CountUp value={value} format={format} />
@@ -141,7 +145,7 @@ function HeroFigure({ label, value, format, previous, foot }: { label: string; v
 /** A banner figure without a comparison (roles without the sales dashboard). */
 function PlainFigure({ label, value, format, foot }: { label: string; value: number; format(v: number): string; foot?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 md:min-w-[190px]">
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/15 bg-black/10 px-4 py-3 md:min-w-[190px]">
       <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
       <span className="num font-display text-[26px] leading-tight font-semibold tracking-tight text-ink sm:text-[30px]">
         <CountUp value={value} format={format} />
@@ -255,7 +259,7 @@ export function DashboardPage() {
       {/* Banner: the day, the greeting and today's money coming in. */}
       <section className="bg-hero on-dark relative overflow-hidden rounded-[26px] px-5 py-5 shadow-pop sm:px-7 sm:py-6">
         <div className="dots pointer-events-none absolute inset-0 opacity-40" aria-hidden />
-        <div className="pointer-events-none absolute -top-28 -right-24 size-80 rounded-full bg-white/10 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -top-28 -right-24 size-80 rounded-full bg-white/5 blur-3xl" aria-hidden />
         <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <p className="text-[13px] text-ink-2">{weekday}</p>
@@ -278,7 +282,7 @@ export function DashboardPage() {
           ) : (
             <div className="grid grid-cols-2 gap-3 md:flex">
               {[0, 1].map((i) => (
-                <div key={i} className="flex flex-col gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 md:min-w-[190px]">
+                <div key={i} className="flex flex-col gap-2 rounded-2xl border border-white/15 bg-black/10 px-4 py-3 md:min-w-[190px]">
                   <Skeleton className="w-24" />
                   <Skeleton className="h-7 w-28" />
                 </div>

@@ -690,7 +690,7 @@ export function AppShell({ children, onOpenSearch, onOpenShortcuts }: { children
               >
                 <Plus size={16} />
                 {t("invoice.new")}
-                <Kbd keys="mod+i" className="opacity-80 [&_kbd]:border-ink-inverse/30 [&_kbd]:bg-ink-inverse/15 [&_kbd]:text-ink-inverse" />
+                <Kbd keys="mod+i" className="[&_kbd]:border-ink-inverse/40 [&_kbd]:bg-transparent [&_kbd]:text-ink-inverse" />
               </button>
             )}
             {LIVE && <AccountMenu onSignOut={() => void signOut()} />}
