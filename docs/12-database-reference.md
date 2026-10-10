@@ -13,9 +13,9 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Check constraints | 67 |
 | Indexes (besides primary keys and unique constraints) | 136 |
 | Triggers | 73 |
-| Tables with row-level security | 94 |
+| Tables with row-level security | 97 |
 | Enums | 40 |
-| Functions | 16 |
+| Functions | 18 |
 | Migrations | 35 (last: `0034_payment_links`) |
 
 ## How the database is set up
@@ -2992,6 +2992,7 @@ Online payments through a payment gateway the business has an account with (Razo
 * Check `payment_gateway_settings_environment_chk`: `(environment::text = ANY (ARRAY['test'::character varying, 'live'::character varying]::text[]))`
 * Check `payment_gateway_settings_expiry_chk`: `(link_expiry_days >= 1 AND link_expiry_days <= 180)`
 * Check `payment_gateway_settings_provider_chk`: `(provider::text = ANY (ARRAY['none'::character varying, 'razorpay'::character varying, 'cashfree'::character varying]::text[]))`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ### `payment_links`
 
@@ -3026,6 +3027,7 @@ A payment link sent to a customer: for one bill, or for what they owe. Paying it
 * Index `payment_links_invoice_idx`: btree `(business_id, invoice_id)`
 * Index `payment_links_open_idx`: btree `(business_id, status, expires_at)`
 * Index `payment_links_provider_uq`: unique, btree `(provider, provider_link_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`gateway_payments`](#gateway_payments).link_id
 
 ### `gateway_payments`
@@ -3049,6 +3051,7 @@ A payment the gateway received on a link, and the receipt it was recorded as. On
 * Check `gateway_payments_amount_chk`: `(amount > 0::numeric)`
 * Index `gateway_payments_link_idx`: btree `(link_id)`
 * Index `gateway_payments_provider_uq`: unique, btree `(provider, provider_payment_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ## Enums
 
@@ -3310,6 +3313,8 @@ Written in the migrations; triggers use them to keep the rules no application bu
 | `nightly_analytics_due(p_now timestamp with time zone, p_hour integer, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses due for the nightly analytics run: active ones where it is past p_hour in their own time zone and no run is claimed for their current date yet. Without a session, row-level security hides businesses and runs; this answers only "whose turn is it" (the run is claimed and done inside that business). |
 | `order_link_find(p_key_hash text)` | TABLE(id uuid, business_id uuid, customer_id uuid, owner_id uuid, time_zone text) | sql | The link a shop opened, found by its key's hash before the business is known (the page has no sign-in). |
 | `outbox_pending_businesses(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid) | sql | The businesses with outbox events waiting, for the API's outbox worker. It runs without a session, and row-level security hides every business's events until one is chosen; this answers only "whose events are waiting" (the events are then taken and handled inside that business). |
+| `payment_gateway_business(p_key text)` | TABLE(business_id uuid, time_zone text) | sql | The business a gateway's webhook is for, found by the random key in its address before the business is known. |
+| `payment_links_to_check(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses with open payment links not asked about in the last minute (the check runs across businesses). |
 | `recurring_invoices_due(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses with a repeat bill due today in their own time zone (the job runs across businesses). |
 | `reminder_rules_due(p_now timestamp with time zone, p_limit integer)` | TABLE(business_id uuid, time_zone text) | sql | The businesses with a reminder check due: an active rule whose hour (config.hour, else 10 for leave_request, salary_due and customer_reminders, 9 for the rest) has come in the business's time zone and that has not run since: hourly rules (orders_waiting, REMINDERS[...].hourly in @digitalbahi/core) an hour after their last run (last_run_at), the others once per business day (last_run_on). Without a session, row-level security hides businesses and rules; this answers only "whose turn is it" (the rules are then claimed and checked inside that business). |
 | `set_updated_at()` | trigger | plpgsql | updated_at is maintained automatically on every table that has it. Trigger on 55 tables. |
