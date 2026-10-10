@@ -10,8 +10,7 @@ import { SheetError } from "./sheet";
 export async function readPdfTable(file: File, isHeader: (cells: string[]) => boolean, onProgress?: ReadProgress): Promise<PdfTable> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc = (await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")).default;
-  // isEvalSupported off: the pages' Content-Security-Policy allows no eval, and pdf.js would try it first.
-  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false });
+  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
   let doc;
   try {
     doc = await task.promise;
