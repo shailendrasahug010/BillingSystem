@@ -13,7 +13,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Check constraints | 70 |
 | Indexes (besides primary keys and unique constraints) | 144 |
 | Triggers | 73 |
-| Tables with row-level security | 97 |
+| Tables with row-level security | 100 |
 | Enums | 41 |
 | Functions | 18 |
 | Migrations | 36 (last: `0035_bank_reconciliation`) |
@@ -3081,6 +3081,7 @@ Money moved between the business's own accounts: cash deposited in the bank, cas
 
 * Check `account_transfers_chk`: `(amount > 0::numeric AND from_account_id <> to_account_id)`
 * Index `account_transfers_date_idx`: btree `(business_id, transfer_date)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`bank_statement_lines`](#bank_statement_lines).transfer_id
 
 ### `bank_statements`
@@ -3104,6 +3105,7 @@ A bank statement as imported for one of the business's accounts (the CSV, Excel 
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
 
 * Index `bank_statements_account_idx`: btree `(business_id, payment_account_id, period_to)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`bank_statement_lines`](#bank_statement_lines).statement_id
 
 ### `bank_statement_lines`
@@ -3143,6 +3145,7 @@ One line of a bank statement and what it was reconciled with: a receipt or payme
 * Index `bank_statement_lines_payment_idx`: btree `(payment_id)`
 * Index `bank_statement_lines_statement_idx`: btree `(statement_id, row_no)`
 * Index `bank_statement_lines_transfer_idx`: btree `(transfer_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ## Enums
 
