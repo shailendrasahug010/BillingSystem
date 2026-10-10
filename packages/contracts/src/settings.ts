@@ -119,6 +119,14 @@ export const SETTING_SCHEMAS = {
   "ewaybill.threshold": z.number().int().min(0).max(10_000_000),
   /** Days a device may go without connecting before its saved copy is deleted (0 = never). */
   "offline.wipe_after_days": z.number().int().min(0).max(365),
+  /**
+   * Roles (by key) whose members must sign in with a code from an authenticator app as well; until they turn
+   * it on, the business's screens stay closed to them. Only the owner changes it.
+   */
+  "security.two_step_roles": z
+    .array(z.string().trim().min(1).max(50))
+    .max(50)
+    .refine((keys) => new Set(keys).size === keys.length, { message: "Each role once" }),
   "backup.schedule": z.strictObject({
     frequency: z.enum(["daily", "weekly", "off"]),
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),

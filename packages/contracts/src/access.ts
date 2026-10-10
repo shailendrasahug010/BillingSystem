@@ -23,8 +23,10 @@ export const MemberCredentialsBody = z
   .strictObject({
     username: Username.nullable().optional(),
     password: z.string().min(8).max(128).optional(),
+    /** Turns off the member's two-step sign-in (a lost phone and lost recovery codes); they can turn it on again. */
+    twoStepOff: z.literal(true).optional(),
   })
-  .refine((b) => b.username !== undefined || b.password !== undefined, { message: "Nothing to change" });
+  .refine((b) => b.username !== undefined || b.password !== undefined || b.twoStepOff !== undefined, { message: "Nothing to change" });
 
 export const UpdateMemberBody = z.strictObject({
   roleId: Id.optional(),

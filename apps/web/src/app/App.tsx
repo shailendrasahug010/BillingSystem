@@ -13,6 +13,7 @@ import { ServerSetup, useNeedsServer } from "../features/auth/ServerSetup";
 import { NativePush } from "../components/NativePush";
 import { BusinessPicker } from "../features/auth/BusinessPicker";
 import { LoginPage } from "../features/auth/LoginPage";
+import { TwoStepRequiredPage } from "../features/auth/TwoStep";
 import { UnlockPage } from "../features/auth/UnlockPage";
 import { CommandPalette } from "../features/search/CommandPalette";
 import { ShopApp, shopKeyFromHash } from "../features/shop/ShopPage";
@@ -230,6 +231,7 @@ function SessionGate() {
   if (session.status === "signed-out") return <AuthPage />;
   if (session.status === "no-business") return <BusinessPicker />;
   if (session.status === "locked") return <UnlockPage />;
+  if (session.status === "two-step") return <TwoStepRequiredPage />;
   const offline = session.status === "error" && session.error?.code === "network";
   return (
     <AuthLayout>

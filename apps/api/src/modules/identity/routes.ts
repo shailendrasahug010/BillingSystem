@@ -23,10 +23,11 @@ import { uuidv7 } from "uuidv7";
 import { authenticate, loadAccess } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import { withTenant, withUser } from "../../lib/db.js";
-import { ApiError, badRequest, conflict, unauthorized } from "../../lib/errors.js";
+import { badRequest, conflict, unauthorized } from "../../lib/errors.js";
 import { hashPassword, isLoopback, sha256, verifyPassword } from "../../lib/security.js";
 import type { ApiModule } from "../types.js";
 import { createBusiness, MAX_OWNED_BUSINESSES, validateBusinessInput } from "./businesses.js";
+import { assertNotLocked, countFailedSignIn } from "./lock.js";
 import { issueOtp, requireOtp } from "./otp.js";
 import {
   clearRefreshCookie,
@@ -40,13 +41,11 @@ import {
   rotateRefreshToken,
   sessionResponse,
   setSessionBusiness,
+  signIn as completeSignIn,
   startSession,
   type UserRow,
 } from "./sessions.js";
-
-const MAX_FAILED_LOGINS = 5;
-const LOCK_MINUTES = 15;
-/** Businesses one person may own (abuse guard for free trials). */
+import { twoStepChallenge } from "./twoStep.js";
 
 function mobileOrThrow(raw: string, field = "mobile"): string {
   const mobile = normalizeIndianMobile(raw);
@@ -70,23 +69,13 @@ export const identityModule: ApiModule = async (app, deps) => {
   const findUserByMobile = async (mobile: string) =>
     (await deps.db.select().from(schema.users).where(eq(schema.users.mobile, mobile)))[0];
 
-  /** Opens a session for a verified user and records the login. */
+  /**
+   * The password or the OTP was right: the session opens, or, with two-step
+   * sign-in on, the app asks for the authenticator app's code first.
+   */
   async function signIn(request: FastifyRequest, reply: Parameters<typeof sessionResponse>[2], user: UserRow, requested?: string, method = "password") {
-    const businesses = await listBusinesses(deps.db, user.id);
-    const business = pickBusiness(businesses, requested, user.lastBusinessId);
-    const session = await deps.db.transaction(async (tx) => {
-      await tx
-        .update(schema.users)
-        .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: now().toISOString(), ...(business ? { lastBusinessId: business.id } : {}) })
-        .where(eq(schema.users.id, user.id));
-      return startSession(tx, deps, request, user.id, business?.id ?? null);
-    });
-    if (business) {
-      await withTenant(deps.db, { businessId: business.id, userId: user.id }, (tx) =>
-        audit(tx, { ...actorOf(request, user), businessId: business.id }, { action: "auth.login", changes: { method } }),
-      );
-    }
-    return sessionResponse(deps, request, reply, { user, familyId: session.familyId, business, businesses, refreshToken: session.refreshToken });
+    if (user.mfaEnabledAt) throw await twoStepChallenge(deps, user, requested, method);
+    return completeSignIn(deps, request, reply, user, requested, method);
   }
 
   // ---------------------------------------------------------------- OTP
@@ -155,21 +144,12 @@ export const identityModule: ApiModule = async (app, deps) => {
       else if (/^[a-z]/i.test(identifier)) user = (await deps.db.select().from(schema.users).where(eq(schema.users.username, identifier.toLowerCase())))[0];
     }
     const at = now();
-    if (user?.lockedUntil && Date.parse(user.lockedUntil) > at.getTime()) {
-      throw new ApiError(429, "ACCOUNT_LOCKED", { retryAfter: Math.ceil((Date.parse(user.lockedUntil) - at.getTime()) / 1000) });
-    }
+    if (user) assertNotLocked(user, at);
     const ok = await verifyPassword(user?.isActive ? user.passwordHash : null, password);
     if (!user || !ok) {
       if (user) {
         await withUser(deps.db, user.id, async (tx) => {
-          await tx
-            .update(schema.users)
-            .set({
-              failedLoginCount: sql`${schema.users.failedLoginCount} + 1`,
-              lockedUntil: sql`case when ${schema.users.failedLoginCount} + 1 >= ${MAX_FAILED_LOGINS}
-                then ${new Date(at.getTime() + LOCK_MINUTES * 60_000).toISOString()}::timestamptz else ${schema.users.lockedUntil} end`,
-            })
-            .where(eq(schema.users.id, user.id));
+          await countFailedSignIn(tx, user.id, at);
           await tx.insert(schema.auditLogs).values({
             businessId: null,
             userId: user.id,
@@ -199,7 +179,7 @@ export const identityModule: ApiModule = async (app, deps) => {
   r.post("/auth/refresh", { config: authLimit, schema: { tags: ["auth"], security: [], body: RefreshBody } }, async (request, reply) => {
     const token = presentedRefreshToken(request, request.body);
     if (!token) throw unauthorized("REFRESH_INVALID");
-    const result = await rotateRefreshToken(deps, token);
+    const result = await rotateRefreshToken(deps, token, { ip: request.ip, userAgent: request.headers["user-agent"] ?? null });
     if (!result.ok) {
       if (result.code !== "REFRESH_ROTATED") clearRefreshCookie(deps, reply);
       throw unauthorized(result.code);
@@ -289,21 +269,13 @@ export const identityModule: ApiModule = async (app, deps) => {
     const [user] = await deps.db.select().from(schema.users).where(eq(schema.users.id, claims.userId));
     if (!user?.isActive) throw unauthorized();
     const at = now();
-    if (user.lockedUntil && Date.parse(user.lockedUntil) > at.getTime()) {
-      throw new ApiError(429, "ACCOUNT_LOCKED", { retryAfter: Math.ceil((Date.parse(user.lockedUntil) - at.getTime()) / 1000) });
-    }
+    assertNotLocked(user, at);
     if (!(await verifyPassword(user.passwordHash, request.body.password))) {
-      await deps.db
-        .update(schema.users)
-        .set({
-          failedLoginCount: sql`${schema.users.failedLoginCount} + 1`,
-          lockedUntil: sql`case when ${schema.users.failedLoginCount} + 1 >= ${MAX_FAILED_LOGINS}
-            then ${new Date(at.getTime() + LOCK_MINUTES * 60_000).toISOString()}::timestamptz else ${schema.users.lockedUntil} end`,
-        })
-        .where(eq(schema.users.id, user.id));
+      await countFailedSignIn(deps.db, user.id, at);
       throw badRequest("INVALID_CREDENTIALS", {}, "password");
     }
-    if (user.failedLoginCount > 0) await deps.db.update(schema.users).set({ failedLoginCount: 0 }).where(eq(schema.users.id, user.id));
+    // With two-step sign-in on, only a right code starts the count again: else this would undo wrong codes typed with a right password.
+    if (user.failedLoginCount > 0 && !user.mfaEnabledAt) await deps.db.update(schema.users).set({ failedLoginCount: 0 }).where(eq(schema.users.id, user.id));
     return reply.code(204).send();
   });
 
@@ -429,9 +401,11 @@ export const identityModule: ApiModule = async (app, deps) => {
           email: b!.email,
           logoFileId: b!.logoFileId,
         },
-        permissions: expandGrants(access.grants as Grant[]),
-        settings: Object.fromEntries(settings.map((s) => [s.key, s.value])),
+        // Asked for two-step sign-in and not turned on yet: nothing of the business until it is (its routes refuse too).
+        permissions: access.twoStepMissing ? [] : expandGrants(access.grants as Grant[]),
+        settings: access.twoStepMissing ? {} : Object.fromEntries(settings.map((s) => [s.key, s.value])),
         today: deps.clock.today(b!.timeZone),
+        ...(access.twoStepMissing ? { twoStepRequired: true } : {}),
       };
     });
   });

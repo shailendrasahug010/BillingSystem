@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useI18n } from "../../app/i18n";
+import { Field, Input } from "../../components/ui/Field";
 import { cn } from "../../lib/cn";
 
 const DIGITS = 6;
@@ -165,4 +166,50 @@ export function initialsOf(name: string): string {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+/**
+ * The second step of two-step sign-in: the authenticator app's 6-digit code,
+ * or one of the recovery codes instead (a link switches between them).
+ */
+export function SecondStepField({
+  id,
+  value,
+  onChange,
+  onComplete,
+  error,
+  autoFocus = true,
+}: {
+  id: string;
+  value: string;
+  onChange(code: string): void;
+  onComplete?(code: string): void;
+  error: string | null;
+  autoFocus?: boolean;
+}) {
+  const { t } = useI18n();
+  const [recovery, setRecovery] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      {recovery ? (
+        <Field label={t("twoStep.recoveryLabel")} htmlFor={id} error={error}>
+          <Input id={id} className="[&_input]:font-mono" autoComplete="off" autoCapitalize="none" spellCheck={false} invalid={Boolean(error)} value={value} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus} />
+        </Field>
+      ) : (
+        <Field label={t("twoStep.codeLabel")} htmlFor={id} error={error}>
+          <OtpBoxes id={id} value={value} onChange={onChange} onComplete={onComplete} invalid={Boolean(error)} autoFocus={autoFocus} />
+        </Field>
+      )}
+      <button
+        type="button"
+        className="self-start text-[13px] font-medium text-accent hover:underline"
+        onClick={() => {
+          setRecovery((r) => !r);
+          onChange("");
+        }}
+      >
+        {recovery ? t("twoStep.useApp") : t("twoStep.useRecovery")}
+      </button>
+    </div>
+  );
 }

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PERMISSION_CATALOG, validateMobile, type PermissionModule } from "@digitalbahi/core";
 import type { TranslationKey } from "@digitalbahi/i18n";
-import { MessageCircle, ShieldPlus, UserPlus } from "lucide-react";
+import { MessageCircle, ShieldCheck, ShieldPlus, UserPlus } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -12,6 +12,7 @@ import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Avatar } from "../../components/ui/misc";
 import { DataTable, ErrorNote, PageHeader, RowCard, TAB_TRIGGER, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
+import { useConfirm } from "../../components/ui/Confirm";
 import { allowed, BUSINESS } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { useAppLink } from "../../lib/appLink";
@@ -26,6 +27,8 @@ interface Member {
   /** User ID to sign in with, if the business gave one. */
   username: string | null;
   hasPassword: boolean;
+  /** Signs in with a code from an authenticator app as well. */
+  twoStep: boolean;
   lastLoginAt: string | null;
   role: { id: string; key: string; name: string };
   isOwner: boolean;
@@ -136,7 +139,21 @@ export function UsersPage() {
                 ),
               },
               { key: "role", header: t("users.role"), sortValue: (m) => (m.isOwner ? t("users.owner") : m.role.name), render: (m) => (m.isOwner ? <Badge tone="accent">{t("users.owner")}</Badge> : <span className="text-ink-2">{m.role.name}</span>) },
-              { key: "status", header: t("common.status"), sortValue: (m) => (m.isActive ? t("common.active") : t("common.inactive")), render: (m) => (m.isActive ? <Badge tone="good">{t("common.active")}</Badge> : <Badge tone="danger">{t("common.inactive")}</Badge>) },
+              {
+                key: "status",
+                header: t("common.status"),
+                sortValue: (m) => (m.isActive ? t("common.active") : t("common.inactive")),
+                render: (m) => (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    {m.isActive ? <Badge tone="good">{t("common.active")}</Badge> : <Badge tone="danger">{t("common.inactive")}</Badge>}
+                    {m.twoStep && (
+                      <Badge icon={<ShieldCheck size={12} />} className="h-5 text-[11px]">
+                        {t("users.twoStep")}
+                      </Badge>
+                    )}
+                  </span>
+                ),
+              },
               { key: "login", header: t("users.lastLogin"), align: "right", sortValue: (m) => m.lastLoginAt, render: (m) => <span className="text-ink-3">{m.lastLoginAt ? dateMedium(m.lastLoginAt.slice(0, 10)) : t("users.never")}</span> },
             ]}
           />
@@ -319,6 +336,7 @@ function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChan
 function MemberDialog({ member, onClose, roles }: { member: Member | null; onClose(): void; roles: Role[] }) {
   const { t } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
   const invite = useWhatsAppInvite();
   const qc = useQueryClient();
   const [roleId, setRoleId] = useState("");
@@ -343,6 +361,23 @@ function MemberDialog({ member, onClose, roles }: { member: Member | null; onClo
       });
       void qc.invalidateQueries({ queryKey: ["team"] });
       toast({ tone: "success", title: t("users.signInSaved"), body: member!.name });
+      onClose();
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  /** Their phone and recovery codes are lost: they sign in without the app's code until they set it up again. */
+  const twoStepOff = async () => {
+    const ok = await confirm({ title: t("users.twoStepOffTitle"), body: t("users.twoStepOffBody", { name: member!.name }), confirmLabel: t("users.twoStepOff"), danger: true });
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.put(`/members/${member!.id}/credentials`, { twoStepOff: true });
+      void qc.invalidateQueries({ queryKey: ["team"] });
+      toast({ tone: "success", title: t("users.twoStepTurnedOff"), body: member!.name });
       onClose();
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
@@ -406,6 +441,7 @@ function MemberDialog({ member, onClose, roles }: { member: Member | null; onClo
           <div>
             <h3 className="text-[13px] font-semibold text-ink">{t("users.signIn")}</h3>
             <p className="text-[12.5px] text-ink-3">{t("users.signInWith", { ways })}</p>
+            {member?.twoStep && <p className="mt-1 inline-flex items-center gap-1.5 text-[12.5px] text-good"><ShieldCheck size={13} aria-hidden />{t("users.twoStepOn")}</p>}
           </div>
           {member?.isActive && (
             <div>
@@ -425,10 +461,15 @@ function MemberDialog({ member, onClose, roles }: { member: Member | null; onClo
                   <Input id="m-password" type="password" autoComplete="new-password" value={login.password} onChange={(e) => setLogin((l) => ({ ...l, password: e.target.value }))} />
                 </Field>
               </div>
-              <div>
+              <div className="flex flex-wrap gap-2">
                 <Button disabled={busy || !loginChanged || loginBad} onClick={() => void saveLogin()}>
                   {t("users.saveSignIn")}
                 </Button>
+                {member?.twoStep && (
+                  <Button variant="ghost" disabled={busy} onClick={() => void twoStepOff()}>
+                    {t("users.twoStepOff")}
+                  </Button>
+                )}
               </div>
             </>
           )}

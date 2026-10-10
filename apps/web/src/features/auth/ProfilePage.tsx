@@ -15,8 +15,9 @@ import { BUSINESS, WORKSPACE } from "../../data/db";
 import { ApiError } from "../../lib/api";
 import { initialsOf, PasswordStrength } from "./parts";
 import { PasswordInput } from "./AuthPage";
+import { SessionsCard, TwoStepCard } from "./TwoStep";
 
-/** The signed-in person's own page: their name and email, and a new password. */
+/** The signed-in person's own page: their name and email, a new password, two-step sign-in and where they are signed in. */
 export function ProfilePage() {
   const i18n = useI18n();
   const { t } = i18n;
@@ -152,6 +153,8 @@ export function ProfilePage() {
         </form>
       </Card>
 
+      <TwoStepCard />
+      <SessionsCard />
       <PinLockSettings />
     </div>
   );

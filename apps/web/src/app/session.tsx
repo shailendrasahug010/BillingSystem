@@ -17,8 +17,11 @@ import { lockVault, passwordOpens, rememberPassword, unlockOnline, unlockWithPas
 import { stopPush } from "../platform/push";
 import { markSignedOut, rememberSignInName } from "../lib/lastSignIn";
 
-/** "locked": no server, and the copy on this device waits for the person's password. */
-export type SessionStatus = "loading" | "signed-out" | "no-business" | "ready" | "error" | "locked";
+/**
+ * "locked": no server, and the copy on this device waits for the person's password.
+ * "two-step": the business asks this person's role for two-step sign-in, which they have not turned on yet.
+ */
+export type SessionStatus = "loading" | "signed-out" | "no-business" | "ready" | "error" | "locked" | "two-step";
 
 export interface SignupInput {
   name: string;
@@ -36,9 +39,14 @@ interface SessionValue {
   businesses: BusinessSummary[];
   me: MeResponse | null;
   error: ApiError | null;
+  /** Password sign-in. With two-step sign-in on it fails with TWO_STEP_REQUIRED, whose token goes to loginTwoStep. */
   login(identifier: string, password: string): Promise<void>;
   requestOtp(mobile: string, purpose: "signup" | "login" | "reset"): Promise<{ devCode?: string }>;
   loginWithOtp(mobile: string, otp: string): Promise<void>;
+  /** The second step: the authenticator app's code (or a recovery code); the password typed first, to open the copy on this device later. */
+  loginTwoStep(token: string, code: string, password?: string): Promise<void>;
+  /** Loads the business again for this session (two-step sign-in just turned on where it was asked for). */
+  reopen(): Promise<void>;
   signup(input: SignupInput): Promise<void>;
   resetPassword(mobile: string, otp: string, password: string): Promise<void>;
   /** The person's own name and email ("" removes the email). */
@@ -217,6 +225,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           setStatus("no-business");
           return;
         }
+        // The business asks for two-step sign-in first: nothing of it loads (or is kept here) until it is on.
+        if (profile.twoStepRequired) {
+          setMe(profile);
+          setError(null);
+          setStatus("two-step");
+          return;
+        }
         // Another person or business: their copy is not this one.
         if (kept && (current.current.session?.user.id !== res.user.id || current.current.me?.business?.id !== profile.business.id)) kept = undefined;
         const loaded = await bringUpToDate(profile, res.user.id);
@@ -253,6 +268,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!res || !res.business || res.user.id !== was?.user.id || res.business.id !== was.business?.id) return enter(res);
     try {
       const profile = await api.get<MeResponse>("/me");
+      // Asked for two-step sign-in meanwhile: the screen that turns it on.
+      if (profile.twoStepRequired) return enter(res);
       const loaded = await bringUpToDate(profile, res.user.id);
       offlineMode.current = false;
       await keepOnDevice(res, profile, loaded);
@@ -443,6 +460,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       login: (identifier, password) => withSession(() => api.post<SessionResponse>("/auth/login", { identifier, password }), password),
       requestOtp: (mobile, purpose) => api.post<{ devCode?: string }>("/auth/otp", { mobile, purpose }),
       loginWithOtp: (mobile, otp) => withSession(() => api.post<SessionResponse>("/auth/login/otp", { mobile, otp })),
+      loginTwoStep: (token, code, password) => withSession(() => api.post<SessionResponse>("/auth/login/two-step", { token, code }), password),
+      reopen: () => (session ? enter(session) : Promise.resolve()),
       signup: (input) => withSession(() => api.post<SessionResponse>("/auth/signup", input), input.password),
       resetPassword: async (mobile, otp, password) => {
         await api.post("/auth/password/reset", { mobile, otp, password });

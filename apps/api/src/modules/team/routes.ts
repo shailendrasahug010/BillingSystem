@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
-import { can, guard, invalidateAccess } from "../../lib/access.js";
+import { can, guard, invalidateAccess, invalidateUserAccess } from "../../lib/access.js";
 import { audit, diff } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
@@ -59,6 +59,7 @@ async function listMembers(tx: Tx, businessId: string, memberId?: string) {
     email: string | null;
     username: string | null;
     has_password: boolean;
+    two_step: boolean;
     last_login_at: string | null;
     role_id: string;
     role_key: string;
@@ -67,7 +68,8 @@ async function listMembers(tx: Tx, businessId: string, memberId?: string) {
     is_active: boolean;
     created_at: string;
   }>(sql`
-    select bm.id, bm.user_id, u.name, u.mobile, u.email, u.username, u.password_hash is not null as has_password, u.last_login_at, bm.role_id, r.key as role_key, r.name as role_name,
+    select bm.id, bm.user_id, u.name, u.mobile, u.email, u.username, u.password_hash is not null as has_password, u.mfa_enabled_at is not null as two_step,
+           u.last_login_at, bm.role_id, r.key as role_key, r.name as role_name,
            bm.is_owner, bm.is_active, bm.created_at
     from business_members bm
     join users u on u.id = bm.user_id
@@ -82,6 +84,8 @@ async function listMembers(tx: Tx, businessId: string, memberId?: string) {
     email: m.email,
     username: m.username,
     hasPassword: m.has_password,
+    /** Signs in with a code from an authenticator app as well. */
+    twoStep: m.two_step,
     lastLoginAt: m.last_login_at,
     role: { id: m.role_id, key: m.role_key, name: m.role_name },
     isOwner: m.is_owner,
@@ -171,8 +175,18 @@ export const teamModule: ApiModule = async (app, deps) => {
         assertCanGrant(ctx, await roleGrants(tx, m.roleId));
         const shared = await tx.execute<{ shared: boolean }>(sql`select user_in_other_business(${m.userId}::uuid, ${ctx.businessId}::uuid) as shared`);
         if (shared.rows[0]?.shared) throw conflict("MEMBER_ACCOUNT_SHARED");
-        const [u] = await tx.select({ username: schema.users.username }).from(schema.users).where(eq(schema.users.id, m.userId)).for("update");
-        const changes: { username?: string | null; passwordHash?: string; passwordChangedAt?: string; failedLoginCount?: number; lockedUntil?: null } = {};
+        const [u] = await tx.select({ username: schema.users.username, twoStep: schema.users.mfaEnabledAt }).from(schema.users).where(eq(schema.users.id, m.userId)).for("update");
+        const changes: {
+          username?: string | null;
+          passwordHash?: string;
+          passwordChangedAt?: string;
+          failedLoginCount?: number;
+          lockedUntil?: null;
+          mfaSecretEnc?: null;
+          mfaEnabledAt?: null;
+          mfaRecoveryCodes?: null;
+          mfaLastStep?: null;
+        } = {};
         if (body.username !== undefined && body.username !== u?.username) {
           if (body.username) await assertUsernameFree(tx, body.username, m.userId);
           changes.username = body.username;
@@ -183,6 +197,9 @@ export const teamModule: ApiModule = async (app, deps) => {
           changes.failedLoginCount = 0;
           changes.lockedUntil = null;
         }
+        // Their phone and recovery codes are lost: they sign in with the password (or OTP) alone again, and can set it up anew.
+        const twoStepOff = Boolean(body.twoStepOff && u?.twoStep);
+        if (twoStepOff) Object.assign(changes, { mfaSecretEnc: null, mfaEnabledAt: null, mfaRecoveryCodes: null, mfaLastStep: null });
         if (Object.keys(changes).length) {
           await tx.update(schema.users).set(changes).where(eq(schema.users.id, m.userId));
           if (body.password) {
@@ -195,11 +212,16 @@ export const teamModule: ApiModule = async (app, deps) => {
             action: "member.credentials_set",
             entityType: "member",
             entityId: m.id,
-            changes: { ...(changes.username !== undefined ? { username: changes.username } : {}), ...(body.password ? { password: "changed" } : {}) },
+            changes: {
+              ...(changes.username !== undefined ? { username: changes.username } : {}),
+              ...(body.password ? { password: "changed" } : {}),
+              ...(twoStepOff ? { twoStep: "off" } : {}),
+            },
           });
         }
         return (await listMembers(tx, ctx.businessId, m.id))[0]!;
       });
+      if (body.twoStepOff) invalidateUserAccess(result.userId);
       return result;
     },
   );

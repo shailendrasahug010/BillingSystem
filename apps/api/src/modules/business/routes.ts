@@ -10,7 +10,7 @@ import { guard, invalidateAccess } from "../../lib/access.js";
 import { audit, diff } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
-import { badRequest, notFound } from "../../lib/errors.js";
+import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { getSettings, isSettingKey, SETTING_DEFAULTS } from "../../services/settings.js";
 import type { ApiModule } from "../types.js";
 
@@ -146,13 +146,26 @@ export const businessModule: ApiModule = async (app, deps) => {
       if (!isSettingKey(key)) throw badRequest("UNKNOWN_SETTING", { key }, "key");
       const parsed = SETTING_SCHEMAS[key].safeParse(request.body.value);
       if (!parsed.success) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
-      return tenant(ctx, async (tx) => {
+      // Who must use two-step sign-in is the owner's call: an admin cannot excuse themselves from it.
+      if (key === "security.two_step_roles" && !ctx.isOwner) throw forbidden();
+      const saved = await tenant(ctx, async (tx) => {
         // The bill's unit letters and the unit new lines start in name units of this business.
         const unitIds = key === "invoice.unit_letters" && parsed.data ? Object.keys(parsed.data) : key === "invoice.default_unit" && parsed.data && parsed.data !== "own" ? [parsed.data as string] : null;
         if (unitIds) {
           const ids = unitIds;
           const found = ids.length ? await tx.select({ id: schema.units.id }).from(schema.units).where(and(eq(schema.units.businessId, ctx.businessId), inArray(schema.units.id, ids))) : [];
           if (found.length !== ids.length) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
+        }
+        // Two-step sign-in is asked of this business's own roles.
+        if (key === "security.two_step_roles") {
+          const keys = parsed.data as string[];
+          const found = keys.length ? await tx.select({ key: schema.roles.key }).from(schema.roles).where(and(eq(schema.roles.businessId, ctx.businessId), inArray(schema.roles.key, keys))) : [];
+          if (found.length !== keys.length) throw badRequest("INVALID_SETTING_VALUE", { key }, "value");
+          // The owner turns it on for themselves first, so asking it of their own role cannot shut them out.
+          if (keys.includes(ctx.roleKey)) {
+            const [me] = await tx.select({ on: schema.users.mfaEnabledAt }).from(schema.users).where(eq(schema.users.id, ctx.userId));
+            if (!me?.on) throw conflict("TWO_STEP_OWNER_FIRST", {}, "value");
+          }
         }
         const [before] = await tx
           .select({ value: schema.settings.value })
@@ -178,6 +191,9 @@ export const businessModule: ApiModule = async (app, deps) => {
         }
         return { key, value: parsed.data };
       });
+      // Members of a role just asked for two-step sign-in (or excused from it) find out at their next request.
+      if (key === "security.two_step_roles") invalidateAccess(ctx.businessId);
+      return saved;
     },
   );
 
