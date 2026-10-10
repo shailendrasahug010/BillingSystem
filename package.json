@@ -1,6 +1,7 @@
 {
   "name": "digitalbahi",
   "private": true,
+  "license": "UNLICENSED",
   "description": "Distributor & Supplier CRM, Inventory, Billing and GST platform for Indian distributors and wholesalers",
   "packageManager": "pnpm@10.33.0",
   "engines": {
