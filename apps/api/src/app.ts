@@ -11,6 +11,7 @@ import type { AppDeps } from "./lib/context.js";
 import { errorHandler } from "./lib/errors.js";
 import { assertWebApp, registerWebApp } from "./lib/webApp.js";
 import { MODULES } from "./modules/index.js";
+import { createGateways } from "./services/gateways/index.js";
 import type { ApiModule } from "./modules/types.js";
 
 /**
@@ -18,7 +19,9 @@ import type { ApiModule } from "./modules/types.js";
  * modules only talk to each other through exported service functions that
  * take the caller's transaction.
  */
-export async function buildApp(deps: AppDeps, options: { extraModules?: ApiModule[] } = {}): Promise<FastifyInstance> {
+export async function buildApp(given: Omit<AppDeps, "gateways"> & { gateways?: AppDeps["gateways"] }, options: { extraModules?: ApiModule[] } = {}): Promise<FastifyInstance> {
+  // The payment gateways come from the configuration unless a test hands in its own.
+  const deps: AppDeps = { ...given, gateways: given.gateways ?? createGateways(given.config.gateways) };
   const { config } = deps;
   const app = Fastify({
     logger:

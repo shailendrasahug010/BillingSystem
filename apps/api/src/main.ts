@@ -13,6 +13,7 @@ import { startNightlyScheduler } from "./services/nightly-analytics.js";
 import { startOutboxWorker } from "./services/outbox-worker.js";
 import { startReminderScheduler } from "./services/reminders.js";
 import { startRepeatBillScheduler } from "./services/repeat-bills.js";
+import { startPaymentLinkPoller } from "./services/payment-links.js";
 import { LiveMessenger, LogMessenger } from "./services/messaging/transport.js";
 import { pushSender } from "./services/push.js";
 
@@ -86,6 +87,8 @@ const stopNightly = startNightlyScheduler(app.deps, config.nightlyAnalytics.sche
 const stopReminders = startReminderScheduler(app.deps, config.reminderSchedulerSeconds, app.log);
 // Repeat bills on their day (same cadence as the reminder checks).
 const stopRepeatBills = startRepeatBillScheduler(app.deps, config.reminderSchedulerSeconds, app.log);
+// Open payment links asked about at the gateway (payments a webhook did not bring).
+const stopPaymentLinks = startPaymentLinkPoller(app.deps, config.gateways.pollSeconds, app.log);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");
@@ -94,6 +97,7 @@ const shutdown = async (signal: string) => {
   stopNightly();
   stopReminders();
   stopRepeatBills();
+  stopPaymentLinks();
   await app.close();
   await errors.flush();
   await pool.end();

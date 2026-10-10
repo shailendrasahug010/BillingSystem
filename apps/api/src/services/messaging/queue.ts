@@ -4,6 +4,7 @@ import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 import type { AppDeps } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
+import { payLinksInReminders, withPayLink } from "../payment-links.js";
 import type { Channels, Outgoing } from "./transport.js";
 
 /**
@@ -122,17 +123,22 @@ export function pumpMessages(deps: AppDeps, ctx: QueueCtx): Promise<void> {
   const work = (async () => {
     try {
       for (;;) {
-        const { rows, channels } = await withTenant(deps.db, ctx, async (tx) => {
+        const { rows, channels, payLinks } = await withTenant(deps.db, ctx, async (tx) => {
           const rows = await tx
             .select()
             .from(schema.messages)
             .where(and(eq(schema.messages.businessId, ctx.businessId), eq(schema.messages.status, "queued")))
             .orderBy(schema.messages.createdAt)
             .limit(10);
-          return { rows, channels: resolveChannels(deps, await loadSettings(tx, ctx.businessId), await businessContact(tx, ctx.businessId)) };
+          return {
+            rows,
+            channels: resolveChannels(deps, await loadSettings(tx, ctx.businessId), await businessContact(tx, ctx.businessId)),
+            // Payment reminders carry a link to pay online when the business takes payments online.
+            payLinks: rows.some((r) => r.kind === "reminder") && (await payLinksInReminders(tx, ctx.businessId)),
+          };
         });
         if (!rows.length) break;
-        for (const row of rows) await deliverLogged(deps, ctx, row, channels, null);
+        for (const row of rows) await deliverLogged(deps, ctx, payLinks ? await withPayLink(deps, ctx, row) : row, channels, null);
       }
     } catch (e) {
       // Left queued; the next send for this business picks them up.

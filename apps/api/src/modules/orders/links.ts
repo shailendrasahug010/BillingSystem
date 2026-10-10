@@ -11,6 +11,7 @@ import { audit } from "../../lib/audit.js";
 import type { AppDeps, RequestCtx } from "../../lib/context.js";
 import { inSequence, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, notFound } from "../../lib/errors.js";
+import { createPaymentLink, gatewayReady, linkActor, loadGateway } from "../../services/payment-links.js";
 import { prepareSale } from "../../services/sales-document.js";
 import { getSettings } from "../../services/settings.js";
 import { customerStatementPdf, invoicePdfFile } from "../documents/routes.js";
@@ -21,6 +22,8 @@ const IdParams = z.strictObject({ id: z.uuid() });
 /** The key in a link: 24 random bytes, URL-safe. */
 const KeyParams = z.strictObject({ key: z.string().regex(/^[A-Za-z0-9_-]{32}$/) });
 const KeyIdParams = KeyParams.extend({ id: z.uuid() });
+/** Pay one bill, or (no bill) everything owed. */
+const ShopPayBody = z.strictObject({ invoiceId: z.uuid().optional() });
 const LocaleQuery = z.object({ locale: z.enum(["en", "hi"]).optional() });
 /** Bills and payments a shop sees on its page. */
 const ACCOUNT_BILLS = 20;
@@ -161,7 +164,7 @@ async function showsAccount(tx: Tx, linkId: string): Promise<boolean> {
 async function shopAccount(tx: Tx, ctx: RequestCtx, customerId: string, today: string): Promise<ShopAccount> {
   const [customer] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, customerId));
   const i = schema.invoices;
-  const [bills, overdue, payments, settings, business] = await inSequence([
+  const [bills, overdue, payments, settings, business, gateway] = await inSequence([
     () =>
       tx
         .select({ id: i.id, number: i.invoiceNumber, date: i.invoiceDate, dueDate: i.dueDate, total: i.grandTotal, due: i.balanceDue })
@@ -183,6 +186,7 @@ async function shopAccount(tx: Tx, ctx: RequestCtx, customerId: string, today: s
         .limit(ACCOUNT_PAYMENTS),
     () => getSettings(tx, ctx.businessId, ["invoice.payment_details"]),
     () => tx.select({ legalName: schema.businesses.legalName, tradeName: schema.businesses.tradeName }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId)),
+    () => loadGateway(tx, ctx.businessId),
   ]);
   const upiId = settings["invoice.payment_details"].upiId;
   return {
@@ -191,6 +195,7 @@ async function shopAccount(tx: Tx, ctx: RequestCtx, customerId: string, today: s
     bills: bills.map((b) => ({ ...b, overdue: Number(b.due) > 0 && b.dueDate !== null && b.dueDate < today })),
     payments,
     upi: upiId && UPI_ID.test(upiId) ? { id: upiId, name: business[0]?.tradeName ?? business[0]?.legalName ?? "" } : null,
+    online: gatewayReady(gateway),
   };
 }
 
@@ -336,6 +341,17 @@ export const orderLinksModule: ApiModule = async (app, deps) => {
     if (!own) throw notFound("invoice");
     const file = await invoicePdfFile(deps, ctx, own.id, request.query.locale);
     return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${file.filename}"`).header("cache-control", "private, no-store").send(file.pdf);
+  });
+
+  /**
+   * Pays a bill (or everything owed) online: a payment link at the business's
+   * gateway, opened by the page. Paying it records the receipt by itself.
+   */
+  r.post("/shop/:key/pay", { config: orderLimit, schema: { tags: ["shop"], params: KeyParams, body: ShopPayBody } }, async (request, reply) => {
+    const { link, ctx } = await accountLink(request.params.key, request.ip, request.headers["user-agent"] ?? null);
+    const made = await createPaymentLink(deps, linkActor(ctx), { customerId: link.customerId, invoiceId: request.body.invoiceId ?? null, source: "shop" });
+    reply.header("cache-control", "private, no-store");
+    return { url: made.link.url, amount: made.link.amount, expiresAt: made.link.expiresAt };
   });
 
   /** What an order would come to, with GST, before it is placed. */

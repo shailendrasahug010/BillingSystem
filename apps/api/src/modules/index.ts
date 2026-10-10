@@ -14,6 +14,8 @@ import { expensesModule } from "./expenses/routes.js";
 import { eInvoiceModule } from "./gst/einvoice.js";
 import { gstModule } from "./gst/routes.js";
 import { gstr2bModule } from "./gst/gstr2b.js";
+import { gatewaysModule } from "./gateways/routes.js";
+import { paymentWebhookModule } from "./gateways/webhook.js";
 import { healthModule } from "./health.js";
 import { identityModule } from "./identity/routes.js";
 import { twoStepModule } from "./identity/twoStep.js";
@@ -77,6 +79,7 @@ export const MODULES: ApiModule[] = [
   documentsModule,
   messagingModule,
   messagingStatusModule,
+  paymentWebhookModule,
   notificationsModule,
   pushModule,
   syncModule,
@@ -89,6 +92,7 @@ export const MODULES: ApiModule[] = [
   purchaseImportModule,
   inventoryModule,
   paymentsModule,
+  gatewaysModule,
   cashBookModule,
   collectionsModule,
   homeModule,

@@ -1297,7 +1297,17 @@
     "TWO_STEP_NOT_STARTED": "फिर से शुरू करें: सबसे नया QR कोड स्कैन करें और उसका कोड लिखें।",
     "TWO_STEP_OFF": "दो-चरण साइन इन बंद है।",
     "TWO_STEP_SETUP_REQUIRED": "आपका व्यापार दो-चरण साइन इन माँगता है। आगे बढ़ने के लिए मेरी प्रोफ़ाइल में इसे चालू करें।",
-    "TWO_STEP_OWNER_FIRST": "पहले अपने लिए दो-चरण साइन इन चालू करें (मेरी प्रोफ़ाइल), ताकि अपनी भूमिका के लिए माँगने से आप बाहर न हो जाएँ।"
+    "TWO_STEP_OWNER_FIRST": "पहले अपने लिए दो-चरण साइन इन चालू करें (मेरी प्रोफ़ाइल), ताकि अपनी भूमिका के लिए माँगने से आप बाहर न हो जाएँ।",
+    "PAYMENT_GATEWAY_NOT_SET_UP": "ऑनलाइन भुगतान सेट नहीं है। सेटिंग्स → ऑनलाइन भुगतान में पेमेंट गेटवे चुनें और उसकी कुंजियाँ सेव करें।",
+    "PAYMENT_LINK_NOTHING_DUE": "कुछ बकाया नहीं है, इसलिए माँगने को कुछ नहीं।",
+    "PAYMENT_LINK_EXCEEDS_DUE": "लिंक बकाया ({{due, currency}}) से ज़्यादा नहीं माँग सकता।",
+    "PAYMENT_LINK_TOO_SMALL": "भुगतान लिंक कम से कम ₹1 का होना चाहिए।",
+    "PAYMENT_LINK_CLOSED": "यह लिंक अब खुला नहीं है (भुगतान हो चुका, रद्द हुआ या समय खत्म हुआ)।",
+    "PAYMENT_LINK_NEEDS_MOBILE": "Cashfree को लिंक पर ग्राहक का मोबाइल नंबर चाहिए। पहले ग्राहक में मोबाइल नंबर जोड़ें।",
+    "GATEWAY_AUTH_FAILED": "पेमेंट गेटवे ने कुंजियाँ नहीं मानीं। सेटिंग्स → ऑनलाइन भुगतान में key id, secret और टेस्ट या लाइव जाँचें।",
+    "GATEWAY_REFUSED": "पेमेंट गेटवे ने मना किया: {{reason}}",
+    "GATEWAY_UNREACHABLE": "पेमेंट गेटवे से संपर्क नहीं हो पाया। एक मिनट बाद फिर कोशिश करें।",
+    "GATEWAY_KEYS_REQUIRED": "गेटवे की key id और secret लिखें।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -2870,7 +2880,8 @@
     "skippedOptedOut_other": "{{count}} छोड़े: रिमाइंडर न भेजने को कहा है",
     "optedOut": "रिमाइंडर नहीं",
     "dailySummary_one": "{{business}}, {{date}}: बिक्री {{sales}} ({{count}} बिल), वसूली {{collected}}, भुगतान {{paid}}, ख़र्च {{expenses}}। ग्राहकों पर बकाया {{receivable}}, जिसमें {{overdue}} की तारीख़ निकल चुकी है। — Digital Bahi",
-    "dailySummary_other": "{{business}}, {{date}}: बिक्री {{sales}} ({{count}} बिल), वसूली {{collected}}, भुगतान {{paid}}, ख़र्च {{expenses}}। ग्राहकों पर बकाया {{receivable}}, जिसमें {{overdue}} की तारीख़ निकल चुकी है। — Digital Bahi"
+    "dailySummary_other": "{{business}}, {{date}}: बिक्री {{sales}} ({{count}} बिल), वसूली {{collected}}, भुगतान {{paid}}, ख़र्च {{expenses}}। ग्राहकों पर बकाया {{receivable}}, जिसमें {{overdue}} की तारीख़ निकल चुकी है। — Digital Bahi",
+    "payOnline": "ऑनलाइन भुगतान करें: {{url}}"
   },
   "backup": {
     "title": "बैकअप और रिस्टोर",
@@ -3415,7 +3426,8 @@
       "offline_review": "ऑफ़लाइन बना बिल {{number}} ({{customer}}, {{total, currency}}) जाँच के लिए रोका गया है",
       "offline_reviewed": "आपका बिल {{number}} ({{customer}}) {{reviewer}} ने जाँच लिया",
       "customer_edit_replaced": "{{customer}} में आपका बदलाव ({{fields}}) {{editor}} के बाद में ऑफ़लाइन किए गए बदलाव से बदल गया",
-      "reminders_stopped": "{{customer}} ने भुगतान रिमाइंडर बंद करने को कहा (व्हाट्सऐप पर STOP भेजा)"
+      "reminders_stopped": "{{customer}} ने भुगतान रिमाइंडर बंद करने को कहा (व्हाट्सऐप पर STOP भेजा)",
+      "payment_received_online": "{{customer}} ने {{amount, currency}} ऑनलाइन भुगतान किया (रसीद {{number}})"
     },
     "review": {
       "price_changed": "{{product}} {{billed, currency}} पर बिल हुआ; रेट लिस्ट में {{list, currency}} है।",
@@ -3907,7 +3919,12 @@
       "left": "{{amount}} बकाया",
       "paid": "भुगतान हो गया",
       "billPdf": "बिल {{number}} PDF में",
-      "payments": "प्राप्त भुगतान"
+      "payments": "प्राप्त भुगतान",
+      "payOnline": "ऑनलाइन भुगतान करें",
+      "payOnlineHint": "UPI, कार्ड या नेट बैंकिंग। आपका भुगतान अपने-आप दर्ज हो जाता है।",
+      "payBill": "भुगतान",
+      "payBillLabel": "बिल {{number}} का ऑनलाइन भुगतान करें",
+      "opening": "भुगतान पेज खुल रहा है…"
     }
   },
   "gstr2b": {
@@ -4242,5 +4259,113 @@
     "endOthersBody_other": "{{count}} दूसरे डिवाइस तुरंत साइन आउट हो जाएँगे। यह डिवाइस साइन इन रहेगा।",
     "endedOthers_one": "{{count}} डिवाइस साइन आउट हुआ",
     "endedOthers_other": "{{count}} डिवाइस साइन आउट हुए"
+  },
+  "gateway": {
+    "title": "ऑनलाइन भुगतान",
+    "hint": "अपने Razorpay या Cashfree खाते से UPI, कार्ड या नेट बैंकिंग से भुगतान लें। भुगतान हुआ लिंक अपने-आप रसीद बन जाता है। कुंजियाँ कूटबद्ध रखी जाती हैं और दोबारा दिखाई नहीं जातीं।",
+    "testMode": "यह सर्वर टेस्ट लिंक खुद बनाता है: कोई पैसा नहीं कटता और किसी गेटवे को नहीं बुलाया जाता।",
+    "provider": "पेमेंट गेटवे",
+    "providers": {
+      "none": "कोई नहीं: सिर्फ़ UPI QR कोड",
+      "razorpay": "Razorpay",
+      "cashfree": "Cashfree"
+    },
+    "noneHint": "बिल, दुकान का पेज और \"भुगतान माँगें\" आपका UPI QR कोड दिखाते हैं (बिल के भुगतान विवरण से)। ये भुगतान बैंक में आने पर दर्ज करें, या बैंक स्टेटमेंट इम्पोर्ट करें।",
+    "environment": "खाता",
+    "environments": {
+      "test": "टेस्ट (सैंडबॉक्स)",
+      "live": "लाइव"
+    },
+    "keyId": "Key id",
+    "appId": "App id",
+    "keySecret": "Key secret",
+    "secretKey": "Secret key",
+    "webhookSecret": "Webhook secret",
+    "secretSet": "सेव है। बदलना न हो तो खाली छोड़ें।",
+    "webhookTitle": "गेटवे से भुगतान की सूचना",
+    "webhookRazorpay": "Razorpay डैशबोर्ड में (Accounts & Settings → Webhooks) यह पता payment_link.paid, payment_link.partially_paid, payment_link.expired और payment_link.cancelled इवेंट के लिए जोड़ें, अपनी पसंद का एक secret रखें और वही यहाँ लिखें।",
+    "webhookCashfree": "Cashfree डैशबोर्ड में (Developers → Webhooks) यह पता पेमेंट लिंक इवेंट के लिए जोड़ें। Cashfree इन्हें आपकी secret key से साइन करता है।",
+    "webhookUrl": "वेबहुक पता",
+    "lastWebhook": "गेटवे से पिछली सूचना: {{date}}",
+    "noWebhook": "गेटवे से अभी कोई सूचना नहीं आई। तब तक खुले लिंक हर कुछ मिनट में जाँचे जाते हैं।",
+    "account": "पैसा किस खाते में जाता है",
+    "accountNone": "चुना नहीं",
+    "accountHint": "जिस बैंक खाते में गेटवे पैसा भेजता है: ऑनलाइन भुगतान की रसीदें इसी में दर्ज होती हैं।",
+    "upiOnly": "सिर्फ़ UPI (कार्ड या नेट बैंकिंग का शुल्क नहीं)",
+    "expiryDays": "लिंक कितने दिन तक चलें",
+    "inReminders": "भुगतान रिमाइंडर में भुगतान लिंक जोड़ें",
+    "inRemindersHint": "ईमेल, बिना DLT टेम्पलेट वाले SMS और बिना टेम्पलेट वाले WhatsApp में: टेम्पलेट के शब्द बदले नहीं जा सकते।",
+    "test": "कुंजियाँ जाँचें",
+    "testOk": "{{provider}} ने कुंजियाँ मान लीं",
+    "saved": "ऑनलाइन भुगतान सेव हुआ"
+  },
+  "payLink": {
+    "button": "भुगतान माँगें",
+    "hint": "लिंक (या QR कोड) जिससे ग्राहक UPI, कार्ड या नेट बैंकिंग से भुगतान करे",
+    "title": "{{name}} से भुगतान माँगें",
+    "forBill": "बिल {{number}}: {{amount}} बकाया",
+    "forBalance": "कुल बकाया: {{amount}}",
+    "amount": "माँगी जाने वाली राशि",
+    "make": "भुगतान लिंक बनाएँ",
+    "making": "लिंक बन रहा है…",
+    "scan": "भुगतान के लिए स्कैन करें",
+    "address": "भुगतान लिंक",
+    "copy": "कॉपी",
+    "copied": "लिंक कॉपी हुआ",
+    "copyFailed": "कॉपी नहीं हुआ। लिंक चुनकर कॉपी करें।",
+    "send": "WhatsApp पर भेजें",
+    "messageBill": "नमस्ते {{name}}, कृपया {{business}} के बिल {{number}} के {{amount}} का भुगतान करें। UPI, कार्ड या नेट बैंकिंग से ऑनलाइन भुगतान करें: {{url}}",
+    "messageBalance": "नमस्ते {{name}}, कृपया {{business}} का बकाया {{amount}} भुगतान करें। UPI, कार्ड या नेट बैंकिंग से ऑनलाइन भुगतान करें: {{url}}",
+    "waiting": "भुगतान का इंतज़ार है। यह हर कुछ सेकंड में अपने-आप जाँचता है।",
+    "check": "अभी जाँचें",
+    "paidTitle": "{{amount}} का भुगतान हुआ",
+    "paidReceipts": "रसीद {{numbers}} के रूप में दर्ज हुआ",
+    "paidToast": "{{name}} ने {{amount}} ऑनलाइन भुगतान किया",
+    "expires": "{{date}} तक भुगतान हो सकता है",
+    "testLink": "टेस्ट लिंक: कोई पैसा नहीं कटेगा।",
+    "cancel": "लिंक रद्द करें",
+    "cancelTitle": "यह भुगतान लिंक रद्द करें?",
+    "cancelBody": "{{name}} इससे भुगतान नहीं कर पाएँगे। इस पर पहले हुए भुगतान दर्ज रहेंगे।",
+    "cancelled": "भुगतान लिंक रद्द हुआ",
+    "status": {
+      "created": "खुला",
+      "partly_paid": "आंशिक भुगतान",
+      "paid": "भुगतान हुआ",
+      "expired": "समय खत्म",
+      "cancelled": "रद्द"
+    },
+    "source": {
+      "staff": "ऐप से भेजा",
+      "reminder": "रिमाइंडर में",
+      "shop": "दुकान के पेज से"
+    },
+    "upiTitle": "UPI से भुगतान",
+    "upiScan": "{{upi}} पर {{amount}} भुगतान के लिए किसी भी UPI ऐप से स्कैन करें",
+    "upiNote": "आपकी UPI आईडी पर आया भुगतान अपने-आप पक्का नहीं होता: पैसा आने पर उसे दर्ज करें, या बैंक स्टेटमेंट इम्पोर्ट करें।",
+    "upiMessageBill": "नमस्ते {{name}}, कृपया {{business}} के बिल {{number}} के {{amount}} का भुगतान UPI से करें: {{upi}}",
+    "upiMessageBalance": "नमस्ते {{name}}, कृपया {{business}} का बकाया {{amount}} UPI से भुगतान करें: {{upi}}",
+    "record": "भुगतान दर्ज करें",
+    "setUp": "भुगतान अपने-आप दर्ज हों, इसके लिए सेटिंग्स → ऑनलाइन भुगतान में Razorpay या Cashfree सेट करें।",
+    "openSettings": "सेटिंग्स खोलें",
+    "noUpi": "यहाँ UPI QR कोड दिखाने के लिए सेटिंग्स में बिल के भुगतान विवरण में अपनी UPI आईडी जोड़ें।",
+    "tab": "ऑनलाइन",
+    "empty": "अभी कोई भुगतान लिंक नहीं। बिल या ग्राहक पर \"भुगतान माँगें\" से बनाएँ।",
+    "search": "ग्राहक या बिल खोजें",
+    "filters": {
+      "open": "खुले",
+      "paid": "भुगतान हुए",
+      "all": "सभी"
+    },
+    "col": {
+      "made": "बना",
+      "customer": "ग्राहक",
+      "for": "किसका",
+      "amount": "राशि",
+      "paid": "मिला",
+      "status": "स्थिति",
+      "expires": "कब तक"
+    },
+    "balance": "कुल बकाया",
+    "reused": "यह उसी राशि के लिए पहले बना लिंक है (अभी खुला है)।"
   }
 }

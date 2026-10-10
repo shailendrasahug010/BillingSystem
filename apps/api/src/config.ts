@@ -72,6 +72,17 @@ const Env = z.object({
   /** Or the path of that JSON file. */
   FCM_SERVICE_ACCOUNT_FILE: z.string().optional(),
   FCM_API_BASE: z.url().default("https://fcm.googleapis.com"),
+  /**
+   * Online payment links (each business's own Razorpay or Cashfree account):
+   * "live" makes them at the gateway; "fake" makes them in memory, charging
+   * nobody (development, demos, tests). Default: live in production, else fake.
+   */
+  PAYMENT_GATEWAY_DRIVER: z.enum(["live", "fake"]).optional(),
+  /** The gateways' addresses (a stand-in server in tests); Cashfree's replaces both its test and live ones. */
+  RAZORPAY_API_BASE: z.url().optional(),
+  CASHFREE_API_BASE: z.url().optional(),
+  /** How often the API asks the gateways about open payment links, in case a webhook did not arrive; 0 = never. */
+  PAYMENT_LINK_POLL_SECONDS: z.coerce.number().int().min(0).max(86400).default(600),
   /** Days a new SaaS business stays in trial. */
   TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(14),
   /** How often the API looks for automatic backups that are due (0 = never, e.g. on extra instances). */
@@ -118,6 +129,7 @@ export interface Config {
   otpWebhook?: { url: string; token?: string };
   messaging: { driver: "live" | "log"; smtpUrl?: string; mailFrom?: string; whatsappApiBase: string };
   push: { driver: "fcm" | "log" | "off"; serviceAccount?: ServiceAccount; apiBase: string };
+  gateways: { driver: "live" | "fake"; razorpayBase?: string; cashfreeBase?: string; pollSeconds: number };
   trialDays: number;
   backupSchedulerSeconds: number;
   outboxWorkerSeconds: number;
@@ -201,6 +213,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       whatsappApiBase: e.WHATSAPP_API_BASE.replace(/\/+$/, ""),
     },
     push: { driver: pushDriver, ...(account ? { serviceAccount: account } : {}), apiBase: e.FCM_API_BASE.replace(/\/+$/, "") },
+    gateways: {
+      driver: e.PAYMENT_GATEWAY_DRIVER ?? (e.NODE_ENV === "production" ? "live" : "fake"),
+      ...(e.RAZORPAY_API_BASE ? { razorpayBase: e.RAZORPAY_API_BASE.replace(/\/+$/, "") } : {}),
+      ...(e.CASHFREE_API_BASE ? { cashfreeBase: e.CASHFREE_API_BASE.replace(/\/+$/, "") } : {}),
+      pollSeconds: e.PAYMENT_LINK_POLL_SECONDS,
+    },
     trialDays: e.TRIAL_DAYS,
     backupSchedulerSeconds: e.BACKUP_SCHEDULER_SECONDS,
     outboxWorkerSeconds: e.OUTBOX_WORKER_SECONDS,

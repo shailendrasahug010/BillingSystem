@@ -21,6 +21,8 @@ export interface PaymentInput {
   notes?: string | null;
   /** Explicit allocations; omitted = oldest due first. */
   allocations?: ReadonlyArray<{ documentId: string; amount: string }>;
+  /** Without explicit allocations: this bill first (a payment link for it), then the oldest due. */
+  preferDocumentId?: string | null;
   clientId?: string | null;
 }
 
@@ -88,7 +90,9 @@ export async function recordPayment(tx: Tx, ctx: RequestCtx, financialYearStartM
     .for("no key update");
   if (!party) throw badRequest("REFERENCE_NOT_FOUND", {}, input.party.type === "customer" ? "customerId" : "supplierId");
   const open = await lockOpenDocuments(tx, businessId, input.party);
-  const { allocations, unallocated } = allocatePayment(input.amount, open, input.allocations);
+  // The preferred bill sorts first (oldest due first is the order allocatePayment takes).
+  const ordered = input.preferDocumentId ? open.map((d) => (d.id === input.preferDocumentId ? { ...d, dueDate: "0000-01-01" } : d)) : open;
+  const { allocations, unallocated } = allocatePayment(input.amount, ordered, input.allocations);
   const docType = input.direction === "in" ? "payment_in" : "payment_out";
   const numbering = await nextDocumentNumber(tx, businessId, docType, input.date, financialYearStartMonth);
   const id = uuidv7();

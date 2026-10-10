@@ -1,6 +1,7 @@
 import type { Database } from "@digitalbahi/db";
 import type { Config } from "../config.js";
 import type { Messenger } from "../services/messaging/transport.js";
+import type { Gateways } from "../services/gateways/index.js";
 import type { PushSender } from "../services/push.js";
 import type { FieldCipher } from "./crypto.js";
 import type { ErrorLog } from "./errorLog.js";
@@ -26,6 +27,8 @@ export interface AppDeps {
   push: PushSender;
   /** Failures written to the error log files (see errorLog.ts). */
   errors: ErrorLog;
+  /** Online payment links at the businesses' gateways (Razorpay, Cashfree); made from config.gateways when not given. */
+  gateways: Gateways;
 }
 
 /** Who is calling and in which business. Present on every tenant route. */
