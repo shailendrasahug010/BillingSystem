@@ -372,6 +372,63 @@ async function supplierStatementPdf(deps: AppDeps, ctx: RequestCtx, id: string, 
   return { pdf, filename: fileName(`statement-${supplier.name}-${to}`) };
 }
 
+/**
+ * A customer's account for a period as a PDF: opening balance, every bill,
+ * receipt, return and cancellation, and the closing balance they owe. Sent
+ * from their profile, and opened by the shop itself from its order link.
+ */
+export async function customerStatementPdf(deps: AppDeps, ctx: RequestCtx, id: string, q: { from?: string | undefined; to?: string | undefined; locale?: string | undefined }) {
+  const today = deps.clock.today(ctx.timeZone);
+  const from = q.from ?? financialYearOf(today).startDate;
+  const to = q.to ?? today;
+  if (to < from) throw badRequest("INVALID_PERIOD", {}, "to");
+  const letterhead = await loadLetterhead(deps, ctx);
+  const data = await withTenant(deps.db, ctx, async (tx) => {
+    const [c] = await tx
+      .select({ id: schema.customers.id, name: schema.customers.name, businessName: schema.customers.businessName, gstin: schema.customers.gstin })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.id, id), eq(schema.customers.businessId, ctx.businessId)));
+    if (!c) throw notFound("customer");
+    const settings = await getSettings(tx, ctx.businessId, ["invoice.default_print_locale"]);
+    return { customer: c, ledger: await partyLedger(tx, ctx, "customer", c.id, from, to), printLocale: settings["invoice.default_print_locale"] };
+  });
+  const locale: LocaleCode = isLocaleCode(q.locale) ? q.locale : isLocaleCode(data.printLocale) ? data.printLocale : "en";
+  const { t } = createTranslator(locale);
+  const label = (type: string) => {
+    const key = `ledger.${type}`;
+    const text = t(key as "ledger.opening");
+    return text === key ? type : text;
+  };
+  const { customer, ledger } = data;
+  const name = customer.businessName ?? customer.name;
+  const rows = [
+    { date: pdfDate(from), particulars: t("ledger.openingBalance"), debit: "", credit: "", balance: ledger.opening },
+    ...ledger.entries.map((e) => ({
+      date: pdfDate(e.date),
+      particulars: [label(e.docType), e.docNumber].filter(Boolean).join(" · "),
+      debit: Number(e.debit) ? e.debit : "",
+      credit: Number(e.credit) ? e.credit : "",
+      balance: e.balance,
+    })),
+  ];
+  const pdf = await renderReportPdf({
+    letterhead,
+    title: `${t("customer.statement.title")}: ${name}${customer.gstin ? ` (${customer.gstin})` : ""}`,
+    period: `${pdfDate(from)} – ${pdfDate(to)}`,
+    generatedAt: formatDateTime(deps.clock.now(), ctx.timeZone),
+    columns: [
+      { key: "date", label: t("common.date") },
+      { key: "particulars", label: t("customer.ledger.particulars") },
+      { key: "debit", label: t("customer.statement.billed") },
+      { key: "credit", label: t("customer.statement.received") },
+      { key: "balance", label: t("customer.statement.receivable") },
+    ],
+    rows,
+    totals: { particulars: t("ledger.closingBalance"), debit: ledger.totalDebit, credit: ledger.totalCredit, balance: ledger.closing },
+  });
+  return { pdf, filename: fileName(`statement-${name}-${to}`), closing: ledger.closing, from, to, locale };
+}
+
 function sendPdf(reply: FastifyReply, file: Pick<PdfFile, "pdf" | "filename">) {
   reply.header("content-type", "application/pdf");
   reply.header("content-disposition", `attachment; filename="${file.filename}"`);
@@ -388,6 +445,11 @@ export const documentsModule: ApiModule = async (app, deps) => {
   r.get("/notes/:id/pdf", opts("note.view", "notes"), async (request, reply) => sendPdf(reply, await notePdfFile(deps, request.ctx, request.params.id, request.query.locale)));
   r.get("/payments/:id/pdf", opts("payment.view", "payments"), async (request, reply) => sendPdf(reply, await receiptPdfFile(deps, request.ctx, request.params.id, request.query.locale)));
   r.get("/purchases/:id/pdf", opts("purchase.view", "purchases"), async (request, reply) => sendPdf(reply, await purchasePdfFile(deps, request.ctx, request.params.id, request.query.locale)));
+  r.get(
+    "/customers/:id/statement/pdf",
+    { preHandler: guard(deps, "customer.view_ledger"), schema: { tags: ["customers"], params: IdParams, querystring: StatementQuery } },
+    async (request, reply) => sendPdf(reply, await customerStatementPdf(deps, request.ctx, request.params.id, request.query)),
+  );
   r.get(
     "/suppliers/:id/statement/pdf",
     { preHandler: guard(deps, "supplier.view_ledger"), schema: { tags: ["suppliers"], params: IdParams, querystring: StatementQuery } },

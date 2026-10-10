@@ -562,8 +562,9 @@ export const recurringInvoices = pgTable(
 /**
  * Order links: a private web address for one customer (a shop), sent to them
  * on WhatsApp, where they see their own rates and place orders without
- * signing in. The orders land in Sales orders, waiting to be confirmed. Only
- * the key's hash is looked up; a new link replaces the old one.
+ * signing in, and (when the business chooses) their bills, what they owe, their
+ * statement and a UPI link to pay. The orders land in Sales orders, waiting to
+ * be confirmed. Only the key's hash is looked up; a new link replaces the old one.
  */
 export const orderLinks = pgTable(
   "order_links",
@@ -585,6 +586,8 @@ export const orderLinks = pgTable(
     revokedAt: tstz(),
     lastUsedAt: tstz(),
     ordersPlaced: integer().notNull().default(0),
+    /** The page also shows the shop its bills, what it owes, its statement and a way to pay (links made before this: off until turned on). */
+    showsAccount: boolean().notNull().default(false),
     ...auditColumns,
   },
   (t) => [uniqueIndex("order_links_key_idx").on(t.keyHash), index("order_links_customer_idx").on(t.businessId, t.customerId)],

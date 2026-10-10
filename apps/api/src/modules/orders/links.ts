@@ -1,5 +1,5 @@
-import { ShopOrderBody } from "@digitalbahi/contracts";
-import { dec, hasPermission, resolveTax, roundRate, type TaxCategory, type TaxRateRule } from "@digitalbahi/core";
+import { OrderLinkBody, ShopOrderBody, type ShopAccount } from "@digitalbahi/contracts";
+import { dec, hasPermission, resolveTax, roundRate, UPI_ID, type TaxCategory, type TaxRateRule } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -12,12 +12,19 @@ import type { AppDeps, RequestCtx } from "../../lib/context.js";
 import { inSequence, withTenant } from "../../lib/db.js";
 import { ApiError, badRequest, notFound } from "../../lib/errors.js";
 import { prepareSale } from "../../services/sales-document.js";
+import { getSettings } from "../../services/settings.js";
+import { customerStatementPdf, invoicePdfFile } from "../documents/routes.js";
 import type { ApiModule } from "../types.js";
 import { createSalesOrder } from "./routes.js";
 
 const IdParams = z.strictObject({ id: z.uuid() });
 /** The key in a link: 24 random bytes, URL-safe. */
 const KeyParams = z.strictObject({ key: z.string().regex(/^[A-Za-z0-9_-]{32}$/) });
+const KeyIdParams = KeyParams.extend({ id: z.uuid() });
+const LocaleQuery = z.object({ locale: z.enum(["en", "hi"]).optional() });
+/** Bills and payments a shop sees on its page. */
+const ACCOUNT_BILLS = 20;
+const ACCOUNT_PAYMENTS = 5;
 
 const hashKey = (key: string) => createHash("sha256").update(key).digest("hex");
 const gone = () => new ApiError(410, "ORDER_LINK_OFF");
@@ -144,6 +151,49 @@ async function shopCatalogue(tx: Tx, ctx: RequestCtx, customerId: string, today:
   };
 }
 
+/** Whether the link's page shows the shop its account (bills, what it owes, statement, pay). */
+async function showsAccount(tx: Tx, linkId: string): Promise<boolean> {
+  const [row] = await tx.select({ on: schema.orderLinks.showsAccount }).from(schema.orderLinks).where(eq(schema.orderLinks.id, linkId));
+  return Boolean(row?.on);
+}
+
+/** The shop's own account: what it owes and since when, its latest bills and payments, and where to pay by UPI. */
+async function shopAccount(tx: Tx, ctx: RequestCtx, customerId: string, today: string): Promise<ShopAccount> {
+  const [customer] = await tx.select({ balance: schema.customers.balance }).from(schema.customers).where(eq(schema.customers.id, customerId));
+  const i = schema.invoices;
+  const [bills, overdue, payments, settings, business] = await inSequence([
+    () =>
+      tx
+        .select({ id: i.id, number: i.invoiceNumber, date: i.invoiceDate, dueDate: i.dueDate, total: i.grandTotal, due: i.balanceDue })
+        .from(i)
+        .where(and(eq(i.businessId, ctx.businessId), eq(i.customerId, customerId), eq(i.status, "posted")))
+        .orderBy(desc(i.invoiceDate), desc(i.createdAt))
+        .limit(ACCOUNT_BILLS),
+    () =>
+      tx
+        .select({ amount: sql<string>`coalesce(sum(${i.balanceDue}), 0)::text` })
+        .from(i)
+        .where(and(eq(i.businessId, ctx.businessId), eq(i.customerId, customerId), eq(i.status, "posted"), sql`${i.balanceDue} > 0`, sql`${i.dueDate} < ${today}`)),
+    () =>
+      tx
+        .select({ number: schema.payments.paymentNumber, date: schema.payments.paymentDate, amount: schema.payments.amount, method: schema.payments.method })
+        .from(schema.payments)
+        .where(and(eq(schema.payments.businessId, ctx.businessId), eq(schema.payments.customerId, customerId), eq(schema.payments.direction, "in"), eq(schema.payments.status, "posted")))
+        .orderBy(desc(schema.payments.paymentDate), desc(schema.payments.createdAt))
+        .limit(ACCOUNT_PAYMENTS),
+    () => getSettings(tx, ctx.businessId, ["invoice.payment_details"]),
+    () => tx.select({ legalName: schema.businesses.legalName, tradeName: schema.businesses.tradeName }).from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId)),
+  ]);
+  const upiId = settings["invoice.payment_details"].upiId;
+  return {
+    balance: customer?.balance ?? "0.00",
+    overdue: dec(overdue[0]?.amount ?? 0).toFixed(2),
+    bills: bills.map((b) => ({ ...b, overdue: Number(b.due) > 0 && b.dueDate !== null && b.dueDate < today })),
+    payments,
+    upi: upiId && UPI_ID.test(upiId) ? { id: upiId, name: business[0]?.tradeName ?? business[0]?.legalName ?? "" } : null,
+  };
+}
+
 /**
  * Order links. The business makes one per shop (a customer) and sends it;
  * the shop opens it with no sign-in, sees its own rates and places orders,
@@ -166,13 +216,15 @@ export const orderLinksModule: ApiModule = async (app, deps) => {
   r.get("/customers/:id/order-link", { preHandler: guard(deps, "order.create"), schema: { tags: ["orders"], params: IdParams } }, async (request) => {
     const ctx = request.ctx;
     const [row] = await withTenant(deps.db, ctx, (tx) => current(tx, ctx.businessId, request.params.id));
-    return row ? { key: linkUrlKey(row), createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, ordersPlaced: row.ordersPlaced } : { key: null };
+    return row ? { key: linkUrlKey(row), createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, ordersPlaced: row.ordersPlaced, showsAccount: row.showsAccount } : { key: null };
   });
 
   // A new link: the old one (if any) stops opening.
-  r.post("/customers/:id/order-link", { preHandler: guard(deps, "order.create"), schema: { tags: ["orders"], params: IdParams } }, async (request, reply) => {
+  r.post("/customers/:id/order-link", { preHandler: guard(deps, "order.create"), schema: { tags: ["orders"], params: IdParams, body: OrderLinkBody.partial().nullish() } }, async (request, reply) => {
     const ctx = request.ctx;
     const key = randomBytes(24).toString("base64url");
+    // A new link shows the shop its account unless asked not to.
+    const account = request.body?.showsAccount ?? true;
     const now = deps.clock.now().toISOString();
     const row = await withTenant(deps.db, ctx, async (tx) => {
       const [customer] = await tx
@@ -188,12 +240,29 @@ export const orderLinksModule: ApiModule = async (app, deps) => {
         .returning({ id: t.id });
       const [made] = await tx
         .insert(t)
-        .values({ businessId: ctx.businessId, customerId: customer.id, keyHash: hashKey(key), keySealed: deps.cipher.encrypt(key), ownerId: ctx.userId, createdBy: ctx.userId, updatedBy: ctx.userId })
+        .values({ businessId: ctx.businessId, customerId: customer.id, keyHash: hashKey(key), keySealed: deps.cipher.encrypt(key), ownerId: ctx.userId, showsAccount: account, createdBy: ctx.userId, updatedBy: ctx.userId })
         .returning();
       await audit(tx, ctx, { action: replaced.length ? "order_link.replaced" : "order_link.created", entityType: "customer", entityId: customer.id, entityLabel: customer.businessName ?? customer.name });
       return made!;
     });
-    return reply.code(201).send({ key, createdAt: row.createdAt, lastUsedAt: null, ordersPlaced: 0 });
+    return reply.code(201).send({ key, createdAt: row.createdAt, lastUsedAt: null, ordersPlaced: 0, showsAccount: row.showsAccount });
+  });
+
+  /** Shows (or stops showing) the shop its account on its current link. */
+  r.patch("/customers/:id/order-link", { preHandler: guard(deps, "order.create"), schema: { tags: ["orders"], params: IdParams, body: OrderLinkBody } }, async (request) => {
+    const ctx = request.ctx;
+    const now = deps.clock.now().toISOString();
+    const row = await withTenant(deps.db, ctx, async (tx) => {
+      const [changed] = await tx
+        .update(t)
+        .set({ showsAccount: request.body.showsAccount, updatedAt: now, updatedBy: ctx.userId })
+        .where(and(eq(t.businessId, ctx.businessId), eq(t.customerId, request.params.id), isNull(t.revokedAt)))
+        .returning();
+      if (!changed) throw notFound("order_link");
+      await audit(tx, ctx, { action: "order_link.updated", entityType: "customer", entityId: request.params.id, changes: { showsAccount: request.body.showsAccount } });
+      return changed;
+    });
+    return { key: linkUrlKey(row), createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, ordersPlaced: row.ordersPlaced, showsAccount: row.showsAccount };
   });
 
   r.delete("/customers/:id/order-link", { preHandler: guard(deps, "order.create"), schema: { tags: ["orders"], params: IdParams } }, async (request, reply) => {
@@ -233,10 +302,40 @@ export const orderLinksModule: ApiModule = async (app, deps) => {
         customer: { name: customer.businessName ?? customer.name },
         products,
         orders,
+        account: (await showsAccount(tx, link.id)) ? await shopAccount(tx, ctx, customer.id, today) : null,
       };
     });
     reply.header("cache-control", "private, no-store");
     return body;
+  });
+
+  /** The link whose page shows the shop's account (else as if turned off: nothing of it is given). */
+  const accountLink = async (key: string, ip: string, userAgent: string | null) => {
+    const link = await findLink(deps, key);
+    const ctx = await linkCtx(deps, link, ip, userAgent);
+    if (!(await withTenant(deps.db, ctx, (tx) => showsAccount(tx, link.id)))) throw notFound("statement");
+    return { link, ctx };
+  };
+
+  /** The shop's statement from the start of the financial year, as a PDF. */
+  r.get("/shop/:key/statement/pdf", { config: pageLimit, schema: { tags: ["shop"], params: KeyParams, querystring: LocaleQuery } }, async (request, reply) => {
+    const { link, ctx } = await accountLink(request.params.key, request.ip, request.headers["user-agent"] ?? null);
+    const file = await customerStatementPdf(deps, ctx, link.customerId, { locale: request.query.locale });
+    return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${file.filename}"`).header("cache-control", "private, no-store").send(file.pdf);
+  });
+
+  /** One of the shop's own bills, as a PDF. */
+  r.get("/shop/:key/invoices/:id/pdf", { config: pageLimit, schema: { tags: ["shop"], params: KeyIdParams, querystring: LocaleQuery } }, async (request, reply) => {
+    const { link, ctx } = await accountLink(request.params.key, request.ip, request.headers["user-agent"] ?? null);
+    const [own] = await withTenant(deps.db, ctx, (tx) =>
+      tx
+        .select({ id: schema.invoices.id })
+        .from(schema.invoices)
+        .where(and(eq(schema.invoices.id, request.params.id), eq(schema.invoices.businessId, ctx.businessId), eq(schema.invoices.customerId, link.customerId), eq(schema.invoices.status, "posted"))),
+    );
+    if (!own) throw notFound("invoice");
+    const file = await invoicePdfFile(deps, ctx, own.id, request.query.locale);
+    return reply.header("content-type", "application/pdf").header("content-disposition", `attachment; filename="${file.filename}"`).header("cache-control", "private, no-store").send(file.pdf);
   });
 
   /** What an order would come to, with GST, before it is placed. */

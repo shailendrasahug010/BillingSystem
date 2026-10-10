@@ -7,7 +7,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | | Count |
 |---|---|
 | Tables | 100 |
-| Columns | 1665 |
+| Columns | 1666 |
 | Foreign keys | 269 |
 | Unique constraints | 46 |
 | Check constraints | 61 |
@@ -16,7 +16,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Tables with row-level security | 94 |
 | Enums | 39 |
 | Functions | 16 |
-| Migrations | 33 (last: `0032_two_step_sign_in`) |
+| Migrations | 34 (last: `0033_order_link_account`) |
 
 ## How the database is set up
 
@@ -1809,7 +1809,7 @@ A bill made again every week or month for a regular customer (rent, a monthly su
 
 ### `order_links`
 
-Order links: a private web address for one customer (a shop), sent to them on WhatsApp, where they see their own rates and place orders without signing in. The orders land in Sales orders, waiting to be confirmed. Only the key's hash is looked up; a new link replaces the old one.
+Order links: a private web address for one customer (a shop), sent to them on WhatsApp, where they see their own rates and place orders without signing in, and (when the business chooses) their bills, what they owe, their statement and a UPI link to pay. The orders land in Sales orders, waiting to be confirmed. Only the key's hash is looked up; a new link replaces the old one.
 
 | Column | Type | Required | Default | Description |
 |---|---|:-:|---|---|
@@ -1826,6 +1826,7 @@ Order links: a private web address for one customer (a shop), sent to them on Wh
 | `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
 | `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+| `shows_account` | boolean | ✓ | `false` | The page also shows the shop its bills, what it owes, its statement and a way to pay (links made before this: off until turned on). |
 
 * Index `order_links_customer_idx`: btree `(business_id, customer_id)`
 * Index `order_links_key_idx`: unique, btree `(key_hash)`
@@ -3226,4 +3227,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account`

@@ -1,4 +1,4 @@
-import { buildReorderList, daysBetween, findState } from "@digitalbahi/core";
+import { buildReorderList, daysBetween, financialYearOf, findState } from "@digitalbahi/core";
 import { ArrowLeft, ClipboardPlus, MapPin, Pencil, Phone, Receipt, SearchX, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
@@ -9,7 +9,8 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardHeader } from "../../components/ui/Card";
 import { Avatar, EmptyState } from "../../components/ui/misc";
-import { allowed, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
+import { allowed, BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
+import { PdfActions } from "../../components/ui/PdfActions";
 import { useCustomerInsight } from "../../data/hooks";
 import { LIVE } from "../../data/source";
 import { useStoreVersion } from "../../data/store";
@@ -21,7 +22,7 @@ import { useToast } from "../../components/ui/Toast";
 import { AddCustomerDialog } from "./AddCustomerDialog";
 import { OrderLinkButton } from "../orders/OrderLink";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
-import { translateError } from "@digitalbahi/i18n";
+import { formatDate, translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
 import { customerKind, kindLabel } from "./customerKind";
 import { WhatsAppIcon } from "../../components/brand/WhatsAppIcon";
@@ -81,7 +82,9 @@ function PriceListPicker({ customerId, value }: { customerId: string; value: str
 }
 
 export function CustomerProfilePage({ customerId }: { customerId: string }) {
-  const { t, money, date, locale } = useI18n();
+  const { t, money, date, dateMedium, locale } = useI18n();
+  // The statement runs from the start of the financial year, as the server's does by default.
+  const statementFrom = financialYearOf(TODAY).startDate;
   const { navigate } = useRouter();
   const version = useStoreVersion();
   const [editing, setEditing] = useState(false);
@@ -341,7 +344,21 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           </Card>
         </Tabs.Content>
 
-        <Tabs.Content value="ledger">
+        <Tabs.Content value="ledger" className="flex flex-col gap-3">
+          {LIVE && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <p className="mr-auto text-[12.5px] text-ink-3">{t("supplier.statement.period", { from: dateMedium(statementFrom), to: dateMedium(TODAY) })}</p>
+              <PdfActions
+                size="sm"
+                path={`/customers/${customer.id}/statement/pdf`}
+                locale={WORKSPACE.printLocale || locale}
+                number={`statement-${customer.businessName}-${TODAY}`}
+                shareText={t("share.customerStatement", { party: customer.businessName, from: formatDate(statementFrom), to: formatDate(TODAY), amount: money(insight.outstanding), business: BUSINESS.name })}
+                mobile={customer.mobile || null}
+                print
+              />
+            </div>
+          )}
           <Card className="scroll-x">
             <table className="w-full min-w-[620px] text-[13.5px]">
               <thead>

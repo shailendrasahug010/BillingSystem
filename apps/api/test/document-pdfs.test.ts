@@ -107,6 +107,17 @@ describe.skipIf(!hasDatabase)("invoices, notes and receipts as PDF", () => {
     for (const s of ["RECEIPT", ids.receiptNumber!, "Received from", "Sharma Kirana Store", "₹300.00", "Cheque", "004512", "SBI", "Cheque payments are subject to realisation."]) expect(receipt).toContain(s);
   });
 
+  it("gives a customer's statement: opening balance, every bill, return and receipt, and what they owe", async () => {
+    const res = await pdf(`/customers/${ids.shop}/statement/pdf?from=2026-04-01`);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toContain("statement-Sharma-Kirana-Store-2026-09-24.pdf");
+    const text = await pdfText(res.rawPayload);
+    for (const s of ["Account statement: Sharma Kirana Store", "Opening balance", "Sales invoice", "Credit note (return)", "Payment received", "Closing balance", "Receivable"]) expect(text).toContain(s);
+    expect((await pdf(`/customers/${ids.shop}/statement/pdf?locale=hi`)).statusCode).toBe(200);
+    expect((await pdf(`/customers/${ids.shop}/statement/pdf?from=2026-10-01&to=2026-09-01`)).statusCode).toBe(400);
+  });
+
   it("needs the right to see the document, within the business", async () => {
     const roles = Object.fromEntries((await get("/roles")).body.data.map((r: { key: string; id: string }) => [r.key, r.id]));
     const mobile = nextMobile();
@@ -114,7 +125,9 @@ describe.skipIf(!hasDatabase)("invoices, notes and receipts as PDF", () => {
     await call(t.app, "POST", "/auth/otp", { body: { mobile, purpose: "login" } });
     const token = (await call(t.app, "POST", "/auth/login/otp", { body: { mobile, otp: t.otp.last(mobile) } })).body.accessToken;
     expect((await pdf(`/payments/${ids.receipt}/pdf`, token)).statusCode).toBe(403);
+    expect((await pdf(`/customers/${ids.shop}/statement/pdf`, token)).statusCode).toBe(403);
     const other = await signup(t, { legalName: "Other Firm", stateCode: "27" });
     expect((await pdf(`/invoices/${ids.invoice}/pdf`, other.token)).statusCode).toBe(404);
+    expect((await pdf(`/customers/${ids.shop}/statement/pdf`, other.token)).statusCode).toBe(404);
   });
 });
