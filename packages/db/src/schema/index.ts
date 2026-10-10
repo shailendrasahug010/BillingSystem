@@ -22,3 +22,4 @@ export * from "./system.js";
 export * from "./analytics.js";
 export * from "./messaging.js";
 export * from "./gateways.js";
+export * from "./bank.js";

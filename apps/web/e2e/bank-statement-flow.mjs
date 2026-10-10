@@ -1,12 +1,14 @@
 /**
- * End-to-end check of bank reconciliation. Payments → Bank statement: an
- * HDFC-style statement (CSV, the bank's lines above the header) with four
- * lines: a UPI payment from a shop whose mobile number is in the narration
- * (matched, for its open bill), a payment already entered by hand (already
- * recorded), a cash deposit nobody's (not matched, the shop chosen by hand)
- * and a NEFT to a supplier by name (matched). Recording them makes three
- * payments with the bank's reference; the bill is paid; the same statement
- * again shows every line already recorded.
+ * End-to-end check of bank reconciliation. Payments → Bank statement opens
+ * the Bank tab; the business's bank account is added there. An HDFC-style
+ * statement (CSV, the bank's lines above the header) with four lines: a UPI
+ * payment from a shop whose mobile number is in the narration (matched, for
+ * its open bill), a payment already entered by hand (reconciled by itself),
+ * a cash deposit (the bank's own kind of line) and a NEFT to a supplier by
+ * name (matched). The three are reconciled in one go: a receipt that pays
+ * the bill, a transfer from the cash drawer, a supplier payment. The
+ * reconciliation statement agrees with the bank once the books' opening
+ * balance is set; the same statement again adds nothing.
  *
  * Run against a database with the API started with OTP_DEV_ECHO=true:
  *   API_URL=http://localhost:3000 WEB_URL=http://localhost:5173 node apps/web/e2e/bank-statement-flow.mjs
@@ -49,100 +51,133 @@ page.on("response", (r) => {
   if (!signedIn && r.status() === 401 && r.url().endsWith("/auth/refresh")) return;
   if (r.status() >= 400) errors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
 });
-
-// 1. Sign up.
-await page.goto(WEB);
-await page.getByRole("button", { name: "Create account" }).click();
-await page.fill("#su-name", "Arun Bansal");
-await page.fill("#su-mobile", mobile);
-await page.fill("#su-password", password);
-await page.getByRole("button", { name: "Next" }).click();
-await page.fill("#su-business", "Bansal Agencies");
-await page.getByRole("button", { name: "Send OTP" }).click();
-const hint = page.getByText(/Development code: \d{6}/);
-await hint.waitFor();
-await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
-await page.getByRole("heading", { name: /, Arun/ }).waitFor({ timeout: 15000 });
-signedIn = true;
-const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
-log("signed up");
-
-// 2. A shop with an open bill, another shop, a supplier; one payment entered by hand.
-const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).data.map((c) => [c.name, c.id]));
-const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
-const soap = await api("POST", "/products", token, { name: "Lifebuoy 100g", taxCategoryId: taxes["GST 18%"], baseUnitId: units.PCS, sellingPrice: "35", openingStock: "100", openingStockCost: "28" });
-const gupta = await api("POST", "/customers", token, { name: "Gupta Stores", mobile: "9826011111", stateCode: "23" });
-const khanna = await api("POST", "/customers", token, { name: "Khanna Kirana", stateCode: "23" });
-await api("POST", "/suppliers", token, { name: "HUL Distributor", stateCode: "23", gstin: "23AAACM1234M1ZR" });
-const bill = await api("POST", "/invoices", token, { customerId: gupta.id, lines: [{ productId: soap.id, qty: "10" }] });
-const today = bill.invoiceDate;
-await api("POST", "/payments", token, { direction: "in", customerId: khanna.id, amount: "650", method: "upi", referenceNumber: "412345678902" });
-const [y, m, d] = today.split("-");
-const day = `${d}/${m}/${y.slice(2)}`;
-const csv = [
-  "HDFC BANK Ltd.,,,,,,",
-  "Statement of account,,,,,,",
-  "Date,Narration,Chq./Ref.No.,Value Dt,Withdrawal Amt.,Deposit Amt.,Closing Balance",
-  `${day},UPI-RAMESH GUPTA-9826011111@ybl-SBIN0001234-412345678901-PAYMENT,0000412345678901,${day},,"${Number(bill.grandTotal).toFixed(2)}","1,00,000.00"`,
-  `${day},UPI-KHANNA-412345678902-PAYMENT,0000412345678902,${day},,650.00,"1,00,650.00"`,
-  `${day},CASH DEPOSIT BY SELF,,${day},,"1,200.00","1,01,850.00"`,
-  `${day},NEFT DR-HUL DISTRIBUTOR-N260123456,N260123456,${day},"5,000.00",,"96,850.00"`,
-].join("\n");
-const file = join(tmpdir(), "statement.csv");
-await writeFile(file, csv);
-
-// 3. The statement read and matched.
-await page.goto(`${WEB}/#payments`);
-await page.reload();
-await page.getByRole("button", { name: "Bank statement" }).click();
-const dialog = page.getByRole("dialog");
-await page.locator("#bank-file").setInputFiles(file);
-/** Waits for the dialog to say `text`; on failure shows what it says instead. */
-const says = (text) =>
-  dialog
+const toast = (text) => page.getByText(text).first().waitFor({ timeout: 15000 });
+/** Waits for the page to say `text`; on failure shows what it says instead. */
+const says = (text, within = page) =>
+  within
     .getByText(text)
+    .first()
     .waitFor({ timeout: 15000 })
     .catch(async (e) => {
       await page.screenshot({ path: `${OUT}/bank-failed.png` });
-      console.error("the page says:", (await page.locator("body").innerText()).slice(0, 1500));
+      console.error("the page says:", (await page.locator("body").innerText()).slice(0, 2000));
       throw e;
     });
-const row = (n) => dialog.locator(`li[data-row="${n}"]`);
-await says("4 lines: 2 matched, 0 to check, 1 already recorded, 1 not matched");
-check(await row(1).getByText("Matched").isVisible(), "the UPI payment is not matched");
-check(await row(1).getByText("Gupta Stores", { exact: true }).isVisible(), "the UPI payment is not Gupta's");
-check(await row(2).getByText("Already recorded").isVisible(), "the payment entered by hand is not seen");
-check(await row(3).getByText("Not matched").isVisible(), "the cash deposit is matched");
-check(await row(4).getByText("HUL Distributor", { exact: true }).isVisible(), "the NEFT is not the supplier's");
-await dialog.screenshot({ path: `${OUT}/bank-1-matched.png` });
-log("read: 2 matched, 1 already recorded, 1 not matched");
 
-// 4. The deposit given to Khanna by hand; three recorded.
-await row(3).locator("#bank-party-3").fill("Khanna");
-await page.getByRole("option", { name: /Khanna Kirana/ }).click();
-await dialog.getByRole("button", { name: "Record 3 payments" }).click();
-await page.getByText("3 payments recorded").first().waitFor({ timeout: 15000 });
-const payments = (await api("GET", "/payments", token)).data;
-const upi = payments.find((p) => p.referenceNumber === "0000412345678901");
-check(upi && upi.method === "upi" && upi.amount === bill.grandTotal && upi.direction === "in", `the UPI payment: ${JSON.stringify(upi)}`);
-check(payments.some((p) => p.direction === "in" && p.amount === "1200.00" && p.method === "bank_transfer"), "the cash deposit is not recorded for Khanna");
-check(payments.some((p) => p.direction === "out" && p.amount === "5000.00" && p.referenceNumber === "N260123456"), "the NEFT is not recorded");
-const paid = await api("GET", `/invoices/${bill.id}`, token);
-check(paid.paymentStatus === "paid", `the bill is ${paid.paymentStatus}`);
-log("recorded 3 payments; Gupta's bill is paid");
+try {
+  // 1. Sign up.
+  await page.goto(WEB);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.fill("#su-name", "Arun Bansal");
+  await page.fill("#su-mobile", mobile);
+  await page.fill("#su-password", password);
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.fill("#su-business", "Bansal Agencies");
+  await page.getByRole("button", { name: "Send OTP" }).click();
+  const hint = page.getByText(/Development code: \d{6}/);
+  await hint.waitFor();
+  await page.fill("#auth-otp", (await hint.textContent()).match(/\d{6}/)[0]);
+  await page.getByRole("heading", { name: /, Arun/ }).waitFor({ timeout: 15000 });
+  signedIn = true;
+  const token = (await api("POST", "/auth/login", null, { identifier: mobile, password })).accessToken;
+  log("signed up");
 
-// 5. The same statement again: all in the books.
-await page.locator("#bank-file").setInputFiles(file);
-await says("4 lines: 0 matched, 0 to check, 4 already recorded, 0 not matched");
-check(await dialog.getByRole("button", { name: "Record 0 payments" }).isDisabled(), "nothing to record, yet the button works");
-await dialog.screenshot({ path: `${OUT}/bank-2-again.png` });
-log("the same statement again: 4 already recorded");
+  // 2. A shop with an open bill, another shop, a supplier; one payment entered by hand.
+  const taxes = Object.fromEntries((await api("GET", "/tax-categories", token)).data.map((c) => [c.name, c.id]));
+  const units = Object.fromEntries((await api("GET", "/units", token)).data.map((u) => [u.symbol, u.id]));
+  const soap = await api("POST", "/products", token, { name: "Lifebuoy 100g", taxCategoryId: taxes["GST 18%"], baseUnitId: units.PCS, sellingPrice: "35", openingStock: "100", openingStockCost: "28" });
+  const gupta = await api("POST", "/customers", token, { name: "Gupta Stores", mobile: "9826011111", stateCode: "23" });
+  const khanna = await api("POST", "/customers", token, { name: "Khanna Kirana", stateCode: "23" });
+  await api("POST", "/suppliers", token, { name: "HUL Distributor", stateCode: "23", gstin: "23AAACM1234M1ZR" });
+  const bill = await api("POST", "/invoices", token, { customerId: gupta.id, lines: [{ productId: soap.id, qty: "10" }] });
+  const today = bill.invoiceDate;
+  await api("POST", "/payments", token, { direction: "in", customerId: khanna.id, amount: "650", method: "upi", referenceNumber: "412345678902" });
+  const [y, m, d] = today.split("-");
+  const day = `${d}/${m}/${y.slice(2)}`;
+  const total = Number(bill.grandTotal);
+  const opening = 100000 - total;
+  const inr = (n) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const csv = [
+    "HDFC BANK Ltd.,,,,,,",
+    "Statement of account,,,,,,",
+    "Date,Narration,Chq./Ref.No.,Value Dt,Withdrawal Amt.,Deposit Amt.,Closing Balance",
+    `${day},UPI-RAMESH GUPTA-9826011111@ybl-SBIN0001234-412345678901-PAYMENT,0000412345678901,${day},,"${total.toFixed(2)}","${inr(100000)}"`,
+    `${day},UPI-KHANNA-412345678902-PAYMENT,0000412345678902,${day},,650.00,"${inr(100650)}"`,
+    `${day},CASH DEPOSIT BY SELF,,${day},,"1,200.00","${inr(101850)}"`,
+    `${day},NEFT DR-HUL DISTRIBUTOR-N260123456,N260123456,${day},"5,000.00",,"${inr(96850)}"`,
+  ].join("\n");
+  const file = join(tmpdir(), "statement.csv");
+  await writeFile(file, csv);
 
-// 6. A phone.
-await page.setViewportSize({ width: 390, height: 844 });
-await dialog.screenshot({ path: `${OUT}/bank-3-phone.png` });
-check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "the page scrolls sideways on a phone");
-log("phone: fits");
+  // 3. Payments → Bank statement: the Bank tab, where the bank account is added.
+  await page.goto(`${WEB}/#payments`);
+  await page.reload();
+  await page.getByRole("button", { name: "Bank statement" }).click();
+  await page.locator("#bank-account-name").fill("HDFC current");
+  await page.locator("#bank-account-bank").fill("HDFC Bank");
+  await page.locator("#bank-account-last4").fill("1234");
+  await page.getByRole("button", { name: "Add bank account" }).click();
+  await toast("Bank account added");
+  await page.locator("#bank-account").waitFor({ timeout: 15000 });
+  log("bank account added");
+
+  // 4. The statement imported: Khanna's payment is in the books already; the rest suggested.
+  await page.locator("#bank-file").setInputFiles(file);
+  await toast("4 new lines, 0 already saved; 1 matched to entries in the books");
+  const row = (n) => page.locator(`li[data-line="${n}"]`);
+  await row(1).waitFor({ timeout: 15000 });
+  check(await row(1).getByText("Matched", { exact: true }).isVisible(), "the UPI payment is not matched");
+  await says("Gupta Stores, found by mobile number, name, bill amount", row(1));
+  check((await row(3).getByRole("combobox", { name: "What is it?" }).inputValue()) === "cash_deposit", "the cash deposit is not suggested as one");
+  check(await row(4).getByText("Matched", { exact: true }).isVisible(), "the NEFT is not matched");
+  await says("HUL Distributor", row(4));
+  check((await page.locator("li[data-line]").count()) === 3, "Khanna's line is still to reconcile");
+  await page.screenshot({ path: `${OUT}/bank-1-lines.png`, fullPage: true });
+  log("imported: 1 reconciled by itself, 3 suggested");
+
+  // 5. All three reconciled in one go.
+  await page.locator("[data-reconcile]").getByText("Reconcile 3 lines").click();
+  await toast("3 lines reconciled");
+  await says("Nothing here.");
+  const payments = (await api("GET", "/payments", token)).data;
+  const upi = payments.find((p) => p.referenceNumber === "0000412345678901");
+  check(upi && upi.method === "upi" && upi.amount === bill.grandTotal && upi.direction === "in", `the UPI payment: ${JSON.stringify(upi)}`);
+  check(payments.some((p) => p.direction === "out" && p.amount === "5000.00" && p.referenceNumber === "N260123456"), "the NEFT is not recorded");
+  const paid = await api("GET", `/invoices/${bill.id}`, token);
+  check(paid.paymentStatus === "paid", `the bill is ${paid.paymentStatus}`);
+  const cashBook = await api("GET", `/payments/cash-book?from=${today}&to=${today}&book=cash`, token);
+  check(cashBook.rows.some((r) => r.kind === "transfer" && r.direction === "out" && r.amount === "1200.00"), "the deposit is not out of the cash book");
+  log("reconciled: a receipt (the bill is paid), a transfer from cash, a supplier payment");
+
+  // 6. The reconciliation statement agrees once the books start where the bank did.
+  const brs = page.locator("[data-brs]");
+  await says("Not explained yet", brs);
+  await brs.getByRole("button", { name: "Change" }).click();
+  await brs.getByLabel("Opening balance in the books").fill(String(opening));
+  await brs.getByRole("button", { name: "Save" }).click();
+  await toast("Opening balance saved");
+  await says("Agrees with the bank", brs);
+  await brs.screenshot({ path: `${OUT}/bank-2-brs.png` });
+  log("BRS: agrees with the bank (opening", opening, ")");
+
+  // 7. The same statement again adds nothing; all four lines are done.
+  await page.locator("#bank-file").setInputFiles(file);
+  await toast("0 new lines, 4 already saved; 0 matched to entries in the books");
+  await page.getByRole("radio", { name: "Done", exact: true }).click();
+  await page.locator('li[data-line-status="reconciled"]').nth(3).waitFor({ timeout: 15000 });
+  check((await page.locator('li[data-line-status="reconciled"]').count()) === 4, "not every line is done");
+  check(await row(3).getByText("Cash deposited ·").isVisible(), "the deposit does not say what it is");
+  log("the same statement again: nothing new; 4 lines done");
+
+  // 8. A phone.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: `${OUT}/bank-3-phone.png`, fullPage: true });
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "the page scrolls sideways on a phone");
+  log("phone: fits");
+} catch (e) {
+  errors.push(`flow stopped: ${e.message}`);
+  await page.screenshot({ path: `${OUT}/bank-failed.png` }).catch(() => {});
+}
 
 await browser.close();
 if (errors.length) {

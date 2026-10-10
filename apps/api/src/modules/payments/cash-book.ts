@@ -34,10 +34,25 @@ function accountFilter(book: CashBookKind): SQL {
 }
 
 /**
+ * Money moved between the cash drawer and a bank (or UPI) account, as this
+ * book sees it: for the cash book, money leaving a cash account is out and
+ * reaching one is in; for the bank book the other way round. Transfers that
+ * stay on one side (bank to bank), and every transfer in the combined book,
+ * change nothing and are left out.
+ */
+function transferDirection(book: CashBookKind): SQL | null {
+  if (book === "all") return null;
+  const fromCash = sql`(select a.type = 'cash' from payment_accounts a where a.id = t.from_account_id)`;
+  return book === "cash" ? sql`case when ${fromCash} then 'out' else 'in' end` : sql`case when ${fromCash} then 'in' else 'out' end`;
+}
+const crossesCash = sql`(select a.type = 'cash' from payment_accounts a where a.id = t.from_account_id) <> (select a.type = 'cash' from payment_accounts a where a.id = t.to_account_id)`;
+
+/**
  * Every rupee that came in or went out, day by day: receipts and payments
- * (bounced cheques left out) and expenses, with the opening balance, a
- * running balance and each day's closing. The cash book follows cash; the
- * bank book everything else (UPI, transfers, cheques, cards).
+ * (bounced cheques left out), expenses, and cash deposited in or drawn from
+ * the bank, with the opening balance, a running balance and each day's
+ * closing. The cash book follows cash; the bank book everything else (UPI,
+ * transfers, cheques, cards).
  */
 async function cashBookData(tx: Tx, ctx: RequestCtx, q: { from: string; to: string; book: CashBookKind }) {
   const b = ctx.businessId;
@@ -46,16 +61,19 @@ async function cashBookData(tx: Tx, ctx: RequestCtx, q: { from: string; to: stri
   const expMethod = methodFilter(q.book, sql`e.payment_method::text`);
   const payments = sql`p.business_id = ${b} and p.status = 'posted' and coalesce(p.cheque_status::text, '') <> 'bounced' and ${payMethod}`;
   const expenses = sql`e.business_id = ${b} and e.status = 'posted' and ${expMethod}`;
+  const direction = transferDirection(q.book);
+  const transfers = sql`t.business_id = ${b} and t.status = 'posted' and ${crossesCash}`;
   const [before] = (
     await tx.execute<{ amount: string }>(sql`
       select (
         coalesce((select sum(opening_balance) from payment_accounts where business_id = ${b} and is_active and ${accountFilter(q.book)}), 0)
         + coalesce((select sum(case when p.direction = 'in' then p.amount else -p.amount end) from payments p where ${payments} and p.payment_date < ${q.from}), 0)
         - ${withExpenses ? sql`coalesce((select sum(e.total_amount) from expenses e where ${expenses} and e.expense_date < ${q.from}), 0)` : sql`0`}
+        + ${direction ? sql`coalesce((select sum(case when ${direction} = 'in' then t.amount else -t.amount end) from account_transfers t where ${transfers} and t.transfer_date < ${q.from}), 0)` : sql`0`}
       )::numeric(15, 2)::text as amount`)
   ).rows;
   const rows = (
-    await tx.execute<{ id: string; kind: "payment" | "expense"; date: string; number: string | null; direction: "in" | "out"; party: string | null; method: string; reference: string | null; amount: string; entered_at: string }>(sql`
+    await tx.execute<{ id: string; kind: "payment" | "expense" | "transfer"; date: string; number: string | null; direction: "in" | "out"; party: string | null; method: string; reference: string | null; amount: string; entered_at: string }>(sql`
       select p.id, 'payment' as kind, p.payment_date::text as date, p.payment_number as number, p.direction::text as direction,
              coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = p.customer_id),
                       (select s.name from suppliers s where s.id = p.supplier_id),
@@ -71,6 +89,16 @@ async function cashBookData(tx: Tx, ctx: RequestCtx, q: { from: string; to: stri
              e.payment_method::text, e.reference_number, e.total_amount::text, e.created_at
       from expenses e
       where ${expenses} and e.expense_date between ${q.from} and ${q.to}`
+          : sql``
+      }
+      ${
+        direction
+          ? sql`union all
+      select t.id, 'transfer', t.transfer_date::text, null, ${direction},
+             concat((select a.name from payment_accounts a where a.id = t.from_account_id), ' → ', (select a.name from payment_accounts a where a.id = t.to_account_id)),
+             'transfer', t.reference, t.amount::text, t.created_at
+      from account_transfers t
+      where ${transfers} and t.transfer_date between ${q.from} and ${q.to}`
           : sql``
       }
       order by date, entered_at, id
@@ -98,7 +126,7 @@ export const cashBookModule: ApiModule = async (app, deps) => {
       { date: q.from, particulars: "Opening balance", number: "", method: "", in: "", out: "", balance: data.opening },
       ...data.rows.map((x) => ({
         date: x.date,
-        particulars: x.kind === "expense" ? `Expense · ${x.party ?? ""}` : (x.party ?? ""),
+        particulars: x.kind === "expense" ? `Expense · ${x.party ?? ""}` : x.kind === "transfer" ? `Transfer · ${x.party ?? ""}` : (x.party ?? ""),
         number: x.number ?? "",
         method: x.reference ? `${x.method} · ${x.reference}` : x.method,
         in: dec(x.in).isZero() ? "" : x.in,

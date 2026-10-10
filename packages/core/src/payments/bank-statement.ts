@@ -16,6 +16,8 @@ export interface StatementLine {
   reference: string;
   /** Money in (positive) or out (negative), in rupees. */
   amount: number;
+  /** The bank's balance after the line, when the statement has a balance column (null where it is blank). */
+  balance?: number | null;
 }
 
 export interface StatementRead {
@@ -24,7 +26,7 @@ export interface StatementRead {
   skipped: number;
 }
 
-type Field = "date" | "narration" | "reference" | "debit" | "credit" | "amount" | "drcr";
+type Field = "date" | "narration" | "reference" | "debit" | "credit" | "amount" | "drcr" | "balance";
 
 const HEADERS: Array<[Field, RegExp]> = [
   ["date", /^(txn |transaction |value )?date$|^date$|^tran date$|^posting date$/],
@@ -42,8 +44,12 @@ function headerMap(cells: string[]): Partial<Record<Field, number>> | null {
   const map: Partial<Record<Field, number>> = {};
   cells.forEach((c, i) => {
     const h = norm(c);
-    // The running balance is never the transaction's amount.
-    if (!h || /balance/.test(h)) return;
+    if (!h) return;
+    // The running balance is never the transaction's amount; the first one (not an opening balance) is kept as the balance.
+    if (/balance/.test(h)) {
+      if (map.balance === undefined && !/opening/.test(h)) map.balance = i;
+      return;
+    }
     // "Value Date" after "Txn Date": the first date column wins.
     for (const [field, re] of HEADERS) {
       if (map[field] === undefined && re.test(h)) {
@@ -88,6 +94,13 @@ function money(raw: string | undefined): number | null {
   return s.startsWith("(") ? -n : n;
 }
 
+/** A balance as the bank shows it: "80,250.00 Cr" is in credit, "5,000.00 Dr" overdrawn. */
+function balanceOf(raw: string | undefined): number | null {
+  const v = money(raw);
+  if (v === null) return null;
+  return /dr\.?\s*$/i.test((raw ?? "").trim()) ? -Math.abs(v) : v;
+}
+
 /** The statement's transactions, from the rows of its file (whatever is above the header is ignored). */
 export function readBankStatement(rows: string[][]): StatementRead | null {
   const headerAt = rows.findIndex((r) => headerMap(r) !== null);
@@ -115,7 +128,14 @@ export function readBankStatement(rows: string[][]): StatementRead | null {
     let reference = (map.reference !== undefined ? (r[map.reference] ?? "") : "").trim();
     // UPI narrations carry the 12-digit transaction number: "UPI/CR/412345678901/…".
     if (!reference || /^0+$/.test(reference)) reference = narration.match(/(?:^|\D)(\d{12})(?:\D|$)/)?.[1] ?? "";
-    lines.push({ row: i + 1, date, narration, reference, amount: Math.round(amount * 100) / 100 });
+    lines.push({
+      row: i + 1,
+      date,
+      narration,
+      reference,
+      amount: Math.round(amount * 100) / 100,
+      ...(map.balance !== undefined ? { balance: balanceOf(r[map.balance]) } : {}),
+    });
   });
   return { lines, skipped };
 }
@@ -132,6 +152,8 @@ export interface StatementParty {
   balance: number;
   /** Balances of the party's open bills. */
   openBills: number[];
+  /** Numbers of the party's open bills (a customer's invoices, a supplier's own bill numbers). */
+  billNumbers?: string[];
 }
 
 export interface RecordedPayment {
@@ -147,8 +169,52 @@ export type MatchStatus = "recorded" | "matched" | "likely" | "unmatched";
 export interface StatementMatch {
   status: MatchStatus;
   partyId: string | null;
-  /** Why: "upi", "mobile", "name", plus "bill" / "balance" when the amount fits. */
+  /** Why: "upi", "mobile", "bill_number", "name", plus "bill" / "balance" when the amount fits. */
   reasons: string[];
+  /** The open bill whose number the narration carries. */
+  billNumber?: string;
+}
+
+/** Letters and digits only, upper case: "INV/2026-0042" and "inv 2026 0042" read the same. */
+const compact = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "");
+
+/** Whether the narration (compacted) carries a bill number, not as part of a longer number. */
+function carriesBill(narration: string, bill: string): boolean {
+  const b = compact(bill);
+  // Too short or without a digit, a bill number would be found in anything.
+  if (b.length < 5 || !/\d/.test(b)) return false;
+  for (let at = narration.indexOf(b); at >= 0; at = narration.indexOf(b, at + 1)) {
+    const before = narration[at - 1] ?? "";
+    const after = narration[at + b.length] ?? "";
+    if (!(/\d/.test(b[0]!) && /\d/.test(before)) && !(/\d/.test(b[b.length - 1]!) && /\d/.test(after))) return true;
+  }
+  return false;
+}
+
+/** What a line is when it is the bank's own doing, not a customer's or supplier's: charges, interest, cash in or out. */
+export type StatementLineKind = "bank_charge" | "interest" | "cash_deposit" | "cash_withdrawal";
+
+const INTEREST = /\b(interest|int\.? ?(pd|paid|cr|credit|coll|dr|debit)|sb ?int|od ?int|cc ?int)\b/;
+const CHARGES = /\b(chg|chgs|chrg|chrgs|charges?|commission|amc|sms ?alert|min(imum)? ?bal(ance)?|non ?maint(enance)?|penal(ty)?|annual fee|card fee|service fee|processing fee|folio)\b/;
+const CASH_IN = /\b(cash dep(osit)?|by cash|cdm|cash cr|csh dep|cash credit)\b/;
+const CASH_OUT = /\b(atm|atw|nfs|cash wdl|cash withdrawal|cash wd|cash paid|self|eaw)\b/;
+
+/**
+ * The bank's own lines, by their narration: interest (either way), charges
+ * (money out), cash deposited (in) or drawn (out). Null for anything else,
+ * which is a customer's or a supplier's.
+ */
+export function classifyStatementLine(line: Pick<StatementLine, "narration" | "amount">): StatementLineKind | null {
+  const n = line.narration.toLowerCase().replace(/[^a-z0-9.]+/g, " ");
+  if (INTEREST.test(n)) return "interest";
+  if (line.amount > 0) return CASH_IN.test(n) ? "cash_deposit" : null;
+  if (CHARGES.test(n)) return "bank_charge";
+  return CASH_OUT.test(n) ? "cash_withdrawal" : null;
+}
+
+/** A line's identity, the same however the bank's file wrote it (CSV, Excel or PDF): date, amount, reference, narration. */
+export function statementLineKey(line: Pick<StatementLine, "date" | "amount" | "reference" | "narration">): string {
+  return `${line.date}|${line.amount.toFixed(2)}|${compact(line.reference).replace(/^0+/, "")}|${compact(line.narration)}`;
 }
 
 /** Words that say nothing about who paid. */
@@ -181,11 +247,12 @@ export function matchStatementLine(line: StatementLine, parties: StatementParty[
 
   const pool = parties.filter((p) => p.kind === (direction === "in" ? "customer" : "supplier"));
   const text = line.narration.toUpperCase();
+  const narrationCompact = compact(line.narration);
   const digits = line.narration.replace(/\D+/g, " ");
   const textWords = new Set(words(line.narration));
   const fits = (p: StatementParty) => (p.openBills.some((b) => sameMoney(b, amount)) ? "bill" : sameMoney(p.balance, amount) ? "balance" : null);
 
-  let best: { party: StatementParty; score: number; reasons: string[]; fullName: boolean } | null = null;
+  let best: { party: StatementParty; score: number; reasons: string[]; fullName: boolean; billNumber: string | null } | null = null;
   for (const p of pool) {
     const reasons: string[] = [];
     let score = 0;
@@ -196,6 +263,12 @@ export function matchStatementLine(line: StatementLine, parties: StatementParty[
     if ((p.mobiles ?? []).some((m) => m.length >= 10 && digits.includes(m.slice(-10)))) {
       score += 90;
       reasons.push("mobile");
+    }
+    // The number of one of the party's open bills, as a shop often writes in the payment's remark.
+    const billNumber = (p.billNumbers ?? []).find((b) => carriesBill(narrationCompact, b)) ?? null;
+    if (billNumber) {
+      score += 90;
+      reasons.push("bill_number");
     }
     let nameScore = 0;
     // Every word of a name of two words or more is as good as a mobile number.
@@ -215,11 +288,11 @@ export function matchStatementLine(line: StatementLine, parties: StatementParty[
       score += 30;
       reasons.push(fit);
     }
-    if (score > 0 && (!best || score > best.score)) best = { party: p, score, reasons, fullName };
+    if (score > 0 && (!best || score > best.score)) best = { party: p, score, reasons, fullName, billNumber };
   }
   if (best) {
-    const sure = best.reasons.includes("upi") || best.reasons.includes("mobile") || (best.reasons.includes("name") && (best.score >= 80 || best.fullName));
-    return { status: sure ? "matched" : "likely", partyId: best.party.id, reasons: best.reasons };
+    const sure = best.reasons.includes("upi") || best.reasons.includes("mobile") || best.reasons.includes("bill_number") || (best.reasons.includes("name") && (best.score >= 80 || best.fullName));
+    return { status: sure ? "matched" : "likely", partyId: best.party.id, reasons: best.reasons, ...(best.billNumber ? { billNumber: best.billNumber } : {}) };
   }
   // Nothing in the narration: an amount only one party has open is a fair guess.
   const byAmount = pool.filter((p) => fits(p));

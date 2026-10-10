@@ -18,12 +18,13 @@ import { downloadReport } from "../../lib/download";
 
 interface CashBookRow {
   id: string;
-  kind: "payment" | "expense";
+  kind: "payment" | "expense" | "transfer";
   date: string;
   number: string | null;
   direction: "in" | "out";
   party: string | null;
-  method: PaymentMethod;
+  /** "transfer" for money moved between the cash drawer and a bank. */
+  method: PaymentMethod | "transfer";
   reference: string | null;
   in: string;
   out: string;
@@ -76,8 +77,8 @@ export function CashBook() {
       .catch((e: unknown) => toast({ tone: "danger", title: t("errors.exportFailed"), body: translateError(i18n, e instanceof ApiError ? e : null) }))
       .finally(() => setBusy(null));
   };
-  const particulars = (r: CashBookRow) => (r.kind === "expense" ? `${t("cashBook.expense")} · ${r.party ?? ""}` : (r.party ?? ""));
-  const mode = (r: CashBookRow) => `${t(`paymentMethod.${r.method}`)}${r.reference ? ` · ${r.reference}` : ""}`;
+  const particulars = (r: CashBookRow) => (r.kind === "expense" ? `${t("cashBook.expense")} · ${r.party ?? ""}` : r.kind === "transfer" ? `${t("cashBook.transfer")} · ${r.party ?? ""}` : (r.party ?? ""));
+  const mode = (r: CashBookRow) => `${r.method === "transfer" ? t("cashBook.transfer") : t(`paymentMethod.${r.method}`)}${r.reference ? ` · ${r.reference}` : ""}`;
 
   return (
     <div className="flex flex-col gap-4">
