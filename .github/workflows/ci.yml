@@ -1,9 +1,13 @@
 name: CI
 
+# A branch is checked through its pull request: a push to a PR's branch used to start CI
+# twice (once for the branch, once for the PR), which spent about a fifth of the month's
+# Actions minutes on duplicates. "Run workflow" on the Actions tab checks any branch by hand.
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
