@@ -79,4 +79,16 @@ CREATE INDEX "bank_statement_lines_account_idx" ON "bank_statement_lines" USING 
 CREATE INDEX "bank_statement_lines_payment_idx" ON "bank_statement_lines" USING btree ("payment_id");--> statement-breakpoint
 CREATE INDEX "bank_statement_lines_expense_idx" ON "bank_statement_lines" USING btree ("expense_id");--> statement-breakpoint
 CREATE INDEX "bank_statement_lines_transfer_idx" ON "bank_statement_lines" USING btree ("transfer_id");--> statement-breakpoint
-CREATE INDEX "bank_statements_account_idx" ON "bank_statements" USING btree ("business_id","payment_account_id","period_to");
+CREATE INDEX "bank_statements_account_idx" ON "bank_statements" USING btree ("business_id","payment_account_id","period_to");--> statement-breakpoint
+-- Bank statements, their lines and transfers between accounts, per business.
+ALTER TABLE account_transfers ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON account_transfers USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE bank_statements ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON bank_statements USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE bank_statement_lines ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON bank_statement_lines USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
