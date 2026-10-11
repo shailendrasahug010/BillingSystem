@@ -146,7 +146,8 @@
     "pin": "{{name}} को ऊपर पिन करें",
     "unpin": "{{name}} का पिन हटाएँ",
     "keepOpen": "मेन्यू खुला रखें",
-    "autoHide": "माउस बाईं ओर ले जाने तक मेन्यू छिपाएँ"
+    "autoHide": "माउस बाईं ओर ले जाने तक मेन्यू छिपाएँ",
+    "schemes": "स्कीम"
   },
   "auth": {
     "welcome": "फिर से स्वागत है",
@@ -1314,7 +1315,17 @@
     "BANK_LINE_DIRECTION": "यह इस लाइन पर नहीं बैठता: आया पैसा रसीद, ब्याज या कैश जमा होता है; गया पैसा भुगतान, बैंक शुल्क, ब्याज या कैश निकासी।",
     "BANK_LINK_NOT_FOUND": "यह एंट्री इस खाते की किताबों में नहीं है, या कोई और लाइन उससे मिलाई जा चुकी है।",
     "BANK_LINK_MISMATCH": "यह एंट्री इस लाइन की तरह (आया या गया) {{amount, currency}} की नहीं है।",
-    "CASH_ACCOUNT_MISSING": "पैसा जिस कैश खाते से या में जाए, ऐसा कोई कैश खाता नहीं है। पहले भुगतान खातों में एक कैश खाता जोड़ें।"
+    "CASH_ACCOUNT_MISSING": "पैसा जिस कैश खाते से या में जाए, ऐसा कोई कैश खाता नहीं है। पहले भुगतान खातों में एक कैश खाता जोड़ें।",
+    "SCHEME_NO_PRODUCTS": "स्कीम किन उत्पादों, ब्रांड या श्रेणियों पर है, चुनें।",
+    "SCHEME_NO_SLABS": "कम से कम एक स्लैब जोड़ें।",
+    "SCHEME_ENDS_BEFORE_START": "स्कीम शुरू होने से पहले खत्म नहीं हो सकती।",
+    "SCHEME_SLAB_FROM": "हर स्लैब शून्य से ज़्यादा से शुरू होता है।",
+    "SCHEME_SLAB_TWICE": "दो स्लैब एक ही मात्रा से शुरू हो रहे हैं।",
+    "SCHEME_SLAB_BENEFIT": "हर स्लैब में कुछ मिलना चाहिए: फ्री माल या छूट।",
+    "SCHEME_IN_USE": "{{scheme}} बिलों पर दी जा चुकी है, इसलिए रहेगी: इसे बंद करें।",
+    "SCHEME_NOT_EARNED": "यह बिल {{scheme}} का हकदार नहीं, या कम का है। स्कीम अपडेट हो रही हैं: फिर से कोशिश करें।",
+    "SCHEME_NOT_RUNNING": "{{scheme}} बिल की तारीख पर चालू नहीं है।",
+    "SCHEME_FREE_LINE": "{{product}}: स्कीम का फ्री माल अलग लाइन में, 100% छूट पर होता है।"
   },
   "validation": {
     "required": "यह जानकारी ज़रूरी है",
@@ -1914,7 +1925,8 @@
       "role": "भूमिका",
       "setting": "सेटिंग",
       "business": "व्यापार प्रोफ़ाइल",
-      "document_series": "नंबर सीरीज़"
+      "document_series": "नंबर सीरीज़",
+      "scheme": "स्कीम"
     }
   },
   "notes": {
@@ -3445,7 +3457,8 @@
       "stock_short": "{{product}}: स्टॉक {{available}} था और {{requested}} बेचा गया, जबकि कम स्टॉक पर बेचना रोका गया है।",
       "credit_limit": "{{customer}} {{limit, currency}} की क्रेडिट सीमा से {{excess, currency}} ऊपर चला गया।",
       "credit_overdue_one": "{{customer}} का {{count}} बिल ({{amount, currency}}) देय तारीख पार कर चुका है, जिससे नए बिल रुकते हैं।",
-      "credit_overdue_other": "{{customer}} के {{count}} बिल ({{amount, currency}}) देय तारीख पार कर चुके हैं, जिससे नए बिल रुकते हैं।"
+      "credit_overdue_other": "{{customer}} के {{count}} बिल ({{amount, currency}}) देय तारीख पार कर चुके हैं, जिससे नए बिल रुकते हैं।",
+      "scheme_changed": "{{scheme}} दी गई, पर बिल अब उसका हकदार नहीं (स्कीम बदली या खत्म हुई)।"
     },
     "devices_unsynced": {
       "title_one": "{{count}} डिवाइस का काम सर्वर तक नहीं पहुँचा",
@@ -4469,5 +4482,124 @@
     },
     "balance": "कुल बकाया",
     "reused": "यह उसी राशि के लिए पहले बना लिंक है (अभी खुला है)।"
+  },
+  "schemes": {
+    "title": "स्कीम",
+    "subtitle": "कंपनियों की फ्री माल और स्लैब छूट वाली स्कीम, बिल पर अपने आप",
+    "tab": "स्कीम",
+    "new": "नई स्कीम",
+    "editorHint": "जैसी कंपनी ने बताई: किस माल पर, उसके स्लैब, कब से कब तक और किसके लिए।",
+    "name": "स्कीम का नाम",
+    "namePlaceholder": "लाइफबॉय 10+1",
+    "kind": "प्रकार",
+    "kinds": {
+      "free_goods": "फ्री माल",
+      "discount": "छूट"
+    },
+    "onProducts": "इन उत्पादों पर",
+    "onBrands": "इन ब्रांड पर",
+    "onCategories": "इन श्रेणियों पर",
+    "findProduct": "उत्पाद खोजें",
+    "findBrand": "ब्रांड खोजें",
+    "findCategory": "श्रेणी खोजें",
+    "slabs": "स्लैब",
+    "countedBy": "गिनती",
+    "measure": {
+      "qty": "मात्रा से",
+      "value": "रकम से"
+    },
+    "from": "कम से कम ({{unit}})",
+    "stockUnits": "स्टॉक इकाई",
+    "freeQty": "फ्री (स्टॉक इकाई)",
+    "percentOff": "% छूट",
+    "perUnitOff": "हर इकाई पर ₹ छूट",
+    "removeSlab": "स्लैब हटाएँ",
+    "addSlab": "स्लैब जोड़ें",
+    "repeat": "हर गुणज पर फिर से (10 पर 1: 20 पर 2)",
+    "freeProduct": "फ्री में",
+    "sameProduct": "वही उत्पाद जो खरीदा",
+    "freeSameHint": "हर उत्पाद की गिनती अलग, फ्री भी वही उत्पाद।",
+    "freeOtherHint": "स्कीम के सब उत्पाद मिलाकर गिने जाते हैं।",
+    "validFrom": "कब से",
+    "validTo": "कब तक",
+    "noEnd": "कोई अंत नहीं: बंद करने तक चलेगी",
+    "forCategories": "सिर्फ इन ग्राहक श्रेणियों के लिए",
+    "forRateLists": "सिर्फ इन रेट लिस्ट के लिए",
+    "everyCustomer": "हर ग्राहक",
+    "company": "कंपनी (क्लेम किससे)",
+    "companyHint": "क्लेम किसको जाएगा; क्लेम टैब में जोड़ मिलता है।",
+    "findCompany": "सप्लायर खोजें",
+    "reference": "कंपनी का स्कीम कोड",
+    "save": "स्कीम सेव करें",
+    "savedToast": "स्कीम सेव हुई",
+    "switchOff": "बंद करें",
+    "switchOn": "चालू करें",
+    "switchedOff": "स्कीम बंद की गई",
+    "switchedOn": "स्कीम चालू की गई",
+    "deleted": "स्कीम हटाई गई",
+    "deleteTitle": "{{scheme}} हटाएँ?",
+    "deleteBody": "यह किसी बिल पर नहीं दी गई। जो स्कीम बिल पर दी गई हो, वह हटती नहीं, बंद की जाती है।",
+    "search": "स्कीम खोजें",
+    "filter": {
+      "running": "चालू",
+      "upcoming": "आने वाली",
+      "ended": "खत्म",
+      "all": "सभी"
+    },
+    "status": {
+      "running": "चालू",
+      "upcoming": "आने वाली",
+      "ended": "खत्म",
+      "off": "बंद"
+    },
+    "gives": "क्या मिलता है",
+    "on": "किस पर",
+    "period": "अवधि",
+    "for": "किसके लिए",
+    "someCustomers": "कुछ ग्राहक",
+    "allCustomers": "सभी ग्राहक",
+    "bills": "बिल",
+    "fromOn": "{{date}} से",
+    "none": "यहाँ कोई स्कीम नहीं",
+    "noneHint": "कंपनियों की स्कीम जोड़ें: बिल पर अपने आप लगेंगी।",
+    "describe": {
+      "free": "{{from}} पर: {{qty}} फ्री",
+      "freeOf": "{{from}} पर: {{qty}} {{product}} फ्री",
+      "off": "{{from}} पर: {{off}}",
+      "percent": "{{percent}}% छूट",
+      "perUnit": "हर एक पर {{amount}} छूट",
+      "repeats": "(बार-बार)"
+    },
+    "scheme": "स्कीम",
+    "free": "फ्री",
+    "freeLine": "फ्री · {{scheme}}",
+    "lineDiscount": "{{scheme}}: {{amount}} छूट",
+    "leaveOff": "{{scheme}} इस बिल पर न दें",
+    "leftOff": "इस बिल पर नहीं दी:",
+    "giveAgain": "{{scheme}} इस बिल पर दें",
+    "saved": "स्कीम का फायदा",
+    "nudge": {
+      "more": "{{short}} और: {{benefit}} ({{scheme}})",
+      "free": "{{qty}} फ्री",
+      "freeOf": "{{qty}} {{product}} फ्री",
+      "percent": "{{percent}}% छूट",
+      "perUnit": "हर एक पर {{amount}} छूट"
+    },
+    "print": {
+      "free": "{{scheme}} में फ्री",
+      "discount": "{{scheme}}: {{amount}} छूट"
+    },
+    "claims": {
+      "tab": "क्लेम",
+      "freeCost": "फ्री माल (लागत पर)",
+      "freeValue": "फ्री माल (बिल रेट पर)",
+      "discount": "छूट",
+      "claim": "क्लेम करना है",
+      "freeQty": "फ्री",
+      "none": "इस अवधि में कोई स्कीम नहीं दी गई",
+      "lines": "बिल-वार",
+      "billsCount_one": "{{count}} बिल",
+      "billsCount_other": "{{count}} बिल"
+    }
   }
 }

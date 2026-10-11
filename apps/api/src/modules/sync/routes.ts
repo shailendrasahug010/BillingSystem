@@ -88,10 +88,10 @@ const PullQuery = z.object({
 });
 
 /** The small lists a device keeps with the products and customers, those this person may see. */
-async function lists(tx: Tx, ctx: RequestCtx) {
+async function lists(tx: Tx, ctx: RequestCtx, today: string) {
   const out: Record<string, unknown> = {};
   if (can(ctx, "product.view")) {
-    Object.assign(out, await catalogLists(tx, ctx));
+    Object.assign(out, await catalogLists(tx, ctx, today));
     out.warehouses = await tx
       .select()
       .from(schema.warehouses)
@@ -128,7 +128,7 @@ export const syncModule: ApiModule = async (app, deps) => {
     const body = await withTenant(deps.db, ctx, async (tx) => {
       const firstPage = !given?.a;
       const withLists = async () => {
-        const l = await lists(tx, ctx);
+        const l = await lists(tx, ctx, today);
         // Hashed in id order, so rows read back in another order do not count as a change.
         const canonical = Object.entries(l).map(([k, v]) => [k, Array.isArray(v) ? [...v].sort((a: { id?: string }, b: { id?: string }) => String(a.id).localeCompare(String(b.id))) : v]);
         const hash = createHash("sha256").update(JSON.stringify(canonical)).digest("base64url").slice(0, 43);

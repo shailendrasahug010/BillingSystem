@@ -1,7 +1,7 @@
 import { CancelBody, InvoiceBody, InvoiceListQuery, InvoiceReviewBody, ShippingBillBody } from "@digitalbahi/contracts";
 import { addDays, amountInWords, dec, evaluateCredit, taxComponentLabels, toAmountString, toQtyString, toRateString, type DocumentTotals, type OpenDocument } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
-import { and, asc, eq, gt, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
@@ -119,6 +119,8 @@ export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .from(schema.invoiceItems)
     .where(eq(schema.invoiceItems.invoiceId, id))
     .orderBy(asc(schema.invoiceItems.lineNo));
+  const schemeIds = [...new Set(items.map((i) => i.schemeId).filter((x): x is string => x !== null))];
+  const schemeNames = schemeIds.length ? await tx.select({ id: schema.schemes.id, name: schema.schemes.name }).from(schema.schemes).where(inArray(schema.schemes.id, schemeIds)) : [];
   const payments = await tx
     .select({
       paymentId: schema.payments.id,
@@ -155,7 +157,7 @@ export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
     },
     taxLabels: taxComponentLabels(inv.placeOfSupply),
     amountInWords: amountInWords(inv.grandTotal, inv.printLocale),
-    items: items.map(({ businessId: _ib, unitCost, ...item }) => ({ ...item, ...(showCost ? { unitCost } : {}) })),
+    items: items.map(({ businessId: _ib, unitCost, ...item }) => ({ ...item, schemeName: schemeNames.find((x) => x.id === item.schemeId)?.name ?? null, ...(showCost ? { unitCost } : {}) })),
     payments,
   };
 }
@@ -174,7 +176,8 @@ export async function postInvoice(
   link?: { salesOrderId: string; orderItemIds: string[] },
 ) {
   const today = deps.clock.today(ctx.timeZone);
-  const sale = await prepareSale(tx, ctx, body, today);
+  // An order's lines keep the schemes they were given when it was taken.
+  const sale = await prepareSale(tx, ctx, body, today, { trustSchemes: link !== undefined });
   const t = sale.totals;
   const warnings: Warning[] = [];
   const review: ReviewReason[] = [...sale.review];
@@ -282,7 +285,7 @@ export async function postInvoice(
         rate: toRateString(l.rate),
         rateIncludesTax: p.rateIncludesTax,
         grossAmount: money(l.gross),
-        discountPercent: body.lines[i]!.discountPercent ?? "0",
+        discountPercent: p.schemeFree ? "100" : (body.lines[i]!.discountPercent ?? "0"),
         discountAmount: money(l.lineDiscount),
         documentDiscountShare: money(l.documentDiscountShare),
         taxableValue: money(l.taxable),
@@ -300,6 +303,9 @@ export async function postInvoice(
         cessAmount: money(l.cess),
         lineTotal: money(l.total),
         unitCost: toRateString(p.avgCost),
+        schemeId: p.schemeId,
+        schemeDiscount: p.schemeDiscount,
+        schemeFree: p.schemeFree,
       };
     }),
   );

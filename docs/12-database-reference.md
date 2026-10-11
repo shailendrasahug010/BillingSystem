@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 106 |
-| Columns | 1764 |
-| Foreign keys | 288 |
+| Tables | 107 |
+| Columns | 1793 |
+| Foreign keys | 293 |
 | Unique constraints | 48 |
-| Check constraints | 70 |
-| Indexes (besides primary keys and unique constraints) | 144 |
+| Check constraints | 73 |
+| Indexes (besides primary keys and unique constraints) | 147 |
 | Triggers | 73 |
-| Tables with row-level security | 100 |
-| Enums | 41 |
+| Tables with row-level security | 101 |
+| Enums | 43 |
 | Functions | 18 |
-| Migrations | 36 (last: `0035_bank_reconciliation`) |
+| Migrations | 37 (last: `0036_schemes`) |
 
 ## How the database is set up
 
@@ -36,6 +36,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Customers and suppliers:** [`price_levels`](#price_levels), [`customer_categories`](#customer_categories), [`sales_routes`](#sales_routes), [`customers`](#customers), [`customer_addresses`](#customer_addresses), [`suppliers`](#suppliers)
 * **beats:** [`customer_visits`](#customer_visits)
 * **Products, units and tax:** [`brands`](#brands), [`product_categories`](#product_categories), [`units`](#units), [`tax_categories`](#tax_categories), [`tax_rates`](#tax_rates), [`products`](#products), [`product_units`](#product_units), [`product_barcodes`](#product_barcodes), [`product_prices`](#product_prices), [`product_images`](#product_images), [`batches`](#batches)
+* **schemes:** [`schemes`](#schemes)
 * **Stock:** [`stock_ledger`](#stock_ledger), [`stock_balances`](#stock_balances), [`stock_adjustments`](#stock_adjustments), [`stock_adjustment_items`](#stock_adjustment_items), [`stock_transfers`](#stock_transfers), [`stock_transfer_items`](#stock_transfer_items)
 * **Purchases:** [`purchases`](#purchases), [`purchase_items`](#purchase_items), [`supplier_items`](#supplier_items)
 * **Sales: orders, invoices, packing and dispatch:** [`sales_orders`](#sales_orders), [`sales_order_items`](#sales_order_items), [`invoices`](#invoices), [`invoice_items`](#invoice_items), [`invoice_revisions`](#invoice_revisions), [`status_history`](#status_history), [`packings`](#packings), [`packing_items`](#packing_items), [`dispatches`](#dispatches), [`dispatch_orders`](#dispatch_orders), [`price_overrides`](#price_overrides), [`recurring_invoices`](#recurring_invoices), [`order_links`](#order_links)
@@ -141,7 +142,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 97 tables by `business_id`
+* Referenced by: 98 tables by `business_id`
 
 ### `settings`
 
@@ -760,7 +761,7 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 * Trigger `suppliers_set_updated_at`: before update, each row → `set_updated_at()`
 * Trigger `suppliers_sync_change`: after insert or delete or update, each row → `track_sync_change('supplier', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`products`](#products).preferred_supplier_id, [`purchases`](#purchases).supplier_id, [`supplier_items`](#supplier_items).supplier_id, [`credit_debit_notes`](#credit_debit_notes).supplier_id, [`payments`](#payments).supplier_id, [`party_ledger_entries`](#party_ledger_entries).supplier_id, [`expenses`](#expenses).supplier_id
+* Referenced by: [`products`](#products).preferred_supplier_id, [`schemes`](#schemes).supplier_id, [`purchases`](#purchases).supplier_id, [`supplier_items`](#supplier_items).supplier_id, [`credit_debit_notes`](#credit_debit_notes).supplier_id, [`payments`](#payments).supplier_id, [`party_ledger_entries`](#party_ledger_entries).supplier_id, [`expenses`](#expenses).supplier_id
 
 ## beats
 
@@ -962,7 +963,7 @@ Effective-dated GST rates per category, optionally conditional on unit value. Se
 * Trigger `products_set_updated_at`: before update, each row → `set_updated_at()`
 * Trigger `products_sync_change`: after insert or delete or update, each row → `track_sync_change('product', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`products`](#products).parent_product_id, [`product_units`](#product_units).product_id, [`product_barcodes`](#product_barcodes).product_id, [`product_prices`](#product_prices).product_id, [`product_images`](#product_images).product_id, [`batches`](#batches).product_id, [`stock_ledger`](#stock_ledger).product_id, [`stock_balances`](#stock_balances).product_id, [`stock_adjustment_items`](#stock_adjustment_items).product_id, [`stock_transfer_items`](#stock_transfer_items).product_id, [`purchase_items`](#purchase_items).product_id, [`supplier_items`](#supplier_items).product_id, [`sales_order_items`](#sales_order_items).product_id, [`invoice_items`](#invoice_items).product_id, [`packing_items`](#packing_items).product_id, [`credit_debit_note_items`](#credit_debit_note_items).product_id, [`customer_product_stats`](#customer_product_stats).product_id, [`product_associations`](#product_associations).product_id, [`product_associations`](#product_associations).related_product_id, [`sales_daily_product`](#sales_daily_product).product_id
+* Referenced by: [`products`](#products).parent_product_id, [`product_units`](#product_units).product_id, [`product_barcodes`](#product_barcodes).product_id, [`product_prices`](#product_prices).product_id, [`product_images`](#product_images).product_id, [`batches`](#batches).product_id, [`schemes`](#schemes).free_product_id, [`stock_ledger`](#stock_ledger).product_id, [`stock_balances`](#stock_balances).product_id, [`stock_adjustment_items`](#stock_adjustment_items).product_id, [`stock_transfer_items`](#stock_transfer_items).product_id, [`purchase_items`](#purchase_items).product_id, [`supplier_items`](#supplier_items).product_id, [`sales_order_items`](#sales_order_items).product_id, [`invoice_items`](#invoice_items).product_id, [`packing_items`](#packing_items).product_id, [`credit_debit_note_items`](#credit_debit_note_items).product_id, [`customer_product_stats`](#customer_product_stats).product_id, [`product_associations`](#product_associations).product_id, [`product_associations`](#product_associations).related_product_id, [`sales_daily_product`](#sales_daily_product).product_id
 
 ### `product_units`
 
@@ -1074,6 +1075,44 @@ Price per price level and unit.
 * Trigger `batches_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`stock_ledger`](#stock_ledger).batch_id, [`stock_balances`](#stock_balances).batch_id, [`stock_adjustment_items`](#stock_adjustment_items).batch_id, [`stock_transfer_items`](#stock_transfer_items).batch_id, [`purchase_items`](#purchase_items).batch_id, [`invoice_items`](#invoice_items).batch_id, [`packing_items`](#packing_items).batch_id, [`credit_debit_note_items`](#credit_debit_note_items).batch_id
+
+## schemes
+
+### `schemes`
+
+Trade schemes on sales (company schemes passed on to customers): free goods and discounts by slab, on products, brands or categories, for a period and for every customer or some. Bills say which scheme gave each free line and each scheme discount (invoice_items.scheme_id), which is what the claim to the company is made from.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `name` | varchar(120) | ✓ |  | Name as staff and bills show it ("Lifebuoy 10+1", "Diwali 2% on Parle"). |
+| `kind` | [scheme_kind](#enum-scheme_kind) | ✓ |  |  |
+| `measure` | [scheme_measure](#enum-scheme_measure) | ✓ | `'qty'` |  |
+| `product_ids` | uuid[] | ✓ | `'{}'` | The products it is on: these products, and any product of these brands or categories. |
+| `brand_ids` | uuid[] | ✓ | `'{}'` |  |
+| `category_ids` | uuid[] | ✓ | `'{}'` |  |
+| `slabs` | jsonb | ✓ |  | [{from, freeQty \| discountPercent, discountPerUnit}]: the highest slab reached counts. |
+| `repeat` | boolean | ✓ | `true` | Free goods given again for each further slab's worth (buy 10 get 1: 20 get 2). |
+| `free_product_id` | uuid |  |  | → [`products`](#products).id. The product given free; empty: each product bought, given free on itself. |
+| `valid_from` | date | ✓ |  | First and last day it runs (no last day: until it is ended). |
+| `valid_to` | date |  |  |  |
+| `customer_category_ids` | uuid[] | ✓ | `'{}'` | Only for customers of these categories or rate lists (both empty: every customer). |
+| `price_level_ids` | uuid[] | ✓ | `'{}'` |  |
+| `supplier_id` | uuid |  |  | → [`suppliers`](#suppliers).id. The company that pays for the scheme (the claim goes to it), and its own code for it. |
+| `reference` | varchar(60) |  |  |  |
+| `notes` | text |  |  | Free-text notes. |
+| `is_active` | boolean | ✓ | `true` | Switched off: no longer given (bills already made keep it). |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+
+* Check `schemes_validity_chk`: `(valid_to IS NULL OR valid_to >= valid_from)`
+* Index `schemes_business_idx`: btree `(business_id, valid_to)`
+* Index `schemes_name_uq`: unique, btree `(business_id, lower((name)::text))`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`sales_order_items`](#sales_order_items).scheme_id, [`invoice_items`](#invoice_items).scheme_id
 
 ## Stock
 
@@ -1463,9 +1502,13 @@ How a supplier names our products on their bills ("SURF EXL 1KG", item code "HU-
 | `delivered_qty` | numeric(15,3) | ✓ | `0` | Base units delivered. |
 | `invoiced_qty` | numeric(15,3) | ✓ | `0` | Base units already billed (an order can be billed in parts). |
 | `cancelled_qty` | numeric(15,3) | ✓ | `0` | Base units no longer to be supplied. |
+| `scheme_id` | uuid |  |  | → [`schemes`](#schemes).id. The scheme that gave this line's scheme discount, or the whole line free. |
+| `scheme_discount` | numeric(15,2) | ✓ | `0` | Rupees of the line's discount that the scheme gave (part of discount_amount). |
+| `scheme_free` | boolean | ✓ | `false` | Goods given free under the scheme: the whole line, at 100% discount. |
 
 * Check `sales_order_items_progress_chk`: `(packed_qty >= 0::numeric AND dispatched_qty >= 0::numeric AND delivered_qty >= 0::numeric AND invoiced_qty >= 0::numeric AND cancelled_qty >= 0::numeric)`
 * Check `sales_order_items_qty_chk`: `(qty > 0::numeric)`
+* Check `sales_order_items_scheme_chk`: `(scheme_id IS NOT NULL OR NOT scheme_free AND scheme_discount = 0::numeric)`
 * Index `sales_order_items_order_idx`: btree `(order_id)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`invoice_items`](#invoice_items).order_item_id, [`packing_items`](#packing_items).order_item_id
@@ -1608,11 +1651,16 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 | `order_item_id` | uuid |  |  | → [`sales_order_items`](#sales_order_items).id. The order line this line bills. |
 | `unit_cost` | numeric(15,4) | ✓ | `0` | Moving-average cost per base unit at posting time (margin reports). |
 | `returned_qty` | numeric(15,3) | ✓ | `0` | Quantity already returned (credit notes); no more than was sold can be returned. |
+| `scheme_id` | uuid |  |  | → [`schemes`](#schemes).id. The scheme that gave this line's scheme discount, or the whole line free. |
+| `scheme_discount` | numeric(15,2) | ✓ | `0` | Rupees of the line's discount that the scheme gave (part of discount_amount). |
+| `scheme_free` | boolean | ✓ | `false` | Goods given free under the scheme: the whole line, at 100% discount. |
 
 * Check `invoice_items_amounts_chk`: `(taxable_value >= 0::numeric AND line_total >= 0::numeric)`
 * Check `invoice_items_qty_chk`: `(qty > 0::numeric AND free_qty >= 0::numeric)`
+* Check `invoice_items_scheme_chk`: `(scheme_id IS NOT NULL OR NOT scheme_free AND scheme_discount = 0::numeric)`
 * Index `invoice_items_invoice_idx`: btree `(invoice_id)`
 * Index `invoice_items_product_idx`: btree `(business_id, product_id)`
+* Index `invoice_items_scheme_idx`: btree `(business_id, scheme_id) WHERE (scheme_id IS NOT NULL)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`price_overrides`](#price_overrides).invoice_item_id
 
@@ -3367,6 +3415,22 @@ Values: `earning`, `deduction`
 
 Used by: [`salary_components`](#salary_components).type, [`salary_slip_lines`](#salary_slip_lines).type
 
+### Enum `scheme_kind`
+
+free_goods: buy so much, get goods free; discount: so much off by slab.
+
+Values: `free_goods`, `discount`
+
+Used by: [`schemes`](#schemes).kind
+
+### Enum `scheme_measure`
+
+What a scheme's slabs count: stock units of its products, or their value in rupees.
+
+Values: `qty`, `value`
+
+Used by: [`schemes`](#schemes).measure
+
 ### Enum `stock_movement_type`
 
 Values: `opening`, `purchase`, `purchase_return`, `sale`, `sale_return`, `adjustment_in`, `adjustment_out`, `transfer_in`, `transfer_out`, `damaged`, `expired`, `free_in`, `free_out`, `consumption`
@@ -3426,4 +3490,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes`

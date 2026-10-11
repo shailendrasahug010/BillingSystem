@@ -37,6 +37,8 @@ export interface PrintableInvoice {
     sgst: number;
     igst: number;
     total: number;
+    /** Given under a trade scheme: the whole line free, or rupees off. */
+    scheme?: { name: string; free: boolean; discount: number } | null;
   }>;
   hsnSummary: Array<{ hsn: string; gstRate: number; taxable: number; cgst: number; sgst: number; igst: number }>;
   taxableTotal: number;
@@ -185,6 +187,11 @@ export interface ApiInvoice extends Omit<ReviewFields, "id"> {
     sgstAmount: string;
     igstAmount: string;
     lineTotal: string;
+    /** The trade scheme that gave the line free, or its scheme discount. */
+    schemeId?: string | null;
+    schemeName?: string | null;
+    schemeDiscount?: string;
+    schemeFree?: boolean;
   }>;
 }
 
@@ -209,6 +216,7 @@ export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
       sgst: num(i.sgstAmount),
       igst: num(i.igstAmount),
       total: num(i.lineTotal),
+      scheme: i.schemeId ? { name: i.schemeName ?? "", free: i.schemeFree === true, discount: num(i.schemeDiscount) } : null,
     };
   });
   const a = inv.billingAddress;

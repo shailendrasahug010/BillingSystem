@@ -6,6 +6,7 @@ import {
   type CustomerProductStats,
   type CustomerSummary,
   type PaymentBehaviour,
+  type SchemeRule,
   type TaxCategory,
   type TaxRateRule,
 } from "@digitalbahi/core";
@@ -21,6 +22,7 @@ import {
   replaceAll,
   replaceMap,
   ROUTES,
+  SCHEMES,
   setToday,
   SUPPLIERS,
   supplierById,
@@ -68,6 +70,8 @@ export interface Catalog {
   units: Array<{ id: string; symbol: string; uqc: string; name: string }>;
   brands: Array<{ id: string; name: string }>;
   categories: Array<{ id: string; name: string; parentId: string | null }>;
+  /** Trade schemes running or to come (servers before schemes send none). */
+  schemes?: Array<SchemeRule & { name: string }>;
 }
 
 export interface CustomerRow {
@@ -130,6 +134,7 @@ function mapCustomer(c: CustomerRow, routeName: Map<string, string>): Customer {
     priceLevel: level?.name.toLowerCase() === "wholesale" ? "wholesale" : "retail",
     openingBalance: 0,
     priceLevelId: c.priceLevelId,
+    categoryId: c.categoryId,
     gstRegistration: c.gstRegistration ?? (c.gstin ? "regular" : "consumer"),
     balance: Number(c.balance),
     overdue: Number(c.overdue),
@@ -170,6 +175,7 @@ function mapProduct(p: CatalogProduct, cat: Catalog, taxById: Map<string, TaxCat
     brandId: p.brandId ?? "",
     brand: cat.brands.find((b) => b.id === p.brandId)?.name ?? "",
     category: cat.categories.find((c) => c.id === p.categoryId)?.name ?? "",
+    categoryId: p.categoryId,
     hsn: p.hsnCode ?? "",
     taxCategory,
     gstRate,
@@ -261,6 +267,7 @@ function applyCatalog(catalog: Catalog): void {
     return { id: c.id, name: c.name, kind: c.kind, rate };
   });
   WORKSPACE.categories = catalog.categories.map((c) => ({ id: c.id, name: c.name }));
+  replaceAll(SCHEMES, catalog.schemes ?? []);
 }
 
 export interface SupplierRow {

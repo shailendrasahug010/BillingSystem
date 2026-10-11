@@ -13,6 +13,7 @@ import { ApiError, badRequest, conflict, forbidden, notFound } from "../../lib/e
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextMasterCode } from "../../services/numbering.js";
 import { assertOwned } from "../../services/owned.js";
+import { schemesForDevices } from "../../services/schemes.js";
 import { postStockMovement } from "../../services/stock.js";
 import type { ApiModule } from "../types.js";
 import { listTaxCategories } from "./masters.js";
@@ -75,9 +76,9 @@ export async function catalogProducts(tx: Tx, ctx: RequestCtx, ids?: string[]) {
   }));
 }
 
-/** The catalogue's lists that go with the products: tax categories, rate lists, units, brands and categories. */
-export async function catalogLists(tx: Tx, ctx: RequestCtx) {
-  const [taxCategories, priceLevels, units, brands, categories] = await inSequence([
+/** The catalogue's lists that go with the products: tax categories, rate lists, units, brands, categories and the trade schemes to bill with. */
+export async function catalogLists(tx: Tx, ctx: RequestCtx, today: string) {
+  const [taxCategories, priceLevels, units, brands, categories, schemes] = await inSequence([
     () => listTaxCategories(tx, ctx.businessId),
     () => tx.select().from(schema.priceLevels).where(eq(schema.priceLevels.businessId, ctx.businessId)),
     () => tx.select().from(schema.units).where(eq(schema.units.businessId, ctx.businessId)),
@@ -87,8 +88,9 @@ export async function catalogLists(tx: Tx, ctx: RequestCtx) {
         .select({ id: schema.productCategories.id, name: schema.productCategories.name, parentId: schema.productCategories.parentId })
         .from(schema.productCategories)
         .where(and(eq(schema.productCategories.businessId, ctx.businessId), isNull(schema.productCategories.deletedAt))),
+    () => schemesForDevices(tx, ctx.businessId, today),
   ]);
-  return { taxCategories, priceLevels, units, brands, categories };
+  return { taxCategories, priceLevels, units, brands, categories, schemes };
 }
 
 async function validateRefs(tx: Tx, businessId: string, body: Partial<Body>, baseUnitId: string): Promise<void> {
@@ -461,7 +463,7 @@ export const productsModule: ApiModule = async (app, deps) => {
     const body = await tenant(ctx, async (tx) => ({
       generatedAt: deps.clock.now().toISOString(),
       products: await catalogProducts(tx, ctx),
-      ...(await catalogLists(tx, ctx)),
+      ...(await catalogLists(tx, ctx, deps.clock.today(ctx.timeZone))),
     }));
     reply.header("cache-control", "private, no-store");
     return body;

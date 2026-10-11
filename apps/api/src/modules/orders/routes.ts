@@ -1,7 +1,7 @@
 import { InvoiceBody, OrderInvoiceBody, OrderListQuery, OrderStatusBody, SalesOrderBody } from "@digitalbahi/contracts";
-import { allowedTransitions, dec, DEFAULT_ORDER_WORKFLOW, toAmountString, toQtyString, toRateString, type OrderStatus, type OrderWorkflowConfig } from "@digitalbahi/core";
+import { allowedTransitions, dec, DEFAULT_ORDER_WORKFLOW, roundAmount, toAmountString, toQtyString, toRateString, type OrderStatus, type OrderWorkflowConfig } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
-import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
@@ -31,6 +31,8 @@ async function orderDetail(tx: Tx, ctx: RequestCtx, id: string, workflow: OrderW
   const [o] = await tx.select().from(schema.salesOrders).where(and(eq(schema.salesOrders.id, id), eq(schema.salesOrders.businessId, ctx.businessId)));
   if (!o) throw notFound("sales_order");
   const items = await tx.select().from(schema.salesOrderItems).where(eq(schema.salesOrderItems.orderId, id)).orderBy(asc(schema.salesOrderItems.lineNo));
+  const schemeIds = [...new Set(items.map((i) => i.schemeId).filter((x): x is string => x !== null))];
+  const schemeNames = schemeIds.length ? await tx.select({ id: schema.schemes.id, name: schema.schemes.name }).from(schema.schemes).where(inArray(schema.schemes.id, schemeIds)) : [];
   const [customer] = await tx
     .select({ id: schema.customers.id, name: schema.customers.name, businessName: schema.customers.businessName, mobile: schema.customers.mobile })
     .from(schema.customers)
@@ -49,7 +51,7 @@ async function orderDetail(tx: Tx, ctx: RequestCtx, id: string, workflow: OrderW
   return {
     ...rest,
     customer: customer ? { id: customer.id, name: customer.businessName ?? customer.name, mobile: customer.mobile } : null,
-    items: items.map(({ businessId: _ib, ...i }) => ({ ...i, remainingQty: toQtyString(remaining(i)) })),
+    items: items.map(({ businessId: _ib, ...i }) => ({ ...i, schemeName: schemeNames.find((x) => x.id === i.schemeId)?.name ?? null, remainingQty: toQtyString(remaining(i)) })),
     invoices,
     history,
     nextStatuses: allowedTransitions(o.status as OrderStatus, workflow),
@@ -155,7 +157,7 @@ export async function createSalesOrder(
           rate: toRateString(l.rate),
           rateIncludesTax: p.rateIncludesTax,
           grossAmount: money(l.gross),
-          discountPercent: body.lines[i]!.discountPercent ?? "0",
+          discountPercent: p.schemeFree ? "100" : (body.lines[i]!.discountPercent ?? "0"),
           discountAmount: money(l.lineDiscount),
           documentDiscountShare: money(l.documentDiscountShare),
           taxableValue: money(l.taxable),
@@ -172,6 +174,9 @@ export async function createSalesOrder(
           cessRate: l.cessRate.toFixed(3),
           cessAmount: money(l.cess),
           lineTotal: money(l.total),
+          schemeId: p.schemeId,
+          schemeDiscount: p.schemeDiscount,
+          schemeFree: p.schemeFree,
         };
       }),
     );
@@ -366,6 +371,11 @@ export const ordersModule: ApiModule = async (app, deps) => {
           rate: item.rate,
           discountPercent: item.discountPercent,
           discountAmount: "0",
+          // Its scheme goes with it: goods given free whole, a discount for the part billed.
+          ...(item.schemeId && item.schemeFree ? { scheme: { id: item.schemeId, free: true } } : {}),
+          ...(item.schemeId && !item.schemeFree && dec(item.schemeDiscount).gt(0)
+            ? { scheme: { id: item.schemeId, discount: money(roundAmount(dec(item.schemeDiscount).times(qty).dividedBy(item.qty))) } }
+            : {}),
         })),
         charges: [],
         ...(body.payment ? { payment: body.payment } : {}),

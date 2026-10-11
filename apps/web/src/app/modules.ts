@@ -1,5 +1,6 @@
 import {
   BadgeIndianRupee,
+  BadgePercent,
   ChartColumn,
   Bell,
   Boxes,
@@ -57,7 +58,7 @@ const planned = (module: PlannedModule): Route => ({ name: "planned", module });
 
 /** Modules whose screens exist in live mode (the demo preview keeps showing their plan). */
 export const LIVE_MODULES: ReadonlySet<PlannedModule> = new Set<PlannedModule>(
-  LIVE ? ["orders", "payments", "purchases", "suppliers", "inventory", "packing", "dispatch", "reports", "gst", "expenses", "employees", "payroll", "leave", "productReports", "companyReports", "users", "audit", "messages", "notifications", "backup"] : [],
+  LIVE ? ["schemes", "orders", "payments", "purchases", "suppliers", "inventory", "packing", "dispatch", "reports", "gst", "expenses", "employees", "payroll", "leave", "productReports", "companyReports", "users", "audit", "messages", "notifications", "backup"] : [],
 );
 
 /** Roadmap badge for the menu: hidden once the screen exists. */
@@ -78,6 +79,7 @@ export const MODULES: ModuleDef[] = [
   { key: "messages", label: "nav.messages", icon: MessagesSquare, group: "daily", route: planned("messages"), permission: "message.send", phase: 5 },
 
   { key: "products", label: "nav.products", icon: Package, group: "stock", route: { name: "products" }, permission: "product.view" },
+  { key: "schemes", label: "nav.schemes", icon: BadgePercent, group: "stock", route: planned("schemes"), permission: "product.view", phase: 3 },
   { key: "inventory", label: "nav.inventory", icon: Boxes, group: "stock", route: planned("inventory"), permission: "inventory.view", phase: 3 },
   { key: "purchases", label: "nav.purchases", icon: ShoppingCart, group: "stock", route: planned("purchases"), permission: "purchase.view", phase: 3 },
   { key: "suppliers", label: "nav.suppliers", icon: Factory, group: "stock", route: planned("suppliers"), permission: "supplier.view", phase: 3 },

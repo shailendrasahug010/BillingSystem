@@ -33,6 +33,7 @@ export type Route =
   | { name: "planned"; module: PlannedModule; action?: "collect" | "pay" | "new"; partyId?: string };
 
 export type PlannedModule =
+  | "schemes"
   | "suppliers"
   | "orders"
   | "purchases"
@@ -65,6 +66,7 @@ interface RouterValue {
 const RouterContext = createContext<RouterValue | null>(null);
 
 const PLANNED_MODULES: readonly PlannedModule[] = [
+  "schemes",
   "suppliers",
   "orders",
   "purchases",

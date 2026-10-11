@@ -58,6 +58,7 @@ export function invoiceReceipt(inv: PrintableInvoice, locale: LocaleCode): Recei
     items.push({ t: "text", text: locale === "hi" && l.nameLocal ? l.nameLocal : l.name, bold: true, scale: 0.95 });
     const detail = [`${qty(l.qty)} ${l.unit} × ${n(l.rate)}`, l.freeQty ? `+${qty(l.freeQty)} ${t("invoice.free")}` : null, l.discountPercent ? `-${l.discountPercent}%` : null, l.hsn ? `${t("invoice.hsn")} ${l.hsn}` : null, inv.billOfSupply ? null : `${l.gstRate}%`].filter(Boolean).join(" · ");
     items.push({ t: "pair", left: detail, right: n(l.taxable), scale: 0.85 });
+    if (l.scheme) items.push({ t: "text", text: l.scheme.free ? t("schemes.print.free", { scheme: l.scheme.name }) : t("schemes.print.discount", { scheme: l.scheme.name, amount: n(l.scheme.discount) }), scale: 0.8 });
     if (l.batch) items.push({ t: "text", text: `${t("invoice.batch")} ${l.batch}`, scale: 0.8 });
   }
   items.push({ t: "rule" }, { t: "pair", left: t("invoice.taxableValue"), right: m(inv.taxableTotal), scale: 0.9 });

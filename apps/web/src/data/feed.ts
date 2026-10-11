@@ -17,7 +17,7 @@ export interface PullPage {
   customers: CustomerRow[];
   suppliers: SupplierRow[];
   removed: { product: string[]; customer: string[]; supplier: string[] };
-  lists?: Partial<Pick<Catalog, "taxCategories" | "priceLevels" | "units" | "brands" | "categories">> & Partial<Pick<WorkspaceData, "routes" | "warehouses" | "expenseCategories">>;
+  lists?: Partial<Pick<Catalog, "taxCategories" | "priceLevels" | "units" | "brands" | "categories" | "schemes">> & Partial<Pick<WorkspaceData, "routes" | "warehouses" | "expenseCategories">>;
   listsHash?: string;
 }
 
@@ -56,6 +56,7 @@ export function applyPull(data: WorkspaceData, page: PullPage): WorkspaceData {
     ...(lists.units ? { units: lists.units } : {}),
     ...(lists.brands ? { brands: lists.brands } : {}),
     ...(lists.categories ? { categories: lists.categories } : {}),
+    ...(lists.schemes ? { schemes: lists.schemes } : {}),
   };
   return {
     ...data,

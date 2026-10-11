@@ -315,17 +315,20 @@ async function postReturn(tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1
   if (settle.gt(0)) {
     await applyToDocument(tx, side, doc.id, toAmountString(settle), toAmountString(dec(doc.balanceDue).minus(settle)));
   }
-  await postPartyEntry(tx, {
-    businessId: ctx.businessId,
-    party: isSale ? { type: "customer", id: partyId } : { type: "supplier", id: partyId },
-    date: noteDate,
-    docType: isSale ? "credit_note" : "debit_note",
-    docId: id,
-    docNumber: numbering.number,
-    ...(isSale ? { credit: toAmountString(grandTotal) } : { debit: toAmountString(grandTotal) }),
-    narration: `${isSale ? "Sales return" : "Purchase return"} against ${docNumber}`,
-    userId: ctx.userId,
-  });
+  // Goods given free (a scheme's) come back worth nothing: stock only, nothing on the party's account.
+  if (grandTotal.gt(0)) {
+    await postPartyEntry(tx, {
+      businessId: ctx.businessId,
+      party: isSale ? { type: "customer", id: partyId } : { type: "supplier", id: partyId },
+      date: noteDate,
+      docType: isSale ? "credit_note" : "debit_note",
+      docId: id,
+      docNumber: numbering.number,
+      ...(isSale ? { credit: toAmountString(grandTotal) } : { debit: toAmountString(grandTotal) }),
+      narration: `${isSale ? "Sales return" : "Purchase return"} against ${docNumber}`,
+      userId: ctx.userId,
+    });
+  }
 
   await tx.insert(schema.gstTransactions).values(
     lines.map((l, i) => ({
@@ -767,18 +770,20 @@ export const notesModule: ApiModule = async (app, deps) => {
         .select({ id: schema.partyLedgerEntries.id })
         .from(schema.partyLedgerEntries)
         .where(and(eq(schema.partyLedgerEntries.docId, note.id), eq(schema.partyLedgerEntries.docType, ledgerType)));
-      await postPartyEntry(tx, {
-        businessId: ctx.businessId,
-        party: isSale ? { type: "customer", id: note.customerId! } : { type: "supplier", id: note.supplierId! },
-        date: today,
-        docType: `${ledgerType}_cancel`,
-        docId: note.id,
-        docNumber: note.noteNumber,
-        ...(isSale ? { debit: note.grandTotal } : { credit: note.grandTotal }),
-        narration: `Cancelled: ${request.body.reason}`,
-        reversesEntryId: original?.id ?? null,
-        userId: ctx.userId,
-      });
+      if (dec(note.grandTotal).gt(0)) {
+        await postPartyEntry(tx, {
+          businessId: ctx.businessId,
+          party: isSale ? { type: "customer", id: note.customerId! } : { type: "supplier", id: note.supplierId! },
+          date: today,
+          docType: `${ledgerType}_cancel`,
+          docId: note.id,
+          docNumber: note.noteNumber,
+          ...(isSale ? { debit: note.grandTotal } : { credit: note.grandTotal }),
+          narration: `Cancelled: ${request.body.reason}`,
+          reversesEntryId: original?.id ?? null,
+          userId: ctx.userId,
+        });
+      }
       await tx
         .update(schema.gstTransactions)
         .set({ isCancelled: true })

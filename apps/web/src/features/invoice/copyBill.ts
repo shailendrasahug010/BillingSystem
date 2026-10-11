@@ -38,7 +38,7 @@ export function copyBill(number: string, customerId: string, lines: CopiedLine[]
     });
   pending = {
     number,
-    draft: { customerId, date: "", lines: draftLines, received: "", method: "cash", zeroRated: { withPayment: null, shippingBillNumber: "", shippingBillDate: "", portCode: "" } },
+    draft: { customerId, date: "", lines: draftLines, received: "", method: "cash", zeroRated: { withPayment: null, shippingBillNumber: "", shippingBillDate: "", portCode: "" }, declinedSchemes: [] },
   };
 }
 

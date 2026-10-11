@@ -28,6 +28,7 @@ import {
   paymentStatus,
 } from "./enums.js";
 import { batches, products, units } from "./catalog.js";
+import { schemes } from "./schemes.js";
 import { employees } from "./hr.js";
 import { customers, priceLevels } from "./parties.js";
 import { businessId, devices, documentSeries, files, users, warehouses } from "./platform.js";
@@ -120,9 +121,16 @@ export const salesOrderItems = pgTable(
     invoicedQty: qty().notNull().default("0"),
     /** Base units no longer to be supplied. */
     cancelledQty: qty().notNull().default("0"),
+    /** The scheme that gave this line's scheme discount, or the whole line free. */
+    schemeId: uuid().references(() => schemes.id),
+    /** Rupees of the line's discount that the scheme gave (part of discount_amount). */
+    schemeDiscount: money().notNull().default("0"),
+    /** Goods given free under the scheme: the whole line, at 100% discount. */
+    schemeFree: boolean().notNull().default(false),
   },
   (t) => [
     index("sales_order_items_order_idx").on(t.orderId),
+    check("sales_order_items_scheme_chk", sql`${t.schemeId} is not null or (not ${t.schemeFree} and ${t.schemeDiscount} = 0)`),
     check("sales_order_items_qty_chk", sql`${t.qty} > 0`),
     check(
       "sales_order_items_progress_chk",
@@ -290,10 +298,19 @@ export const invoiceItems = pgTable(
     unitCost: rate().notNull().default("0"),
     /** Quantity already returned (credit notes); no more than was sold can be returned. */
     returnedQty: qty().notNull().default("0"),
+    /** The scheme that gave this line's scheme discount, or the whole line free. */
+    schemeId: uuid().references(() => schemes.id),
+    /** Rupees of the line's discount that the scheme gave (part of discount_amount). */
+    schemeDiscount: money().notNull().default("0"),
+    /** Goods given free under the scheme: the whole line, at 100% discount. */
+    schemeFree: boolean().notNull().default(false),
   },
   (t) => [
     index("invoice_items_invoice_idx").on(t.invoiceId),
     index("invoice_items_product_idx").on(t.businessId, t.productId),
+    // The scheme claim report.
+    index("invoice_items_scheme_idx").on(t.businessId, t.schemeId).where(sql`${t.schemeId} is not null`),
+    check("invoice_items_scheme_chk", sql`${t.schemeId} is not null or (not ${t.schemeFree} and ${t.schemeDiscount} = 0)`),
     check("invoice_items_qty_chk", sql`${t.qty} > 0 and ${t.freeQty} >= 0`),
     check("invoice_items_amounts_chk", sql`${t.taxableValue} >= 0 and ${t.lineTotal} >= 0`),
   ],

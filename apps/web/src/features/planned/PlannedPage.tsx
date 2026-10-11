@@ -7,6 +7,7 @@ import { Card } from "../../components/ui/Card";
 
 /** What already exists for each planned module: its tables (migrated) and its API surface (specified). */
 const PLAN: Record<PlannedModule, { tables: string[]; endpoints: string[] }> = {
+  schemes: { tables: ["schemes", "invoice_items.scheme_id"], endpoints: ["GET/POST /schemes", "PATCH /schemes/:id", "GET /reports/scheme-claims?from=&to="] },
   suppliers: { tables: ["suppliers", "party_ledger_entries", "purchases"], endpoints: ["GET/POST /suppliers", "GET /suppliers/:id/ledger", "GET /suppliers/:id/outstanding"] },
   orders: { tables: ["sales_orders", "sales_order_items", "status_history"], endpoints: ["GET/POST /sales-orders", "POST /sales-orders/:id/transitions", "POST /sales-orders/:id/invoice"] },
   purchases: { tables: ["purchases", "purchase_items", "batches", "stock_ledger", "gst_transactions"], endpoints: ["POST /purchases", "POST /purchases/:id/post", "POST /purchases/:id/cancel", "POST /notes (purchase return)"] },

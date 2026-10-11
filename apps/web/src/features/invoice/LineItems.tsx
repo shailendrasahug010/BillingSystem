@@ -1,5 +1,5 @@
 import type { DocumentTotals } from "@digitalbahi/core";
-import { Copy, Minus, Pencil, Plus, Replace, ShoppingBasket, Trash, TriangleAlert } from "lucide-react";
+import { BadgePercent, Copy, Gift, Minus, Pencil, Plus, Replace, ShoppingBasket, Sparkles, Trash, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useI18n } from "../../app/i18n";
 import { prefersLessMotion } from "../../app/comfort";
@@ -12,7 +12,7 @@ import { inStockAlternative } from "./alternatives";
 import { cn } from "../../lib/cn";
 import type { Product } from "../../data/types";
 import { saleUnits, unitByLetter, type SaleUnit } from "./units";
-import { factorOf, unitSymbolOf, type DraftLine } from "./useInvoiceDraft";
+import { factorOf, unitSymbolOf, type BillSchemes, type DraftLine, type SchemeNudge } from "./useInvoiceDraft";
 
 /** Numeric input that keeps the typed text (e.g. "12.") and commits valid numbers. */
 function NumberCell({
@@ -194,6 +194,67 @@ function LineWarnings({ line, lines, onReplace }: { line: DraftLine; lines: Draf
   );
 }
 
+/** "6 PCS more: 1 free (Lifebuoy 10+1)". */
+function useNudgeText() {
+  const { t, money, number } = useI18n();
+  return (n: SchemeNudge) => {
+    const short = n.unit ? `${number(n.short)} ${n.unit}` : money(n.short);
+    const benefit =
+      n.freeQty !== undefined
+        ? n.freeProduct
+          ? t("schemes.nudge.freeOf", { qty: number(n.freeQty), product: n.freeProduct })
+          : t("schemes.nudge.free", { qty: number(n.freeQty) })
+        : n.percent
+          ? t("schemes.nudge.percent", { percent: n.percent })
+          : t("schemes.nudge.perUnit", { amount: money(n.perUnit ?? 0) });
+    return t("schemes.nudge.more", { short, benefit, scheme: n.name });
+  };
+}
+
+/** Under a line: the scheme discount it gets (with a way to leave the scheme off this bill), and how much more earns more. */
+function SchemeNotes({ lineKey, schemes, onScheme }: { lineKey: string; schemes: BillSchemes | undefined; onScheme?(schemeId: string, on: boolean): void }) {
+  const { t, money } = useI18n();
+  const nudgeText = useNudgeText();
+  const d = schemes?.discounts.get(lineKey);
+  const nudges = schemes?.nudges.get(lineKey) ?? [];
+  if (!d && !nudges.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
+      {d && (
+        <span className="inline-flex items-center gap-1 text-good" data-scheme-discount>
+          <BadgePercent size={12} aria-hidden /> {t("schemes.lineDiscount", { scheme: d.name, amount: money(d.amount) })}
+          {onScheme && (
+            <button type="button" tabIndex={-1} onClick={() => onScheme(d.schemeId, false)} className="rounded p-0.5 text-ink-3 hover:text-danger" aria-label={t("schemes.leaveOff", { scheme: d.name })}>
+              <X size={11} />
+            </button>
+          )}
+        </span>
+      )}
+      {nudges.map((n) => (
+        <span key={n.schemeId} className="inline-flex items-center gap-1 text-accent" data-scheme-nudge>
+          <Sparkles size={12} aria-hidden /> {nudgeText(n)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Schemes left off this bill, to give again. */
+function SchemesLeftOff({ schemes, onScheme, className }: { schemes: BillSchemes | undefined; onScheme?(schemeId: string, on: boolean): void; className?: string }) {
+  const { t } = useI18n();
+  if (!schemes?.declined.length || !onScheme) return null;
+  return (
+    <div className={cn("flex flex-wrap items-center gap-2 py-2 text-[12.5px] text-ink-3", className)} data-schemes-off>
+      <span>{t("schemes.leftOff")}</span>
+      {schemes.declined.map((d) => (
+        <button key={d.id} type="button" onClick={() => onScheme(d.id, true)} className="inline-flex h-7 items-center gap-1 rounded-full border border-line px-2.5 font-medium text-accent hover:bg-accent-soft" aria-label={t("schemes.giveAgain", { scheme: d.name })}>
+          <Plus size={12} aria-hidden /> {d.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** One-tap counts under a line on a phone while its quantity is typed: in its unit, then one or two of each bigger pack. */
 function QuickQty({ product, line, units, onPick }: { product: Product; line: DraftLine; units: SaleUnit[]; onPick(qty: number, unitId?: string | null): void }) {
   const { t } = useI18n();
@@ -371,10 +432,16 @@ export function LineItems({
   onRemove,
   onReplace,
   onBackToSearch,
+  schemes,
+  onScheme,
   variant = "desktop",
 }: {
   lines: DraftLine[];
   totals: DocumentTotals | null;
+  /** What the bill earns under trade schemes: discounts on lines, goods given free, how much more earns more. */
+  schemes?: BillSchemes;
+  /** A scheme left off this bill (on: false), or given again. */
+  onScheme?(schemeId: string, on: boolean): void;
   focusKey: string | null;
   onFocused(): void;
   onUpdate(key: string, patch: Partial<Pick<DraftLine, "qty" | "freeQty" | "rate" | "discountPercent">>): void;
@@ -385,7 +452,7 @@ export function LineItems({
   onBackToSearch(): void;
   variant?: "desktop" | "mobile";
 }) {
-  const { t, money, locale } = useI18n();
+  const { t, money, locale, number } = useI18n();
   const qtyRefs = useRef(new Map<string, HTMLInputElement>());
   const rowRefs = useRef(new Map<string, HTMLLIElement>());
   const canChangeRate = allowed("invoice.override_price");
@@ -526,9 +593,35 @@ export function LineItems({
                 />
               )}
               <LineWarnings line={line} lines={lines} {...(onReplace ? { onReplace: (id: string) => onReplace(line.key, id) } : {})} />
+              <SchemeNotes lineKey={line.key} schemes={schemes} {...(onScheme ? { onScheme } : {})} />
             </li>
           );
         })}
+        {schemes?.free.map((f) => {
+          const p = productById.get(f.productId)!;
+          const scheme = schemes.names.get(f.schemeId ?? "") ?? "";
+          return (
+            <li key={f.key} data-free-line className="-mx-4 flex items-center gap-2 bg-good-soft/40 px-4 py-2">
+              <Gift size={16} className="shrink-0 text-good" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14.5px] leading-snug font-medium text-ink">{locale === "hi" ? p.nameHi : p.name}</p>
+                <p className="truncate text-[12px] font-medium text-good">
+                  {number(f.qty)} {p.unit} · {t("schemes.freeLine", { scheme })}
+                </p>
+              </div>
+              {onScheme && f.schemeId && (
+                <button type="button" onClick={() => onScheme(f.schemeId!, false)} className="flex size-10 shrink-0 items-center justify-center text-ink-3 hover:text-danger" aria-label={t("schemes.leaveOff", { scheme })}>
+                  <X size={16} />
+                </button>
+              )}
+            </li>
+          );
+        })}
+        {schemes && schemes.declined.length > 0 && onScheme && (
+          <li>
+            <SchemesLeftOff schemes={schemes} onScheme={onScheme} />
+          </li>
+        )}
         {(() => {
           const open = editing ? lines.find((l) => l.key === editing) : undefined;
           if (!open) return null;
@@ -603,6 +696,7 @@ export function LineItems({
                   <UnitSelect product={p} line={line} units={units} onUnit={(u) => onUnit(line.key, u)} onEnter={() => toRate(line.key)} onTab={() => afterUnit(line.key)} selectRef={keep(unitRefs, line.key)} className="h-5 text-[11px]" />
                 </div>
                 <LineWarnings line={line} lines={lines} {...(onReplace ? { onReplace: (id: string) => onReplace(line.key, id) } : {})} />
+                <SchemeNotes lineKey={line.key} schemes={schemes} {...(onScheme ? { onScheme } : {})} />
               </td>
               <td className="py-1 align-middle">
                 <div className="flex items-center justify-center">
@@ -684,7 +778,48 @@ export function LineItems({
             </tr>
           );
         })}
+        {schemes?.free.map((f, j) => {
+          const p = productById.get(f.productId)!;
+          const name = locale === "hi" ? p.nameHi : p.name;
+          const scheme = schemes.names.get(f.schemeId ?? "") ?? "";
+          return (
+            <tr key={f.key} data-free-line className="border-b border-line bg-good-soft/40 last:border-b-0">
+              <td className="num py-1 pl-3 align-middle text-[12px] text-ink-3">{lines.length + j + 1}</td>
+              <td className="py-1 pl-1 align-middle">
+                <p className="truncate leading-tight font-medium text-ink" title={name}>
+                  {name}
+                </p>
+                <p className="flex min-w-0 items-center gap-1 text-[11.5px] leading-tight font-medium text-good">
+                  <Gift size={12} aria-hidden /> <span className="truncate">{t("schemes.freeLine", { scheme })}</span>
+                </p>
+              </td>
+              <td className="num py-1 text-center align-middle font-semibold text-good">
+                {number(f.qty)} {p.unit}
+              </td>
+              <td className="num py-1 pr-2 text-right align-middle text-ink-3">{f.rate}</td>
+              <td className="num py-1 pr-2 text-right align-middle text-ink-3">100</td>
+              <td className="py-1 pr-2" />
+              <td className="py-1 pr-2 text-right align-middle font-semibold text-good">{t("schemes.free")}</td>
+              <td className="py-1 pr-1 align-middle">
+                {onScheme && f.schemeId && (
+                  <button type="button" onClick={() => onScheme(f.schemeId!, false)} className="flex size-8 items-center justify-center rounded-md text-ink-3 hover:bg-danger-soft hover:text-danger" aria-label={t("schemes.leaveOff", { scheme })}>
+                    <X size={15} />
+                  </button>
+                )}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
+      {schemes && schemes.declined.length > 0 && onScheme && (
+        <tfoot>
+          <tr>
+            <td colSpan={8} className="px-3">
+              <SchemesLeftOff schemes={schemes} onScheme={onScheme} />
+            </td>
+          </tr>
+        </tfoot>
+      )}
     </table>
   );
 }

@@ -1,13 +1,17 @@
 import {
   addDays,
+  applySchemes,
   calculateDocument,
   determineSupplyType,
   DomainError,
   evaluateCredit,
   NO_TAX,
   dec,
+  pct,
   resolveTax,
+  roundAmount,
   roundRate,
+  schemeCovers,
   stateTaxComponent,
   suggestProducts,
   buildReorderList,
@@ -18,13 +22,15 @@ import {
   type CreditCheck,
   type PartyGstRegistration,
   type SuggestionProduct,
+  type SchemeLine,
+  type SchemeRule,
   type ZeroRatedKind,
   type ZeroRatedType,
   zeroRatedKindFor,
   zeroRatedTypeOf,
 } from "@digitalbahi/core";
 import { useCallback, useMemo, useReducer, useRef, type Dispatch } from "react";
-import { BUSINESS, customerById, PRODUCTS, productById, TODAY, WORKSPACE } from "../../data/db";
+import { BUSINESS, customerById, PRODUCTS, productById, SCHEMES, TODAY, WORKSPACE } from "../../data/db";
 import { useCustomerInsight } from "../../data/hooks";
 import { storeAssociations, useStoreVersion, type CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
@@ -54,6 +60,8 @@ export interface Draft {
   focusKey: string | null;
   /** Export or supply to SEZ: paying IGST or not (null = under the LUT while it is valid), and the shipping bill. */
   zeroRated: ZeroRatedChoice;
+  /** Trade schemes left off this bill (the customer is not given them). */
+  declinedSchemes: string[];
 }
 
 export interface ZeroRatedChoice {
@@ -78,6 +86,8 @@ type Action =
   | { type: "method"; value: PaymentMethod }
   | { type: "focused" }
   | { type: "zeroRated"; patch: Partial<ZeroRatedChoice> }
+  /** A trade scheme given on this bill again (on) or left off it. */
+  | { type: "scheme"; schemeId: string; on: boolean }
   | { type: "reset"; customerId?: string | null }
   /** A bill left half made, brought back (see keptDraft). */
   | { type: "restore"; draft: Omit<Draft, "focusKey"> };
@@ -209,6 +219,10 @@ function reducer(state: Draft, action: Action): Draft {
       return { ...state, focusKey: null };
     case "zeroRated":
       return { ...state, zeroRated: { ...state.zeroRated, ...action.patch } };
+    case "scheme": {
+      const others = state.declinedSchemes.filter((id) => id !== action.schemeId);
+      return { ...state, declinedSchemes: action.on ? others : [...others, action.schemeId] };
+    }
     case "reset":
       return initialDraft(action.customerId ?? null);
     case "restore": {
@@ -226,13 +240,145 @@ function reducer(state: Draft, action: Action): Draft {
         received: kept.received,
         method: kept.method,
         zeroRated: kept.zeroRated,
+        // Kept before schemes came: none left off.
+        declinedSchemes: kept.declinedSchemes ?? [],
       };
     }
   }
 }
 
 function initialDraft(customerId: string | null): Draft {
-  return { customerId, date: TODAY, lines: [], received: "", method: "cash", focusKey: null, zeroRated: { withPayment: null, shippingBillNumber: "", shippingBillDate: "", portCode: "" } };
+  return { customerId, date: TODAY, lines: [], received: "", method: "cash", focusKey: null, zeroRated: { withPayment: null, shippingBillNumber: "", shippingBillDate: "", portCode: "" }, declinedSchemes: [] };
+}
+
+/**
+ * A line as it is billed: a line of the draft with the scheme discount it
+ * earned, or goods a scheme gives free (their own line, in the stock unit,
+ * at 100% off).
+ */
+export interface BillLine extends DraftLine {
+  /** Rupees off under a scheme, besides the line's own discount. */
+  schemeDiscount: number;
+  schemeId: string | null;
+  free: boolean;
+}
+
+/** How much more of a scheme's products earns more, said under a line. */
+export interface SchemeNudge {
+  schemeId: string;
+  name: string;
+  /** More needed: stock units (unit given) or rupees. */
+  short: number;
+  unit: string | null;
+  /** What it earns then: goods free (a product's name when another product), or a discount. */
+  freeQty?: number;
+  freeProduct?: string | null;
+  percent?: number;
+  perUnit?: number;
+}
+
+export interface BillSchemes {
+  /** The scheme discount on each line of the draft, by its key. */
+  discounts: Map<string, { schemeId: string; name: string; amount: number }>;
+  /** Goods given free (the bill's last lines). */
+  free: BillLine[];
+  nudges: Map<string, SchemeNudge[]>;
+  /** Schemes this bill earns that were left off it. */
+  declined: Array<{ id: string; name: string }>;
+  /** Scheme names by id (for the free lines). */
+  names: Map<string, string>;
+  /** Rupees the customer gets: scheme discounts plus free goods at their rate. */
+  saved: number;
+}
+
+const NO_SCHEMES: BillSchemes = { discounts: new Map(), free: [], nudges: new Map(), declined: [], names: new Map(), saved: 0 };
+
+/**
+ * What the bill earns under the business's schemes, worked out from exactly
+ * what will be sent (quantities to 3 decimals, rates to 4, discounts to 2),
+ * so the server, running the same engine, finds the same.
+ */
+export function billSchemes(draft: Pick<Draft, "lines" | "date" | "declinedSchemes">, customer: Customer | null, schemes: ReadonlyArray<SchemeRule & { name: string }> = SCHEMES): { lines: BillLine[]; schemes: BillSchemes } {
+  const plain = draft.lines.map((l): BillLine => ({ ...l, schemeDiscount: 0, schemeId: null, free: false }));
+  if (!schemes.length || !draft.lines.length) return { lines: plain, schemes: NO_SCHEMES };
+  const input: SchemeLine[] = draft.lines.flatMap((l) => {
+    const p = productById.get(l.productId);
+    if (!p) return [];
+    const qty = dec(Math.max(0, l.qty).toFixed(3));
+    const gross = roundAmount(qty.times(dec(Math.max(0, l.rate).toFixed(4))));
+    const discount = Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2);
+    return [{ key: l.key, productId: p.id, brandId: p.brandId || null, categoryId: p.categoryId ?? null, qtyBase: qty.times(factorOf(p, l.unitId)), value: gross.minus(roundAmount(pct(gross, discount))) }];
+  });
+  const result = applySchemes({
+    date: draft.date,
+    customer: customer ? { categoryId: customer.categoryId ?? null, priceLevelId: customer.priceLevelId ?? WORKSPACE.defaultPriceLevelId } : null,
+    lines: input,
+    schemes,
+    declined: draft.declinedSchemes,
+    unitValue: (id) => {
+      const p = productById.get(id);
+      return p ? rateFor(p, customer, null) : null;
+    },
+  });
+  const names = new Map(schemes.map((x) => [x.id, x.name]));
+  const discounts = new Map([...result.discountByLine].map(([key, d]) => [key, { schemeId: d.schemeId, name: names.get(d.schemeId) ?? "", amount: d.amount.toNumber() }]));
+  const lines = plain.map((l) => {
+    const d = discounts.get(l.key);
+    return d ? { ...l, schemeDiscount: d.amount, schemeId: d.schemeId } : l;
+  });
+  const free = result.free.flatMap((f): BillLine[] => {
+    const p = productById.get(f.productId);
+    if (!p) return [];
+    return [{ key: `free:${f.schemeId}:${f.productId}`, productId: p.id, unitId: null, qty: f.qty.toNumber(), freeQty: 0, rate: rateFor(p, customer, null), discountPercent: 100, schemeDiscount: 0, schemeId: f.schemeId, free: true }];
+  });
+  // Said under the bill's last line of the scheme's products, once the bill is half way to more.
+  const nudges = new Map<string, SchemeNudge[]>();
+  for (const h of result.hints) {
+    if (h.short.gt(h.measure)) continue;
+    const covered = input.filter((l) => (h.productId ? l.productId === h.productId : schemeCovers(h.scheme, l)));
+    const last = covered[covered.length - 1];
+    if (!last) continue;
+    const slab = h.scheme.slabs[h.slab]!;
+    const at = h.measure.plus(h.short);
+    const nudge: SchemeNudge = {
+      schemeId: h.scheme.id,
+      name: names.get(h.scheme.id) ?? "",
+      short: h.short.toNumber(),
+      unit: h.scheme.measure === "qty" ? (productById.get(last.productId)?.unit ?? null) : null,
+    };
+    if (h.scheme.kind === "free_goods") {
+      const from = dec(slab.from);
+      nudge.freeQty = (h.scheme.repeat ? at.dividedToIntegerBy(from) : dec(1)).times(dec(slab.freeQty ?? 0)).toNumber();
+      const freeId = h.scheme.freeProductId ?? h.productId;
+      nudge.freeProduct = freeId && freeId !== last.productId ? (productById.get(freeId)?.name ?? null) : null;
+    } else {
+      if (slab.discountPercent) nudge.percent = Number(slab.discountPercent);
+      if (slab.discountPerUnit) nudge.perUnit = Number(slab.discountPerUnit);
+    }
+    nudges.set(last.key, [...(nudges.get(last.key) ?? []), nudge]);
+  }
+  const declined = result.available.filter((x) => draft.declinedSchemes.includes(x.id)).map((x) => ({ id: x.id, name: names.get(x.id) ?? "" }));
+  const saved = [...discounts.values()].reduce((a, d) => a + d.amount, 0) + free.reduce((a, f) => a + f.qty * f.rate, 0);
+  return { lines: [...lines, ...free], schemes: { discounts, free, nudges, declined, names, saved } };
+}
+
+/**
+ * The bill's lines as POST /invoices takes them: rates and discounts as
+ * shown; goods a scheme gives free as their own lines at 100% off; each
+ * scheme discount with the scheme that gave it (the server checks the bill
+ * earned it).
+ */
+export function bodyLines(lines: readonly BillLine[]) {
+  return lines.map((l) => ({
+    productId: l.productId,
+    ...(l.unitId ? { unitId: l.unitId } : {}),
+    qty: l.qty.toFixed(3),
+    ...(l.freeQty > 0 ? { freeQty: l.freeQty.toFixed(3) } : {}),
+    rate: l.rate.toFixed(4),
+    discountPercent: l.free ? "100.00" : Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),
+    ...(l.free && l.schemeId ? { scheme: { id: l.schemeId, free: true } } : {}),
+    ...(!l.free && l.schemeId && l.schemeDiscount > 0 ? { scheme: { id: l.schemeId, discount: l.schemeDiscount.toFixed(2) } } : {}),
+  }));
 }
 
 /** Under the LUT (no IGST) by default while it is valid on the invoice date, as the server decides. */
@@ -259,6 +405,9 @@ export function zeroRatedBody(view: DraftView) {
 export interface DraftView {
   draft: Draft;
   dispatch: Dispatch<Action>;
+  /** The bill as it is billed and saved: the draft's lines with their scheme discounts, then goods given free. */
+  billLines: BillLine[];
+  schemes: BillSchemes;
   customer: Customer | null;
   insight: CustomerInsight | null;
   totals: DocumentTotals | null;
@@ -308,6 +457,12 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
     [version],
   );
 
+  const billed = useMemo(
+    () => billSchemes(draft, customer),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draft.lines, draft.date, draft.declinedSchemes, customer, version],
+  );
+
   const { totals, error } = useMemo(() => {
     if (draft.lines.length === 0) return { totals: null, error: null };
     try {
@@ -318,7 +473,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
         withoutPayment,
         roundOff: WORKSPACE.roundOff,
         amountPaid: draft.received.trim() === "" ? 0 : Number(draft.received) || 0,
-        lines: draft.lines.map((l) => {
+        lines: billed.lines.map((l) => {
           const p = productById.get(l.productId)!;
           const factor = factorOf(p, l.unitId);
           // Value-based GST slabs look at the price of one stock unit, as the server does.
@@ -332,6 +487,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
             rate: l.rate >= 0 ? l.rate : 0,
             rateIncludesTax: Boolean(p.pricesIncludeTax),
             discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)),
+            discountAmount: l.schemeDiscount,
             conversionFactor: factor,
             tax,
             hsnCode: p.hsn,
@@ -343,7 +499,7 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
     } catch (e) {
       return { totals: null, error: e instanceof DomainError ? e : new DomainError("generic", String(e)) };
     }
-  }, [draft.lines, draft.received, draft.date, supplyType, withoutPayment]);
+  }, [billed, draft.lines.length, draft.received, draft.date, supplyType, withoutPayment]);
 
   const suggestions = useMemo(() => {
     if (!insight) return [];
@@ -378,6 +534,8 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
   return {
     draft,
     dispatch,
+    billLines: billed.lines,
+    schemes: billed.schemes,
     customer,
     insight,
     totals,

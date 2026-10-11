@@ -3,6 +3,7 @@ import {
   addDays,
   calculateDocument,
   chargesGst,
+  checkSchemeClaims,
   compareTotals,
   daysBetween,
   dec,
@@ -14,10 +15,14 @@ import {
   todayIn,
   zeroRatedKindFor,
   zeroRatedTypeOf,
+  pct,
+  roundAmount,
   type BusinessGstRegistration,
   type DocumentLineInput,
   type DocumentTotals,
   type PartyGstRegistration,
+  type SchemeClaims,
+  type SchemeLine,
   type TaxCategory,
   type TaxRateRule,
   type ZeroRatedType,
@@ -30,6 +35,7 @@ import type { RequestCtx } from "../lib/context.js";
 import { inSequence } from "../lib/db.js";
 import { ApiError, badRequest, conflict, forbidden } from "../lib/errors.js";
 import { periodLocked } from "./gst-period.js";
+import { schemeRule, schemesOn } from "./schemes.js";
 import { getSettings } from "./settings.js";
 
 type Body = z.output<typeof InvoiceBody>;
@@ -52,6 +58,12 @@ export interface PreparedLine {
   taxability: "taxable" | "exempt" | "nil_rated" | "non_gst" | "zero_rated";
   avgCost: string;
   listRate: string;
+  /** The line's discount percent as charged (the rate list's when the request gave none; 100 for goods given free). */
+  discountPercent: string;
+  /** The scheme that gave the line's scheme discount, or the whole line free. */
+  schemeId: string | null;
+  schemeDiscount: string;
+  schemeFree: boolean;
 }
 
 export interface PreparedSale {
@@ -78,7 +90,7 @@ export interface PreparedSale {
 
 /** Why a bill made offline is held for review (codes in invoices.review_reasons). */
 export interface ReviewReason {
-  code: "price_changed" | "customer_inactive" | "product_inactive" | "period_locked" | "late_sync" | "stock_short" | "credit_limit" | "credit_overdue";
+  code: "price_changed" | "customer_inactive" | "product_inactive" | "period_locked" | "late_sync" | "stock_short" | "credit_limit" | "credit_overdue" | "scheme_changed";
   params?: Record<string, string | number>;
 }
 
@@ -94,7 +106,12 @@ const loadSaleSettings = (tx: Tx, businessId: string) =>
 /** How long a bill made offline may wait on a device and still keep its own date without the back-date permission. */
 const OFFLINE_DAYS = 7;
 
-export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: string, options: { order?: boolean } = {}): Promise<PreparedSale> {
+/**
+ * `order`: pricing an order (no GST period check). `trustSchemes`: the lines'
+ * schemes were checked when they were given (an order being billed), so they
+ * are kept as they are.
+ */
+export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: string, options: { order?: boolean; trustSchemes?: boolean } = {}): Promise<PreparedSale> {
   const businessId = ctx.businessId;
   const [business] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, businessId));
   const [customer] = await tx
@@ -215,6 +232,8 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
 
   let rateOverridden = false;
   const prepared: PreparedLine[] = [];
+  const schemeLines: SchemeLine[] = [];
+  const schemeClaims: { discounts: Array<SchemeClaims["discounts"][number]>; free: Array<SchemeClaims["free"][number]> } = { discounts: [], free: [] };
   const engineLines: DocumentLineInput[] = body.lines.map((line, i) => {
     const product = productById.get(line.productId);
     if (!product) throw badRequest("REFERENCE_NOT_FOUND", {}, `lines[${i}].productId`);
@@ -245,7 +264,13 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
         review.push({ code: "price_changed", params: { product: product.name, billed: rate.toFixed(2), list: listRate.toFixed(2) } });
       }
     }
-    const discountPercent = line.discountPercent ?? basePrice?.discountPercent ?? "0";
+    // Goods given free under a scheme: the whole line at 100% off, nothing else taken off it.
+    const free = line.scheme?.free === true;
+    if (free && ((line.discountPercent !== undefined && !dec(line.discountPercent).eq(100)) || dec(line.discountAmount).gt(0) || dec(line.freeQty).gt(0) || line.scheme?.discount !== undefined)) {
+      throw badRequest("SCHEME_FREE_LINE", { product: product.name }, `lines[${i}].scheme`);
+    }
+    const discountPercent = free ? "100" : (line.discountPercent ?? basePrice?.discountPercent ?? "0");
+    const schemeDiscount = free ? dec(0) : roundAmount(line.scheme?.discount ?? 0);
 
     const category = categoryById.get(product.taxCategoryId);
     if (!category) throw badRequest("REFERENCE_NOT_FOUND", {}, `lines[${i}].productId`);
@@ -256,6 +281,21 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     });
     const baseUnit = unitById.get(product.baseUnitId);
     const key = `L${i + 1}`;
+    const qtyBase = dec(line.qty).times(factor);
+    if (free) schemeClaims.free.push({ schemeId: line.scheme!.id, productId: product.id, qty: qtyBase });
+    else {
+      // What the line comes to before any scheme, exactly as the engine works it out.
+      const gross = roundAmount(dec(line.qty).times(rate));
+      schemeLines.push({
+        key,
+        productId: product.id,
+        brandId: product.brandId,
+        categoryId: product.categoryId,
+        qtyBase,
+        value: gross.minus(roundAmount(pct(gross, discountPercent))).minus(roundAmount(line.discountAmount)),
+      });
+      if (line.scheme && schemeDiscount.gt(0)) schemeClaims.discounts.push({ lineKey: key, schemeId: line.scheme.id, amount: schemeDiscount });
+    }
     prepared.push({
       key,
       productId: product.id,
@@ -273,6 +313,10 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
       taxability: tax.kind,
       avgCost: product.avgCost,
       listRate: listRate.toFixed(4),
+      discountPercent,
+      schemeId: line.scheme && (free || schemeDiscount.gt(0)) ? line.scheme.id : null,
+      schemeDiscount: schemeDiscount.toFixed(2),
+      schemeFree: free,
     });
     return {
       key,
@@ -280,7 +324,7 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
       rate,
       rateIncludesTax: product.pricesIncludeTax,
       discountPercent,
-      discountAmount: line.discountAmount,
+      discountAmount: dec(line.discountAmount).plus(schemeDiscount),
       conversionFactor: factor,
       tax,
       hsnCode: product.hsnCode,
@@ -288,6 +332,37 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     };
   });
   if (rateOverridden && !offline && !can(ctx, "invoice.override_price")) throw forbidden("invoice.override_price");
+
+  // Schemes: the bill must have earned what it gives (an order being billed keeps what it was given).
+  const named = [...new Set([...schemeClaims.discounts.map((d) => d.schemeId), ...schemeClaims.free.map((f) => f.schemeId)])];
+  if (named.length && !options.trustSchemes) {
+    const rows = await schemesOn(tx, businessId, invoiceDate, named);
+    // Another business's scheme is never written on this bill.
+    for (const p of prepared) {
+      if (!p.schemeId || rows.some((r) => r.id === p.schemeId)) continue;
+      if (!offline) throw new ApiError(422, "SCHEME_NOT_EARNED", { scheme: p.schemeId });
+      // Kept as a plain discount (or goods given free), with no scheme to claim it from.
+      p.schemeId = null;
+      p.schemeDiscount = "0.00";
+      p.schemeFree = false;
+    }
+    const unitValue = (productId: string) => {
+      const product = productById.get(productId);
+      if (!product) return null;
+      return prices.find((p) => p.productId === productId && p.unitId === product.baseUnitId)?.price ?? product.sellingPrice;
+    };
+    const problems = checkSchemeClaims(
+      { date: invoiceDate, customer: { categoryId: customer.categoryId, priceLevelId }, lines: schemeLines, schemes: rows.map(schemeRule), unitValue },
+      schemeClaims,
+    );
+    if (problems.length) {
+      const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? id;
+      const first = problems[0]!;
+      // A bill made offline is a fact: given is given, and a manager looks at it.
+      if (!offline) throw new ApiError(422, first.reason === "not_in_force" ? "SCHEME_NOT_RUNNING" : "SCHEME_NOT_EARNED", { scheme: nameOf(first.schemeId) });
+      for (const id of new Set(problems.map((p) => p.schemeId))) review.push({ code: "scheme_changed", params: { scheme: nameOf(id) } });
+    }
+  }
 
   const settings = await loadSaleSettings(tx, businessId);
   // Without payment of IGST (under the LUT) unless asked otherwise, while the LUT is valid on the invoice date.
