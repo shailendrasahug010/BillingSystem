@@ -13,7 +13,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Check constraints | 73 |
 | Indexes (besides primary keys and unique constraints) | 147 |
 | Triggers | 73 |
-| Tables with row-level security | 100 |
+| Tables with row-level security | 101 |
 | Enums | 43 |
 | Functions | 18 |
 | Migrations | 37 (last: `0036_schemes`) |
@@ -1111,6 +1111,7 @@ Trade schemes on sales (company schemes passed on to customers): free goods and 
 * Check `schemes_validity_chk`: `(valid_to IS NULL OR valid_to >= valid_from)`
 * Index `schemes_business_idx`: btree `(business_id, valid_to)`
 * Index `schemes_name_uq`: unique, btree `(business_id, lower((name)::text))`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`sales_order_items`](#sales_order_items).scheme_id, [`invoice_items`](#invoice_items).scheme_id
 
 ## Stock
