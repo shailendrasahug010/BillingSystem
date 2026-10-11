@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 107 |
-| Columns | 1793 |
-| Foreign keys | 293 |
+| Tables | 108 |
+| Columns | 1801 |
+| Foreign keys | 296 |
 | Unique constraints | 48 |
-| Check constraints | 73 |
-| Indexes (besides primary keys and unique constraints) | 147 |
+| Check constraints | 74 |
+| Indexes (besides primary keys and unique constraints) | 149 |
 | Triggers | 73 |
 | Tables with row-level security | 101 |
 | Enums | 43 |
 | Functions | 18 |
-| Migrations | 37 (last: `0036_schemes`) |
+| Migrations | 38 (last: `0037_sales_returns`) |
 
 ## How the database is set up
 
@@ -40,7 +40,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Stock:** [`stock_ledger`](#stock_ledger), [`stock_balances`](#stock_balances), [`stock_adjustments`](#stock_adjustments), [`stock_adjustment_items`](#stock_adjustment_items), [`stock_transfers`](#stock_transfers), [`stock_transfer_items`](#stock_transfer_items)
 * **Purchases:** [`purchases`](#purchases), [`purchase_items`](#purchase_items), [`supplier_items`](#supplier_items)
 * **Sales: orders, invoices, packing and dispatch:** [`sales_orders`](#sales_orders), [`sales_order_items`](#sales_order_items), [`invoices`](#invoices), [`invoice_items`](#invoice_items), [`invoice_revisions`](#invoice_revisions), [`status_history`](#status_history), [`packings`](#packings), [`packing_items`](#packing_items), [`dispatches`](#dispatches), [`dispatch_orders`](#dispatch_orders), [`price_overrides`](#price_overrides), [`recurring_invoices`](#recurring_invoices), [`order_links`](#order_links)
-* **Credit and debit notes:** [`credit_debit_notes`](#credit_debit_notes), [`credit_debit_note_items`](#credit_debit_note_items)
+* **Credit and debit notes:** [`credit_debit_notes`](#credit_debit_notes), [`credit_debit_note_items`](#credit_debit_note_items), [`note_allocations`](#note_allocations)
 * **Payments and the party ledger:** [`payment_accounts`](#payment_accounts), [`payments`](#payments), [`payment_allocations`](#payment_allocations), [`party_ledger_entries`](#party_ledger_entries), [`collection_notes`](#collection_notes)
 * **Payroll:** [`salary_components`](#salary_components), [`employee_salary_structures`](#employee_salary_structures), [`employee_salary_structure_components`](#employee_salary_structure_components), [`employee_advances`](#employee_advances), [`payroll_runs`](#payroll_runs), [`salary_slips`](#salary_slips), [`salary_slip_lines`](#salary_slip_lines)
 * **Expenses:** [`expense_categories`](#expense_categories), [`expenses`](#expenses)
@@ -142,7 +142,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 98 tables by `business_id`
+* Referenced by: 99 tables by `business_id`
 
 ### `settings`
 
@@ -1592,6 +1592,7 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 | `reviewed_by` | uuid |  |  | User who marked it reviewed (or cancelled it while it was held). |
 | `reviewed_at` | timestamptz |  |  | When it was marked reviewed. |
 | `review_note` | text |  |  | What the reviewer noted (for example the credit note issued for it). |
+| `debited` | numeric(15,2) | ✓ | `0` | Raised after the bill by debit notes (a rate difference, charges): owed on it besides its total. |
 
 * Check `invoices_number_format_chk`: `(invoice_number IS NULL OR invoice_number::text ~ '^[A-Za-z0-9/-]{1,16}$'::text)`
 * Unique `invoices_number_uq`: `(business_id, financial_year, invoice_number)`
@@ -1608,7 +1609,7 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 * Trigger `invoices_period_lock`: before update, each row → `invoices_period_lock_guard()`
 * Trigger `invoices_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`invoice_items`](#invoice_items).invoice_id, [`invoice_revisions`](#invoice_revisions).invoice_id, [`dispatch_orders`](#dispatch_orders).invoice_id, [`recurring_invoices`](#recurring_invoices).last_invoice_id, [`recurring_invoices`](#recurring_invoices).source_invoice_id, [`credit_debit_notes`](#credit_debit_notes).invoice_id, [`payment_allocations`](#payment_allocations).invoice_id, [`suggestion_feedback`](#suggestion_feedback).invoice_id, [`payment_links`](#payment_links).invoice_id
+* Referenced by: [`invoice_items`](#invoice_items).invoice_id, [`invoice_revisions`](#invoice_revisions).invoice_id, [`dispatch_orders`](#dispatch_orders).invoice_id, [`recurring_invoices`](#recurring_invoices).last_invoice_id, [`recurring_invoices`](#recurring_invoices).source_invoice_id, [`credit_debit_notes`](#credit_debit_notes).invoice_id, [`note_allocations`](#note_allocations).invoice_id, [`payment_allocations`](#payment_allocations).invoice_id, [`suggestion_feedback`](#suggestion_feedback).invoice_id, [`payment_links`](#payment_links).invoice_id
 
 ### `invoice_items`
 
@@ -1960,7 +1961,7 @@ Credit and debit notes for both sides:
 * Trigger `credit_debit_notes_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `credit_debit_notes_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`credit_debit_note_items`](#credit_debit_note_items).note_id, [`payment_allocations`](#payment_allocations).note_id
+* Referenced by: [`credit_debit_note_items`](#credit_debit_note_items).note_id, [`note_allocations`](#note_allocations).note_id, [`payment_allocations`](#payment_allocations).note_id
 
 ### `credit_debit_note_items`
 
@@ -2006,6 +2007,24 @@ Credit and debit notes for both sides:
 * Check `credit_debit_note_items_qty_chk`: `(qty > 0::numeric)`
 * Index `credit_debit_note_items_note_idx`: btree `(note_id)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+
+### `note_allocations`
+
+A credit note not against one bill (goods returned without their bill) settles the customer's open bills, oldest due first, like a payment does; each bill it went to, and how much. Cancelling the note gives it back.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `note_id` | uuid | ✓ |  | → [`credit_debit_notes`](#credit_debit_notes).id. |
+| `invoice_id` | uuid | ✓ |  | → [`invoices`](#invoices).id. |
+| `amount` | numeric(15,2) | ✓ |  |  |
+| `reversed_at` | timestamptz |  |  | When it was given back (the note cancelled). |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+
+* Check `note_allocations_amount_chk`: `(amount > 0::numeric)`
+* Index `note_allocations_invoice_idx`: btree `(invoice_id)`
+* Index `note_allocations_note_idx`: btree `(note_id)`
 
 ## Payments and the party ledger
 
@@ -3490,4 +3509,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes` · `0037_sales_returns`
