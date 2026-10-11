@@ -399,6 +399,8 @@ export async function customerStatementPdf(deps: AppDeps, ctx: RequestCtx, id: s
   const locale: LocaleCode = isLocaleCode(q.locale) ? q.locale : isLocaleCode(data.printLocale) ? data.printLocale : "en";
   const { t } = createTranslator(locale);
   const label = (type: string) => {
+    // A debit note to a customer is a charge after the bill (a rate difference), not a return.
+    if (type === "debit_note") return t("notes.debitNote");
     const key = `ledger.${type}`;
     const text = t(key as "ledger.opening");
     return text === key ? type : text;

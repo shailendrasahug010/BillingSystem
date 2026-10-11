@@ -14,4 +14,8 @@ ALTER TABLE "note_allocations" ADD CONSTRAINT "note_allocations_business_id_busi
 ALTER TABLE "note_allocations" ADD CONSTRAINT "note_allocations_note_id_credit_debit_notes_id_fk" FOREIGN KEY ("note_id") REFERENCES "public"."credit_debit_notes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "note_allocations" ADD CONSTRAINT "note_allocations_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "note_allocations_note_idx" ON "note_allocations" USING btree ("note_id");--> statement-breakpoint
-CREATE INDEX "note_allocations_invoice_idx" ON "note_allocations" USING btree ("invoice_id");
+CREATE INDEX "note_allocations_invoice_idx" ON "note_allocations" USING btree ("invoice_id");--> statement-breakpoint
+-- Credit and debit notes set against customers' bills, per business.
+ALTER TABLE note_allocations ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON note_allocations USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
