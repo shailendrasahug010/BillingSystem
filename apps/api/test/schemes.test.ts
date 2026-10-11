@@ -15,7 +15,7 @@ describe.skipIf(!hasDatabase)("trade schemes", () => {
   const post = (url: string, body?: unknown, token: string = owner.token, headers?: Record<string, string>) => call(t.app, "POST", url, { token, body, ...(headers ? { headers } : {}) });
   const patch = (url: string, body: unknown, token: string = owner.token) => call(t.app, "PATCH", url, { token, body });
   const get = (url: string, token: string = owner.token) => call(t.app, "GET", url, { token });
-  const stockOf = async (id: string) => (await t.owner.query(`select coalesce(sum(qty), 0)::text as qty from stock_balances where product_id = $1`, [id])).rows[0].qty as string;
+  const stockOf = async (id: string | undefined) => (await t.owner.query(`select coalesce(sum(qty), 0)::text as qty from stock_balances where product_id = $1`, [id])).rows[0].qty as string;
   const september = { validFrom: "2026-09-01", validTo: "2026-09-30" };
 
   beforeAll(async () => {
