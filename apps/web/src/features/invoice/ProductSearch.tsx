@@ -16,6 +16,7 @@ import { productById } from "../../data/db";
 import { topBilled } from "./topItems";
 import { usualPick, wholeUnit } from "./units";
 import { rateFor } from "./useInvoiceDraft";
+import { useStockOf } from "./GodownStock";
 
 /** How a product is added: with the quantity said or typed with it, or in the unit and count the shop usually takes. */
 export interface AddHow {
@@ -34,6 +35,7 @@ export const ProductSearch = forwardRef<
   { customer: Customer | null; insight: CustomerInsight | null; cartIds: string[]; onAdd(productId: string, how?: AddHow): void; large?: boolean; onScan?(): void }
 >(function ProductSearch({ customer, insight, cartIds, onAdd, large, onScan }, ref) {
   const { t, money, locale } = useI18n();
+  const stockOf = useStockOf();
   // A phone-wide box shows a shorter hint, so it is read in full rather than cut off.
   const narrow = useMediaQuery("(max-width: 639px)");
   const [query, setQuery] = useState("");
@@ -207,7 +209,8 @@ export const ProductSearch = forwardRef<
             </li>
           )}
           {rows.map((p, i) => {
-            const level = stockLevel(p.stock, p.minStock);
+            const stock = stockOf(p);
+            const level = stockLevel(stock, p.minStock);
             const stats = insight?.stats.get(p.id);
             const inCart = cartIds.includes(p.id);
             // What this shop paid last time, in the unit it took then (the bill's rate before tax, with tax for a price list that includes it).
@@ -251,7 +254,7 @@ export const ProductSearch = forwardRef<
                       </span>
                     )}
                     <Badge tone={level === "out_of_stock" ? "danger" : level === "low" ? "warn" : "neutral"} className="h-5 px-2 text-[11px]">
-                      {level === "out_of_stock" ? t("status.stock.out_of_stock") : t("invoice.inStock", { qty: p.stock })}
+                      {level === "out_of_stock" ? t("status.stock.out_of_stock") : t("invoice.inStock", { qty: stock })}
                     </Badge>
                   </div>
                 </div>

@@ -316,8 +316,66 @@ export const PriceNoteBody = z.strictObject({
   clientTotals: z.strictObject({ grandTotal: Money }).optional(),
 });
 
+/**
+ * Goods a customer brings back without their bill: the lines as they are
+ * taken back (product, quantity, the rate given), a credit note with GST that
+ * settles the customer's open bills, oldest due first; anything over stays on
+ * their account. A line without a rate is taken back at the customer's last
+ * billed rate for it (the rate list's when they were never billed it).
+ */
+export const LooseReturnBody = z.strictObject({
+  customerId: Id,
+  noteDate: IsoDate.optional(),
+  reason: z.enum(["sales_return", "damage", "other"]).default("sales_return"),
+  /** Put the goods back into sellable stock. */
+  restock: z.boolean().default(true),
+  /** The godown they go back into (the default godown when not given). */
+  warehouseId: Id.optional(),
+  lines: z
+    .array(
+      z.strictObject({
+        productId: Id,
+        /** Defaults to the product's base unit. */
+        unitId: Id.optional(),
+        qty: Qty,
+        /** Per unit, as the product's prices are given (with or without GST). */
+        rate: Rate.optional(),
+        discountPercent: Percent.optional(),
+        batchId: Id.optional(),
+      }),
+    )
+    .min(1)
+    .max(300),
+  notes: z.string().trim().max(500).optional(),
+  clientTotals: z.strictObject({ grandTotal: Money }).optional(),
+});
+
+/**
+ * A debit note on a bill: the customer owes more than it said (a rate
+ * difference upward, a charge after the sale). The taxable amount is spread
+ * over the bill's lines by their value (or given per line) and each line's
+ * GST applies; the bill's balance grows by the note.
+ */
+export const DebitNoteBody = z.strictObject({
+  noteDate: IsoDate.optional(),
+  reason: z.enum(["rate_difference", "other"]).default("rate_difference"),
+  /** Taxable amount (before GST). */
+  amount: Money.optional(),
+  percent: Percent.optional(),
+  lines: z.array(z.strictObject({ lineId: Id, amount: Money })).min(1).max(300).optional(),
+  notes: z.string().trim().max(500).optional(),
+  clientTotals: z.strictObject({ grandTotal: Money }).optional(),
+});
+
 export const NoteListQuery = PageQuery.extend({
   party: z.enum(["customer", "supplier", "all"]).default("all"),
+  /** Credit notes, debit notes, or both. */
+  type: z.enum(["credit", "debit", "all"]).default("all"),
+  /** Only notes not against a bill (goods returned without their bill). */
+  withoutBill: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
   customerId: z.uuid().optional(),
   supplierId: z.uuid().optional(),
   invoiceId: z.uuid().optional(),

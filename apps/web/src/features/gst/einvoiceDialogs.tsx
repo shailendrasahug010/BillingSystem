@@ -24,7 +24,7 @@ export async function downloadPortalFile(path: string, query: Record<string, str
 export const fileName = (prefix: string, number: string) => `${prefix}_${number.replace(/[^A-Za-z0-9-]/g, "-")}.json`;
 
 export interface IrnTarget {
-  kind: "invoice" | "credit_note";
+  kind: "invoice" | "credit_note" | "debit_note";
   id: string;
   number: string;
   irn?: string | null;

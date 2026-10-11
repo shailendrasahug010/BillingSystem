@@ -182,6 +182,8 @@ export const invoices = pgTable(
     ...documentTotalsColumns(),
     /** Paid so far against this invoice (payments allocated to it, and payment at the time of the invoice). */
     amountPaid: money().notNull().default("0"),
+    /** Raised after the bill by debit notes (a rate difference, charges): owed on it besides its total. */
+    debited: money().notNull().default("0"),
     /** Still to be paid: grand total less amount paid and returns / credit notes against it. */
     balanceDue: money().notNull().default("0"),
     /** Unpaid, partly paid or paid. */

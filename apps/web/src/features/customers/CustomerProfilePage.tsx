@@ -1,5 +1,5 @@
 import { buildReorderList, daysBetween, financialYearOf, findState } from "@digitalbahi/core";
-import { ArrowLeft, ClipboardPlus, MapPin, Pencil, Phone, Receipt, SearchX, Wallet } from "lucide-react";
+import { ArrowLeft, ClipboardPlus, MapPin, Pencil, Phone, Receipt, SearchX, Undo2, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -22,6 +22,7 @@ import { useToast } from "../../components/ui/Toast";
 import { AddCustomerDialog } from "./AddCustomerDialog";
 import { OrderLinkButton } from "../orders/OrderLink";
 import { PayLinkButton } from "../payments/PayLink";
+import { LooseReturnDialog } from "../notes/LooseReturnDialog";
 import { editCustomer, NotKeptOffline } from "./saveCustomer";
 import { formatDate, translateError } from "@digitalbahi/i18n";
 import { BEHAVIOUR_TONE } from "../invoice/CustomerCard";
@@ -89,6 +90,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
   const { navigate } = useRouter();
   const version = useStoreVersion();
   const [editing, setEditing] = useState(false);
+  const [returning, setReturning] = useState(false);
   const customer = customerById.get(customerId);
   const insight = useCustomerInsight(customer ? customer.id : null);
   const { invoices, payments, ledger } = useCustomerHistory(customerId);
@@ -200,6 +202,11 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
           {LIVE && allowed("order.create") && (
             <Button icon={<ClipboardPlus size={16} />} onClick={() => navigate({ name: "planned", module: "orders", action: "new", partyId: customer.id })}>
               {t("orders.new")}
+            </Button>
+          )}
+          {LIVE && allowed("note.create") && (
+            <Button icon={<Undo2 size={16} />} onClick={() => setReturning(true)}>
+              {t("notes.loose.button")}
             </Button>
           )}
           {allowed("invoice.create") && (
@@ -423,6 +430,7 @@ export function CustomerProfilePage({ customerId }: { customerId: string }) {
         </Tabs.Content>
       </Tabs.Root>
       <AddCustomerDialog open={editing} onOpenChange={setEditing} customer={customer} />
+      {LIVE && <LooseReturnDialog open={returning} onOpenChange={setReturning} customerId={customer.id} />}
     </div>
   );
 }

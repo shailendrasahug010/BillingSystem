@@ -104,8 +104,10 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const kind = kindOf(entry);
   const bill = kind === "invoice" ? (entry as OutboxEntry) : null;
   const name =
-    entry.kind === "payment" || entry.kind === "return" || entry.kind === "price-note"
+    entry.kind === "payment" || entry.kind === "return" || entry.kind === "price-note" || entry.kind === "loose-return"
       ? entry.partyName
+      : entry.kind === "debit-note"
+        ? `${entry.partyName} · ${entry.documentNumber}`
       : entry.kind === "purchase"
         ? `${entry.supplierName} · ${entry.billNumber}`
         : entry.kind === "expense"
@@ -116,7 +118,7 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
   const amount =
     entry.kind === "payment"
       ? entry.amount
-      : entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note"
+      : entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note" || entry.kind === "loose-return" || entry.kind === "debit-note"
         ? entry.estimate
         : entry.kind === "collection-note"
           ? entry.amount
@@ -127,7 +129,21 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
             : bill
               ? bill.total
               : null;
-  const when = entry.kind === "payment" || entry.kind === "order" || entry.kind === "collection-note" || entry.kind === "purchase" || entry.kind === "expense" || entry.kind === "return" || entry.kind === "price-note" || entry.kind === "visit" ? entry.date : bill ? bill.date : null;
+  const when =
+    entry.kind === "payment" ||
+    entry.kind === "order" ||
+    entry.kind === "collection-note" ||
+    entry.kind === "purchase" ||
+    entry.kind === "expense" ||
+    entry.kind === "return" ||
+    entry.kind === "price-note" ||
+    entry.kind === "loose-return" ||
+    entry.kind === "debit-note" ||
+    entry.kind === "visit"
+      ? entry.date
+      : bill
+        ? bill.date
+        : null;
   const visit = entry.kind === "visit" ? (entry.outcome === "no_order" && entry.reason ? `${t("beat.outcome.no_order")}: ${t(`beat.reasons.${entry.reason as "other"}`)}` : t(`beat.outcome.${entry.outcome}`)) : null;
   const conflict = kind === "customer-edit" && entry.error?.code === "VERSION_CONFLICT";
   const removeText =
@@ -147,7 +163,7 @@ function EntryRow({ entry, onOpen }: { entry: QueuedEntry; onOpen(): void }) {
         </Badge>
         {amount !== null && amount > 0 && (
           <span className="num ml-auto text-[13.5px] font-medium text-ink">
-            {entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note" ? "≈ " : ""}
+            {entry.kind === "order" || entry.kind === "return" || entry.kind === "price-note" || entry.kind === "loose-return" || entry.kind === "debit-note" ? "≈ " : ""}
             {money(amount)}
           </span>
         )}

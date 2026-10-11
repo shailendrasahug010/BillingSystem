@@ -49,8 +49,10 @@ export interface PrintableInvoice {
   roundOff: number;
   grandTotal: number;
   paid: number;
-  /** Credited by returns (credit notes) against this invoice. */
+  /** Credited by returns (credit notes) against this invoice, and goods returned without it whose credit went to it. */
   credited?: number;
+  /** Raised since by debit notes. */
+  debited?: number;
   balance: number;
   /** Export or supply to SEZ: printed with its declaration, the LUT it was made under and the shipping bill. */
   zeroRated?: ZeroRatedPrint | null;
@@ -169,6 +171,12 @@ export interface ApiInvoice extends Omit<ReviewFields, "id"> {
   ewayBillDate?: string | null;
   ewayBillValidUntil?: string | null;
   returns?: Array<{ status: string; amountSettled: string }>;
+  /** Raised by debit notes after the bill. */
+  debited?: string;
+  /** Credit notes without a bill (goods returned) that paid part of it. */
+  noteCredits?: Array<{ noteId: string; noteNumber: string | null; noteDate: string; amount: string; reversedAt: string | null }>;
+  /** The godown the goods left from. */
+  warehouseId?: string;
   items: Array<{
     productId: string;
     productName: string;
@@ -197,7 +205,9 @@ export interface ApiInvoice extends Omit<ReviewFields, "id"> {
 
 export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
   const num = (v: string | null | undefined) => dec(v ?? 0).toNumber();
-  const credited = (inv.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + num(r.amountSettled), 0);
+  const credited =
+    (inv.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + num(r.amountSettled), 0) +
+    (inv.noteCredits ?? []).filter((c) => !c.reversedAt).reduce((s, c) => s + num(c.amount), 0);
   const lines = inv.items.map((i) => {
     const product = productById.get(i.productId);
     return {
@@ -251,6 +261,7 @@ export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
     // The API's amount paid includes what returns settled; show them apart.
     paid: num(inv.amountPaid) - credited,
     credited,
+    debited: num(inv.debited),
     balance: num(inv.balanceDue),
     zeroRated: inv.zeroRatedType
       ? { type: inv.zeroRatedType, lutArn: inv.lutArn ?? null, shippingBill: { number: inv.shippingBillNumber ?? null, date: inv.shippingBillDate ?? null, portCode: inv.portCode ?? null } }
@@ -295,10 +306,14 @@ export interface ApiNote {
   notes: string | null;
   cancelReason: string | null;
   original: { id: string; number: string; date: string } | null;
+  /** The bill a customer's note is against (none: goods returned without their bill). */
+  invoiceId?: string | null;
+  /** Goods returned without their bill: the open bills the note paid. */
+  allocations?: Array<{ invoiceId: string; invoiceNumber: string | null; invoiceDate: string; amount: string; reversedAt: string | null }>;
   items: ApiInvoice["items"];
 }
 
-/** A credit note (sales return) or debit note (purchase return) in the invoice layout. */
+/** A credit note (a return, a discount) or debit note (a return to a supplier, a charge to a customer) in the invoice layout. */
 export function printableFromNote(note: ApiNote): PrintableInvoice {
   const base = printableFromApi({
     id: note.id,

@@ -118,3 +118,27 @@ export const creditDebitNoteItems = pgTable(
   },
   (t) => [index("credit_debit_note_items_note_idx").on(t.noteId), check("credit_debit_note_items_qty_chk", sql`${t.qty} > 0`)],
 );
+
+/**
+ * A credit note not against one bill (goods returned without their bill)
+ * settles the customer's open bills, oldest due first, like a payment does;
+ * each bill it went to, and how much. Cancelling the note gives it back.
+ */
+export const noteAllocations = pgTable(
+  "note_allocations",
+  {
+    id: pk(),
+    businessId: businessId(),
+    noteId: uuid()
+      .notNull()
+      .references(() => creditDebitNotes.id),
+    invoiceId: uuid()
+      .notNull()
+      .references(() => invoices.id),
+    amount: money().notNull(),
+    /** When it was given back (the note cancelled). */
+    reversedAt: tstz(),
+    createdAt: tstz().notNull().defaultNow(),
+  },
+  (t) => [index("note_allocations_note_idx").on(t.noteId), index("note_allocations_invoice_idx").on(t.invoiceId), check("note_allocations_amount_chk", sql`${t.amount} > 0`)],
+);

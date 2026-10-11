@@ -3,7 +3,7 @@ import { customerById } from "../../data/db";
 import { adjustStock } from "../../data/live";
 import { dropLiveInsight, touch } from "../../data/store";
 import { api, QUICK_SAVE_MS } from "../../lib/api";
-import { bodyLines, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
+import { bodyLines, godownBody, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
 
 export interface SavedInvoice {
   id: string;
@@ -40,6 +40,7 @@ export async function postInvoice(view: DraftView, idempotencyKey: string): Prom
     {
       customerId: customer!.id,
       invoiceDate: draft.date,
+      ...godownBody(draft),
       lines: bodyLines(view.billLines),
       ...(received > 0 ? { payment: { amount: received.toFixed(2), method: draft.method } } : {}),
       ...zeroRatedBody(view),
@@ -56,6 +57,7 @@ export async function postInvoice(view: DraftView, idempotencyKey: string): Prom
   dropLiveInsight(customer!.id);
   void queryClient.invalidateQueries({ queryKey: ["insight", customer!.id] });
   void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  void queryClient.invalidateQueries({ queryKey: ["godown-stock"] });
   touch();
   return {
     id: res.id,

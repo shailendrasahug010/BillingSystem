@@ -1,7 +1,7 @@
-import { CancelBody, NoteListQuery, PriceNoteBody, ReturnBody } from "@digitalbahi/contracts";
+import { CancelBody, DebitNoteBody, LooseReturnBody, NoteListQuery, PriceNoteBody, ReturnBody } from "@digitalbahi/contracts";
 import { applyRoundOff, dec, roundAmount, toAmountString, toQtyString, toRateString, type Dec } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
-import { and, asc, desc, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
@@ -15,6 +15,7 @@ import { decodeCursor, page } from "../../lib/pagination.js";
 import { periodLocked } from "../../services/gst-period.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
+import { allocateNoteCredit, lastBilledRates, noteAllocationsOf, postDebitNote, postLooseReturn, reverseNoteAllocations, undoDebitOnInvoice } from "../../services/customer-notes.js";
 import { applyToDocument } from "../../services/payments.js";
 import { getSettings } from "../../services/settings.js";
 import { postStockMovement } from "../../services/stock.js";
@@ -65,8 +66,10 @@ export async function noteDetail(tx: Tx, ctx: RequestCtx, id: string) {
             .where(eq(schema.purchases.id, note.purchaseId))
         )[0]
       : undefined;
+  // A credit note without its bill: the open bills it paid.
+  const allocations = note.partyType === "customer" && note.noteType === "credit" && !note.invoiceId ? await noteAllocationsOf(tx, note.id) : [];
   const { businessId: _b, ...rest } = note;
-  return { ...rest, original: original ?? null, items: items.map(({ businessId: _ib, ...i }) => i) };
+  return { ...rest, original: original ?? null, allocations, items: items.map(({ businessId: _ib, ...i }) => i) };
 }
 
 /**
@@ -627,7 +630,8 @@ export const notesModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
 
-  const create = async <B>(side: Side, ctx: RequestCtx, documentId: string, body: B, key: unknown, reply: FastifyReply, post: (tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1], side: Side, documentId: string, body: B, clientId: string | null) => Promise<unknown>) => {
+  /** Posts a note once per Idempotency-Key: a retried save gets the note it made. */
+  const createWith = async (ctx: RequestCtx, key: unknown, reply: FastifyReply, post: (tx: Tx, clientId: string | null) => Promise<unknown>) => {
     const clientId = typeof key === "string" && z.uuid().safeParse(key).success ? key : null;
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
     const result = await tenant(ctx, async (tx) => {
@@ -639,11 +643,13 @@ export const notesModule: ApiModule = async (app, deps) => {
           .where(and(eq(schema.creditDebitNotes.businessId, ctx.businessId), eq(schema.creditDebitNotes.clientId, clientId)));
         if (existing) return { replay: true, detail: await noteDetail(tx, ctx, existing.id) };
       }
-      return { replay: false, detail: await post(tx, ctx, deps, side, documentId, body, clientId) };
+      return { replay: false, detail: await post(tx, clientId) };
     });
     if (result.replay) reply.header("idempotent-replay", "true");
     return reply.code(result.replay ? 200 : 201).send(result.detail);
   };
+  const create = <B>(side: Side, ctx: RequestCtx, documentId: string, body: B, key: unknown, reply: FastifyReply, post: (tx: Tx, ctx: RequestCtx, deps: Parameters<ApiModule>[1], side: Side, documentId: string, body: B, clientId: string | null) => Promise<unknown>) =>
+    createWith(ctx, key, reply, (tx, clientId) => post(tx, ctx, deps, side, documentId, body, clientId));
 
   /** Sales return: a credit note against the invoice. */
   r.post("/invoices/:id/returns", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, body: ReturnBody } }, (request, reply) =>
@@ -665,6 +671,61 @@ export const notesModule: ApiModule = async (app, deps) => {
     create("supplier", request.ctx, request.params.id, request.body, request.headers["idempotency-key"], reply, postReturn),
   );
 
+  /** Goods a customer brings back without their bill: a credit note that settles their open bills, oldest due first. */
+  r.post("/returns", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], body: LooseReturnBody } }, (request, reply) =>
+    createWith(request.ctx, request.headers["idempotency-key"], reply, async (tx, clientId) => {
+      const { id, warnings } = await postLooseReturn(tx, request.ctx, deps, request.body, clientId);
+      return { ...(await noteDetail(tx, request.ctx, id)), warnings };
+    }),
+  );
+
+  /** A rate difference or charge after the sale: a debit note on the bill, which then asks for that much more. */
+  r.post("/invoices/:id/debit-notes", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, body: DebitNoteBody } }, (request, reply) =>
+    createWith(request.ctx, request.headers["idempotency-key"], reply, async (tx, clientId) => {
+      const { id, warnings } = await postDebitNote(tx, request.ctx, deps, request.params.id, request.body, clientId);
+      return { ...(await noteDetail(tx, request.ctx, id)), warnings };
+    }),
+  );
+
+  /** A credit note's credit not used yet goes to the customer's open bills, oldest due first. */
+  r.post("/notes/:id/allocate", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams } }, async (request) => {
+    const ctx = request.ctx;
+    return tenant(ctx, async (tx) => {
+      const [note] = await tx
+        .select()
+        .from(schema.creditDebitNotes)
+        .where(and(eq(schema.creditDebitNotes.id, request.params.id), eq(schema.creditDebitNotes.businessId, ctx.businessId)))
+        .for("update");
+      if (!note) throw notFound("note");
+      if (note.status !== "posted") throw conflict("NOTE_NOT_POSTED", { status: note.status });
+      if (note.partyType !== "customer" || note.noteType !== "credit" || note.invoiceId) throw conflict("NOTE_NOT_ON_ACCOUNT");
+      const { allocated } = await allocateNoteCredit(tx, ctx.businessId, note.id);
+      if (allocated.lte(0)) throw conflict("NOTHING_TO_ALLOCATE");
+      await audit(tx, ctx, { action: "credit_note.allocated", entityType: "note", entityId: note.id, entityLabel: note.noteNumber ?? undefined, changes: { allocated: toAmountString(allocated) } });
+      await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "credit_note.allocated", aggregateType: "note", aggregateId: note.id, payload: { customerId: note.customerId } });
+      return noteDetail(tx, ctx, note.id);
+    });
+  });
+
+  /** The rate each product was last billed to the customer at: what goods coming back without their bill are taken back at. */
+  r.get(
+    "/customers/:id/last-rates",
+    { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, querystring: z.object({ productIds: z.string().max(4000) }) } },
+    async (request) => {
+      const asked: string = request.query.productIds;
+      const ids = [...new Set(asked.split(",").map((x) => x.trim()))].filter((x) => z.uuid().safeParse(x).success).slice(0, 100);
+      return tenant(request.ctx, async (tx) => {
+        const [customer] = await tx
+          .select({ id: schema.customers.id })
+          .from(schema.customers)
+          .where(and(eq(schema.customers.id, request.params.id), eq(schema.customers.businessId, request.ctx.businessId)));
+        if (!customer) throw notFound("customer");
+        const rates = await lastBilledRates(tx, request.ctx.businessId, customer.id, ids);
+        return { data: rates.map(({ unitCost: _cost, ...r }) => r) };
+      });
+    },
+  );
+
   r.get("/notes", { preHandler: guard(deps, "note.view"), schema: { tags: ["notes"], querystring: NoteListQuery } }, async (request) => {
     const ctx = request.ctx;
     const q = request.query;
@@ -679,6 +740,8 @@ export const notesModule: ApiModule = async (app, deps) => {
     if (q.from) where.push(sql`${n.noteDate} >= ${q.from}`);
     if (q.to) where.push(sql`${n.noteDate} <= ${q.to}`);
     if (q.status !== "all") where.push(eq(n.status, q.status));
+    if (q.type !== "all") where.push(eq(n.noteType, q.type));
+    if (q.withoutBill) where.push(isNull(n.invoiceId), isNull(n.purchaseId));
     if (cursor) where.push(sql`(${n.noteDate}, ${n.id}) < (${String(cursor.v)}::date, ${cursor.id}::uuid)`);
     const rows = await tenant(ctx, (tx) =>
       tx
@@ -695,6 +758,7 @@ export const notesModule: ApiModule = async (app, deps) => {
           invoiceId: n.invoiceId,
           purchaseId: n.purchaseId,
           grandTotal: n.grandTotal,
+          amountSettled: n.amountSettled,
           status: n.status,
         })
         .from(n)
@@ -709,7 +773,11 @@ export const notesModule: ApiModule = async (app, deps) => {
     tenant(request.ctx, (tx) => noteDetail(tx, request.ctx, request.params.id)),
   );
 
-  /** Cancels a return: stock, returned quantities, ledger, document balance and GST rows are reversed. */
+  /**
+   * Cancels a note: stock, returned quantities, ledger, the bill's balance (or
+   * the bills a note without its bill paid) and GST rows are reversed. A debit
+   * note to a customer is cancelled only while its bill still owes it.
+   */
   r.post("/notes/:id/cancel", { preHandler: guard(deps, "note.cancel"), schema: { tags: ["notes"], params: IdParams, body: CancelBody } }, async (request) => {
     const ctx = request.ctx;
     return tenant(ctx, async (tx) => {
@@ -722,21 +790,27 @@ export const notesModule: ApiModule = async (app, deps) => {
       if (note.status !== "posted") throw conflict("NOTE_NOT_POSTED", { status: note.status });
       if (await periodLocked(tx, ctx.businessId, note.noteDate)) throw conflict("GST_PERIOD_LOCKED");
       const isSale = note.partyType === "customer";
+      // Our debit note to a customer (a rate difference or charge after the sale).
+      const debitToCustomer = isSale && note.noteType === "debit";
       const docTable = isSale ? schema.invoices : schema.purchases;
-      const docId = (isSale ? note.invoiceId : note.purchaseId)!;
-      const [doc] = await tx.select({ id: docTable.id, balanceDue: docTable.balanceDue }).from(docTable).where(eq(docTable.id, docId)).for("update");
+      // None: goods a customer returned without their bill.
+      const docId = isSale ? note.invoiceId : note.purchaseId;
       const today = deps.clock.today(ctx.timeZone);
       const now = deps.clock.now().toISOString();
+      if (debitToCustomer) await undoDebitOnInvoice(tx, ctx, docId!, note.grandTotal);
+      const [doc] = docId && !debitToCustomer ? await tx.select({ id: docTable.id, balanceDue: docTable.balanceDue }).from(docTable).where(eq(docTable.id, docId)).for("update") : [];
       const policy = (await getSettings(tx, ctx.businessId, ["stock.negative_policy"] as const))["stock.negative_policy"];
       const items = await tx.select().from(schema.creditDebitNoteItems).where(eq(schema.creditDebitNoteItems.noteId, note.id));
       const itemTable = isSale ? schema.invoiceItems : schema.purchaseItems;
-      // Discounts and rate differences changed only the value: no quantities or stock to give back.
-      const valueOnly = (VALUE_ONLY as readonly string[]).includes(note.reason);
+      // Discounts, rate differences and debit notes changed only the value: no quantities or stock to give back.
+      const valueOnly = debitToCustomer || (VALUE_ONLY as readonly string[]).includes(note.reason);
       for (const it of valueOnly ? [] : [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
-        await tx
-          .update(itemTable)
-          .set({ returnedQty: sql`${itemTable.returnedQty} - ${it.qty}` })
-          .where(eq(itemTable.id, it.originalLineId!));
+        if (it.originalLineId) {
+          await tx
+            .update(itemTable)
+            .set({ returnedQty: sql`${itemTable.returnedQty} - ${it.qty}` })
+            .where(eq(itemTable.id, it.originalLineId));
+        }
         if (!note.affectsStock) continue;
         await postStockMovement(
           tx,
@@ -761,16 +835,19 @@ export const notesModule: ApiModule = async (app, deps) => {
           isSale ? policy : "allow",
         );
       }
-      if (doc && dec(note.amountSettled).gt(0)) {
+      if (isSale && !docId) await reverseNoteAllocations(tx, note.id, now);
+      else if (doc && dec(note.amountSettled).gt(0)) {
         await applyToDocument(tx, isSale ? "customer" : "supplier", doc.id, `-${note.amountSettled}`, toAmountString(dec(doc.balanceDue).plus(note.amountSettled)));
       }
-      // Returns: credit note (sale) / debit note (purchase); value-only on a purchase: the supplier's credit note.
-      const ledgerType = isSale ? "credit_note" : valueOnly ? "supplier_credit_note" : "debit_note";
+      // Customers: credit or debit note; suppliers: our debit note (returns), or their credit note (value only).
+      const ledgerType = isSale ? (debitToCustomer ? "debit_note" : "credit_note") : valueOnly ? "supplier_credit_note" : "debit_note";
       const [original] = await tx
         .select({ id: schema.partyLedgerEntries.id })
         .from(schema.partyLedgerEntries)
         .where(and(eq(schema.partyLedgerEntries.docId, note.id), eq(schema.partyLedgerEntries.docType, ledgerType)));
       if (dec(note.grandTotal).gt(0)) {
+        // What the note did to the party's account, undone.
+        const takesBack = debitToCustomer || !isSale ? { credit: note.grandTotal } : { debit: note.grandTotal };
         await postPartyEntry(tx, {
           businessId: ctx.businessId,
           party: isSale ? { type: "customer", id: note.customerId! } : { type: "supplier", id: note.supplierId! },
@@ -778,29 +855,31 @@ export const notesModule: ApiModule = async (app, deps) => {
           docType: `${ledgerType}_cancel`,
           docId: note.id,
           docNumber: note.noteNumber,
-          ...(isSale ? { debit: note.grandTotal } : { credit: note.grandTotal }),
+          ...takesBack,
           narration: `Cancelled: ${request.body.reason}`,
           reversesEntryId: original?.id ?? null,
           userId: ctx.userId,
         });
       }
+      const gstType = isSale ? (debitToCustomer ? "debit_note" : "credit_note") : valueOnly ? "purchase_credit_note" : "debit_note";
       await tx
         .update(schema.gstTransactions)
         .set({ isCancelled: true })
-        .where(and(eq(schema.gstTransactions.docType, isSale ? "credit_note" : valueOnly ? "purchase_credit_note" : "debit_note"), eq(schema.gstTransactions.docId, note.id), eq(schema.gstTransactions.businessId, ctx.businessId)));
+        .where(and(eq(schema.gstTransactions.docType, gstType), eq(schema.gstTransactions.docId, note.id), eq(schema.gstTransactions.businessId, ctx.businessId)));
       await tx
         .update(schema.creditDebitNotes)
         .set({ status: "cancelled", cancelledAt: now, cancelReason: request.body.reason, amountSettled: "0", settlementStatus: "unpaid", version: note.version + 1, updatedBy: ctx.userId })
         .where(eq(schema.creditDebitNotes.id, note.id));
+      const event = isSale ? (debitToCustomer ? "debit_note" : "credit_note") : valueOnly ? "supplier_credit_note" : "debit_note";
       await tx.insert(schema.outboxEvents).values({
         businessId: ctx.businessId,
-        eventType: isSale ? "credit_note.cancelled" : valueOnly ? "supplier_credit_note.cancelled" : "debit_note.cancelled",
+        eventType: `${event}.cancelled`,
         aggregateType: "note",
         aggregateId: note.id,
-        payload: { [isSale ? "invoiceId" : "purchaseId"]: docId },
+        payload: isSale ? { invoiceId: docId, customerId: note.customerId } : { purchaseId: docId },
       });
       await audit(tx, ctx, {
-        action: isSale ? "credit_note.cancelled" : "debit_note.cancelled",
+        action: isSale ? `${event}.cancelled` : "debit_note.cancelled",
         entityType: "note",
         entityId: note.id,
         entityLabel: note.noteNumber ?? undefined,

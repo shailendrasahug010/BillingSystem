@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
-import { Percent, Printer, Undo2 } from "lucide-react";
+import { FilePlus2, Percent, Printer, ReceiptText, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Badge } from "../../components/ui/Badge";
@@ -37,7 +37,7 @@ export interface ReturnRow {
 
 /** A credit / debit note: the document as printed, print, and cancel with a reason. */
 export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose(): void }) {
-  const { t, locale } = useI18n();
+  const { t, locale, money } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
   const [printLocale, setPrintLocale] = useState<LocaleCode>((WORKSPACE.printLocale as LocaleCode) || locale);
@@ -46,6 +46,7 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const q = useQuery({ queryKey: ["notes", noteId], queryFn: () => api.get<ApiNote>(`/notes/${noteId}`), enabled: Boolean(noteId) });
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     setCancelling(false);
@@ -72,7 +73,28 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
     }
   };
 
+  /** Credit left on the account from goods returned without their bill, to the customer's open bills. */
+  const apply = async () => {
+    if (!note) return;
+    setApplying(true);
+    setError(null);
+    try {
+      const res = await api.post<ApiNote>(`/notes/${note.id}/allocate`);
+      if (note.customerId) await refreshCustomer(note.customerId).catch(() => undefined);
+      invalidateMoney(qc);
+      for (const k of ["invoice", "invoice-raw", "notes"]) void qc.invalidateQueries({ queryKey: [k] });
+      toast({ tone: "success", title: t("notes.applied"), body: `${note.noteNumber} · ${money(Number(res.amountSettled) - Number(note.amountSettled))}` });
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const printable = note ? printableFromNote(note) : null;
+  // Goods returned without their bill: which bills the credit paid, and what is still on the account.
+  const onAccount = note && note.partyType === "customer" && note.noteType === "credit" && !note.invoiceId && note.status === "posted" ? Number(note.grandTotal) - Number(note.amountSettled) : 0;
+  const paidBills = (note?.allocations ?? []).filter((a) => !a.reversedAt);
   return (
     <Dialog
       open={Boolean(noteId)}
@@ -144,6 +166,26 @@ export function NoteDialog({ noteId, onClose }: { noteId: string | null; onClose
               locale={printLocale}
             />
           </div>
+          {(paidBills.length > 0 || onAccount > 0.005) && (
+            <div className="flex flex-col gap-1.5 rounded-lg bg-surface-2 px-3 py-2.5 text-[13px]" data-note-allocations>
+              {paidBills.length > 0 && (
+                <p className="text-ink-2">
+                  {t("notes.paidBills")}{" "}
+                  <span className="num text-ink">{paidBills.map((a) => `${a.invoiceNumber ?? ""} ${money(a.amount)}`).join(" · ")}</span>
+                </p>
+              )}
+              {onAccount > 0.005 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-ink-2">{t("notes.onAccount", { amount: money(onAccount) })}</span>
+                  {allowed("note.create") && (
+                    <Button size="sm" icon={<ReceiptText size={14} />} disabled={applying} onClick={() => void apply()}>
+                      {t("notes.applyToBills")}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {note.cancelReason && (
             <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger">
               {t("common.reason")}: {note.cancelReason}
@@ -195,6 +237,7 @@ export function ReturnsCard({
   const [open, setOpen] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [pricing, setPricing] = useState(false);
+  const [debiting, setDebiting] = useState(false);
   return (
     <Card>
       <CardHeader
@@ -205,6 +248,11 @@ export function ReturnsCard({
               {(!deviceCopy || (party && totals)) && (
                 <Button size="sm" icon={<Percent size={14} />} onClick={() => setPricing(true)}>
                   {kind === "sale" ? t("notes.priceNote") : t("notes.supplierCreditNote")}
+                </Button>
+              )}
+              {kind === "sale" && (!deviceCopy || (party && totals)) && (
+                <Button size="sm" icon={<FilePlus2 size={14} />} onClick={() => setDebiting(true)}>
+                  {t("notes.debitButton")}
                 </Button>
               )}
               <Button size="sm" icon={<Undo2 size={14} />} onClick={() => setRecording(true)}>
@@ -226,7 +274,11 @@ export function ReturnsCard({
                   <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "text-ink"}>
                     {r.noteNumber} · {dateMedium(r.noteDate)}
                   </span>
-                  <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "font-medium"}>{money(r.grandTotal)}</span>
+                  <span className={r.status === "cancelled" ? "text-ink-3 line-through" : "font-medium"}>
+                    {/* A debit note adds to the bill; credit notes take off it. */}
+                    {r.noteType === "debit" && kind === "sale" ? "+ " : ""}
+                    {money(r.grandTotal)}
+                  </span>
                 </button>
               </li>
             ))}
@@ -236,6 +288,9 @@ export function ReturnsCard({
       <NoteDialog noteId={open} onClose={() => setOpen(null)} />
       <ReturnDialog kind={kind} documentId={documentId} open={recording} onOpenChange={setRecording} />
       <PriceNoteDialog kind={kind} documentId={documentId} documentNumber={documentNumber} open={pricing} onOpenChange={setPricing} {...(party ? { party } : {})} {...(totals ? { totals } : {})} />
+      {kind === "sale" && (
+        <PriceNoteDialog debit kind="sale" documentId={documentId} documentNumber={documentNumber} open={debiting} onOpenChange={setDebiting} {...(party ? { party } : {})} {...(totals ? { totals } : {})} />
+      )}
     </Card>
   );
 }

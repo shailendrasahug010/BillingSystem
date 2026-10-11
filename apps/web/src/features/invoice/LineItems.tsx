@@ -13,6 +13,7 @@ import { cn } from "../../lib/cn";
 import type { Product } from "../../data/types";
 import { saleUnits, unitByLetter, type SaleUnit } from "./units";
 import { factorOf, unitSymbolOf, type BillSchemes, type DraftLine, type SchemeNudge } from "./useInvoiceDraft";
+import { useStockOf } from "./GodownStock";
 
 /** Numeric input that keeps the typed text (e.g. "12.") and commits valid numbers. */
 function NumberCell({
@@ -160,10 +161,13 @@ function UnitSelect({
  */
 function LineWarnings({ line, lines, onReplace }: { line: DraftLine; lines: DraftLine[]; onReplace?(productId: string): void }) {
   const { t, locale } = useI18n();
+  const stockOf = useStockOf();
   const p = productById.get(line.productId)!;
   const factor = factorOf(p, line.unitId);
   const need = (line.qty + (line.freeQty || 0)) * factor;
-  const short = need > p.stock;
+  // In the godown the bill takes it from, when the business has more than one.
+  const stock = stockOf(p);
+  const short = need > stock;
   const belowCost = line.rate * (1 - line.discountPercent / 100) < p.purchasePrice * factor;
   const twin = lines.findIndex((l) => l.key !== line.key && l.productId === line.productId);
   const instead = short && onReplace ? inStockAlternative(p, need, PRODUCTS, new Set(lines.map((l) => l.productId))) : null;
@@ -172,7 +176,7 @@ function LineWarnings({ line, lines, onReplace }: { line: DraftLine; lines: Draf
     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
       {short && (
         <span className="inline-flex items-center gap-1 text-warn">
-          <TriangleAlert size={12} /> {p.stock <= 0 ? t("status.stock.out_of_stock") : t("invoice.stockShort", { qty: `${p.stock} ${p.unit}` })}
+          <TriangleAlert size={12} /> {stock <= 0 ? t("status.stock.out_of_stock") : t("invoice.stockShort", { qty: `${stock} ${p.unit}` })}
         </span>
       )}
       {instead && (

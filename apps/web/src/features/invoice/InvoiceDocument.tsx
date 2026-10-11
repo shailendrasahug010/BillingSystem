@@ -354,6 +354,12 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
           {invoice.reverseCharge && <p className="max-w-[16rem] text-right text-[10.5px] text-[#4a5570]">{t("invoice.print.rcmNotIncluded")}</p>}
           {!noPayment && (
             <>
+              {(invoice.debited ?? 0) > 0 && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[#4a5570]">{t("notes.addDebits")}</dt>
+                  <dd className="num">{m(invoice.debited ?? 0)}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <dt className="text-[#4a5570]">{t("invoice.print.paid")}</dt>
                 <dd className="num">{m(invoice.paid)}</dd>

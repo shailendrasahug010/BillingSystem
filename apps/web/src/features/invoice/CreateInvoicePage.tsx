@@ -25,6 +25,8 @@ import { CustomerPicker } from "./CustomerPicker";
 import { CashSaleButton } from "./CashSaleButton";
 import { LineItems } from "./LineItems";
 import { ProductSearch } from "./ProductSearch";
+import { GodownPicker, GodownStockProvider } from "./GodownStock";
+import { defaultGodownId, rememberGodown } from "./godown";
 import { SuggestionsPanel } from "./SuggestionsPanel";
 import { SummaryPanel } from "./SummaryPanel";
 import { InvoiceSavedDialog, type SavedNotice } from "./InvoiceSavedDialog";
@@ -463,6 +465,10 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
               <h2 id="items-h" className="text-[15px] font-semibold text-ink">
                 {t("invoice.items")} <span className="num ml-1 text-[13px] font-normal text-ink-3">{draft.lines.length}</span>
               </h2>
+              <GodownPicker value={draft.warehouseId ?? null} onChange={(id) => {
+                  dispatch({ type: "godown", warehouseId: id });
+                  rememberGodown(id);
+                }} />
               {draft.lines.length > 0 && (
                 <p className="hidden truncate text-[12px] text-ink-3 md:block" title={unitLetters ? t("invoice.unitKeys", { letters: unitLetters }) : undefined}>
                   {t("invoice.keysHint")}
@@ -692,6 +698,10 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
             </span>
             <span className="text-[13px] font-medium text-accent">{t("invoice.changeCustomer")}</span>
           </button>
+          <GodownPicker value={draft.warehouseId ?? null} onChange={(id) => {
+                  dispatch({ type: "godown", warehouseId: id });
+                  rememberGodown(id);
+                }} />
           <div data-overlay="top" className="sticky top-[calc(3.5rem+var(--inset-top))] z-20 -mx-4 bg-bg/85 px-4 py-2 backdrop-blur-md">
             <ProductSearch ref={productRef} large customer={customer} insight={insight} cartIds={draft.lines.map((l) => l.productId)} onAdd={(id, how) => dispatch({ type: "add", productId: id, ...how })} onScan={() => setScanOpen(true)} />
           </div>
@@ -803,5 +813,10 @@ export function CreateInvoicePage({ customerId }: { customerId?: string }) {
   const kept = useKeptDraft(view, customerId ?? null);
   // The full screen (with its keyboard shortcuts) from tablet width up; the step-by-step one on phones.
   const desktop = useMediaQuery("(min-width: 768px)");
-  return desktop ? <DesktopInvoice view={view} kept={kept} /> : <MobileInvoice view={view} kept={kept} />;
+  // Stock shown on the lines and in the search is the chosen godown's (when the business has more than one).
+  return (
+    <GodownStockProvider warehouseId={view.draft.warehouseId ?? defaultGodownId()}>
+      {desktop ? <DesktopInvoice view={view} kept={kept} /> : <MobileInvoice view={view} kept={kept} />}
+    </GodownStockProvider>
+  );
 }

@@ -97,6 +97,36 @@ export interface ReviewReason {
 const loadSaleSettings = (tx: Tx, businessId: string) =>
   getSettings(tx, businessId, ["invoice.round_off", "stock.negative_policy", "credit.policy", "invoice.default_print_locale", "gst.lut"] as const);
 
+/** The business's tax categories with their dated rate rules, by id. */
+export async function taxCategoriesOf(tx: Tx, businessId: string): Promise<Map<string, TaxCategory>> {
+  const categories = await tx.select().from(schema.taxCategories).where(eq(schema.taxCategories.businessId, businessId));
+  const rules = await tx.select().from(schema.taxRates).where(eq(schema.taxRates.businessId, businessId));
+  return new Map<string, TaxCategory>(
+    categories.map((c) => [
+      c.id,
+      {
+        id: c.id,
+        name: c.name,
+        kind: c.kind,
+        rules: rules
+          .filter((r) => r.taxCategoryId === c.id)
+          .map(
+            (r): TaxRateRule => ({
+              id: r.id,
+              effectiveFrom: r.effectiveFrom,
+              effectiveTo: r.effectiveTo,
+              gstRate: r.gstRate,
+              cessRate: r.cessRate,
+              cessPerUnit: r.cessPerUnit,
+              condition: (r.condition as TaxRateRule["condition"]) ?? null,
+              priority: r.priority,
+            }),
+          ),
+      },
+    ]),
+  );
+}
+
 /**
  * Turns an invoice request into a fully priced, GST-resolved document using
  * only server data: prices come from the rate list unless the caller may
@@ -187,7 +217,7 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     .from(schema.products)
     .where(and(eq(schema.products.businessId, businessId), inArray(schema.products.id, productIds), isNull(schema.products.deletedAt)));
   const productById = new Map(products.map((p) => [p.id, p]));
-  const [altUnits, prices, unitRows, categories, rules] = await inSequence([
+  const [altUnits, prices, unitRows] = await inSequence([
     () => tx.select().from(schema.productUnits).where(inArray(schema.productUnits.productId, productIds)),
     () => priceLevelId
       ? tx
@@ -196,34 +226,9 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
           .where(and(inArray(schema.productPrices.productId, productIds), eq(schema.productPrices.priceLevelId, priceLevelId)))
       : Promise.resolve([]),
     () => tx.select().from(schema.units).where(eq(schema.units.businessId, businessId)),
-    () => tx.select().from(schema.taxCategories).where(eq(schema.taxCategories.businessId, businessId)),
-    () => tx.select().from(schema.taxRates).where(eq(schema.taxRates.businessId, businessId)),
   ]);
   const unitById = new Map(unitRows.map((u) => [u.id, u]));
-  const categoryById = new Map<string, TaxCategory>(
-    categories.map((c) => [
-      c.id,
-      {
-        id: c.id,
-        name: c.name,
-        kind: c.kind,
-        rules: rules
-          .filter((r) => r.taxCategoryId === c.id)
-          .map(
-            (r): TaxRateRule => ({
-              id: r.id,
-              effectiveFrom: r.effectiveFrom,
-              effectiveTo: r.effectiveTo,
-              gstRate: r.gstRate,
-              cessRate: r.cessRate,
-              cessPerUnit: r.cessPerUnit,
-              condition: (r.condition as TaxRateRule["condition"]) ?? null,
-              priority: r.priority,
-            }),
-          ),
-      },
-    ]),
-  );
+  const categoryById = await taxCategoriesOf(tx, businessId);
 
   const batchIds = body.lines.map((l) => l.batchId).filter((b): b is string => Boolean(b));
   const batches = batchIds.length

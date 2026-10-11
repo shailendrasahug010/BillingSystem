@@ -9,7 +9,7 @@ import { can, guard } from "../../lib/access.js";
 import { audit } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { withTenant } from "../../lib/db.js";
-import { ApiError, badRequest, conflict } from "../../lib/errors.js";
+import { ApiError, badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { getSetting } from "../../services/settings.js";
@@ -67,6 +67,33 @@ export const inventoryModule: ApiModule = async (app, deps) => {
     }));
     return page(data, q.limit, (x) => ({ v: x.name, id: x.productId }));
   });
+
+  /**
+   * What each product has in one godown (products with none left out): the
+   * bill and order screens show it when they take goods from that godown.
+   */
+  r.get(
+    "/warehouses/:id/stock",
+    { preHandler: guard(deps), schema: { tags: ["inventory"], params: z.object({ id: z.uuid() }) } },
+    async (request) => {
+      const ctx = request.ctx;
+      if (!can(ctx, "inventory.view") && !can(ctx, "invoice.create") && !can(ctx, "order.create")) throw forbidden("inventory.view");
+      return tenant(ctx, async (tx) => {
+        const [wh] = await tx
+          .select({ id: schema.warehouses.id })
+          .from(schema.warehouses)
+          .where(and(eq(schema.warehouses.id, request.params.id), eq(schema.warehouses.businessId, ctx.businessId), isNull(schema.warehouses.deletedAt)));
+        if (!wh) throw notFound("warehouse");
+        const rows = await tx
+          .select({ productId: schema.stockBalances.productId, qty: sql<string>`sum(${schema.stockBalances.qty})::text` })
+          .from(schema.stockBalances)
+          .where(and(eq(schema.stockBalances.businessId, ctx.businessId), eq(schema.stockBalances.warehouseId, wh.id)))
+          .groupBy(schema.stockBalances.productId)
+          .having(sql`sum(${schema.stockBalances.qty}) <> 0`);
+        return { warehouseId: wh.id, data: rows };
+      });
+    },
+  );
 
   /**
    * Batches in stock with an expiry date, soonest first, per godown: what is
