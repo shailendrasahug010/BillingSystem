@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 103 |
-| Columns | 1714 |
-| Foreign keys | 277 |
+| Tables | 106 |
+| Columns | 1764 |
+| Foreign keys | 288 |
 | Unique constraints | 48 |
-| Check constraints | 67 |
-| Indexes (besides primary keys and unique constraints) | 136 |
+| Check constraints | 70 |
+| Indexes (besides primary keys and unique constraints) | 144 |
 | Triggers | 73 |
-| Tables with row-level security | 97 |
-| Enums | 40 |
+| Tables with row-level security | 100 |
+| Enums | 41 |
 | Functions | 18 |
-| Migrations | 35 (last: `0034_payment_links`) |
+| Migrations | 36 (last: `0035_bank_reconciliation`) |
 
 ## How the database is set up
 
@@ -48,6 +48,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Analytics (derived, rebuildable):** [`customer_product_stats`](#customer_product_stats), [`product_associations`](#product_associations), [`customer_stats`](#customer_stats), [`analytics_runs`](#analytics_runs), [`suggestion_feedback`](#suggestion_feedback), [`sales_daily_product`](#sales_daily_product), [`sales_daily_customer`](#sales_daily_customer)
 * **WhatsApp and email:** [`messaging_settings`](#messaging_settings), [`messages`](#messages)
 * **gateways:** [`payment_gateway_settings`](#payment_gateway_settings), [`payment_links`](#payment_links), [`gateway_payments`](#gateway_payments)
+* **bank:** [`account_transfers`](#account_transfers), [`bank_statements`](#bank_statements), [`bank_statement_lines`](#bank_statement_lines)
 * [Enums](#enums) · [Functions](#functions) · [Migrations](#migrations)
 
 ## Platform and tenancy
@@ -140,7 +141,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 94 tables by `business_id`
+* Referenced by: 97 tables by `business_id`
 
 ### `settings`
 
@@ -1985,7 +1986,7 @@ Cash drawer, bank accounts, UPI handles: where money actually lands (cash book /
 * Unique `payment_accounts_name_uq`: `(business_id, name)`
 * Trigger `payment_accounts_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`payments`](#payments).payment_account_id, [`expenses`](#expenses).payment_account_id, [`payment_gateway_settings`](#payment_gateway_settings).payment_account_id
+* Referenced by: [`payments`](#payments).payment_account_id, [`expenses`](#expenses).payment_account_id, [`payment_gateway_settings`](#payment_gateway_settings).payment_account_id, [`account_transfers`](#account_transfers).from_account_id, [`account_transfers`](#account_transfers).to_account_id, [`bank_statements`](#bank_statements).payment_account_id, [`bank_statement_lines`](#bank_statement_lines).payment_account_id
 
 ### `payments`
 
@@ -2038,7 +2039,7 @@ Money in (customer collection) or out (supplier payment, salary, refund). Posted
 * Trigger `payments_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `payments_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`payment_allocations`](#payment_allocations).payment_id, [`employee_advances`](#employee_advances).payment_id, [`salary_slips`](#salary_slips).payment_id, [`gateway_payments`](#gateway_payments).payment_id
+* Referenced by: [`payment_allocations`](#payment_allocations).payment_id, [`employee_advances`](#employee_advances).payment_id, [`salary_slips`](#salary_slips).payment_id, [`gateway_payments`](#gateway_payments).payment_id, [`bank_statement_lines`](#bank_statement_lines).payment_id
 
 ### `payment_allocations`
 
@@ -2364,6 +2365,7 @@ Rent, Electricity, Salary, Transport, Fuel, Office, Maintenance, Marketing, Othe
 * Trigger `expenses_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `expenses_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`bank_statement_lines`](#bank_statement_lines).expense_id
 
 ## GST returns and configuration
 
@@ -3053,6 +3055,98 @@ A payment the gateway received on a link, and the receipt it was recorded as. On
 * Index `gateway_payments_provider_uq`: unique, btree `(provider, provider_payment_id)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
+## bank
+
+### `account_transfers`
+
+Money moved between the business's own accounts: cash deposited in the bank, cash drawn from it, or one bank account to another. It changes neither a party's balance nor profit; the cash book and the bank book show it.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `transfer_date` | date | ✓ |  | Date the money moved. |
+| `from_account_id` | uuid | ✓ |  | → [`payment_accounts`](#payment_accounts).id. Account the money left (the cash drawer for a deposit). |
+| `to_account_id` | uuid | ✓ |  | → [`payment_accounts`](#payment_accounts).id. Account the money reached (the bank for a deposit). |
+| `amount` | numeric(15,2) | ✓ |  | Amount moved. |
+| `reference` | varchar(40) |  |  | The bank's reference for it, when there is one. |
+| `notes` | text |  |  | Free-text notes. |
+| `status` | [document_status](#enum-document_status) | ✓ | `'posted'` | Posted or cancelled (kept, never deleted). |
+| `cancelled_at` | timestamptz |  |  | When it was cancelled. |
+| `cancelled_by` | uuid |  |  | User who cancelled it. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+
+* Check `account_transfers_chk`: `(amount > 0::numeric AND from_account_id <> to_account_id)`
+* Index `account_transfers_date_idx`: btree `(business_id, transfer_date)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`bank_statement_lines`](#bank_statement_lines).transfer_id
+
+### `bank_statements`
+
+A bank statement as imported for one of the business's accounts (the CSV, Excel or PDF from net banking, read in the browser). Its lines are kept and reconciled one by one; an overlapping statement brings only the lines not already saved.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `payment_account_id` | uuid | ✓ |  | → [`payment_accounts`](#payment_accounts).id. The account the statement is of. |
+| `file_name` | text |  |  | Name of the file it was read from. |
+| `period_from` | date | ✓ |  | First and last dates of its lines. |
+| `period_to` | date | ✓ |  |  |
+| `closing_balance` | numeric(15,2) |  |  | The bank's balance after its last line, when the statement shows balances. |
+| `lines_added` | integer | ✓ | `0` | Lines it brought that were not already saved from an earlier statement. |
+| `lines_known` | integer | ✓ | `0` | Lines it had that an earlier statement had already brought. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+
+* Index `bank_statements_account_idx`: btree `(business_id, payment_account_id, period_to)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`bank_statement_lines`](#bank_statement_lines).statement_id
+
+### `bank_statement_lines`
+
+One line of a bank statement and what it was reconciled with: a receipt or payment (made from it, or one already in the books), an expense (bank charges, interest paid) or a transfer (cash deposited or drawn); or ignored. Open lines are the bank's side of the bank reconciliation statement.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `statement_id` | uuid | ✓ |  | → [`bank_statements`](#bank_statements).id (on delete cascade). The statement that brought it. |
+| `payment_account_id` | uuid | ✓ |  | → [`payment_accounts`](#payment_accounts).id. The account it is a line of. |
+| `row_no` | integer | ✓ |  | Its row in the statement. |
+| `line_date` | date | ✓ |  | Date the bank booked it. |
+| `narration` | text | ✓ |  | The bank's description (who paid, UPI id, UTR …). |
+| `reference` | varchar(80) |  |  | UTR, cheque or reference number when the bank gives one. |
+| `amount` | numeric(15,2) | ✓ |  | Money in (positive) or out (negative). |
+| `running_balance` | numeric(15,2) |  |  | The bank's balance after it, when the statement shows balances. |
+| `fingerprint` | varchar(64) | ✓ |  | Its identity across statements: date, amount, reference and narration, and which of identical lines it is. |
+| `status` | [bank_line_status](#enum-bank_line_status) | ✓ | `'open'` | open, reconciled or ignored. |
+| `kind` | varchar(20) |  |  | What it turned out to be: receipt, payment, bank_charge, interest, cash_deposit, cash_withdrawal or other. |
+| `suggestion` | jsonb |  |  | The match suggested when it was read. |
+| `payment_id` | uuid |  |  | → [`payments`](#payments).id. The receipt or payment it is. |
+| `expense_id` | uuid |  |  | → [`expenses`](#expenses).id. The expense it is (bank charges, interest paid). |
+| `transfer_id` | uuid |  |  | → [`account_transfers`](#account_transfers).id. The transfer it is (cash deposited or drawn). |
+| `made_from_line` | boolean | ✓ | `false` | Whether that receipt, payment, expense or transfer was made from this line (not one already in the books). |
+| `note` | text |  |  | Why it was ignored, or a remark. |
+| `reconciled_by` | uuid |  |  | User who reconciled or ignored it. |
+| `reconciled_at` | timestamptz |  |  | When it was reconciled or ignored. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+
+* Check `bank_statement_lines_amount_chk`: `(amount <> 0::numeric)`
+* Check `bank_statement_lines_kind_chk`: `(kind IS NULL OR (kind::text = ANY (ARRAY['receipt'::character varying, 'payment'::character varying, 'bank_charge'::character varying, 'interest'::character varying, 'cash_deposit'::character varying, 'cash_withdrawal'::character varying, 'other'::character varying]::text[])))`
+* Index `bank_statement_lines_account_idx`: btree `(business_id, payment_account_id, status, line_date)`
+* Index `bank_statement_lines_expense_idx`: btree `(expense_id)`
+* Index `bank_statement_lines_fingerprint_uq`: unique, btree `(business_id, payment_account_id, fingerprint)`
+* Index `bank_statement_lines_payment_idx`: btree `(payment_id)`
+* Index `bank_statement_lines_statement_idx`: btree `(statement_id, row_no)`
+* Index `bank_statement_lines_transfer_idx`: btree `(transfer_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+
 ## Enums
 
 ### Enum `adjustment_reason`
@@ -3078,6 +3172,12 @@ Used by: [`attendance`](#attendance).status
 Values: `debit`, `credit`
 
 Used by: [`customers`](#customers).opening_balance_side, [`suppliers`](#suppliers).opening_balance_side
+
+### Enum `bank_line_status`
+
+Values: `open`, `reconciled`, `ignored`
+
+Used by: [`bank_statement_lines`](#bank_statement_lines).status
 
 ### Enum `business_gst_registration`
 
@@ -3113,7 +3213,7 @@ Used by: [`invoices`](#invoices).document_kind
 
 Values: `draft`, `posted`, `cancelled`
 
-Used by: [`stock_adjustments`](#stock_adjustments).status, [`purchases`](#purchases).status, [`invoices`](#invoices).status, [`credit_debit_notes`](#credit_debit_notes).status, [`payments`](#payments).status, [`expenses`](#expenses).status
+Used by: [`stock_adjustments`](#stock_adjustments).status, [`purchases`](#purchases).status, [`invoices`](#invoices).status, [`credit_debit_notes`](#credit_debit_notes).status, [`payments`](#payments).status, [`expenses`](#expenses).status, [`account_transfers`](#account_transfers).status
 
 ### Enum `employee_status`
 
@@ -3326,4 +3426,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation`

@@ -207,6 +207,49 @@ export async function releaseAllocationRows(tx: Tx, target: { invoiceId: string 
 }
 
 /**
+ * Money in or out with nobody in the books on the other side (interest the
+ * bank paid): a numbered receipt or voucher with the name typed, in the
+ * payments list and the cash and bank books; no party ledger.
+ */
+export async function recordOtherPayment(
+  tx: Tx,
+  ctx: RequestCtx,
+  financialYearStartMonth: number,
+  input: { direction: "in" | "out"; name: string; date: string; amount: string; method: PaymentMethod; paymentAccountId: string | null; referenceNumber?: string | null; notes?: string | null },
+): Promise<{ id: string; paymentNumber: string }> {
+  const docType = input.direction === "in" ? "payment_in" : "payment_out";
+  const numbering = await nextDocumentNumber(tx, ctx.businessId, docType, input.date, financialYearStartMonth);
+  const id = uuidv7();
+  await tx.insert(schema.payments).values({
+    id,
+    businessId: ctx.businessId,
+    paymentNumber: numbering.number,
+    seriesId: numbering.seriesId,
+    financialYear: numbering.financialYear,
+    direction: input.direction,
+    partyType: "other",
+    otherPartyName: input.name,
+    paymentDate: input.date,
+    amount: toAmountString(input.amount),
+    method: input.method,
+    paymentAccountId: input.paymentAccountId,
+    referenceNumber: input.referenceNumber ?? null,
+    status: "posted",
+    notes: input.notes ?? null,
+    createdBy: ctx.userId,
+    updatedBy: ctx.userId,
+  });
+  await audit(tx, ctx, {
+    action: input.direction === "in" ? "payment.received" : "payment.made",
+    entityType: "payment",
+    entityId: id,
+    entityLabel: numbering.number,
+    changes: { party: input.name, amount: toAmountString(input.amount), method: input.method },
+  });
+  return { id, paymentNumber: numbering.number };
+}
+
+/**
  * Money paid to an employee (salary, advance, loan): a numbered payment-out
  * row so it shows in the payments list and cash book. Employees have no
  * party ledger; the payroll slip or advance holds the balance.

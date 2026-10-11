@@ -1,4 +1,4 @@
-import { AllocationInput, CancelBody, PaymentBody, PaymentListQuery } from "@digitalbahi/contracts";
+import { AllocationInput, CancelBody, PaymentBody, PaymentListQuery, SignedMoney } from "@digitalbahi/contracts";
 import { allocatePayment, dec, type OpenDocument } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
@@ -6,7 +6,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 import { can, guard } from "../../lib/access.js";
-import { audit } from "../../lib/audit.js";
+import { audit, diff } from "../../lib/audit.js";
 import type { RequestCtx } from "../../lib/context.js";
 import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
@@ -26,8 +26,11 @@ const AccountBody = z.strictObject({
   accountNumberLast4: z.string().regex(/^\d{4}$/).optional(),
   ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/).optional(),
   upiId: z.string().trim().max(100).optional(),
+  /** The account's balance when it was brought into the app (a bank overdraft is negative). */
+  openingBalance: SignedMoney.optional(),
   isDefault: z.boolean().default(false),
 });
+const AccountPatch = AccountBody.omit({ type: true, isDefault: true }).partial().extend({ isActive: z.boolean().optional(), isDefault: z.boolean().optional() });
 
 type PaymentRow = typeof schema.payments.$inferSelect;
 
@@ -47,7 +50,10 @@ export async function paymentDetail(tx: Tx, ctx: RequestCtx, id: string) {
       ? (await tx.select({ id: schema.customers.id, name: sql<string>`coalesce(${schema.customers.businessName}, ${schema.customers.name})` }).from(schema.customers).where(eq(schema.customers.id, p.customerId!)))[0]
       : p.partyType === "employee"
         ? (await tx.select({ id: schema.employees.id, name: schema.employees.name }).from(schema.employees).where(eq(schema.employees.id, p.employeeId!)))[0]
-        : (await tx.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId!)))[0];
+        : p.partyType === "other"
+          ? // Nobody in the books (interest from the bank): the name it was entered with.
+            { id: "", name: p.otherPartyName ?? "" }
+          : (await tx.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId!)))[0];
   const { businessId: _b, ...rest } = p;
   return {
     ...rest,
@@ -206,7 +212,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
           partyType: p.partyType,
           customerId: p.customerId,
           supplierId: p.supplierId,
-          partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = "payments"."customer_id"), (select name from suppliers s where s.id = "payments"."supplier_id"), (select name from employees e where e.id = "payments"."employee_id"))`,
+          partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = "payments"."customer_id"), (select name from suppliers s where s.id = "payments"."supplier_id"), (select name from employees e where e.id = "payments"."employee_id"), "payments"."other_party_name")`,
           amount: p.amount,
           method: p.method,
           referenceNumber: p.referenceNumber,
@@ -233,6 +239,14 @@ export const paymentsModule: ApiModule = async (app, deps) => {
       if (!p) throw notFound("payment");
       if (p.status !== "posted") throw conflict("PAYMENT_NOT_POSTED", { status: p.status });
       if (p.partyType === "employee") throw conflict("EMPLOYEE_PAYMENT_LOCKED");
+      if (p.partyType === "other") {
+        // No party ledger or bills to undo: the payment is only marked cancelled.
+        const now = deps.clock.now().toISOString();
+        await tx.update(schema.payments).set({ status: "cancelled", cancelledAt: now, cancelledBy: ctx.userId, cancelReason: request.body.reason, updatedBy: ctx.userId }).where(eq(schema.payments.id, p.id));
+        await tx.insert(schema.outboxEvents).values({ businessId: ctx.businessId, eventType: "payment.cancelled", aggregateType: "payment", aggregateId: p.id, payload: { amount: p.amount } });
+        await audit(tx, ctx, { action: "payment.cancelled", entityType: "payment", entityId: p.id, entityLabel: p.paymentNumber ?? undefined, changes: { amount: p.amount, reason: request.body.reason } });
+        return paymentDetail(tx, ctx, p.id);
+      }
       await reversePayment(tx, ctx, p, request.body.reason, deps.clock.now().toISOString(), deps.clock.today(ctx.timeZone), false);
       return paymentDetail(tx, ctx, p.id);
     });
@@ -321,6 +335,27 @@ export const paymentsModule: ApiModule = async (app, deps) => {
       tx.select().from(schema.paymentAccounts).where(eq(schema.paymentAccounts.businessId, request.ctx.businessId)).orderBy(schema.paymentAccounts.name),
     ),
   }));
+
+  r.patch("/payment-accounts/:id", { preHandler: guard(deps, "settings.update"), schema: { tags: ["payments"], params: IdParams, body: AccountPatch } }, async (request) => {
+    const ctx = request.ctx;
+    return tenant(ctx, async (tx) => {
+      const pa = schema.paymentAccounts;
+      const [before] = await tx
+        .select()
+        .from(pa)
+        .where(and(eq(pa.id, request.params.id), eq(pa.businessId, ctx.businessId)))
+        .for("update");
+      if (!before) throw notFound("payment_account");
+      if (request.body.isDefault) await tx.update(pa).set({ isDefault: false }).where(and(eq(pa.businessId, ctx.businessId), eq(pa.type, before.type)));
+      const [after] = await tx
+        .update(pa)
+        .set({ ...request.body, updatedBy: ctx.userId, updatedAt: sql`now()` })
+        .where(eq(pa.id, before.id))
+        .returning();
+      await audit(tx, ctx, { action: "payment_account.updated", entityType: "payment_account", entityId: before.id, entityLabel: after!.name, changes: diff(before, request.body) });
+      return after!;
+    });
+  });
 
   r.post("/payment-accounts", { preHandler: guard(deps, "settings.update"), schema: { tags: ["payments"], body: AccountBody } }, async (request, reply) => {
     const ctx = request.ctx;
