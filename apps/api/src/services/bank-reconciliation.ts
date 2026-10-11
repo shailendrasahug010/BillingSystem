@@ -372,12 +372,15 @@ export async function lineViews(tx: Tx, rows: LineRow[]): Promise<BankLineView[]
 
 export async function statementViews(tx: Tx, businessId: string, accountId: string): Promise<BankStatementView[]> {
   const st = schema.bankStatements;
+  // Spelled out: in a select from one table Drizzle leaves a column's table off, and a bare
+  // "id" inside the subquery would be the line's own.
+  const count = (status: string) => sql<number>`(select count(*)::int from bank_statement_lines l where l.statement_id = bank_statements.id and l.status = ${status})`;
   const rows = await tx
     .select({
       statement: st,
-      open: sql<number>`(select count(*)::int from bank_statement_lines l where l.statement_id = ${st.id} and l.status = 'open')`,
-      reconciled: sql<number>`(select count(*)::int from bank_statement_lines l where l.statement_id = ${st.id} and l.status = 'reconciled')`,
-      ignored: sql<number>`(select count(*)::int from bank_statement_lines l where l.statement_id = ${st.id} and l.status = 'ignored')`,
+      open: count("open"),
+      reconciled: count("reconciled"),
+      ignored: count("ignored"),
     })
     .from(st)
     .where(and(eq(st.businessId, businessId), eq(st.paymentAccountId, accountId)))
