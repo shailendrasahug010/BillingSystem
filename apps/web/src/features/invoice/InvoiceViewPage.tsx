@@ -130,7 +130,8 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
   const copyLines: CopiedLine[] | null = !allowed("invoice.create")
     ? null
     : LIVE
-      ? (live.data?.items.map((i) => ({ productId: i.productId, unitId: i.unitId, qty: Number(i.qty), freeQty: Number(i.freeQty ?? 0), rate: Number(i.rate), discountPercent: Number(i.discountPercent) })) ?? null)
+      ? // Goods a scheme gave free are not copied: the new bill gives what it earns itself.
+        (live.data?.items.filter((i) => !i.schemeFree).map((i) => ({ productId: i.productId, unitId: i.unitId, qty: Number(i.qty), freeQty: Number(i.freeQty ?? 0), rate: Number(i.rate), discountPercent: Number(i.discountPercent) })) ?? null)
       : (demo?.lines.map((l) => ({ productId: l.productId, unitId: null, qty: l.qty, rate: l.rate, discountPercent: l.discountPercent })) ?? null);
   const openCopy = () => {
     if (!copyLines) return;

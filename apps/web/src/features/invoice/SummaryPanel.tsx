@@ -183,6 +183,8 @@ export function SummaryPanel({
           <Row label={t("invoice.lineCount", { count: totals?.lineCount ?? 0, qty: totals ? totals.totalQty.toString() : "0" })} value="" muted />
           <Row label={t("invoice.subtotal")} value={money(totals?.grossTotal.toNumber() ?? 0)} />
           {totals && totals.discountTotal.gt(0) && <Row label={t("invoice.discountTotal")} value={`− ${money(totals.discountTotal.toNumber())}`} negative />}
+          {/* Of the discount: what the trade schemes give (goods free at their rate, and discounts). */}
+          {view.schemes.saved > 0 && <Row label={t("schemes.saved")} value={money(view.schemes.saved)} muted />}
           <Row label={t("invoice.taxableValue")} value={money(totals?.taxableTotal.toNumber() ?? 0)} />
           {intra ? (
             <>

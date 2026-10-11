@@ -10,6 +10,7 @@ import { Input } from "../../components/ui/Field";
 import { CountUp, Kbd } from "../../components/ui/misc";
 import { useToast } from "../../components/ui/Toast";
 import { allowed, BUSINESS, CUSTOMERS, PRODUCTS, productById } from "../../data/db";
+import { requestPull } from "../../data/live";
 import { LIVE } from "../../data/source";
 import { customerInsight, getSyncState, peekNextInvoiceNumber, saveInvoice, useStoreVersion } from "../../data/store";
 import { ApiError, newIdempotencyKey } from "../../lib/api";
@@ -260,6 +261,8 @@ function useSave(view: DraftView) {
             const err = e instanceof ApiError ? e : new ApiError(0, "generic");
             // A definite rejection will not change on retry: start a fresh key for the corrected bill.
             if (err.status >= 400 && err.status < 500) idempotencyKey.current = newIdempotencyKey();
+            // A scheme changed on the server (ended, or its slabs): bring the device's schemes up to date.
+            if (err.code === "SCHEME_NOT_EARNED" || err.code === "SCHEME_NOT_RUNNING") requestPull();
             toast({ tone: err.code === "network" ? "offline" : "danger", title: t("invoice.saveFailed"), body: translateError(i18n, err) });
             return false;
           })
@@ -483,6 +486,8 @@ function DesktopInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState 
               onRemove={removeLine}
               onReplace={(key, productId) => dispatch({ type: "replace", key, productId })}
               onBackToSearch={() => productRef.current?.focus()}
+              schemes={view.schemes}
+              onScheme={(schemeId, on) => dispatch({ type: "scheme", schemeId, on })}
             />
           </section>
         </div>
@@ -719,6 +724,8 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
               onRemove={removeLine}
               onReplace={(key, productId) => dispatch({ type: "replace", key, productId })}
               onBackToSearch={() => productRef.current?.focus()}
+              schemes={view.schemes}
+              onScheme={(schemeId, on) => dispatch({ type: "scheme", schemeId, on })}
             />
           </section>
           <div data-overlay="bottom" className="glass fixed inset-x-3 bottom-[calc(10px+var(--inset-bottom))] z-20 rounded-2xl border border-line/70 px-4 py-3 shadow-pop short:bottom-3">
@@ -742,7 +749,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
           <section className="rounded-[var(--radius-card)] border border-line bg-surface px-4 py-2 shadow-card">
             <p className="eyebrow pt-2">{t("invoice.reviewItems")}</p>
             <ul className="divide-y divide-line">
-              {draft.lines.map((l) => {
+              {view.billLines.map((l) => {
                 const r = totals?.lines.find((x) => x.key === l.key);
                 const p = PRODUCTS.find((x) => x.id === l.productId)!;
                 return (
@@ -750,7 +757,7 @@ function MobileInvoice({ view, kept }: { view: DraftView; kept: KeptDraftState }
                     <span className="min-w-0 truncate text-ink">
                       {locale === "hi" ? p.nameHi : p.name} <span className="num text-ink-3">× {l.qty} {unitSymbolOf(p, l.unitId)}</span>
                     </span>
-                    <span className="num font-medium text-ink">{r ? money(r.total.toNumber()) : ""}</span>
+                    <span className={cn("num font-medium", l.free ? "text-good" : "text-ink")}>{l.free ? t("schemes.free") : r ? money(r.total.toNumber()) : ""}</span>
                   </li>
                 );
               })}

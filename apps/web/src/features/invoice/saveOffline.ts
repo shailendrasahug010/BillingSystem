@@ -3,7 +3,7 @@ import { takeOfflineNumber } from "../../offline/device";
 import { getOfflineState, queueBill, refreshDevice, type OutboxEntry } from "../../offline/sync";
 import type { SavedInvoice } from "./postInvoice";
 import type { PrintableInvoice } from "./printable";
-import { factorOf, lutValidOn, unitSymbolOf, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
+import { bodyLines, factorOf, lutValidOn, unitSymbolOf, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
 
 export class OfflineNotReady extends Error {
   constructor() {
@@ -16,7 +16,7 @@ function printable(view: DraftView, id: string, number: string): PrintableInvoic
   const { draft, customer, totals, dueDate } = view;
   const c = customer!;
   const t = totals!;
-  const lines = draft.lines.map((l) => {
+  const lines = view.billLines.map((l) => {
     const p = productById.get(l.productId)!;
     const r = t.lines.find((x) => x.key === l.key)!;
     return {
@@ -35,6 +35,7 @@ function printable(view: DraftView, id: string, number: string): PrintableInvoic
       sgst: r.sgst.toNumber(),
       igst: r.igst.toNumber(),
       total: r.total.toNumber(),
+      scheme: l.schemeId ? { name: view.schemes.names.get(l.schemeId) ?? "", free: l.free, discount: l.schemeDiscount } : null,
     };
   });
   const grandTotal = t.grandTotal.toNumber();
@@ -100,24 +101,17 @@ export async function saveOffline(view: DraftView, idempotencyKey: string): Prom
     customerName: customer.businessName,
     total: doc.grandTotal,
     paid: doc.paid,
-    lineCount: draft.lines.length,
+    lineCount: view.billLines.length,
     body: {
       customerId: customer.id,
       invoiceDate: draft.date,
-      lines: draft.lines.map((l) => ({
-        productId: l.productId,
-        ...(l.unitId ? { unitId: l.unitId } : {}),
-        qty: l.qty.toFixed(3),
-        ...(l.freeQty > 0 ? { freeQty: l.freeQty.toFixed(3) } : {}),
-        rate: l.rate.toFixed(4),
-        discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),
-      })),
+      lines: bodyLines(view.billLines),
       ...(received > 0 ? { payment: { amount: received.toFixed(2), method: draft.method } } : {}),
       ...zeroRatedBody(view),
       offline: { deviceId: taken.device.id, invoiceNumber: taken.number, savedAt },
     },
     printable: doc,
-    stock: draft.lines.map((l) => ({ productId: l.productId, qty: (l.qty + l.freeQty) * factorOf(productById.get(l.productId)!, l.unitId) })),
+    stock: view.billLines.map((l) => ({ productId: l.productId, qty: (l.qty + l.freeQty) * factorOf(productById.get(l.productId)!, l.unitId) })),
     status: "pending",
     error: null,
   };

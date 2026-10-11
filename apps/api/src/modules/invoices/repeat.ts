@@ -1,5 +1,5 @@
 import { IsoDate } from "@digitalbahi/contracts";
-import { nextRepeatDate, REPEAT_FREQUENCIES, type RepeatFrequency } from "@digitalbahi/core";
+import { dec, nextRepeatDate, REPEAT_FREQUENCIES, type RepeatFrequency } from "@digitalbahi/core";
 import { schema } from "@digitalbahi/db";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -85,15 +85,18 @@ export const repeatBillsModule: ApiModule = async (app, deps) => {
       const template = {
         customerId: inv.customerId,
         ...(inv.warehouseId ? { warehouseId: inv.warehouseId } : {}),
-        lines: items.map((i) => ({
-          productId: i.productId,
-          unitId: i.unitId,
-          qty: i.qty,
-          freeQty: i.freeQty,
-          rate: i.rate,
-          discountPercent: i.discountPercent,
-          discountAmount: Number(i.discountPercent) > 0 ? "0" : i.discountAmount,
-        })),
+        // Schemes are not repeated (they run for a while): no goods given free, no scheme discount.
+        lines: items
+          .filter((i) => !i.schemeFree)
+          .map((i) => ({
+            productId: i.productId,
+            unitId: i.unitId,
+            qty: i.qty,
+            freeQty: i.freeQty,
+            rate: i.rate,
+            discountPercent: i.discountPercent,
+            discountAmount: Number(i.discountPercent) > 0 ? "0" : dec(i.discountAmount).minus(i.schemeDiscount).toFixed(2),
+          })),
         ...(Number(inv.documentDiscountPercent) > 0 || Number(inv.documentDiscountAmount) > 0
           ? { documentDiscount: { ...(Number(inv.documentDiscountPercent) > 0 ? { percent: inv.documentDiscountPercent } : { amount: inv.documentDiscountAmount }) } }
           : {}),

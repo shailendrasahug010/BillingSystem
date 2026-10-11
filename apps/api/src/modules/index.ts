@@ -51,6 +51,7 @@ import { dashboardModule } from "./reports/dashboard.js";
 import { reportsModule } from "./reports/reports.js";
 import { reportViewsModule } from "./reports/views.js";
 import { searchModule } from "./reports/search.js";
+import { schemesModule } from "./schemes/routes.js";
 import { teamModule } from "./team/routes.js";
 import type { ApiModule } from "./types.js";
 
@@ -65,6 +66,7 @@ export const MODULES: ApiModule[] = [
   businessModule,
   catalogMastersModule,
   productsModule,
+  schemesModule,
   partiesModule,
   beatsModule,
   importsModule,

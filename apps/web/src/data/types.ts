@@ -28,6 +28,8 @@ export interface Product {
   brandId: string;
   brand: string;
   category: string;
+  /** Live data: the product's category (schemes can be on a category). */
+  categoryId?: string | null;
   hsn: string;
   taxCategory: TaxCategory;
   /** GST % in force today (for list display; invoices resolve per date). */
@@ -86,6 +88,8 @@ export interface Customer {
   openingBalance: number;
   /** Live data. */
   priceLevelId?: string | null;
+  /** Live data: the customer's category (schemes can be for some categories only). */
+  categoryId?: string | null;
   gstRegistration?: string;
   balance?: number;
   overdue?: number;

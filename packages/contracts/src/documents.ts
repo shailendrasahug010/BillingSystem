@@ -21,6 +21,12 @@ export const DocumentLineInput = z.strictObject({
   discountPercent: Percent.optional(),
   discountAmount: Money.default("0"),
   batchId: Id.optional(),
+  /**
+   * Given under a trade scheme: its discount on the line (rupees, besides the
+   * line's own), or the whole line given free (at 100% discount). The server
+   * checks the bill earned it.
+   */
+  scheme: z.strictObject({ id: Id, discount: Money.optional(), free: z.boolean().optional() }).optional(),
 });
 
 export const ChargeInput = z.strictObject({

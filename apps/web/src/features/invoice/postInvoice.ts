@@ -3,7 +3,7 @@ import { customerById } from "../../data/db";
 import { adjustStock } from "../../data/live";
 import { dropLiveInsight, touch } from "../../data/store";
 import { api, QUICK_SAVE_MS } from "../../lib/api";
-import { zeroRatedBody, type DraftView } from "./useInvoiceDraft";
+import { bodyLines, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
 
 export interface SavedInvoice {
   id: string;
@@ -40,14 +40,7 @@ export async function postInvoice(view: DraftView, idempotencyKey: string): Prom
     {
       customerId: customer!.id,
       invoiceDate: draft.date,
-      lines: draft.lines.map((l) => ({
-        productId: l.productId,
-        ...(l.unitId ? { unitId: l.unitId } : {}),
-        qty: l.qty.toFixed(3),
-        ...(l.freeQty > 0 ? { freeQty: l.freeQty.toFixed(3) } : {}),
-        rate: l.rate.toFixed(4),
-        discountPercent: Math.min(100, Math.max(0, l.discountPercent || 0)).toFixed(2),
-      })),
+      lines: bodyLines(view.billLines),
       ...(received > 0 ? { payment: { amount: received.toFixed(2), method: draft.method } } : {}),
       ...zeroRatedBody(view),
       clientTotals: { grandTotal: totals!.grandTotal.toFixed(2) },

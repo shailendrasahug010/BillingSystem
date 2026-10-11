@@ -217,6 +217,11 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
                   <td className={td}>{i + 1}</td>
                   <td className={td}>
                     {locale === "hi" ? l.nameLocal : l.name}
+                    {l.scheme && (
+                      <span className="block text-[10.5px] text-[#4a5570]">
+                        {l.scheme.free ? t("schemes.print.free", { scheme: l.scheme.name }) : t("schemes.print.discount", { scheme: l.scheme.name, amount: n(l.scheme.discount) })}
+                      </span>
+                    )}
                     {l.batch && (
                       <span className="block text-[10.5px] text-[#4a5570]">
                         {t("invoice.batch")} {l.batch.split(" · ")[0]}

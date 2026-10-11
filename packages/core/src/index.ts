@@ -15,6 +15,7 @@ export * from "./escpos.js";
 
 export * from "./invoice/calculate.js";
 export * from "./invoice/repeat.js";
+export * from "./schemes/engine.js";
 export * from "./numbering/series.js";
 export * from "./inventory/stock.js";
 export * from "./inventory/packs.js";

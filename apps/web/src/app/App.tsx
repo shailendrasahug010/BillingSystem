@@ -50,6 +50,7 @@ const InvoicesPage = lazy(() => import("../features/invoice/InvoicesPage").then(
 const PurchasesPage = lazy(() => import("../features/purchases/PurchasesPage").then((m) => ({ default: m.PurchasesPage })));
 const PurchaseViewPage = lazy(() => import("../features/purchases/PurchaseViewPage").then((m) => ({ default: m.PurchaseViewPage })));
 const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
+const SchemesPage = lazy(() => import("../features/schemes/SchemesPage").then((m) => ({ default: m.SchemesPage })));
 const SupplierProfilePage = lazy(() => import("../features/suppliers/SupplierProfilePage").then((m) => ({ default: m.SupplierProfilePage })));
 const SuppliersPage = lazy(() => import("../features/suppliers/SuppliersPage").then((m) => ({ default: m.SuppliersPage })));
 const OrdersPage = lazy(() => import("../features/orders/OrdersPage").then((m) => ({ default: m.OrdersPage })));
@@ -117,6 +118,8 @@ function Screen({ route }: { route: Route }) {
     case "planned":
       if (LIVE_MODULES.has(route.module)) {
         switch (route.module) {
+          case "schemes":
+            return <SchemesPage />;
           case "orders":
             return <OrdersPage newOrder={route.action === "new"} {...(route.partyId ? { customerId: route.partyId } : {})} />;
           case "payments":

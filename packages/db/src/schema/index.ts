@@ -10,6 +10,7 @@ export * from "./hr.js";
 export * from "./parties.js";
 export * from "./beats.js";
 export * from "./catalog.js";
+export * from "./schemes.js";
 export * from "./inventory.js";
 export * from "./purchases.js";
 export * from "./sales.js";

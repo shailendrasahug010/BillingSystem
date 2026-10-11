@@ -146,7 +146,8 @@
     "pin": "Pin {{name}} to the top",
     "unpin": "Unpin {{name}}",
     "keepOpen": "Keep the menu open",
-    "autoHide": "Hide the menu until the mouse reaches the left edge"
+    "autoHide": "Hide the menu until the mouse reaches the left edge",
+    "schemes": "Schemes"
   },
   "auth": {
     "welcome": "Welcome back",
@@ -1314,7 +1315,17 @@
     "BANK_LINE_DIRECTION": "That does not fit this line: money in is a receipt, interest or a cash deposit; money out a payment, bank charges, interest or cash withdrawn.",
     "BANK_LINK_NOT_FOUND": "That entry is not in this account's books, or another line is already reconciled with it.",
     "BANK_LINK_MISMATCH": "That entry is not for {{amount, currency}} the same way (in or out) as the line.",
-    "CASH_ACCOUNT_MISSING": "There is no cash account to move the money from or to. Add one under payment accounts first."
+    "CASH_ACCOUNT_MISSING": "There is no cash account to move the money from or to. Add one under payment accounts first.",
+    "SCHEME_NO_PRODUCTS": "Choose the products, brands or categories the scheme is on.",
+    "SCHEME_NO_SLABS": "Add at least one slab.",
+    "SCHEME_ENDS_BEFORE_START": "The scheme cannot end before it starts.",
+    "SCHEME_SLAB_FROM": "Each slab starts from more than zero.",
+    "SCHEME_SLAB_TWICE": "Two slabs start from the same amount.",
+    "SCHEME_SLAB_BENEFIT": "Each slab must give something: goods free, or a discount.",
+    "SCHEME_IN_USE": "{{scheme}} was given on bills, so it stays: switch it off instead.",
+    "SCHEME_NOT_EARNED": "This bill does not earn {{scheme}}, or earns less of it. The schemes are being brought up to date: try again.",
+    "SCHEME_NOT_RUNNING": "{{scheme}} is not running on the bill's date.",
+    "SCHEME_FREE_LINE": "{{product}}: goods given free under a scheme are a line of their own, at 100% off."
   },
   "validation": {
     "required": "This field is required",
@@ -1914,7 +1925,8 @@
       "role": "Role",
       "setting": "Setting",
       "business": "Business profile",
-      "document_series": "Number series"
+      "document_series": "Number series",
+      "scheme": "Scheme"
     }
   },
   "notes": {
@@ -3445,7 +3457,8 @@
       "stock_short": "{{product}}: {{requested}} sold with {{available}} in stock, where selling short of stock is blocked.",
       "credit_limit": "{{customer}} went over the credit limit of {{limit, currency}} by {{excess, currency}}.",
       "credit_overdue_one": "{{customer}} has {{count}} bill overdue ({{amount, currency}}), which blocks new bills.",
-      "credit_overdue_other": "{{customer}} has {{count}} bills overdue ({{amount, currency}}), which blocks new bills."
+      "credit_overdue_other": "{{customer}} has {{count}} bills overdue ({{amount, currency}}), which blocks new bills.",
+      "scheme_changed": "{{scheme}} was given, but the bill does not earn it now (the scheme changed or ended)."
     },
     "devices_unsynced": {
       "title_one": "{{count}} device has work that has not reached the server",
@@ -4469,5 +4482,124 @@
     },
     "balance": "Balance",
     "reused": "This is the link made before for the same amount (still open)."
+  },
+  "schemes": {
+    "title": "Schemes",
+    "subtitle": "Free goods and slab discounts from the companies, given on bills by themselves",
+    "tab": "Schemes",
+    "new": "New scheme",
+    "editorHint": "As the company announced it: what it is on, its slabs, when it runs and for whom.",
+    "name": "Scheme name",
+    "namePlaceholder": "Lifebuoy 10+1",
+    "kind": "Kind",
+    "kinds": {
+      "free_goods": "Free goods",
+      "discount": "Discount"
+    },
+    "onProducts": "On products",
+    "onBrands": "On brands",
+    "onCategories": "On categories",
+    "findProduct": "Find a product",
+    "findBrand": "Find a brand",
+    "findCategory": "Find a category",
+    "slabs": "Slabs",
+    "countedBy": "Counted by",
+    "measure": {
+      "qty": "Quantity",
+      "value": "Value"
+    },
+    "from": "From ({{unit}})",
+    "stockUnits": "stock units",
+    "freeQty": "Free (stock units)",
+    "percentOff": "% off",
+    "perUnitOff": "₹ off each",
+    "removeSlab": "Remove slab",
+    "addSlab": "Add a slab",
+    "repeat": "Again for every multiple (buy 10 get 1: 20 get 2)",
+    "freeProduct": "Given free",
+    "sameProduct": "The product bought",
+    "freeSameHint": "Each product is counted by itself and given free on itself.",
+    "freeOtherHint": "The scheme's products are counted together.",
+    "validFrom": "Runs from",
+    "validTo": "Until",
+    "noEnd": "No end: runs until it is switched off",
+    "forCategories": "Only for customer categories",
+    "forRateLists": "Only for rate lists",
+    "everyCustomer": "Every customer",
+    "company": "Company (claim from)",
+    "companyHint": "Whom the claim goes to; the claims tab adds it up.",
+    "findCompany": "Find a supplier",
+    "reference": "Company's scheme code",
+    "save": "Save scheme",
+    "savedToast": "Scheme saved",
+    "switchOff": "Switch off",
+    "switchOn": "Switch on",
+    "switchedOff": "Scheme switched off",
+    "switchedOn": "Scheme switched on",
+    "deleted": "Scheme deleted",
+    "deleteTitle": "Delete {{scheme}}?",
+    "deleteBody": "It was never given on a bill. A scheme that was is switched off instead.",
+    "search": "Search schemes",
+    "filter": {
+      "running": "Running",
+      "upcoming": "Coming",
+      "ended": "Ended",
+      "all": "All"
+    },
+    "status": {
+      "running": "Running",
+      "upcoming": "Coming",
+      "ended": "Ended",
+      "off": "Switched off"
+    },
+    "gives": "Gives",
+    "on": "On",
+    "period": "Runs",
+    "for": "For",
+    "someCustomers": "Some customers",
+    "allCustomers": "All customers",
+    "bills": "Bills",
+    "fromOn": "From {{date}}",
+    "none": "No schemes here",
+    "noneHint": "Add the companies' schemes: bills give them by themselves.",
+    "describe": {
+      "free": "From {{from}}: {{qty}} free",
+      "freeOf": "From {{from}}: {{qty}} {{product}} free",
+      "off": "From {{from}}: {{off}}",
+      "percent": "{{percent}}% off",
+      "perUnit": "{{amount}} off each",
+      "repeats": "(repeats)"
+    },
+    "scheme": "Scheme",
+    "free": "Free",
+    "freeLine": "Free · {{scheme}}",
+    "lineDiscount": "{{scheme}}: {{amount}} off",
+    "leaveOff": "Leave {{scheme}} off this bill",
+    "leftOff": "Left off this bill:",
+    "giveAgain": "Give {{scheme}} on this bill",
+    "saved": "Scheme benefits",
+    "nudge": {
+      "more": "{{short}} more: {{benefit}} ({{scheme}})",
+      "free": "{{qty}} free",
+      "freeOf": "{{qty}} {{product}} free",
+      "percent": "{{percent}}% off",
+      "perUnit": "{{amount}} off each"
+    },
+    "print": {
+      "free": "Free under {{scheme}}",
+      "discount": "{{scheme}}: {{amount}} off"
+    },
+    "claims": {
+      "tab": "Claims",
+      "freeCost": "Free goods at cost",
+      "freeValue": "Free goods at bill rates",
+      "discount": "Discounts",
+      "claim": "To claim",
+      "freeQty": "Free",
+      "none": "No scheme was given in this period",
+      "lines": "Bill by bill",
+      "billsCount_one": "{{count}} bill",
+      "billsCount_other": "{{count}} bills"
+    }
   }
 }

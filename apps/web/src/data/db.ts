@@ -1,4 +1,4 @@
-import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig } from "@digitalbahi/core";
+import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig, type SchemeRule } from "@digitalbahi/core";
 import * as mock from "./mock";
 import { LIVE } from "./source";
 import type { Brand, Business, Customer, DayAmount, Invoice, Order, Payment, Product } from "./types";
@@ -22,6 +22,8 @@ export const BRANDS: Brand[] = LIVE ? [] : mock.BRANDS;
 export const CUSTOMERS: Customer[] = LIVE ? [] : mock.CUSTOMERS;
 export const customerById: Map<string, Customer> = LIVE ? new Map() : mock.customerById;
 export const ROUTES: string[] = LIVE ? [] : mock.ROUTES;
+/** Trade schemes bills give (live: running and coming ones, from the catalogue; none in the demo). */
+export const SCHEMES: Array<SchemeRule & { name: string }> = [];
 /** Demo only: the counter customer. Live businesses create their own "Cash sale" customer. */
 export const WALK_IN_ID: string = LIVE ? "" : mock.WALK_IN_ID;
 

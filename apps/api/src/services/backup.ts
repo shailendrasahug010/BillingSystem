@@ -258,6 +258,9 @@ export async function restoreInto(tx: Tx, doc: BackupDocument, input: { newBusin
         }
       } else if (col.sqlType === "uuid" && typeof v === "string") {
         v = ids.get(v) ?? v;
+      } else if (col.sqlType === "uuid[]" && Array.isArray(v)) {
+        // Lists of ids (a scheme's products, brands, categories): each one the copy's own.
+        v = v.map((x: unknown) => (typeof x === "string" ? (ids.get(x) ?? x) : x));
       }
       out[k] = v;
     }
