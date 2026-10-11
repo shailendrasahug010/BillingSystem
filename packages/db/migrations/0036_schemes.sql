@@ -42,4 +42,8 @@ ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_scheme_id_schemes_id_f
 ALTER TABLE "sales_order_items" ADD CONSTRAINT "sales_order_items_scheme_id_schemes_id_fk" FOREIGN KEY ("scheme_id") REFERENCES "public"."schemes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "invoice_items_scheme_idx" ON "invoice_items" USING btree ("business_id","scheme_id") WHERE "invoice_items"."scheme_id" is not null;--> statement-breakpoint
 ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_scheme_chk" CHECK ("invoice_items"."scheme_id" is not null or (not "invoice_items"."scheme_free" and "invoice_items"."scheme_discount" = 0));--> statement-breakpoint
-ALTER TABLE "sales_order_items" ADD CONSTRAINT "sales_order_items_scheme_chk" CHECK ("sales_order_items"."scheme_id" is not null or (not "sales_order_items"."scheme_free" and "sales_order_items"."scheme_discount" = 0));
+ALTER TABLE "sales_order_items" ADD CONSTRAINT "sales_order_items_scheme_chk" CHECK ("sales_order_items"."scheme_id" is not null or (not "sales_order_items"."scheme_free" and "sales_order_items"."scheme_discount" = 0));--> statement-breakpoint
+-- Trade schemes, per business.
+ALTER TABLE schemes ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON schemes USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
