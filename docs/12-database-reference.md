@@ -13,7 +13,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Check constraints | 74 |
 | Indexes (besides primary keys and unique constraints) | 149 |
 | Triggers | 73 |
-| Tables with row-level security | 101 |
+| Tables with row-level security | 102 |
 | Enums | 43 |
 | Functions | 18 |
 | Migrations | 38 (last: `0037_sales_returns`) |
@@ -2025,6 +2025,7 @@ A credit note not against one bill (goods returned without their bill) settles t
 * Check `note_allocations_amount_chk`: `(amount > 0::numeric)`
 * Index `note_allocations_invoice_idx`: btree `(invoice_id)`
 * Index `note_allocations_note_idx`: btree `(note_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 
 ## Payments and the party ledger
 
