@@ -13,7 +13,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Check constraints | 76 |
 | Indexes (besides primary keys and unique constraints) | 164 |
 | Triggers | 73 |
-| Tables with row-level security | 102 |
+| Tables with row-level security | 106 |
 | Enums | 45 |
 | Functions | 18 |
 | Migrations | 39 (last: `0038_purchase_orders`) |
@@ -1438,6 +1438,7 @@ An order placed with a supplier. It moves no stock and no money: goods received 
 * Index `purchase_orders_client_id_uq`: unique, btree `(business_id, client_id) WHERE (client_id IS NOT NULL)`
 * Index `purchase_orders_status_idx`: btree `(business_id, status, order_date)`
 * Index `purchase_orders_supplier_idx`: btree `(business_id, supplier_id, order_date)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`purchase_order_items`](#purchase_order_items).purchase_order_id, [`goods_receipts`](#goods_receipts).purchase_order_id
 
 ### `purchase_order_items`
@@ -1482,6 +1483,7 @@ An order placed with a supplier. It moves no stock and no money: goods received 
 * Check `purchase_order_items_qty_chk`: `(qty > 0::numeric AND free_qty >= 0::numeric AND received_qty >= 0::numeric)`
 * Index `purchase_order_items_order_idx`: btree `(purchase_order_id)`
 * Index `purchase_order_items_product_idx`: btree `(business_id, product_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`purchase_items`](#purchase_items).purchase_order_item_id, [`goods_receipt_items`](#goods_receipt_items).purchase_order_item_id
 
 ### `goods_receipts`
@@ -1521,6 +1523,7 @@ Goods received from a supplier before (or without yet) their bill: the stock com
 * Index `goods_receipts_order_idx`: btree `(purchase_order_id) WHERE (purchase_order_id IS NOT NULL)`
 * Index `goods_receipts_purchase_idx`: btree `(purchase_id) WHERE (purchase_id IS NOT NULL)`
 * Index `goods_receipts_supplier_idx`: btree `(business_id, supplier_id, status)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`goods_receipt_items`](#goods_receipt_items).goods_receipt_id
 
 ### `goods_receipt_items`
@@ -1552,6 +1555,7 @@ Goods received from a supplier before (or without yet) their bill: the stock com
 * Index `goods_receipt_items_order_idx`: btree `(purchase_order_item_id) WHERE (purchase_order_item_id IS NOT NULL)`
 * Index `goods_receipt_items_product_idx`: btree `(business_id, product_id)`
 * Index `goods_receipt_items_receipt_idx`: btree `(goods_receipt_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`purchase_items`](#purchase_items).goods_receipt_item_id
 
 ### `supplier_items`
