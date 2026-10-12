@@ -17,6 +17,7 @@ import { Gstr1Tab } from "./Gstr1Tab";
 import { Gstr2bTab } from "./Gstr2bTab";
 import { Gstr3bTab } from "./Gstr3bTab";
 import { PeriodActions } from "./PeriodActions";
+import { TdsTab } from "./TdsTab";
 
 interface Heads {
   taxable: string;
@@ -71,6 +72,9 @@ export function GstPage() {
           <Tabs.Trigger value="einvoice" className={TAB_TRIGGER}>
             {t("einvoice.tab")}
           </Tabs.Trigger>
+          <Tabs.Trigger value="tds" className={TAB_TRIGGER}>
+            {t("tds.tab")}
+          </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="summary">
           <SummaryTab period={period} />
@@ -86,6 +90,9 @@ export function GstPage() {
         </Tabs.Content>
         <Tabs.Content value="einvoice">
           <EInvoiceTab period={period} />
+        </Tabs.Content>
+        <Tabs.Content value="tds">
+          <TdsTab period={period} />
         </Tabs.Content>
       </Tabs.Root>
       <p className="flex items-start gap-2 text-[12.5px] text-ink-3">

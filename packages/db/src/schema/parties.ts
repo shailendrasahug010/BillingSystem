@@ -226,6 +226,8 @@ export const suppliers = pgTable(
     bankName: text(),
     /** Supplier's UPI ID for payments. */
     upiId: text(),
+    /** No TDS on purchases from this supplier (a nil or lower deduction certificate, or a seller not liable). */
+    tdsExempt: boolean().notNull().default(false),
     notes: text(),
     isActive: boolean().notNull().default(true),
     ...auditColumns,

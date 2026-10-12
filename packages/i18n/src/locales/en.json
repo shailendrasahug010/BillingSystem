@@ -1342,7 +1342,13 @@
     "RECEIPT_LINE_TWICE": "A line of goods received is on the bill twice.",
     "RECEIPTS_TWO_GODOWNS": "These goods receipts are in different godowns: make a bill for each.",
     "RECEIPT_OTHER_GODOWN": "The goods on this bill were received in another godown.",
-    "LINE_TWO_SOURCES": "A line cannot come from both a goods receipt and an order."
+    "LINE_TWO_SOURCES": "A line cannot come from both a goods receipt and an order.",
+    "TDS_ON_RECEIPTS_ONLY": "TDS is recorded on a customer's receipt; on a supplier's bill it is kept back by itself.",
+    "NO_TDS_ON_PAYMENT": "This payment has no TDS on it.",
+    "TDS_PAID_ON_BILL": "The TDS on this bill was paid with challan {{challan}} on {{date}}. Remove that challan first (GST → TDS).",
+    "NOTHING_TO_DEPOSIT": "No TDS of {{month}} is waiting for a challan.",
+    "CHALLAN_BEFORE_MONTH": "A challan is paid after the month it is for.",
+    "INVALID_RANGE": "The start date is after the end date."
   },
   "validation": {
     "required": "This field is required",
@@ -1390,7 +1396,11 @@
     "credit_note": "Credit note (return)",
     "credit_note_cancel": "Credit note cancelled",
     "debit_note": "Debit note (return)",
-    "debit_note_cancel": "Debit note cancelled"
+    "debit_note_cancel": "Debit note cancelled",
+    "tds_in": "TDS deducted by the customer",
+    "tds_in_cancel": "TDS taken back (receipt cancelled)",
+    "tds_out": "TDS kept back",
+    "tds_out_cancel": "TDS kept back (bill cancelled)"
   },
   "payment": {
     "title": "Payments",
@@ -1904,7 +1914,9 @@
     "chequeNote": "Cheque payments are subject to realisation.",
     "computerGenerated": "This is a computer-generated receipt.",
     "print": "Print receipt",
-    "printVoucher": "Print voucher"
+    "printVoucher": "Print voucher",
+    "tdsDeducted": "{{section}} deducted by you",
+    "settled": "Total settled"
   },
   "share": {
     "printPdf": "Print / PDF",
@@ -4762,6 +4774,91 @@
       "noSupplier": "No supplier",
       "empty": "Nothing to order",
       "emptyHint": "Stock and open orders cover the coming days."
+    }
+  },
+  "tds": {
+    "tab": "TDS",
+    "section": "Deducted under",
+    "noPan": "No PAN",
+    "sections": {
+      "goods": "Buying goods — 393(1), old 194Q",
+      "contract": "Contract work — old 194C",
+      "commission": "Commission — old 194H",
+      "professional": "Professional fees — old 194J",
+      "rent": "Rent — old 194I",
+      "other": "Other"
+    },
+    "receipt": {
+      "toggle": "The customer deducted TDS",
+      "amount": "TDS deducted",
+      "certificate": "TDS certificate (Form 16A)",
+      "settles": "Settles {{total}} of their bills: {{received}} received + {{tds}} TDS",
+      "deducted": "{{section}} deducted"
+    },
+    "purchase": {
+      "line": "TDS {{rate}}% of {{base}}",
+      "payable": "Payable to the supplier",
+      "paid": "paid to the government",
+      "hint": "TDS on buying goods: kept back from the supplier and paid to the government by the 7th of next month."
+    },
+    "supplier": {
+      "exempt": "No TDS on purchases from this supplier",
+      "exemptHint": "For a supplier with a nil or lower TDS certificate."
+    },
+    "settings": {
+      "title": "TDS on purchases (393(1), old 194Q)",
+      "hint": "For a business whose turnover passed ₹10 crore last year: 0.1% is kept back on each bill once the year's purchases from a supplier pass ₹50 lakh (5% when the supplier has no PAN), to pay to the government.",
+      "off": "Don't deduct",
+      "on": "Deduct"
+    },
+    "deducted": {
+      "title": "TDS kept back on purchase bills",
+      "subtitle": "To pay to the government by {{due}}",
+      "total": "Kept back this month",
+      "paid": "Paid to the government",
+      "pending": "Still to pay",
+      "overdue": "Overdue since {{date}}",
+      "by": "By {{date}}",
+      "empty": "No TDS kept back this month",
+      "emptyHint": "Turn on TDS on purchases in Settings if your turnover passed ₹10 crore last year.",
+      "export": "Download for the TDS return",
+      "base": "Amount it is on",
+      "rate": "Rate",
+      "notPaid": "Not paid yet"
+    },
+    "challan": {
+      "one": "Challan",
+      "record": "Record the challan",
+      "hint": "{{amount}} of this month's TDS goes on it: every bill not on a challan yet.",
+      "date": "Paid on",
+      "bsr": "BSR code",
+      "bsrHint": "The bank's 7-digit BSR code",
+      "serial": "Challan no.",
+      "serialHint": "The 5-digit challan number",
+      "interest": "Interest",
+      "lateFee": "Late fee",
+      "save": "Save challan",
+      "saved": "Challan saved",
+      "removed": "Challan removed",
+      "remove": "Remove challan",
+      "notRemoved": "The challan could not be removed",
+      "list": "Challans",
+      "bills_one": "{{count}} bill",
+      "bills_other": "{{count}} bills"
+    },
+    "received": {
+      "title": "TDS customers deducted",
+      "hint": "match it with Form 26AS",
+      "quarter": "Q{{quarter}} {{year}}",
+      "total": "Deducted by customers",
+      "certificates": "Certificates received",
+      "empty": "No TDS deducted by customers this quarter",
+      "emptyHint": "When a customer pays less for TDS, tick “The customer deducted TDS” on their receipt.",
+      "export": "Download",
+      "amount": "Received",
+      "missing": "Not received",
+      "add": "Add",
+      "saved": "Certificate saved"
     }
   }
 }

@@ -86,6 +86,10 @@ export const TALLY_LEDGERS = {
   cash: { name: "Cash", parent: "Cash-in-Hand" },
 
   bank: { name: "Bank", parent: "Bank Accounts" },
+  /** TDS customers deducted on their payments: claimed against the business's own tax. */
+  tdsReceivable: { name: "TDS Receivable", parent: "Current Assets" },
+  /** TDS kept back on purchase bills, until paid to the government. */
+  tdsPayable: { name: "TDS Payable", parent: "Duties & Taxes" },
 } as const satisfies Record<string, TallyLedger>;
 
 /** The totals every GST document carries (strings as stored). */
@@ -97,6 +101,8 @@ export interface TallyDocumentTotals {
   roundOff: string;
   grandTotal: string;
   isReverseCharge?: boolean;
+  /** A purchase bill's TDS kept back: the supplier is owed the rest, TDS Payable takes it. */
+  tdsAmount?: string;
 }
 
 const cents = (v: string | number) => Math.round(Number(v) * 100);
@@ -122,23 +128,30 @@ export function documentEntries(doc: TallyDocumentTotals, party: string, side: "
         ] as const);
   const round = cents(doc.roundOff);
   const counter = total - taxes.reduce((s, [, v]) => s + v, 0) - round;
+  const tds = side === "purchase" && doc.tdsAmount ? cents(doc.tdsAmount) : 0;
   const entries: Array<[string, number, boolean]> = [
-    [party, sign * total, true],
+    [party, sign * (total - tds), true],
     [side === "sales" ? L.sales.name : L.purchase.name, -sign * counter, false],
     ...taxes.map(([l, v]) => [l.name, -sign * v, false] as [string, number, boolean]),
     [L.roundOff.name, -sign * round, false],
+    [L.tdsPayable.name, sign * tds, false],
   ];
   return entries.filter(([, v, isParty]) => isParty || v !== 0).map(([ledger, v, isParty]) => ({ ledger, amount: v / 100, ...(isParty ? { party: true } : {}) }));
 }
 
-/** A receipt (money in from a customer) or a payment (money out to a supplier). */
-export function paymentEntries(amount: string, party: string, cash: boolean, direction: "in" | "out"): TallyEntry[] {
+/**
+ * A receipt (money in from a customer) or a payment (money out to a supplier). A receipt the customer
+ * deducted TDS on credits them with both: the money to cash or bank, the TDS to TDS Receivable.
+ */
+export function paymentEntries(amount: string, party: string, cash: boolean, direction: "in" | "out", tdsAmount = "0"): TallyEntry[] {
   const v = cents(amount) / 100;
+  const tds = direction === "in" ? cents(tdsAmount) / 100 : 0;
   const account = cash ? TALLY_LEDGERS.cash.name : TALLY_LEDGERS.bank.name;
   return direction === "in"
     ? [
-        { ledger: party, amount: -v, party: true },
+        { ledger: party, amount: -(cents(amount) + cents(tds)) / 100, party: true },
         { ledger: account, amount: v },
+        ...(tds ? [{ ledger: TALLY_LEDGERS.tdsReceivable.name, amount: tds }] : []),
       ]
     : [
         { ledger: party, amount: v, party: true },

@@ -38,6 +38,8 @@ export interface Settings {
   "invoice.default_unit"?: string | null;
   /** Roles (by key) that must use two-step sign-in. */
   "security.two_step_roles"?: string[];
+  /** TDS on buying goods (393(1), old 194Q), kept back on purchase bills. */
+  "tds.purchases"?: { enabled: boolean; threshold: number; rate: number; noPanRate: number };
 }
 export type PaymentDetails = { bankName: string; accountNumber: string; ifsc: string; upiId: string };
 

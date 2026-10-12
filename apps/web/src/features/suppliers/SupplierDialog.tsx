@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
-import { Field, Input, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Skeleton } from "../../components/ui/misc";
 import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
@@ -25,6 +25,8 @@ export interface SupplierDetail extends SupplierRow {
   bankIfsc: string | null;
   bankName: string | null;
   upiId: string | null;
+  /** No TDS on purchases from this supplier. */
+  tdsExempt?: boolean;
   notes: string | null;
   isActive: boolean;
   summary: { balance: string; totalPurchases: string; purchaseCount: number; lastPurchaseDate: string | null; lastPaymentDate: string | null };
@@ -79,6 +81,8 @@ export function SupplierDialog({
   const toast = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState<Form>(blank);
+  // A nil or lower deduction certificate: no TDS is kept back on this supplier's bills.
+  const [noTds, setNoTds] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [touched, setTouched] = useState(false);
@@ -94,6 +98,7 @@ export function SupplierDialog({
     if (!open) return;
     setError(null);
     setTouched(false);
+    setNoTds(Boolean(supplierId && s?.tdsExempt));
     if (!supplierId) {
       // A GSTIN on the bill gives the state too.
       const gstin = prefill?.gstin ? normalizeGstin(prefill.gstin) : "";
@@ -163,6 +168,7 @@ export function SupplierDialog({
       bankName: opt(form.bankName),
       upiId: opt(form.upiId),
       notes: opt(form.notes),
+      tdsExempt: noTds,
     };
     try {
       const saved = supplierId
@@ -268,6 +274,10 @@ export function SupplierDialog({
             <Field label={t("customer.pan")} htmlFor="s-pan" error={show("pan")}>
               <Input id="s-pan" maxLength={10} className="[&_input]:font-mono [&_input]:uppercase" value={form.pan} onChange={(e) => set("pan", e.target.value)} />
             </Field>
+            <div className="flex flex-col justify-end gap-1 pb-1 sm:col-span-2">
+              <Checkbox checked={noTds} onChange={setNoTds} label={t("tds.supplier.exempt")} />
+              <p className="text-[12px] text-ink-3">{t("tds.supplier.exemptHint")}</p>
+            </div>
           </div>
 
           <section className="flex flex-col gap-3">

@@ -100,6 +100,15 @@ export const payments = pgTable(
     chequeBank: text(),
     /** Pending, deposited, cleared or bounced; a bounced cheque reverses the payment. */
     chequeStatus: chequeStatus(),
+    /**
+     * Income tax the customer deducted at source and pays the government for us (TDS, e.g. 0.1% on buying
+     * goods): with the amount received it settles their bills. Claimed against the business's own tax.
+     */
+    tdsAmount: money().notNull().default("0"),
+    /** What it was deducted under: goods (393(1), old 194Q), contract, commission, professional, rent, other. */
+    tdsSection: varchar({ length: 20 }),
+    /** The customer's TDS certificate (Form 16A) number, once it comes. */
+    tdsCertificate: varchar({ length: 40 }),
     /** Part not yet applied to any bill: an advance or on-account amount, used against later bills. */
     unallocatedAmount: money().notNull().default("0"),
     /** Posted or cancelled. */
@@ -128,7 +137,8 @@ export const payments = pgTable(
     index("payments_customer_idx").on(t.businessId, t.customerId, t.paymentDate),
     index("payments_supplier_idx").on(t.businessId, t.supplierId, t.paymentDate),
     index("payments_date_idx").on(t.businessId, t.paymentDate, t.method),
-    check("payments_amount_chk", sql`${t.amount} > 0 and ${t.unallocatedAmount} >= 0 and ${t.unallocatedAmount} <= ${t.amount}`),
+    check("payments_amount_chk", sql`${t.amount} > 0 and ${t.tdsAmount} >= 0 and ${t.unallocatedAmount} >= 0 and ${t.unallocatedAmount} <= ${t.amount} + ${t.tdsAmount}`),
+    index("payments_tds_idx").on(t.businessId, t.paymentDate).where(sql`${t.tdsAmount} > 0`),
     check(
       "payments_party_chk",
       sql`(${t.partyType} = 'customer' and ${t.customerId} is not null)

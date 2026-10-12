@@ -29,6 +29,7 @@ export * from "./payroll/statutory.js";
 export * from "./purchases/bill-file.js";
 export * from "./purchases/cost-change.js";
 export * from "./purchases/ordering.js";
+export * from "./tax/tds.js";
 
 export * from "./suggestions/stats.js";
 export * from "./suggestions/associations.js";

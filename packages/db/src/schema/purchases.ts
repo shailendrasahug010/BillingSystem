@@ -6,6 +6,7 @@ import { documentStatus, goodsReceiptStatus, itcEligibility, paymentStatus, purc
 import { batches, products, units } from "./catalog.js";
 import { suppliers } from "./parties.js";
 import { businessId, devices, documentSeries, warehouses } from "./platform.js";
+import { tdsChallans } from "./tax.js";
 
 /**
  * Purchase bill entry. Posting it (one DB transaction) increases stock, updates
@@ -46,8 +47,20 @@ export const purchases = pgTable(
     ...documentTotalsColumns(),
     /** Paid so far against this bill (payments allocated to it, and payment at the time of the bill). */
     amountPaid: money().notNull().default("0"),
-    /** Still to be paid: grand total less amount paid and returns / credit notes against it. */
+    /** Still to be paid: grand total less TDS deducted, amount paid and returns / credit notes against it. */
     balanceDue: money().notNull().default("0"),
+    /**
+     * Income tax deducted at source on the bill (393(1) of the 2025 Act, old 194Q): on the part of its
+     * value before GST that takes the year's purchases from the supplier past the threshold. The supplier
+     * is paid the rest; this goes to the government. 0 when none.
+     */
+    tdsAmount: money().notNull().default("0"),
+    /** The value the TDS was worked on. */
+    tdsBase: money().notNull().default("0"),
+    /** Its rate in percent (0.1, or 5 when the supplier has no PAN). */
+    tdsRate: percent(),
+    /** The challan the TDS was paid to the government with, once paid. */
+    tdsChallanId: uuid().references(() => tdsChallans.id),
     /** Unpaid, partly paid or paid. */
     paymentStatus: paymentStatus().notNull().default("unpaid"),
     notes: text(),
@@ -81,6 +94,8 @@ export const purchases = pgTable(
     index("purchases_date_idx").on(t.businessId, t.receivedDate),
     index("purchases_open_idx").on(t.businessId, t.supplierId).where(sql`${t.status} = 'posted' and ${t.balanceDue} > 0`),
     check("purchases_totals_chk", sql`${t.grandTotal} >= 0 and ${t.amountPaid} >= 0 and ${t.balanceDue} >= 0`),
+    check("purchases_tds_chk", sql`${t.tdsAmount} >= 0 and ${t.tdsAmount} <= ${t.grandTotal} and ${t.tdsBase} >= 0`),
+    index("purchases_tds_idx").on(t.businessId, t.supplierInvoiceDate).where(sql`${t.tdsAmount} > 0`),
   ],
 );
 

@@ -132,6 +132,17 @@ export const SETTING_SCHEMAS = {
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     retainDays: z.number().int().min(1).max(365),
   }),
+  /**
+   * TDS on buying goods (393(1) of the Income-tax Act, 2025; old 194Q), for a business whose turnover passed
+   * ₹10 crore the year before: on each purchase bill, rate percent on the part of the year's purchases from
+   * the supplier past the threshold (noPanRate when the supplier has no PAN). Off until the business turns it on.
+   */
+  "tds.purchases": z.strictObject({
+    enabled: z.boolean(),
+    threshold: z.number().int().min(0).max(1_000_000_000),
+    rate: z.number().min(0).max(100),
+    noPanRate: z.number().min(0).max(100),
+  }),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;

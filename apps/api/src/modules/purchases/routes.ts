@@ -32,10 +32,11 @@ import { ApiError, badRequest, conflict, forbidden, notFound } from "../../lib/e
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
-import { applyToDocument, recordPayment, releaseAllocationRows } from "../../services/payments.js";
+import { applyToDocument, recordPayment, releaseAllocationRows, tdsLabel } from "../../services/payments.js";
 import { getSettings } from "../../services/settings.js";
 import { assertReceivable, lockOrderLines, lockReceiptsForBill, receiveOnOrderLines } from "../../services/purchase-orders.js";
 import { postStockMovement, revalueStock } from "../../services/stock.js";
+import { tdsOnPurchase } from "../../services/tds.js";
 import { likeContains } from "../catalog/products.js";
 import { assertNoPostedReturns, documentReturns } from "../notes/routes.js";
 import type { ApiModule } from "../types.js";
@@ -108,6 +109,11 @@ async function cancelPostedPurchase(
       ),
     );
   if (locked) throw conflict("GST_PERIOD_LOCKED");
+  if (p.tdsChallanId) {
+    // The TDS kept back on it has been paid to the government: the challan has to let go of it first.
+    const [challan] = await tx.select().from(schema.tdsChallans).where(eq(schema.tdsChallans.id, p.tdsChallanId));
+    throw conflict("TDS_PAID_ON_BILL", { challan: challan ? `${challan.bsrCode}/${challan.challanSerial}` : "", date: challan?.depositDate ?? "" });
+  }
   const { now, today, policy } = at;
   const items = await tx.select().from(schema.purchaseItems).where(eq(schema.purchaseItems.purchaseId, p.id));
   // Goods received before the bill stay in (their receipt waits for a bill again); their cost goes back to the receipt's.
@@ -195,6 +201,19 @@ async function cancelPostedPurchase(
     narration: `Cancelled: ${reason}`,
     userId: ctx.userId,
   });
+  if (dec(p.tdsAmount).gt(0)) {
+    await postPartyEntry(tx, {
+      businessId: ctx.businessId,
+      party: { type: "supplier", id: p.supplierId },
+      date: today,
+      docType: "tds_out_cancel",
+      docId: p.id,
+      docNumber: p.supplierInvoiceNumber,
+      credit: p.tdsAmount,
+      narration: `${tdsLabel("goods")} · cancelled: ${reason}`,
+      userId: ctx.userId,
+    });
+  }
   await tx
     .update(schema.gstTransactions)
     .set({ isCancelled: true })
@@ -402,6 +421,9 @@ export const purchasesModule: ApiModule = async (app, deps) => {
       const id = uuidv7();
       const address = { line1: supplier.addressLine1, line2: supplier.addressLine2, city: supplier.city, stateCode: supplier.stateCode, pincode: supplier.pincode };
       const t = payable;
+      // TDS on buying goods, when the business deducts it: kept back from the supplier, paid to the government.
+      const tds = await tdsOnPurchase(tx, ctx.businessId, supplier, body.supplierInvoiceDate, taxView.taxableTotal);
+      const owed = tds ? t.grandTotal.minus(tds.amount) : t.grandTotal;
       await tx.insert(schema.purchases).values({
         id,
         businessId: ctx.businessId,
@@ -436,8 +458,11 @@ export const purchasesModule: ApiModule = async (app, deps) => {
         roundOff: toAmountString(t.roundOff),
         grandTotal: toAmountString(t.grandTotal),
         amountPaid: "0",
-        balanceDue: toAmountString(t.grandTotal),
-        paymentStatus: t.grandTotal.isZero() ? "paid" : "unpaid",
+        balanceDue: toAmountString(owed),
+        paymentStatus: owed.lte(0) ? "paid" : "unpaid",
+        tdsAmount: tds ? toAmountString(tds.amount) : "0",
+        tdsBase: tds ? toAmountString(tds.base) : "0",
+        tdsRate: tds ? tds.rate.toFixed(3) : null,
         notes: body.notes ?? null,
         postedAt: deps.clock.now().toISOString(),
         postedBy: ctx.userId,
@@ -646,6 +671,19 @@ export const purchasesModule: ApiModule = async (app, deps) => {
         narration: `Purchase bill ${body.supplierInvoiceNumber}`,
         userId: ctx.userId,
       });
+      if (tds) {
+        await postPartyEntry(tx, {
+          businessId: ctx.businessId,
+          party: { type: "supplier", id: supplier.id },
+          date: body.supplierInvoiceDate,
+          docType: "tds_out",
+          docId: id,
+          docNumber: body.supplierInvoiceNumber,
+          debit: toAmountString(tds.amount),
+          narration: `${tdsLabel("goods")} · ${tds.rate.toString()}% of ${toAmountString(tds.base)}`,
+          userId: ctx.userId,
+        });
+      }
 
       const gstBase = {
         businessId: ctx.businessId,
@@ -684,7 +722,7 @@ export const purchasesModule: ApiModule = async (app, deps) => {
 
       let payment = null;
       if (body.payment && dec(body.payment.amount).gt(0)) {
-        const settle = t.amountPaid.gt(t.grandTotal) ? t.grandTotal : t.amountPaid;
+        const settle = t.amountPaid.gt(owed) ? owed : t.amountPaid;
         payment = await recordPayment(tx, ctx, business!.financialYearStartMonth, {
           direction: "out",
           party: { type: "supplier", id: supplier.id, name: supplier.name },
@@ -724,6 +762,7 @@ export const purchasesModule: ApiModule = async (app, deps) => {
         changes: {
           supplier: supplier.name,
           grandTotal: toAmountString(t.grandTotal),
+          ...(tds ? { tds: toAmountString(tds.amount) } : {}),
           ...(replaced ? { replaces: replaced.purchase.purchaseNumber ?? replaced.purchase.supplierInvoiceNumber, paymentsMoved: moved.map((m) => m.amount) } : {}),
         },
       });

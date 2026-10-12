@@ -181,6 +181,8 @@ export const SupplierBody = z.strictObject({
   bankIfsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/).optional(),
   bankName: z.string().trim().max(100).optional(),
   upiId: z.string().trim().max(100).optional(),
+  /** No TDS on purchases from this supplier (a nil or lower deduction certificate). */
+  tdsExempt: z.boolean().optional(),
   notes: z.string().trim().max(1000).optional(),
   isActive: z.boolean().default(true),
 });

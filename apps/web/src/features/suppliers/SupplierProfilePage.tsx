@@ -18,7 +18,7 @@ import { PaymentDialog } from "../payments/PaymentDialog";
 import { PurchaseStatusBadge, type PurchaseRow } from "../purchases/PurchasesPage";
 import { SupplierDialog, type SupplierDetail } from "./SupplierDialog";
 
-const LEDGER_TYPES = new Set(["opening", "invoice", "invoice_cancel", "purchase", "purchase_cancel", "payment_in", "payment_out", "payment_in_cancel", "payment_out_cancel", "cheque_bounce", "credit_note", "credit_note_cancel", "debit_note", "debit_note_cancel"]);
+const LEDGER_TYPES = new Set(["opening", "invoice", "invoice_cancel", "purchase", "purchase_cancel", "payment_in", "payment_out", "payment_in_cancel", "payment_out_cancel", "cheque_bounce", "credit_note", "credit_note_cancel", "debit_note", "debit_note_cancel", "tds_out", "tds_out_cancel"]);
 
 export interface LedgerEntry {
   id: number;

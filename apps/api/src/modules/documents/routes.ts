@@ -17,6 +17,7 @@ import { invoiceDetail } from "../invoices/routes.js";
 import { noteDetail } from "../notes/routes.js";
 import { partyLedger } from "../parties/routes.js";
 import { paymentDetail } from "../payments/routes.js";
+import { tdsLabel } from "../../services/payments.js";
 import { purchaseDetail } from "../purchases/routes.js";
 import type { ApiModule } from "../types.js";
 
@@ -258,6 +259,7 @@ export async function receiptPdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     bills: p.allocations.filter((a) => !a.reversedAt).map((a) => ({ number: a.documentNumber, amount: a.amount })),
     onAccount: p.unallocatedAmount,
     notes: p.notes,
+    tds: Number(p.tdsAmount) > 0 ? { amount: p.tdsAmount, label: tdsLabel(p.tdsSection) } : null,
   });
   const { t } = createTranslator(locale);
   const partyName = p.party?.name ?? data.party?.name ?? "";

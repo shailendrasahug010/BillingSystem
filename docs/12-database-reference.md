@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 112 |
-| Columns | 1925 |
-| Foreign keys | 318 |
-| Unique constraints | 50 |
-| Check constraints | 76 |
-| Indexes (besides primary keys and unique constraints) | 164 |
+| Tables | 113 |
+| Columns | 1947 |
+| Foreign keys | 320 |
+| Unique constraints | 51 |
+| Check constraints | 77 |
+| Indexes (besides primary keys and unique constraints) | 167 |
 | Triggers | 73 |
-| Tables with row-level security | 106 |
+| Tables with row-level security | 107 |
 | Enums | 45 |
 | Functions | 18 |
-| Migrations | 39 (last: `0038_purchase_orders`) |
+| Migrations | 40 (last: `0039_tds`) |
 
 ## How the database is set up
 
@@ -34,6 +34,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Access: users' roles, sessions and sign-in:** [`permissions`](#permissions), [`roles`](#roles), [`role_permissions`](#role_permissions), [`business_members`](#business_members), [`refresh_tokens`](#refresh_tokens), [`otp_challenges`](#otp_challenges)
 * **Employees, attendance and leave:** [`departments`](#departments), [`employees`](#employees), [`attendance`](#attendance), [`leave_types`](#leave_types), [`leave_balances`](#leave_balances), [`leave_requests`](#leave_requests)
 * **Customers and suppliers:** [`price_levels`](#price_levels), [`customer_categories`](#customer_categories), [`sales_routes`](#sales_routes), [`customers`](#customers), [`customer_addresses`](#customer_addresses), [`suppliers`](#suppliers)
+* **tax:** [`tds_challans`](#tds_challans)
 * **beats:** [`customer_visits`](#customer_visits)
 * **Products, units and tax:** [`brands`](#brands), [`product_categories`](#product_categories), [`units`](#units), [`tax_categories`](#tax_categories), [`tax_rates`](#tax_rates), [`products`](#products), [`product_units`](#product_units), [`product_barcodes`](#product_barcodes), [`product_prices`](#product_prices), [`product_images`](#product_images), [`batches`](#batches)
 * **schemes:** [`schemes`](#schemes)
@@ -142,7 +143,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 103 tables by `business_id`
+* Referenced by: 104 tables by `business_id`
 
 ### `settings`
 
@@ -753,6 +754,7 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 | `deleted_at` | timestamptz |  |  | Soft delete: when the row was removed from lists. Posted documents are never deleted. |
 | `deleted_by` | uuid |  |  | Soft delete: the user who removed the row. |
 | `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+| `tds_exempt` | boolean | ✓ | `false` | No TDS on purchases from this supplier (a nil or lower deduction certificate, or a seller not liable). |
 
 * Check `suppliers_credit_limit_chk`: `(credit_limit IS NULL OR credit_limit >= 0::numeric)`
 * Index `suppliers_code_uq`: unique, btree `(business_id, code) WHERE (deleted_at IS NULL)`
@@ -762,6 +764,34 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 * Trigger `suppliers_sync_change`: after insert or delete or update, each row → `track_sync_change('supplier', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`products`](#products).preferred_supplier_id, [`schemes`](#schemes).supplier_id, [`purchases`](#purchases).supplier_id, [`purchase_orders`](#purchase_orders).supplier_id, [`goods_receipts`](#goods_receipts).supplier_id, [`supplier_items`](#supplier_items).supplier_id, [`credit_debit_notes`](#credit_debit_notes).supplier_id, [`payments`](#payments).supplier_id, [`party_ledger_entries`](#party_ledger_entries).supplier_id, [`expenses`](#expenses).supplier_id
+
+## tax
+
+### `tds_challans`
+
+Income tax the business deducted at source (TDS on purchase bills) paid to the government: one challan per month's deductions, with the bank's BSR code and the challan's serial number as the quarterly TDS return asks. The bills it paid point to it (purchases.tds_challan_id).
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `period_month` | varchar(7) | ✓ |  | Month whose deductions it pays ("2026-09"). |
+| `deposit_date` | date | ✓ |  | Date the tax was paid. |
+| `bsr_code` | varchar(7) | ✓ |  | The bank branch's BSR code on the challan (7 digits). |
+| `challan_serial` | varchar(5) | ✓ |  | The challan's serial number (5 digits). |
+| `tax_amount` | numeric(15,2) | ✓ |  | Tax paid: the TDS of the bills it covers. |
+| `interest` | numeric(15,2) | ✓ | `0` | Interest paid for paying late. |
+| `late_fee` | numeric(15,2) | ✓ | `0` | Fee paid for filing the return late. |
+| `notes` | text |  |  | Free-text notes. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+
+* Unique `tds_challans_uq`: `(business_id, deposit_date, bsr_code, challan_serial)`
+* Index `tds_challans_period_idx`: btree `(business_id, period_month)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`purchases`](#purchases).tds_challan_id
 
 ## beats
 
@@ -1300,7 +1330,7 @@ Purchase bill entry. Posting it (one DB transaction) increases stock, updates mo
 | `round_off` | numeric(15,2) | ✓ | `0` | Amount added or taken off to round the grand total (to the rupee by default). |
 | `grand_total` | numeric(15,2) | ✓ | `0` | What the party pays: taxable value + charges + GST and cess + round-off. |
 | `amount_paid` | numeric(15,2) | ✓ | `0` | Paid so far against this bill (payments allocated to it, and payment at the time of the bill). |
-| `balance_due` | numeric(15,2) | ✓ | `0` | Still to be paid: grand total less amount paid and returns / credit notes against it. |
+| `balance_due` | numeric(15,2) | ✓ | `0` | Still to be paid: grand total less TDS deducted, amount paid and returns / credit notes against it. |
 | `payment_status` | [payment_status](#enum-payment_status) | ✓ | `'unpaid'` | Unpaid, partly paid or paid. |
 | `notes` | text |  |  | Free-text notes. |
 | `attachment_file_id` | uuid |  |  | The supplier's bill as a file, when attached. |
@@ -1316,14 +1346,20 @@ Purchase bill entry. Posting it (one DB transaction) increases stock, updates mo
 | `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
 | `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+| `tds_amount` | numeric(15,2) | ✓ | `0` | Income tax deducted at source on the bill (393(1) of the 2025 Act, old 194Q): on the part of its value before GST that takes the year's purchases from the supplier past the threshold. The supplier is paid the rest; this goes to the government. 0 when none. |
+| `tds_base` | numeric(15,2) | ✓ | `0` | The value the TDS was worked on. |
+| `tds_rate` | numeric(7,3) |  |  | Its rate in percent (0.1, or 5 when the supplier has no PAN). |
+| `tds_challan_id` | uuid |  |  | → [`tds_challans`](#tds_challans).id. The challan the TDS was paid to the government with, once paid. |
 
 * Unique `purchases_number_uq`: `(business_id, financial_year, purchase_number)`
+* Check `purchases_tds_chk`: `(tds_amount >= 0::numeric AND tds_amount <= grand_total AND tds_base >= 0::numeric)`
 * Check `purchases_totals_chk`: `(grand_total >= 0::numeric AND amount_paid >= 0::numeric AND balance_due >= 0::numeric)`
 * Index `purchases_client_id_uq`: unique, btree `(business_id, client_id) WHERE (client_id IS NOT NULL)`
 * Index `purchases_date_idx`: btree `(business_id, received_date)`
 * Index `purchases_open_idx`: btree `(business_id, supplier_id) WHERE ((status = 'posted'::document_status) AND (balance_due > (0)::numeric))`
 * Index `purchases_supplier_bill_uq`: unique, btree `(business_id, supplier_id, supplier_invoice_number, financial_year) WHERE (status <> 'cancelled'::document_status)`
 * Index `purchases_supplier_idx`: btree `(business_id, supplier_id, supplier_invoice_date)`
+* Index `purchases_tds_idx`: btree `(business_id, supplier_invoice_date) WHERE (tds_amount > (0)::numeric)`
 * Trigger `purchases_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `purchases_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
@@ -2275,14 +2311,18 @@ Money in (customer collection) or out (supplier payment, salary, refund). Posted
 | `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
 | `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+| `tds_amount` | numeric(15,2) | ✓ | `0` | Income tax the customer deducted at source and pays the government for us (TDS, e.g. 0.1% on buying goods): with the amount received it settles their bills. Claimed against the business's own tax. |
+| `tds_section` | varchar(20) |  |  | What it was deducted under: goods (393(1), old 194Q), contract, commission, professional, rent, other. |
+| `tds_certificate` | varchar(40) |  |  | The customer's TDS certificate (Form 16A) number, once it comes. |
 
-* Check `payments_amount_chk`: `(amount > 0::numeric AND unallocated_amount >= 0::numeric AND unallocated_amount <= amount)`
+* Check `payments_amount_chk`: `(amount > 0::numeric AND tds_amount >= 0::numeric AND unallocated_amount >= 0::numeric AND unallocated_amount <= (amount + tds_amount))`
 * Unique `payments_number_uq`: `(business_id, financial_year, direction, payment_number)`
 * Check `payments_party_chk`: `(party_type = 'customer'::party_type AND customer_id IS NOT NULL OR party_type = 'supplier'::party_type AND supplier_id IS NOT NULL OR party_type = 'employee'::party_type AND employee_id IS NOT NULL OR party_type = 'other'::party_type)`
 * Index `payments_client_id_uq`: unique, btree `(business_id, client_id) WHERE (client_id IS NOT NULL)`
 * Index `payments_customer_idx`: btree `(business_id, customer_id, payment_date)`
 * Index `payments_date_idx`: btree `(business_id, payment_date, method)`
 * Index `payments_supplier_idx`: btree `(business_id, supplier_id, payment_date)`
+* Index `payments_tds_idx`: btree `(business_id, payment_date) WHERE (tds_amount > (0)::numeric)`
 * Trigger `payments_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `payments_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
@@ -3705,4 +3745,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes` · `0037_sales_returns` · `0038_purchase_orders`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes` · `0037_sales_returns` · `0038_purchase_orders` · `0039_tds`
