@@ -6,17 +6,17 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 
 | | Count |
 |---|---|
-| Tables | 108 |
-| Columns | 1801 |
-| Foreign keys | 296 |
-| Unique constraints | 48 |
-| Check constraints | 74 |
-| Indexes (besides primary keys and unique constraints) | 149 |
+| Tables | 112 |
+| Columns | 1925 |
+| Foreign keys | 318 |
+| Unique constraints | 50 |
+| Check constraints | 76 |
+| Indexes (besides primary keys and unique constraints) | 164 |
 | Triggers | 73 |
-| Tables with row-level security | 102 |
-| Enums | 43 |
+| Tables with row-level security | 106 |
+| Enums | 45 |
 | Functions | 18 |
-| Migrations | 38 (last: `0037_sales_returns`) |
+| Migrations | 39 (last: `0038_purchase_orders`) |
 
 ## How the database is set up
 
@@ -38,7 +38,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 * **Products, units and tax:** [`brands`](#brands), [`product_categories`](#product_categories), [`units`](#units), [`tax_categories`](#tax_categories), [`tax_rates`](#tax_rates), [`products`](#products), [`product_units`](#product_units), [`product_barcodes`](#product_barcodes), [`product_prices`](#product_prices), [`product_images`](#product_images), [`batches`](#batches)
 * **schemes:** [`schemes`](#schemes)
 * **Stock:** [`stock_ledger`](#stock_ledger), [`stock_balances`](#stock_balances), [`stock_adjustments`](#stock_adjustments), [`stock_adjustment_items`](#stock_adjustment_items), [`stock_transfers`](#stock_transfers), [`stock_transfer_items`](#stock_transfer_items)
-* **Purchases:** [`purchases`](#purchases), [`purchase_items`](#purchase_items), [`supplier_items`](#supplier_items)
+* **Purchases:** [`purchases`](#purchases), [`purchase_items`](#purchase_items), [`purchase_orders`](#purchase_orders), [`purchase_order_items`](#purchase_order_items), [`goods_receipts`](#goods_receipts), [`goods_receipt_items`](#goods_receipt_items), [`supplier_items`](#supplier_items)
 * **Sales: orders, invoices, packing and dispatch:** [`sales_orders`](#sales_orders), [`sales_order_items`](#sales_order_items), [`invoices`](#invoices), [`invoice_items`](#invoice_items), [`invoice_revisions`](#invoice_revisions), [`status_history`](#status_history), [`packings`](#packings), [`packing_items`](#packing_items), [`dispatches`](#dispatches), [`dispatch_orders`](#dispatch_orders), [`price_overrides`](#price_overrides), [`recurring_invoices`](#recurring_invoices), [`order_links`](#order_links)
 * **Credit and debit notes:** [`credit_debit_notes`](#credit_debit_notes), [`credit_debit_note_items`](#credit_debit_note_items), [`note_allocations`](#note_allocations)
 * **Payments and the party ledger:** [`payment_accounts`](#payment_accounts), [`payments`](#payments), [`payment_allocations`](#payment_allocations), [`party_ledger_entries`](#party_ledger_entries), [`collection_notes`](#collection_notes)
@@ -142,7 +142,7 @@ The tenant: one legal entity / GSTIN. Every business row in every other table ca
 * Row-level security: policy `tenant_isolation` (all commands), using `((id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid) OR (id IN ( SELECT bm.business_id
    FROM business_members bm
   WHERE ((bm.user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND bm.is_active))))`, check `(id = (NULLIF(current_setting('app.business_id'::text, true), ''::text))::uuid)`
-* Referenced by: 99 tables by `business_id`
+* Referenced by: 103 tables by `business_id`
 
 ### `settings`
 
@@ -188,7 +188,7 @@ Godowns / branches holding stock.
 * Index `warehouses_one_default_uq`: unique, btree `(business_id) WHERE (is_default AND (deleted_at IS NULL))`
 * Trigger `warehouses_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`stock_ledger`](#stock_ledger).warehouse_id, [`stock_balances`](#stock_balances).warehouse_id, [`stock_adjustments`](#stock_adjustments).warehouse_id, [`stock_transfers`](#stock_transfers).from_warehouse_id, [`stock_transfers`](#stock_transfers).to_warehouse_id, [`purchases`](#purchases).warehouse_id, [`sales_orders`](#sales_orders).warehouse_id, [`invoices`](#invoices).warehouse_id, [`credit_debit_notes`](#credit_debit_notes).warehouse_id
+* Referenced by: [`stock_ledger`](#stock_ledger).warehouse_id, [`stock_balances`](#stock_balances).warehouse_id, [`stock_adjustments`](#stock_adjustments).warehouse_id, [`stock_transfers`](#stock_transfers).from_warehouse_id, [`stock_transfers`](#stock_transfers).to_warehouse_id, [`purchases`](#purchases).warehouse_id, [`purchase_orders`](#purchase_orders).warehouse_id, [`goods_receipts`](#goods_receipts).warehouse_id, [`sales_orders`](#sales_orders).warehouse_id, [`invoices`](#invoices).warehouse_id, [`credit_debit_notes`](#credit_debit_notes).warehouse_id
 
 ### `files`
 
@@ -271,7 +271,7 @@ Number series per document type and financial year. The next number is taken wit
 * Unique `document_series_uq`: `NULLS NOT DISTINCT (business_id, doc_type, financial_year, pattern, device_id)`
 * Trigger `document_series_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`purchases`](#purchases).series_id, [`sales_orders`](#sales_orders).series_id, [`invoices`](#invoices).series_id, [`credit_debit_notes`](#credit_debit_notes).series_id, [`payments`](#payments).series_id
+* Referenced by: [`purchases`](#purchases).series_id, [`purchase_orders`](#purchase_orders).series_id, [`goods_receipts`](#goods_receipts).series_id, [`sales_orders`](#sales_orders).series_id, [`invoices`](#invoices).series_id, [`credit_debit_notes`](#credit_debit_notes).series_id, [`payments`](#payments).series_id
 
 ## Access: users' roles, sessions and sign-in
 
@@ -761,7 +761,7 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 * Trigger `suppliers_set_updated_at`: before update, each row → `set_updated_at()`
 * Trigger `suppliers_sync_change`: after insert or delete or update, each row → `track_sync_change('supplier', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`products`](#products).preferred_supplier_id, [`schemes`](#schemes).supplier_id, [`purchases`](#purchases).supplier_id, [`supplier_items`](#supplier_items).supplier_id, [`credit_debit_notes`](#credit_debit_notes).supplier_id, [`payments`](#payments).supplier_id, [`party_ledger_entries`](#party_ledger_entries).supplier_id, [`expenses`](#expenses).supplier_id
+* Referenced by: [`products`](#products).preferred_supplier_id, [`schemes`](#schemes).supplier_id, [`purchases`](#purchases).supplier_id, [`purchase_orders`](#purchase_orders).supplier_id, [`goods_receipts`](#goods_receipts).supplier_id, [`supplier_items`](#supplier_items).supplier_id, [`credit_debit_notes`](#credit_debit_notes).supplier_id, [`payments`](#payments).supplier_id, [`party_ledger_entries`](#party_ledger_entries).supplier_id, [`expenses`](#expenses).supplier_id
 
 ## beats
 
@@ -860,7 +860,7 @@ Units (PCS, BOX, KG...) with the GST Unit Quantity Code used in returns.
 * Unique `units_symbol_uq`: `(business_id, symbol)`
 * Trigger `units_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`products`](#products).base_unit_id, [`product_units`](#product_units).unit_id, [`product_barcodes`](#product_barcodes).unit_id, [`product_prices`](#product_prices).unit_id, [`purchase_items`](#purchase_items).unit_id, [`supplier_items`](#supplier_items).unit_id, [`sales_order_items`](#sales_order_items).unit_id, [`invoice_items`](#invoice_items).unit_id, [`credit_debit_note_items`](#credit_debit_note_items).unit_id
+* Referenced by: [`products`](#products).base_unit_id, [`product_units`](#product_units).unit_id, [`product_barcodes`](#product_barcodes).unit_id, [`product_prices`](#product_prices).unit_id, [`purchase_items`](#purchase_items).unit_id, [`purchase_order_items`](#purchase_order_items).unit_id, [`goods_receipt_items`](#goods_receipt_items).unit_id, [`supplier_items`](#supplier_items).unit_id, [`sales_order_items`](#sales_order_items).unit_id, [`invoice_items`](#invoice_items).unit_id, [`credit_debit_note_items`](#credit_debit_note_items).unit_id
 
 ### `tax_categories`
 
@@ -963,7 +963,7 @@ Effective-dated GST rates per category, optionally conditional on unit value. Se
 * Trigger `products_set_updated_at`: before update, each row → `set_updated_at()`
 * Trigger `products_sync_change`: after insert or delete or update, each row → `track_sync_change('product', 'id')`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`products`](#products).parent_product_id, [`product_units`](#product_units).product_id, [`product_barcodes`](#product_barcodes).product_id, [`product_prices`](#product_prices).product_id, [`product_images`](#product_images).product_id, [`batches`](#batches).product_id, [`schemes`](#schemes).free_product_id, [`stock_ledger`](#stock_ledger).product_id, [`stock_balances`](#stock_balances).product_id, [`stock_adjustment_items`](#stock_adjustment_items).product_id, [`stock_transfer_items`](#stock_transfer_items).product_id, [`purchase_items`](#purchase_items).product_id, [`supplier_items`](#supplier_items).product_id, [`sales_order_items`](#sales_order_items).product_id, [`invoice_items`](#invoice_items).product_id, [`packing_items`](#packing_items).product_id, [`credit_debit_note_items`](#credit_debit_note_items).product_id, [`customer_product_stats`](#customer_product_stats).product_id, [`product_associations`](#product_associations).product_id, [`product_associations`](#product_associations).related_product_id, [`sales_daily_product`](#sales_daily_product).product_id
+* Referenced by: [`products`](#products).parent_product_id, [`product_units`](#product_units).product_id, [`product_barcodes`](#product_barcodes).product_id, [`product_prices`](#product_prices).product_id, [`product_images`](#product_images).product_id, [`batches`](#batches).product_id, [`schemes`](#schemes).free_product_id, [`stock_ledger`](#stock_ledger).product_id, [`stock_balances`](#stock_balances).product_id, [`stock_adjustment_items`](#stock_adjustment_items).product_id, [`stock_transfer_items`](#stock_transfer_items).product_id, [`purchase_items`](#purchase_items).product_id, [`purchase_order_items`](#purchase_order_items).product_id, [`goods_receipt_items`](#goods_receipt_items).product_id, [`supplier_items`](#supplier_items).product_id, [`sales_order_items`](#sales_order_items).product_id, [`invoice_items`](#invoice_items).product_id, [`packing_items`](#packing_items).product_id, [`credit_debit_note_items`](#credit_debit_note_items).product_id, [`customer_product_stats`](#customer_product_stats).product_id, [`product_associations`](#product_associations).product_id, [`product_associations`](#product_associations).related_product_id, [`sales_daily_product`](#sales_daily_product).product_id
 
 ### `product_units`
 
@@ -1074,7 +1074,7 @@ Price per price level and unit.
 * Index `batches_expiry_idx`: btree `(business_id, expiry_date)`
 * Trigger `batches_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`stock_ledger`](#stock_ledger).batch_id, [`stock_balances`](#stock_balances).batch_id, [`stock_adjustment_items`](#stock_adjustment_items).batch_id, [`stock_transfer_items`](#stock_transfer_items).batch_id, [`purchase_items`](#purchase_items).batch_id, [`invoice_items`](#invoice_items).batch_id, [`packing_items`](#packing_items).batch_id, [`credit_debit_note_items`](#credit_debit_note_items).batch_id
+* Referenced by: [`stock_ledger`](#stock_ledger).batch_id, [`stock_balances`](#stock_balances).batch_id, [`stock_adjustment_items`](#stock_adjustment_items).batch_id, [`stock_transfer_items`](#stock_transfer_items).batch_id, [`purchase_items`](#purchase_items).batch_id, [`goods_receipt_items`](#goods_receipt_items).batch_id, [`invoice_items`](#invoice_items).batch_id, [`packing_items`](#packing_items).batch_id, [`credit_debit_note_items`](#credit_debit_note_items).batch_id
 
 ## schemes
 
@@ -1327,7 +1327,7 @@ Purchase bill entry. Posting it (one DB transaction) increases stock, updates mo
 * Trigger `purchases_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `purchases_set_updated_at`: before update, each row → `set_updated_at()`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`purchase_items`](#purchase_items).purchase_id, [`credit_debit_notes`](#credit_debit_notes).purchase_id, [`payment_allocations`](#payment_allocations).purchase_id
+* Referenced by: [`purchase_items`](#purchase_items).purchase_id, [`goods_receipts`](#goods_receipts).purchase_id, [`credit_debit_notes`](#credit_debit_notes).purchase_id, [`payment_allocations`](#payment_allocations).purchase_id
 
 ### `purchase_items`
 
@@ -1373,11 +1373,190 @@ Purchase bill entry. Posting it (one DB transaction) increases stock, updates mo
 | `mrp` | numeric(15,4) |  |  | MRP printed on the goods. |
 | `landed_unit_cost` | numeric(15,4) | ✓ | `0` | Unit cost per base unit including apportioned freight/charges (landed cost), used for avg cost. |
 | `returned_qty` | numeric(15,3) | ✓ | `0` | Quantity already returned to the supplier (debit notes); no more than the bill quantity can be returned. |
+| `goods_receipt_item_id` | uuid |  |  | → [`goods_receipt_items`](#goods_receipt_items).id. The goods receipt line this bill line pays for: its stock came in with the receipt, the bill sets its cost. |
+| `purchase_order_item_id` | uuid |  |  | → [`purchase_order_items`](#purchase_order_items).id. The purchase order line the goods were ordered on, when they came in with this bill (no receipt before it). |
 
 * Check `purchase_items_qty_chk`: `(qty > 0::numeric AND free_qty >= 0::numeric)`
+* Index `purchase_items_order_idx`: btree `(purchase_order_item_id) WHERE (purchase_order_item_id IS NOT NULL)`
 * Index `purchase_items_product_idx`: btree `(business_id, product_id)`
 * Index `purchase_items_purchase_idx`: btree `(purchase_id)`
+* Index `purchase_items_receipt_idx`: btree `(goods_receipt_item_id) WHERE (goods_receipt_item_id IS NOT NULL)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+
+### `purchase_orders`
+
+An order placed with a supplier. It moves no stock and no money: goods received against it (a goods receipt, or a bill with the goods) count on its lines, and it is received when everything came, or closed by hand when no more will. Totals are what the order should cost at its rates.
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `order_number` | varchar(30) | ✓ |  | Number from the purchase order series. |
+| `series_id` | uuid |  |  | → [`document_series`](#document_series).id. Number series the order was numbered from. |
+| `financial_year` | varchar(9) | ✓ |  | Financial year of the order (2026-27); its number is unique within it. |
+| `order_date` | date | ✓ |  | Date the order was placed. |
+| `expected_date` | date |  |  | When the goods are wanted. |
+| `supplier_id` | uuid | ✓ |  | → [`suppliers`](#suppliers).id. The supplier the order is placed with. |
+| `warehouse_id` | uuid | ✓ |  | → [`warehouses`](#warehouses).id. Godown the goods are to be delivered to. |
+| `party_name` | text | ✓ |  | Party's name as printed on the document (snapshot). |
+| `party_gstin` | varchar(15) |  |  | Party's GSTIN when the document was posted; empty for unregistered parties. |
+| `party_state_code` | char(2) |  |  | Party's GST state code when the document was posted. |
+| `billing_address` | jsonb |  |  | Billing address printed on the document (snapshot: line1, line2, city, pincode, state). |
+| `shipping_address` | jsonb |  |  | Delivery address printed on the document, when different from billing (snapshot). |
+| `place_of_supply` | char(2) | ✓ |  | GST state code of the place of supply (96 for exports): decides CGST + SGST or IGST. |
+| `supply_type` | [supply_type](#enum-supply_type) | ✓ |  | Intra-state (CGST + SGST), inter-state (IGST) or export / SEZ. |
+| `is_reverse_charge` | boolean | ✓ | `false` | Reverse charge: the recipient pays this GST to the government instead of the supplier. |
+| `tax_engine_version` | varchar(20) | ✓ |  | Version of the calculation engine used (e.g. "gst-line@1"). |
+| `status` | [purchase_order_status](#enum-purchase_order_status) | ✓ | `'open'` | Open, partly received, received, closed or cancelled. |
+| `gross_total` | numeric(15,2) | ✓ | `0` | Sum of the lines' gross amounts (qty x rate). |
+| `discount_total` | numeric(15,2) | ✓ | `0` | All discounts on the lines, including their shares of the document discount. |
+| `document_discount_percent` | numeric(7,3) | ✓ | `0` | Discount on the whole document, in percent of the lines' net total. |
+| `document_discount_amount` | numeric(15,2) | ✓ | `0` | Discount on the whole document, in rupees (spread over the lines as `document_discount_share`). |
+| `taxable_total` | numeric(15,2) | ✓ | `0` | Total taxable value: the lines' plus taxed charges'. |
+| `cgst_total` | numeric(15,2) | ✓ | `0` | Total central GST on lines and charges. |
+| `sgst_total` | numeric(15,2) | ✓ | `0` | Total state / UT GST on lines and charges. |
+| `igst_total` | numeric(15,2) | ✓ | `0` | Total integrated GST on lines and charges. |
+| `cess_total` | numeric(15,2) | ✓ | `0` | Total compensation cess. |
+| `charges` | jsonb | ✓ | `'[]'` | Freight, packing etc.: [{key,label,taxable,gstRate,cgst,sgst,igst,cess,total}]. |
+| `charges_total` | numeric(15,2) | ✓ | `0` | Freight, packing and other charges before their GST. |
+| `round_off` | numeric(15,2) | ✓ | `0` | Amount added or taken off to round the grand total (to the rupee by default). |
+| `grand_total` | numeric(15,2) | ✓ | `0` | What the party pays: taxable value + charges + GST and cess + round-off. |
+| `notes` | text |  |  | Free-text notes. |
+| `closed_at` | timestamptz |  |  | When the order was closed with goods still to come (no more expected). |
+| `closed_by` | uuid |  |  | User who closed the order. |
+| `cancelled_at` | timestamptz |  |  | When the order was cancelled (only before anything came). |
+| `cancelled_by` | uuid |  |  | User who cancelled the order. |
+| `cancel_reason` | text |  |  | Why it was closed or cancelled. |
+| `client_id` | uuid |  |  | Id the app gave the order when it was made: a retried save with the same id returns the saved order. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+| `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+
+* Unique `purchase_orders_number_uq`: `(business_id, financial_year, order_number)`
+* Index `purchase_orders_client_id_uq`: unique, btree `(business_id, client_id) WHERE (client_id IS NOT NULL)`
+* Index `purchase_orders_status_idx`: btree `(business_id, status, order_date)`
+* Index `purchase_orders_supplier_idx`: btree `(business_id, supplier_id, order_date)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`purchase_order_items`](#purchase_order_items).purchase_order_id, [`goods_receipts`](#goods_receipts).purchase_order_id
+
+### `purchase_order_items`
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `purchase_order_id` | uuid | ✓ |  | → [`purchase_orders`](#purchase_orders).id (on delete cascade). The order. |
+| `line_no` | smallint | ✓ |  | Position of the line on the document (1, 2, 3 ...). |
+| `product_id` | uuid | ✓ |  | → [`products`](#products).id. The product sold or bought; its name, HSN and tax are copied onto the line, so later changes to the product do not alter the document. |
+| `product_name` | text | ✓ |  | Product name as printed on the document (snapshot). |
+| `hsn_code` | varchar(8) |  |  | HSN / SAC code printed on the document (snapshot); GST returns summarise by it. |
+| `uqc` | varchar(3) |  |  | GST unit quantity code of the line's unit (NOS, BOX, KGS ...), as reported in the HSN summary. |
+| `unit_id` | uuid | ✓ |  | → [`units`](#units).id. The unit the quantity is in (piece, strip, box ...). |
+| `conversion_factor` | numeric(15,3) | ✓ | `1` | Selling/purchase unit -> base unit. |
+| `qty` | numeric(15,3) | ✓ |  | Quantity in the line's unit. |
+| `free_qty` | numeric(15,3) | ✓ | `0` | Scheme quantity given free (e.g. 10+1); moves stock, carries no value. |
+| `qty_base` | numeric(15,3) | ✓ |  | qty x conversion factor: what the stock ledger moves. |
+| `rate` | numeric(15,4) | ✓ |  | Price per unit of the line's unit. |
+| `rate_includes_tax` | boolean | ✓ | `false` | Whether `rate` already includes GST (tax-inclusive pricing); the taxable value is then worked back from it. |
+| `gross_amount` | numeric(15,2) | ✓ |  | qty x rate, before any discount. |
+| `discount_percent` | numeric(7,3) | ✓ | `0` | The line's own discount in percent of the gross amount. |
+| `discount_amount` | numeric(15,2) | ✓ | `0` | The line's own discount in rupees (its percent part plus any flat amount), not counting its share of the document discount. |
+| `document_discount_share` | numeric(15,2) | ✓ | `0` | This line's share of the discount given on the whole document, spread over the lines in proportion to their net amounts. |
+| `taxable_value` | numeric(15,2) | ✓ |  | Value GST is charged on: gross less both discounts (taken out of a tax-inclusive rate). |
+| `taxability` | [taxability](#enum-taxability) | ✓ | `'taxable'` | Whether the line is taxable, nil-rated, exempt or non-GST (decides the GSTR-1 table it goes to). |
+| `tax_category_id` | uuid |  |  | Tax category the rate was resolved from (snapshot; no foreign key). |
+| `tax_rate_id` | uuid |  |  | The dated tax rule that applied on the document date (snapshot; no foreign key). |
+| `gst_rate` | numeric(7,3) | ✓ | `0` | Total GST rate in percent (CGST + SGST, or IGST). |
+| `cgst_rate` | numeric(7,3) | ✓ | `0` | Central GST rate in percent (intra-state supply). |
+| `cgst_amount` | numeric(15,2) | ✓ | `0` | Central GST charged on the line. |
+| `sgst_rate` | numeric(7,3) | ✓ | `0` | State or Union-territory GST rate in percent (intra-state supply). |
+| `sgst_amount` | numeric(15,2) | ✓ | `0` | State or Union-territory GST charged on the line. |
+| `igst_rate` | numeric(7,3) | ✓ | `0` | Integrated GST rate in percent (inter-state supply, exports and SEZ). |
+| `igst_amount` | numeric(15,2) | ✓ | `0` | Integrated GST charged on the line. |
+| `cess_rate` | numeric(7,3) | ✓ | `0` | Compensation cess rate in percent (tobacco, aerated drinks ...). |
+| `cess_amount` | numeric(15,2) | ✓ | `0` | Compensation cess charged on the line (percent part plus any amount per unit). |
+| `line_total` | numeric(15,2) | ✓ |  | Taxable value plus all GST and cess on the line. |
+| `received_qty` | numeric(15,3) | ✓ | `0` | Base units received so far against the line (bought and free), by goods receipts and by bills that brought the goods. |
+
+* Check `purchase_order_items_qty_chk`: `(qty > 0::numeric AND free_qty >= 0::numeric AND received_qty >= 0::numeric)`
+* Index `purchase_order_items_order_idx`: btree `(purchase_order_id)`
+* Index `purchase_order_items_product_idx`: btree `(business_id, product_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`purchase_items`](#purchase_items).purchase_order_item_id, [`goods_receipt_items`](#goods_receipt_items).purchase_order_item_id
+
+### `goods_receipts`
+
+Goods received from a supplier before (or without yet) their bill: the stock comes in at once, at the order's rate (else the last purchase rate), and the bill entered later for these goods sets their cost. A receipt is billed in one bill; until then it can be cancelled (the goods go out again).
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `receipt_number` | varchar(30) | ✓ |  | Number from the goods receipt series (GRN). |
+| `series_id` | uuid |  |  | → [`document_series`](#document_series).id. Number series the receipt was numbered from. |
+| `financial_year` | varchar(9) | ✓ |  | Financial year of the receipt. |
+| `received_date` | date | ✓ |  | Date the goods came in (the stock comes in on this date). |
+| `supplier_id` | uuid | ✓ |  | → [`suppliers`](#suppliers).id. The supplier who sent the goods. |
+| `party_name` | text | ✓ |  | Supplier's name when the goods came (snapshot). |
+| `purchase_order_id` | uuid |  |  | → [`purchase_orders`](#purchase_orders).id. The order the goods came against, when there was one. |
+| `warehouse_id` | uuid | ✓ |  | → [`warehouses`](#warehouses).id. Godown the goods were put in. |
+| `challan_number` | varchar(30) |  |  | The supplier's delivery challan or lorry receipt number, as written on their papers. |
+| `status` | [goods_receipt_status](#enum-goods_receipt_status) | ✓ | `'received'` | Received (waiting for the bill), billed or cancelled. |
+| `purchase_id` | uuid |  |  | → [`purchases`](#purchases).id. The purchase bill the goods were billed in. |
+| `total_value` | numeric(15,2) | ✓ | `0` | What the goods are worth at the rates they came in at (before GST). |
+| `notes` | text |  |  | Free-text notes. |
+| `cancelled_at` | timestamptz |  |  | When the receipt was cancelled (its goods went back out). |
+| `cancelled_by` | uuid |  |  | User who cancelled the receipt. |
+| `cancel_reason` | text |  |  | Why it was cancelled. |
+| `client_id` | uuid |  |  | Id the app gave the receipt when it was made: a retried save with the same id returns the saved receipt. |
+| `created_at` | timestamptz | ✓ | `now()` | When the row was created. |
+| `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
+| `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
+| `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+| `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+
+* Unique `goods_receipts_number_uq`: `(business_id, financial_year, receipt_number)`
+* Index `goods_receipts_client_id_uq`: unique, btree `(business_id, client_id) WHERE (client_id IS NOT NULL)`
+* Index `goods_receipts_date_idx`: btree `(business_id, received_date)`
+* Index `goods_receipts_order_idx`: btree `(purchase_order_id) WHERE (purchase_order_id IS NOT NULL)`
+* Index `goods_receipts_purchase_idx`: btree `(purchase_id) WHERE (purchase_id IS NOT NULL)`
+* Index `goods_receipts_supplier_idx`: btree `(business_id, supplier_id, status)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`goods_receipt_items`](#goods_receipt_items).goods_receipt_id
+
+### `goods_receipt_items`
+
+| Column | Type | Required | Default | Description |
+|---|---|:-:|---|---|
+| `id` | uuid | ✓ | `gen_random_uuid()` | **Primary key.** UUIDv7 made by the application (time-ordered, creatable on an offline device); the default is a safety net. |
+| `business_id` | uuid | ✓ |  | → [`businesses`](#businesses).id (on delete restrict). The business (tenant) the row belongs to. Row-level security shows a connection only the rows of its current business. |
+| `goods_receipt_id` | uuid | ✓ |  | → [`goods_receipts`](#goods_receipts).id (on delete cascade). The receipt. |
+| `line_no` | smallint | ✓ |  | Position of the line on the receipt. |
+| `product_id` | uuid | ✓ |  | → [`products`](#products).id. The product received. |
+| `product_name` | text | ✓ |  | Product name when it came in (snapshot). |
+| `unit_id` | uuid | ✓ |  | → [`units`](#units).id. The unit the quantity is in (a case, a piece ...). |
+| `conversion_factor` | numeric(15,3) | ✓ | `1` | Base units in one of the line's unit. |
+| `qty` | numeric(15,3) | ✓ |  | Quantity received, in the line's unit. |
+| `free_qty` | numeric(15,3) | ✓ | `0` | Quantity received free (a scheme), in the line's unit. |
+| `qty_base` | numeric(15,3) | ✓ |  | qty x conversion factor. |
+| `rate` | numeric(15,4) | ✓ | `0` | Expected rate per unit of the line's unit (the order's, else the last purchase rate), before GST. |
+| `discount_percent` | numeric(7,3) | ✓ | `0` | Expected discount in percent. |
+| `unit_cost` | numeric(15,4) | ✓ | `0` | Cost per base unit the stock came in at (rate less discount, spread over the free goods too); the bill corrects it. |
+| `purchase_order_item_id` | uuid |  |  | → [`purchase_order_items`](#purchase_order_items).id. The order line the goods came against. |
+| `batch_id` | uuid |  |  | → [`batches`](#batches).id. The batch the goods came in as. |
+| `batch_number` | varchar(40) |  |  | Batch number as printed on the goods. |
+| `mfg_date` | date |  |  | Manufacturing date of the batch. |
+| `expiry_date` | date |  |  | Expiry date of the batch. |
+| `mrp` | numeric(15,4) |  |  | MRP printed on the goods. |
+
+* Check `goods_receipt_items_qty_chk`: `(qty > 0::numeric AND free_qty >= 0::numeric)`
+* Index `goods_receipt_items_order_idx`: btree `(purchase_order_item_id) WHERE (purchase_order_item_id IS NOT NULL)`
+* Index `goods_receipt_items_product_idx`: btree `(business_id, product_id)`
+* Index `goods_receipt_items_receipt_idx`: btree `(goods_receipt_id)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
+* Referenced by: [`purchase_items`](#purchase_items).goods_receipt_item_id
 
 ### `supplier_items`
 
@@ -3289,6 +3468,14 @@ Values: `active`, `on_notice`, `resigned`, `terminated`
 
 Used by: [`employees`](#employees).status
 
+### Enum `goods_receipt_status`
+
+Goods in, waiting for the supplier's bill; billed; cancelled (the goods went back out).
+
+Values: `received`, `billed`, `cancelled`
+
+Used by: [`goods_receipts`](#goods_receipts).status
+
 ### Enum `gst_direction`
 
 Values: `outward`, `inward`
@@ -3423,6 +3610,14 @@ Values: `draft`, `finalized`, `paid`, `cancelled`
 
 Used by: [`payroll_runs`](#payroll_runs).status
 
+### Enum `purchase_order_status`
+
+Placed with the supplier; some goods came; all came; no more expected (closed by hand); cancelled before anything came.
+
+Values: `open`, `partly_received`, `received`, `closed`, `cancelled`
+
+Used by: [`purchase_orders`](#purchase_orders).status
+
 ### Enum `salary_calc_type`
 
 Values: `fixed`, `percent_of_basic`, `per_day`, `per_hour`, `manual`
@@ -3461,7 +3656,7 @@ Used by: [`stock_ledger`](#stock_ledger).movement_type
 
 Values: `intra_state`, `inter_state`
 
-Used by: [`purchases`](#purchases).supply_type, [`invoices`](#invoices).supply_type, [`credit_debit_notes`](#credit_debit_notes).supply_type, [`gst_transactions`](#gst_transactions).supply_type
+Used by: [`purchases`](#purchases).supply_type, [`purchase_orders`](#purchase_orders).supply_type, [`invoices`](#invoices).supply_type, [`credit_debit_notes`](#credit_debit_notes).supply_type, [`gst_transactions`](#gst_transactions).supply_type
 
 ### Enum `sync_mutation_status`
 
@@ -3473,7 +3668,7 @@ Used by: [`sync_mutations`](#sync_mutations).status
 
 Values: `taxable`, `exempt`, `nil_rated`, `non_gst`, `zero_rated`
 
-Used by: [`tax_categories`](#tax_categories).kind, [`purchase_items`](#purchase_items).taxability, [`sales_order_items`](#sales_order_items).taxability, [`invoice_items`](#invoice_items).taxability, [`credit_debit_note_items`](#credit_debit_note_items).taxability, [`gst_transactions`](#gst_transactions).taxability
+Used by: [`tax_categories`](#tax_categories).kind, [`purchase_items`](#purchase_items).taxability, [`purchase_order_items`](#purchase_order_items).taxability, [`sales_order_items`](#sales_order_items).taxability, [`invoice_items`](#invoice_items).taxability, [`credit_debit_note_items`](#credit_debit_note_items).taxability, [`gst_transactions`](#gst_transactions).taxability
 
 ### Enum `transfer_status`
 
@@ -3510,4 +3705,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes` · `0037_sales_returns`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes` · `0037_sales_returns` · `0038_purchase_orders`

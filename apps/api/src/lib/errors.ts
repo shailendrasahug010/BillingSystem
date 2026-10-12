@@ -61,6 +61,8 @@ const CONSTRAINT_CODES: Record<string, { status: number; code: string; field?: s
   invoices_number_uq: { status: 409, code: "DUPLICATE_NUMBER" },
   invoices_client_id_uq: { status: 409, code: "DUPLICATE_REQUEST" },
   purchases_client_id_uq: { status: 409, code: "DUPLICATE_REQUEST" },
+  purchase_orders_client_id_uq: { status: 409, code: "DUPLICATE_REQUEST" },
+  goods_receipts_client_id_uq: { status: 409, code: "DUPLICATE_REQUEST" },
   payments_client_id_uq: { status: 409, code: "DUPLICATE_REQUEST" },
   units_symbol_uq: { status: 409, code: "DUPLICATE_NAME", field: "symbol" },
   payment_accounts_name_uq: { status: 409, code: "DUPLICATE_NAME", field: "name" },

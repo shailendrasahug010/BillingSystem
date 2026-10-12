@@ -34,7 +34,8 @@ import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
 import { applyToDocument, recordPayment, releaseAllocationRows } from "../../services/payments.js";
 import { getSettings } from "../../services/settings.js";
-import { postStockMovement } from "../../services/stock.js";
+import { assertReceivable, lockOrderLines, lockReceiptsForBill, receiveOnOrderLines } from "../../services/purchase-orders.js";
+import { postStockMovement, revalueStock } from "../../services/stock.js";
 import { likeContains } from "../catalog/products.js";
 import { assertNoPostedReturns, documentReturns } from "../notes/routes.js";
 import type { ApiModule } from "../types.js";
@@ -63,8 +64,23 @@ export async function purchaseDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .innerJoin(schema.payments, eq(schema.payments.id, schema.paymentAllocations.paymentId))
     .where(eq(schema.paymentAllocations.purchaseId, id));
   const returns = await documentReturns(tx, { purchaseId: id });
+  // Goods received before the bill that it pays for, and the orders its goods came against.
+  const receipts = await tx
+    .select({ id: schema.goodsReceipts.id, receiptNumber: schema.goodsReceipts.receiptNumber, receivedDate: schema.goodsReceipts.receivedDate })
+    .from(schema.goodsReceipts)
+    .where(and(eq(schema.goodsReceipts.businessId, ctx.businessId), eq(schema.goodsReceipts.purchaseId, id)));
+  const orders = (
+    await tx.execute<{ id: string; order_number: string }>(sql`
+      select distinct o.id, o.order_number
+      from purchase_orders o
+      join purchase_order_items oi on oi.purchase_order_id = o.id
+      where o.business_id = ${ctx.businessId}
+        and (oi.id in (select pi.purchase_order_item_id from purchase_items pi where pi.purchase_id = ${id})
+          or oi.id in (select gi.purchase_order_item_id from goods_receipt_items gi join purchase_items pi on pi.goods_receipt_item_id = gi.id where pi.purchase_id = ${id}))
+      order by o.order_number`)
+  ).rows.map((o) => ({ id: o.id, orderNumber: o.order_number }));
   const { businessId: _b, ...rest } = p;
-  return { ...rest, items: items.map(({ businessId: _ib, ...i }) => i), payments, returns };
+  return { ...rest, items: items.map(({ businessId: _ib, ...i }) => i), payments, returns, receipts, orders };
 }
 
 /**
@@ -94,9 +110,40 @@ async function cancelPostedPurchase(
   if (locked) throw conflict("GST_PERIOD_LOCKED");
   const { now, today, policy } = at;
   const items = await tx.select().from(schema.purchaseItems).where(eq(schema.purchaseItems.purchaseId, p.id));
+  // Goods received before the bill stay in (their receipt waits for a bill again); their cost goes back to the receipt's.
+  const receipts = await tx
+    .select()
+    .from(schema.goodsReceipts)
+    .where(and(eq(schema.goodsReceipts.businessId, ctx.businessId), eq(schema.goodsReceipts.purchaseId, p.id)))
+    .orderBy(asc(schema.goodsReceipts.id))
+    .for("update");
+  const receiptItemIds = items.flatMap((i) => (i.goodsReceiptItemId ? [i.goodsReceiptItemId] : []));
+  const receiptItems = receiptItemIds.length ? await tx.select().from(schema.goodsReceiptItems).where(inArray(schema.goodsReceiptItems.id, receiptItemIds)) : [];
   const warnings: Array<{ code: string; params: Record<string, string> }> = [];
   for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
     const qty = dec(item.qtyBase).plus(dec(item.freeQty).times(item.conversionFactor));
+    const received = item.goodsReceiptItemId ? receiptItems.find((x) => x.id === item.goodsReceiptItemId) : undefined;
+    const receipt = received ? receipts.find((g) => g.id === received.goodsReceiptId) : undefined;
+    if (received && receipt) {
+      await revalueStock(tx, {
+        businessId: ctx.businessId,
+        productId: item.productId,
+        productName: item.productName,
+        warehouseId: receipt.warehouseId,
+        batchId: item.batchId,
+        date: today,
+        qty: toQtyString(qty),
+        from: item.landedUnitCost,
+        to: received.unitCost,
+        refType: "purchase_cost_cancel",
+        refId: p.id,
+        refLineId: item.id,
+        refNumber: p.supplierInvoiceNumber,
+        reason,
+        userId: ctx.userId,
+      });
+      continue;
+    }
     const moved = await postStockMovement(
       tx,
       {
@@ -120,6 +167,17 @@ async function cancelPostedPurchase(
     );
     if (moved.warning) warnings.push({ code: "insufficient_stock", params: { product: item.productName, available: moved.warning.available.toString() } });
   }
+  if (receipts.length) {
+    await tx
+      .update(schema.goodsReceipts)
+      .set({ status: "received", purchaseId: null, updatedBy: ctx.userId, version: sql`${schema.goodsReceipts.version} + 1` })
+      .where(and(eq(schema.goodsReceipts.businessId, ctx.businessId), eq(schema.goodsReceipts.purchaseId, p.id)));
+  }
+  await receiveOnOrderLines(
+    tx,
+    ctx.businessId,
+    items.flatMap((i) => (i.purchaseOrderItemId ? [{ itemId: i.purchaseOrderItemId, base: dec(i.qtyBase).plus(dec(i.freeQty).times(i.conversionFactor)).negated() }] : [])),
+  );
   const releasedRows = await releaseAllocationRows(tx, { purchaseId: p.id }, now);
   const released = releasedRows.reduce((acc, x) => acc.plus(x.amount), dec(0)).toFixed(2);
   await tx
@@ -204,6 +262,32 @@ export const purchasesModule: ApiModule = async (app, deps) => {
         .from(schema.suppliers)
         .where(and(eq(schema.suppliers.id, body.supplierId), eq(schema.suppliers.businessId, ctx.businessId), isNull(schema.suppliers.deletedAt)));
       if (!supplier) throw badRequest("REFERENCE_NOT_FOUND", {}, "supplierId");
+
+      // Lines for goods received before the bill (a goods receipt, billed whole and as received) and for goods ordered.
+      body.lines.forEach((l, i) => {
+        if (l.goodsReceiptItemId && l.purchaseOrderItemId) throw badRequest("LINE_TWO_SOURCES", {}, `lines[${i}].purchaseOrderItemId`);
+      });
+      const receiptItemIds = body.lines.flatMap((l) => (l.goodsReceiptItemId ? [l.goodsReceiptItemId] : []));
+      if (new Set(receiptItemIds).size !== receiptItemIds.length) throw badRequest("RECEIPT_LINE_TWICE", {}, "lines");
+      const onBill = await lockReceiptsForBill(tx, ctx.businessId, supplier.id, receiptItemIds);
+      const receiptGodowns = [...new Set(onBill.receipts.map((g) => g.warehouseId))];
+      if (receiptGodowns.length > 1) throw badRequest("RECEIPTS_TWO_GODOWNS", {}, "lines");
+      if (receiptGodowns[0] && body.warehouseId && body.warehouseId !== receiptGodowns[0]) throw badRequest("RECEIPT_OTHER_GODOWN", {}, "warehouseId");
+      const orderLines = await lockOrderLines(
+        tx,
+        ctx.businessId,
+        body.lines.flatMap((l) => (l.purchaseOrderItemId ? [l.purchaseOrderItemId] : [])),
+      );
+      body.lines.forEach((l, i) => {
+        if (!l.purchaseOrderItemId) return;
+        const ordered = orderLines.find((x) => x.id === l.purchaseOrderItemId);
+        if (!ordered) throw badRequest("REFERENCE_NOT_FOUND", {}, `lines[${i}].purchaseOrderItemId`);
+        if (ordered.order.supplierId !== supplier.id) throw badRequest("ORDER_OTHER_SUPPLIER", { number: ordered.order.orderNumber }, `lines[${i}].purchaseOrderItemId`);
+        assertReceivable(ordered.order, `lines[${i}].purchaseOrderItemId`);
+        if (ordered.productId !== l.productId) throw badRequest("ORDER_LINE_OTHER_PRODUCT", {}, `lines[${i}].productId`);
+      });
+
+      const warehouseWanted = body.warehouseId ?? receiptGodowns[0];
       const [wh] = await tx
         .select({ id: schema.warehouses.id })
         .from(schema.warehouses)
@@ -211,7 +295,7 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           and(
             eq(schema.warehouses.businessId, ctx.businessId),
             isNull(schema.warehouses.deletedAt),
-            body.warehouseId ? eq(schema.warehouses.id, body.warehouseId) : eq(schema.warehouses.isDefault, true),
+            warehouseWanted ? eq(schema.warehouses.id, warehouseWanted) : eq(schema.warehouses.isDefault, true),
           ),
         );
       if (!wh) throw body.warehouseId ? badRequest("REFERENCE_NOT_FOUND", {}, "warehouseId") : new ApiError(409, "NO_DEFAULT_WAREHOUSE");
@@ -258,10 +342,18 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           if (!alt) throw badRequest("UNIT_NOT_ON_PRODUCT", { product: product.name }, `lines[${i}].unitId`);
           factor = alt.conversionFactor;
         }
-        if (product.trackBatches && !line.batchNumber) throw badRequest("BATCH_REQUIRED", { product: product.name }, `lines[${i}].batchNumber`);
-        if (product.trackExpiry && !line.expiryDate) throw badRequest("EXPIRY_REQUIRED", { product: product.name }, `lines[${i}].expiryDate`);
+        const fromReceipt = line.goodsReceiptItemId ? onBill.items.get(line.goodsReceiptItemId)! : null;
+        if (fromReceipt) {
+          // Billed as it was received: the same product, unit and quantities (the batch is the receipt's).
+          if (fromReceipt.productId !== product.id || fromReceipt.unitId !== unitId || !dec(fromReceipt.qty).eq(line.qty) || !dec(fromReceipt.freeQty).eq(line.freeQty)) {
+            throw badRequest("RECEIPT_LINE_CHANGED", { product: product.name }, `lines[${i}].qty`);
+          }
+        } else {
+          if (product.trackBatches && !line.batchNumber) throw badRequest("BATCH_REQUIRED", { product: product.name }, `lines[${i}].batchNumber`);
+          if (product.trackExpiry && !line.expiryDate) throw badRequest("EXPIRY_REQUIRED", { product: product.name }, `lines[${i}].expiryDate`);
+        }
         const tax: ResolvedTax = line.gstRate !== undefined ? taxAt(line.gstRate) : resolveTax(categoryOf(product.taxCategoryId), { date: body.supplierInvoiceDate });
-        return { product, unitId, factor, tax, uqc: unitRows.find((u) => u.id === product.baseUnitId)?.uqc ?? null };
+        return { product, unitId, factor, tax, uqc: unitRows.find((u) => u.id === product.baseUnitId)?.uqc ?? null, fromReceipt };
       });
 
       const engineLines: DocumentLineInput[] = body.lines.map((line, i) => ({
@@ -360,8 +452,8 @@ export const purchasesModule: ApiModule = async (app, deps) => {
         const meta = lineMeta[i]!;
         const l = t.lines[i]!;
         const taxLine = taxView.lines[i]!;
-        let batchId: string | null = null;
-        if (line.batchNumber) {
+        let batchId: string | null = meta.fromReceipt?.batchId ?? null;
+        if (line.batchNumber && !meta.fromReceipt) {
           await tx
             .insert(schema.batches)
             .values({
@@ -421,42 +513,79 @@ export const purchasesModule: ApiModule = async (app, deps) => {
           cessAmount: money(taxLine.cess),
           lineTotal: money(l.total),
           batchId,
-          batchNumber: line.batchNumber ?? null,
-          mfgDate: line.mfgDate ?? null,
-          expiryDate: line.expiryDate ?? null,
-          mrp: line.mrp ?? null,
+          batchNumber: meta.fromReceipt ? meta.fromReceipt.batchNumber : (line.batchNumber ?? null),
+          mfgDate: meta.fromReceipt ? meta.fromReceipt.mfgDate : (line.mfgDate ?? null),
+          expiryDate: meta.fromReceipt ? meta.fromReceipt.expiryDate : (line.expiryDate ?? null),
+          mrp: line.mrp ?? meta.fromReceipt?.mrp ?? null,
           landedUnitCost: toRateString(landed),
+          goodsReceiptItemId: line.goodsReceiptItemId ?? null,
+          purchaseOrderItemId: line.purchaseOrderItemId ?? null,
         });
       }
 
       // Stock in (product order), moving-average cost, last purchase rate.
       for (const it of [...items].sort((a, b) => a.meta.product.id.localeCompare(b.meta.product.id))) {
         const i = items.indexOf(it);
-        await postStockMovement(
-          tx,
-          {
+        const fromReceipt = it.meta.fromReceipt;
+        if (fromReceipt) {
+          const receipt = onBill.receipts.find((g) => g.id === fromReceipt.goodsReceiptId)!;
+          await revalueStock(tx, {
             businessId: ctx.businessId,
             productId: it.meta.product.id,
             productName: it.meta.product.name,
-            warehouseId: wh.id,
+            warehouseId: receipt.warehouseId,
             batchId: it.batchId,
             date: receivedDate,
-            type: "purchase",
             qty: toQtyString(it.unitsIn),
-            unitCost: toRateString(it.landed),
-            refType: "purchase",
+            from: fromReceipt.unitCost,
+            to: toRateString(it.landed),
+            refType: "purchase_cost",
             refId: id,
             refLineId: itemIds[i]!,
             refNumber: body.supplierInvoiceNumber,
+            reason: receipt.receiptNumber,
             userId: ctx.userId,
-          },
-          "allow",
-        );
+          });
+        } else {
+          await postStockMovement(
+            tx,
+            {
+              businessId: ctx.businessId,
+              productId: it.meta.product.id,
+              productName: it.meta.product.name,
+              warehouseId: wh.id,
+              batchId: it.batchId,
+              date: receivedDate,
+              type: "purchase",
+              qty: toQtyString(it.unitsIn),
+              unitCost: toRateString(it.landed),
+              refType: "purchase",
+              refId: id,
+              refLineId: itemIds[i]!,
+              refNumber: body.supplierInvoiceNumber,
+              userId: ctx.userId,
+            },
+            "allow",
+          );
+        }
         await tx
           .update(schema.products)
           .set({ purchasePrice: toRateString(dec(it.line.rate).dividedBy(it.meta.factor)) })
           .where(eq(schema.products.id, it.meta.product.id));
       }
+
+      // The receipts are billed; goods that came with the bill count on their order lines.
+      if (onBill.receipts.length) {
+        await tx
+          .update(schema.goodsReceipts)
+          .set({ status: "billed", purchaseId: id, updatedBy: ctx.userId, version: sql`${schema.goodsReceipts.version} + 1` })
+          .where(inArray(schema.goodsReceipts.id, onBill.receipts.map((g) => g.id)));
+      }
+      await receiveOnOrderLines(
+        tx,
+        ctx.businessId,
+        items.flatMap((it) => (it.line.purchaseOrderItemId ? [{ itemId: it.line.purchaseOrderItemId, base: it.unitsIn }] : [])),
+      );
 
       // Remember how this supplier names the items (a bill imported from their file), for their next bill.
       const remembered = new Map<string, { productId: string; code: string | null; name: string | null; unitId: string | null; rate: string }>();

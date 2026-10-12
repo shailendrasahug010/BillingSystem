@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { financialYearOf, findState, type PaymentMethod } from "@digitalbahi/core";
 import { formatDate } from "@digitalbahi/i18n";
 import type { TranslationKey } from "@digitalbahi/i18n";
-import { Landmark, MapPin, Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
+import { ClipboardList, Landmark, MapPin, Pencil, Phone, ShoppingCart, TrendingDown, Wallet } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -150,6 +150,16 @@ export function SupplierProfilePage({ supplierId }: { supplierId: string }) {
           {allowed("payment.pay") && (
             <Button icon={<Wallet size={16} />} onClick={() => setPaying(true)}>
               {t("payment.pay")}
+            </Button>
+          )}
+          {allowed("purchase.view") && (
+            <Button icon={<TrendingDown size={16} />} onClick={() => navigate({ name: "purchase-reorder", supplierId: s.id })}>
+              {t("buying.reorder.button")}
+            </Button>
+          )}
+          {allowed("purchase.order") && (
+            <Button icon={<ClipboardList size={16} />} onClick={() => navigate({ name: "purchase-order-new", supplierId: s.id })}>
+              {t("buying.order.new")}
             </Button>
           )}
           {allowed("purchase.create") && (

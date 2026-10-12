@@ -151,7 +151,15 @@ export function routePermission(route: Route): Permission | null {
     case "purchase-new":
       return "purchase.create";
     case "purchase-view":
+    case "purchase-list":
+    case "purchase-order-view":
+    case "goods-receipt-view":
+    case "purchase-reorder":
       return "purchase.view";
+    case "purchase-order-new":
+      return "purchase.order";
+    case "goods-receipt-new":
+      return "purchase.receive";
     case "supplier":
       return "supplier.view";
     case "order-view":
@@ -175,7 +183,7 @@ export function moduleForRoute(route: Route): ModuleDef | undefined {
   if (route.name === "planned") return MODULES.find((m) => m.route.name === "planned" && m.route.module === route.module);
   if (route.name === "customer") return MODULES.find((m) => m.key === "customers");
   if (route.name === "invoice-view") return MODULES.find((m) => m.key === "bills");
-  if (route.name === "purchase-new" || route.name === "purchase-view") return MODULES.find((m) => m.key === "purchases");
+  if (["purchase-new", "purchase-view", "purchase-list", "purchase-order-new", "purchase-order-view", "goods-receipt-new", "goods-receipt-view", "purchase-reorder"].includes(route.name)) return MODULES.find((m) => m.key === "purchases");
   if (route.name === "supplier") return MODULES.find((m) => m.key === "suppliers");
   if (route.name === "order-view") return MODULES.find((m) => m.key === "orders");
   return MODULES.find((m) => m.route.name === route.name);

@@ -28,6 +28,8 @@ const ENTITIES = [
   "invoice",
   "payment",
   "purchase",
+  "purchase_order",
+  "goods_receipt",
   "stock_adjustment",
   "product",
   "customer",
@@ -37,6 +39,7 @@ const ENTITIES = [
   "setting",
   "business",
   "document_series",
+  "scheme",
 ] as const;
 
 const show = (v: unknown): string => (v === null || v === undefined || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
