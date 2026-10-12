@@ -13,7 +13,7 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | Check constraints | 77 |
 | Indexes (besides primary keys and unique constraints) | 167 |
 | Triggers | 73 |
-| Tables with row-level security | 106 |
+| Tables with row-level security | 107 |
 | Enums | 45 |
 | Functions | 18 |
 | Migrations | 40 (last: `0039_tds`) |
@@ -790,6 +790,7 @@ Income tax the business deducted at source (TDS on purchase bills) paid to the g
 
 * Unique `tds_challans_uq`: `(business_id, deposit_date, bsr_code, challan_serial)`
 * Index `tds_challans_period_idx`: btree `(business_id, period_month)`
+* Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
 * Referenced by: [`purchases`](#purchases).tds_challan_id
 
 ## beats
