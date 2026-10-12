@@ -38,6 +38,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   },
   // 393(1) [old 194Q]: 0.1% past ₹50 lakh a year from one seller, 5% without the seller's PAN; off until turned on.
   "tds.purchases": { enabled: false, threshold: 5_000_000, rate: 0.1, noPanRate: 5 },
+  // 394(1) [old 206C(1), (1F)]: the goods' rates of the year (core's TCS_RATES) unless the business sets its own; off until turned on.
+  "tcs.sales": { enabled: false, rates: {}, threshold: 1_000_000 },
 };
 
 export const isSettingKey = (key: string): key is SettingKey => Object.hasOwn(SETTING_SCHEMAS, key);

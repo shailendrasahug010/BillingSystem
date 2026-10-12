@@ -67,6 +67,7 @@ export function invoiceReceipt(inv: PrintableInvoice, locale: LocaleCode): Recei
     else items.push({ t: "pair", left: "IGST", right: m(inv.igstTotal), scale: 0.9 });
   }
   if (inv.cessTotal > 0) items.push({ t: "pair", left: t("invoice.cess"), right: m(inv.cessTotal), scale: 0.9 });
+  for (const x of inv.tcs ?? []) items.push({ t: "pair", left: x.label, right: m(x.amount), scale: 0.9 });
   if (Math.abs(inv.roundOff) >= 0.005) items.push({ t: "pair", left: t("invoice.roundOff"), right: m(inv.roundOff), scale: 0.9 });
   items.push({ t: "pair", left: t("invoice.grandTotal"), right: m(inv.grandTotal), bold: true, scale: 1.2 });
   items.push({ t: "text", text: amountInWords(inv.grandTotal, locale), scale: 0.8 });

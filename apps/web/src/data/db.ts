@@ -1,4 +1,4 @@
-import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig, type SchemeRule } from "@digitalbahi/core";
+import { DEFAULT_CREDIT_POLICY, DEFAULT_ROUND_OFF, todayIn, type CreditPolicy, type RoundOffConfig, type SchemeRule, type TcsGoods } from "@digitalbahi/core";
 import * as mock from "./mock";
 import { LIVE } from "./source";
 import type { Brand, Business, Customer, DayAmount, Invoice, Order, Payment, Product } from "./types";
@@ -55,6 +55,8 @@ export const WORKSPACE = {
   einvoice: false,
   /** Value above which a bill needs an e-way bill. */
   ewayThreshold: 50000,
+  /** TCS on sales of specified goods (scrap, liquor…), when the business collects it: the server's rule (null: off). */
+  tcs: null as { enabled: boolean; rates: Partial<Record<TcsGoods, number>>; threshold: number } | null,
   /** How much each kind of suggestion counts on the billing screen (tuned nightly from what was taken; null = the defaults). */
   suggestionWeights: null as Record<"reorder" | "frequent" | "together" | "last_order", number> | null,
   /** Letters the business set for units on a bill's lines, by unit id (null, or a unit not in it: its symbol's first letter). */

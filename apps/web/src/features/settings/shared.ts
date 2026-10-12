@@ -40,6 +40,8 @@ export interface Settings {
   "security.two_step_roles"?: string[];
   /** TDS on buying goods (393(1), old 194Q), kept back on purchase bills. */
   "tds.purchases"?: { enabled: boolean; threshold: number; rate: number; noPanRate: number };
+  /** TCS on sales of specified goods (394(1), old 206C(1) and (1F)), collected on the bill. */
+  "tcs.sales"?: { enabled: boolean; rates: Partial<Record<string, number>>; threshold: number };
 }
 export type PaymentDetails = { bankName: string; accountNumber: string; ifsc: string; upiId: string };
 

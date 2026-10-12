@@ -1348,7 +1348,8 @@
     "TDS_PAID_ON_BILL": "The TDS on this bill was paid with challan {{challan}} on {{date}}. Remove that challan first (GST → TDS).",
     "NOTHING_TO_DEPOSIT": "No TDS of {{month}} is waiting for a challan.",
     "CHALLAN_BEFORE_MONTH": "A challan is paid after the month it is for.",
-    "INVALID_RANGE": "The start date is after the end date."
+    "INVALID_RANGE": "The start date is after the end date.",
+    "TCS_PAID_ON_BILL": "The TCS on this bill was paid with challan {{challan}} on {{date}}. Remove that challan first (GST → TDS & TCS)."
   },
   "validation": {
     "required": "This field is required",
@@ -4859,6 +4860,50 @@
       "missing": "Not received",
       "add": "Add",
       "saved": "Certificate saved"
+    },
+    "tabWithTcs": "TDS & TCS"
+  },
+  "tcs": {
+    "settings": {
+      "title": "TCS on sales (394(1), old 206C(1))",
+      "hint": "Collected on the bill for scrap, liquor, forest produce, tendu leaves and coal, lignite or iron ore, and for a motor vehicle or luxury goods worth over ₹10 lakh apiece: mark those products and TCS is added to their bills (5% when the buyer has no PAN).",
+      "off": "Don't collect",
+      "on": "Collect"
+    },
+    "product": {
+      "label": "TCS on sale",
+      "hint": "TCS is added to the bill for these goods.",
+      "none": "None"
+    },
+    "goods": {
+      "liquor": "Liquor",
+      "tendu": "Tendu leaves",
+      "timber_lease": "Timber (forest lease)",
+      "timber": "Timber",
+      "forest": "Other forest produce",
+      "scrap": "Scrap",
+      "minerals": "Coal, lignite or iron ore",
+      "motor_vehicle": "Motor vehicle (over ₹10 lakh)",
+      "luxury": "Luxury goods (over ₹10 lakh)"
+    },
+    "customer": {
+      "pan": "PAN",
+      "panHint": "For TCS: without it, 5% is collected (the PAN in a GSTIN counts).",
+      "panInvalid": "A PAN is 5 letters, 4 digits and a letter",
+      "exempt": "No TCS on sales to them",
+      "exemptHint": "They gave a declaration that the goods are for making things (Form 27C), or are a government body."
+    },
+    "collected": {
+      "title": "TCS collected on sales",
+      "subtitle": "To pay to the government by {{due}}",
+      "total": "Collected this month",
+      "empty": "No TCS collected this month",
+      "emptyHint": "Mark the products TCS is collected on (scrap, liquor…); it is added to their bills.",
+      "export": "Download for the TCS return",
+      "goods": "Goods"
+    },
+    "challan": {
+      "hint": "{{amount}} of this month's TCS goes on it: every bill not on a challan yet."
     }
   }
 }

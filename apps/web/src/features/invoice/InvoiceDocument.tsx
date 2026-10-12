@@ -340,6 +340,7 @@ export function InvoiceDocument({ invoice, locale }: { invoice: PrintableInvoice
                 ]
               : [["IGST", m(totals.igstTotal)]]),
             ...(totals.cessTotal > 0 ? [[t("invoice.cess"), m(totals.cessTotal)]] : []),
+            ...(invoice.tcs ?? []).map((x) => [x.label, m(x.amount)]),
             [t("invoice.roundOff"), m(totals.roundOff)],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between gap-3">

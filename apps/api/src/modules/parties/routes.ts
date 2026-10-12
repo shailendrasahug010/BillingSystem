@@ -216,6 +216,8 @@ type CustomerRowDb = {
   reminders_opt_out: boolean;
   reminders_opt_out_at: string | null;
   reminders_opt_out_by: string | null;
+  pan: string | null;
+  tcs_exempt: boolean;
 };
 
 /**
@@ -229,7 +231,7 @@ export async function customerRows(tx: Tx, today: string, rest: SQL) {
       select c.id, c.code, c.name, c.business_name, c.customer_type, c.gst_registration::text, c.mobile, c.city, c.gstin, c.balance, c.credit_limit,
              c.credit_days, c.route_id, c.state_code, c.address_line1, c.pincode, c.price_level_id, c.category_id,
              c.is_active, c.version, c.created_at, coalesce(od.amount, 0)::text as overdue, li.on::text as last_invoice_on,
-             c.message_locale, c.reminders_opt_out, c.reminders_opt_out_at, c.reminders_opt_out_by
+             c.message_locale, c.reminders_opt_out, c.reminders_opt_out_at, c.reminders_opt_out_by, c.pan, c.tcs_exempt
       from customers c
       left join lateral (
         select sum(i.balance_due) as amount from invoices i
@@ -269,6 +271,9 @@ export async function customerRows(tx: Tx, today: string, rest: SQL) {
     remindersOptOut: c.reminders_opt_out,
     remindersOptOutAt: c.reminders_opt_out_at ? new Date(c.reminders_opt_out_at).toISOString() : null,
     remindersOptOutBy: c.reminders_opt_out_by,
+    /** For TCS on a bill: their PAN (else the one in the GSTIN counts), and whether they are exempt from it. */
+    pan: c.pan,
+    tcsExempt: c.tcs_exempt,
     /** For If-Match on edits (an edit made offline is checked against it). */
     version: c.version,
     createdAt: new Date(c.created_at).toISOString(),

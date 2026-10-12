@@ -9,7 +9,7 @@ import { Card, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Field";
 import { EmptyState } from "../../components/ui/misc";
 import { DataTable, ErrorNote, FilterBar, PageHeader, TAB_TRIGGER, Tile, type Column } from "../../components/ui/Page";
-import { allowed, TODAY } from "../../data/db";
+import { allowed, TODAY, WORKSPACE } from "../../data/db";
 import { api } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 import { EInvoiceTab } from "./EInvoiceTab";
@@ -73,7 +73,7 @@ export function GstPage() {
             {t("einvoice.tab")}
           </Tabs.Trigger>
           <Tabs.Trigger value="tds" className={TAB_TRIGGER}>
-            {t("tds.tab")}
+            {t(WORKSPACE.tcs?.enabled ? "tds.tabWithTcs" : "tds.tab")}
           </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="summary">

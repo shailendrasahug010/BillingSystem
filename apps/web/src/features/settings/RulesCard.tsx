@@ -345,6 +345,20 @@ export function RulesCard() {
           />,
         )}
         {row(
+          t("tcs.settings.title"),
+          t("tcs.settings.hint"),
+          <Segmented
+            size="sm"
+            label={t("tcs.settings.title")}
+            value={s["tcs.sales"]?.enabled ? "on" : "off"}
+            onChange={(v) => canEdit && void put("tcs.sales", { ...(s["tcs.sales"] ?? { rates: {}, threshold: 1_000_000 }), enabled: v === "on" })}
+            options={[
+              { value: "off", label: t("tcs.settings.off") },
+              { value: "on", label: t("tcs.settings.on") },
+            ]}
+          />,
+        )}
+        {row(
           t("settings.allocation"),
           t("settings.allocationHint"),
           <Segmented

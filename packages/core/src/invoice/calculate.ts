@@ -15,6 +15,7 @@ import { ValidationError } from "../errors.js";
 import { calculateTaxLine, type TaxLineInput, type TaxLineResult } from "../gst/line.js";
 import type { ResolvedTax } from "../gst/rates.js";
 import type { SupplyType } from "../gst/supply.js";
+import { saleTcs, type TcsBuyer, type TcsGoods, type TcsResult, type TcsRule } from "../tax/tcs.js";
 
 /**
  * One calculator for every GST document: sales invoice, sales order estimate,
@@ -55,6 +56,12 @@ export interface DocumentInput {
   /** Pre-tax invoice discount, apportioned across lines so GST is charged on the reduced value. */
   documentDiscount?: DocumentDiscount | null;
   charges?: readonly ChargeInput[];
+  /**
+   * TCS the seller collects on the bill (specified goods, 394(1), old 206C(1)
+   * and (1F)): the goods each line is (by key), the buyer and the rule. It is
+   * added to what the party pays, before rounding, and is no part of the GST value.
+   */
+  tcs?: { goods: Readonly<Record<string, TcsGoods | null | undefined>>; buyer: TcsBuyer; rule?: TcsRule } | null;
   roundOff?: RoundOffConfig;
   amountPaid?: DecimalInput;
 }
@@ -117,6 +124,9 @@ export interface DocumentTotals {
   cessTotal: Dec;
   taxTotal: Dec;
   chargesTotal: Dec;
+  /** TCS collected on the bill (null: none), and its amount (zero then). */
+  tcs: TcsResult | null;
+  tcsTotal: Dec;
   totalBeforeRoundOff: Dec;
   roundOff: Dec;
   grandTotal: Dec;
@@ -201,7 +211,10 @@ export function calculateDocument(input: DocumentInput): DocumentTotals {
   const lineTaxable = sum(lines.map((l) => l.taxable));
   const taxedChargeTaxable = sum(taxedCharges.map((c) => c.taxable));
   const chargesTotal = sum(charges.map((c) => c.taxable));
-  const totalBeforeRoundOff = lineTaxable.plus(chargesTotal).plus(taxTotal);
+  const tcsInput = input.tcs;
+  const tcs = tcsInput ? saleTcs(lines.map((l) => ({ key: l.key, goods: tcsInput.goods[l.key], qtyBase: l.qtyBase, total: l.total })), tcsInput.buyer, tcsInput.rule) : null;
+  const tcsTotal = tcs?.amount ?? ZERO;
+  const totalBeforeRoundOff = lineTaxable.plus(chargesTotal).plus(taxTotal).plus(tcsTotal);
   const { rounded, roundOff } = applyRoundOff(totalBeforeRoundOff, input.roundOff ?? DEFAULT_ROUND_OFF);
 
   const amountPaid = roundAmount(input.amountPaid ?? 0);
@@ -222,6 +235,8 @@ export function calculateDocument(input: DocumentInput): DocumentTotals {
     cessTotal,
     taxTotal,
     chargesTotal,
+    tcs,
+    tcsTotal,
     totalBeforeRoundOff,
     roundOff,
     grandTotal: rounded,

@@ -7,16 +7,16 @@ Every table of the Digital Bahi database with all its columns, keys, indexes, tr
 | | Count |
 |---|---|
 | Tables | 113 |
-| Columns | 1947 |
-| Foreign keys | 320 |
+| Columns | 1953 |
+| Foreign keys | 321 |
 | Unique constraints | 51 |
-| Check constraints | 77 |
-| Indexes (besides primary keys and unique constraints) | 167 |
+| Check constraints | 80 |
+| Indexes (besides primary keys and unique constraints) | 168 |
 | Triggers | 73 |
 | Tables with row-level security | 107 |
 | Enums | 45 |
 | Functions | 18 |
-| Migrations | 40 (last: `0039_tds`) |
+| Migrations | 41 (last: `0040_tcs`) |
 
 ## How the database is set up
 
@@ -673,6 +673,7 @@ Distributor "beats": the route a salesperson / vehicle covers on given weekdays.
 | `reminders_opt_out_at` | timestamptz |  |  | When the customer stopped payment reminders. |
 | `reminders_opt_out_by` | varchar(10) |  |  | How: staff (on the customer's page) or reply (they wrote STOP on WhatsApp). |
 | `route_sequence` | integer |  |  | Place on the route: the order the salesperson visits in (empty: after the numbered ones, by name). |
+| `tcs_exempt` | boolean | ✓ | `false` | No TCS on sales to this customer: they gave a declaration that the goods are for making things (Form 27C), or are a government body. |
 
 * Check `customers_b2b_gstin_chk`: `(customer_type = 'b2c'::customer_type OR gstin IS NOT NULL)`
 * Check `customers_credit_days_chk`: `(credit_days >= 0)`
@@ -769,7 +770,7 @@ Additional ship-to addresses; the ship-to state decides the place of supply for 
 
 ### `tds_challans`
 
-Income tax the business deducted at source (TDS on purchase bills) paid to the government: one challan per month's deductions, with the bank's BSR code and the challan's serial number as the quarterly TDS return asks. The bills it paid point to it (purchases.tds_challan_id).
+Income tax the business deducted at source (TDS on purchase bills) or collected at source (TCS on sales) paid to the government: one challan per month's deductions or collections, with the bank's BSR code and the challan's serial number as the quarterly return asks. The bills it paid point to it (purchases.tds_challan_id, invoices.tcs_challan_id).
 
 | Column | Type | Required | Default | Description |
 |---|---|:-:|---|---|
@@ -787,11 +788,13 @@ Income tax the business deducted at source (TDS on purchase bills) paid to the g
 | `updated_at` | timestamptz | ✓ | `now()` | When the row was last changed; kept by the `set_updated_at` trigger. |
 | `created_by` | uuid |  |  | User who created the row (informational: users are deactivated, never deleted, so there is no foreign key). |
 | `updated_by` | uuid |  |  | User who last changed the row (informational, no foreign key). |
+| `kind` | varchar(3) | ✓ | `'tds'` | TDS kept back on purchase bills, or TCS collected on sales. |
 
+* Check `tds_challans_kind_chk`: `(kind::text = ANY (ARRAY['tds'::character varying, 'tcs'::character varying]::text[]))`
 * Unique `tds_challans_uq`: `(business_id, deposit_date, bsr_code, challan_serial)`
 * Index `tds_challans_period_idx`: btree `(business_id, period_month)`
 * Row-level security: policy `tenant_isolation`, rows of the current business only (`app.business_id`)
-* Referenced by: [`purchases`](#purchases).tds_challan_id
+* Referenced by: [`purchases`](#purchases).tds_challan_id, [`invoices`](#invoices).tcs_challan_id
 
 ## beats
 
@@ -980,10 +983,12 @@ Effective-dated GST rates per category, optionally conditional on unit value. Se
 | `deleted_at` | timestamptz |  |  | Soft delete: when the row was removed from lists. Posted documents are never deleted. |
 | `deleted_by` | uuid |  |  | Soft delete: the user who removed the row. |
 | `version` | integer | ✓ | `1` | Optimistic locking: increases on every change; a stale write (or an offline edit made on an older copy) is detected by it. |
+| `tcs_goods` | varchar(20) |  |  | The seller collects TCS on it (394(1), old 206C(1) and (1F)) when the business turns TCS on: liquor, tendu, timber_lease, timber, forest, scrap, minerals, motor_vehicle or luxury; null for other goods. |
 
 * Check `products_hsn_chk`: `(hsn_code IS NULL OR hsn_code::text ~ '^([0-9]{4}\|[0-9]{6}\|[0-9]{8})$'::text)`
 * Check `products_mrp_chk`: `(mrp IS NULL OR mrp >= 0::numeric)`
 * Check `products_prices_chk`: `(purchase_price >= 0::numeric AND selling_price >= 0::numeric AND avg_cost >= 0::numeric)`
+* Check `products_tcs_goods_chk`: `(tcs_goods IS NULL OR (tcs_goods::text = ANY (ARRAY['liquor'::character varying, 'tendu'::character varying, 'timber_lease'::character varying, 'timber'::character varying, 'forest'::character varying, 'scrap'::character varying, 'minerals'::character varying, 'motor_vehicle'::character varying, 'luxury'::character varying]::text[])))`
 * Index `products_brand_idx`: btree `(business_id, brand_id)`
 * Index `products_category_idx`: btree `(business_id, category_id)`
 * Index `products_code_uq`: unique, btree `(business_id, code) WHERE (deleted_at IS NULL)`
@@ -1808,10 +1813,14 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 | `reviewed_at` | timestamptz |  |  | When it was marked reviewed. |
 | `review_note` | text |  |  | What the reviewer noted (for example the credit note issued for it). |
 | `debited` | numeric(15,2) | ✓ | `0` | Raised after the bill by debit notes (a rate difference, charges): owed on it besides its total. |
+| `tcs_amount` | numeric(15,2) | ✓ | `0` | TCS collected on the bill (specified goods, 394(1)): part of the grand total, outside the GST value. |
+| `tcs` | jsonb |  |  | How the TCS was worked out: [{goods, rate, base, amount}] per kind of goods; null without it. |
+| `tcs_challan_id` | uuid |  |  | → [`tds_challans`](#tds_challans).id. The challan that paid the TCS to the government. |
 
 * Check `invoices_number_format_chk`: `(invoice_number IS NULL OR invoice_number::text ~ '^[A-Za-z0-9/-]{1,16}$'::text)`
 * Unique `invoices_number_uq`: `(business_id, financial_year, invoice_number)`
 * Check `invoices_posted_number_chk`: `(status = 'draft'::document_status OR invoice_number IS NOT NULL)`
+* Check `invoices_tcs_chk`: `(tcs_amount >= 0::numeric AND tcs_amount <= grand_total)`
 * Check `invoices_totals_chk`: `(grand_total >= 0::numeric AND amount_paid >= 0::numeric AND balance_due >= 0::numeric)`
 * Check `invoices_zero_rated_chk`: `(zero_rated_type IS NULL OR (zero_rated_type::text = ANY (ARRAY['EXPWP'::character varying, 'EXPWOP'::character varying, 'SEZWP'::character varying, 'SEZWOP'::character varying]::text[])))`
 * Index `invoices_client_id_uq`: unique, btree `(business_id, client_id) WHERE (client_id IS NOT NULL)`
@@ -1820,6 +1829,7 @@ Tax invoice / bill of supply. Drafts have no number; posting allocates the numbe
 * Index `invoices_open_idx`: btree `(business_id, customer_id, due_date) WHERE ((status = 'posted'::document_status) AND (balance_due > (0)::numeric))`
 * Index `invoices_review_idx`: btree `(business_id, posted_at) WHERE (review_status = 'needs_review'::invoice_review_status)`
 * Index `invoices_salesperson_idx`: btree `(business_id, salesperson_id, invoice_date)`
+* Index `invoices_tcs_idx`: btree `(business_id, invoice_date) WHERE (tcs_amount > (0)::numeric)`
 * Trigger `invoices_no_delete_posted`: before delete, each row → `forbid_delete_posted()`
 * Trigger `invoices_period_lock`: before update, each row → `invoices_period_lock_guard()`
 * Trigger `invoices_set_updated_at`: before update, each row → `set_updated_at()`
@@ -3745,4 +3755,4 @@ Written in the migrations; triggers use them to keep the rules no application bu
 
 Applied in this order (`packages/db/migrations`):
 
-`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes` · `0037_sales_returns` · `0038_purchase_orders` · `0039_tds`
+`0000_extensions` · `0001_schema` · `0002_integrity` · `0003_tenancy` · `0004_saas_lifecycle` · `0005_session_business` · `0006_phase4` · `0007_dispatch_invoices` · `0008_supplier_items` · `0009_file_content` · `0010_messaging` · `0011_strip_unit` · `0012_usernames` · `0013_price_list_names` · `0014_whatsapp_status` · `0015_backup_schedules` · `0016_device_key` · `0017_collection_notes` · `0018_device_wipe` · `0019_report_views` · `0020_zero_rated_supplies` · `0021_payroll_statutory` · `0022_einvoice_ewaybill` · `0023_purchase_history` · `0024_notifications` · `0025_offline_sync` · `0026_reminders_messaging` · `0027_push_tokens` · `0028_beats` · `0029_quotations_challans` · `0030_repeat_bills` · `0031_order_links` · `0032_two_step_sign_in` · `0033_order_link_account` · `0034_payment_links` · `0035_bank_reconciliation` · `0036_schemes` · `0037_sales_returns` · `0038_purchase_orders` · `0039_tds` · `0040_tcs`

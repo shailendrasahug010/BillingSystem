@@ -143,6 +143,17 @@ export const SETTING_SCHEMAS = {
     rate: z.number().min(0).max(100),
     noPanRate: z.number().min(0).max(100),
   }),
+  /**
+   * TCS on sales of specified goods (394(1) of the Income-tax Act, 2025; old 206C(1) and 206C(1F)): collected
+   * on each bill of the goods marked on the product (scrap, liquor, forest produce, minerals; a motor vehicle
+   * or luxury goods worth more than the threshold apiece), rates percent by goods (twice, at least 5%,
+   * without the buyer's PAN). Off until the business turns it on.
+   */
+  "tcs.sales": z.strictObject({
+    enabled: z.boolean(),
+    rates: z.partialRecord(z.enum(["liquor", "tendu", "timber_lease", "timber", "forest", "scrap", "minerals", "motor_vehicle", "luxury"]), z.number().min(0).max(100)),
+    threshold: z.number().int().min(0).max(1_000_000_000),
+  }),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;

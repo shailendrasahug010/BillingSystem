@@ -1,4 +1,4 @@
-import { financialYearOf, zeroRatedDeclaration, type Permission, type ZeroRatedType } from "@digitalbahi/core";
+import { financialYearOf, tcsLabel, zeroRatedDeclaration, type Permission, type TcsGoods, type ZeroRatedType } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { createTranslator, formatCurrency, formatDate, formatDateTime, isLocaleCode, type LocaleCode } from "@digitalbahi/i18n";
 import { and, inArray, eq } from "drizzle-orm";
@@ -155,6 +155,8 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     intraState: inv.supplyType === "intra_state",
     buyer: { businessName: inv.partyName, name: data.party?.name ?? null, address: addressText(inv.billingAddress as Address), stateCode: inv.partyStateCode ?? inv.placeOfSupply, gstin: inv.partyGstin },
     lines: pdfLines(inv.items, data.extras, locale),
+    // TCS collected on the bill, a line per kind of goods ("TCS 206C(1) @ 2%").
+    charges: (inv.tcs ?? []).map((p) => ({ label: tcsLabel({ goods: p.goods as TcsGoods, rate: p.rate }), total: p.amount })),
     totals: { taxable: inv.taxableTotal, cgst: inv.cgstTotal, sgst: inv.sgstTotal, igst: inv.igstTotal, cess: inv.cessTotal, roundOff: inv.roundOff, grandTotal: inv.grandTotal },
     // The amount paid includes what returns settled; the bill shows them apart.
     paid: (Number(inv.amountPaid) - credited).toFixed(2),

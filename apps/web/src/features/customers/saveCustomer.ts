@@ -23,6 +23,9 @@ export interface CustomerInput {
   messageLocale?: "en" | "hi" | null;
   /** No automatic or bulk payment reminders (editing only). */
   remindersOptOut?: boolean;
+  /** For TCS: their PAN, and no TCS on sales to them (a Form 27C declaration, a government body). */
+  pan?: string;
+  tcsExempt?: boolean;
 }
 
 /** The device could not keep the work (storage blocked, nobody signed in). */

@@ -1,4 +1,4 @@
-import type { PaymentMethod, TaxCategory } from "@digitalbahi/core";
+import type { PaymentMethod, TaxCategory, TcsGoods } from "@digitalbahi/core";
 
 export interface Business {
   name: string;
@@ -65,6 +65,8 @@ export interface Product {
   unitDiscounts?: Record<string, number>;
   trackBatches?: boolean;
   trackExpiry?: boolean;
+  /** Live data: TCS goods (scrap, liquor…), when the business collects TCS on them; null for other goods. */
+  tcsGoods?: TcsGoods | null;
 }
 
 export interface Customer {
@@ -102,6 +104,9 @@ export interface Customer {
   version?: number;
   /** The day of their last bill, as the server knows it (live mode). */
   lastInvoiceOn?: string | null;
+  /** Live data, for TCS on a bill: their PAN (else the one in their GSTIN counts), and whether they are exempt. */
+  pan?: string | null;
+  tcsExempt?: boolean;
 }
 
 export interface InvoiceLine {
