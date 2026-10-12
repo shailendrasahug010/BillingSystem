@@ -117,6 +117,7 @@ export function useCustomerHistory(customerId: string) {
         // A debit note to a customer: a rate difference or charge after the bill.
         if (docType === "debit_note") return `${t("notes.debitNote")} ${number ?? ""}`;
         if (docType === "debit_note_cancel") return `${t("ledger.debit_note_cancel")} ${number ?? ""}`;
+        if (docType === "tds_in" || docType === "tds_in_cancel") return [t(`ledger.${docType}`), number, narration].filter(Boolean).join(" · ");
         return [number, narration].filter(Boolean).join(" · ") || docType;
       };
       return {

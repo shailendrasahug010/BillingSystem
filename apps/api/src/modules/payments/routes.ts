@@ -12,12 +12,14 @@ import { lockIdempotencyKey, withTenant } from "../../lib/db.js";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors.js";
 import { decodeCursor, page } from "../../lib/pagination.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
-import { applyToDocument, recordPayment } from "../../services/payments.js";
+import { applyToDocument, recordPayment, tdsLabel } from "../../services/payments.js";
 import { getSetting } from "../../services/settings.js";
 import type { ApiModule } from "../types.js";
 
 const IdParams = z.object({ id: z.uuid() });
 const ChequeBody = z.strictObject({ status: z.enum(["deposited", "cleared", "bounced"]), reason: z.string().trim().max(300).optional() });
+/** The customer's TDS certificate (Form 16A) number for a receipt they deducted TDS on; empty clears it. */
+const TdsCertificateBody = z.strictObject({ certificate: z.string().trim().max(40) });
 const AllocateBody = z.strictObject({ allocations: z.array(AllocationInput).max(200).optional() });
 const AccountBody = z.strictObject({
   name: z.string().trim().min(1).max(60),
@@ -108,6 +110,25 @@ async function reversePayment(tx: Tx, ctx: RequestCtx, p: PaymentRow, reason: st
     reversesEntryId: original?.id ?? null,
     userId: ctx.userId,
   });
+  if (dec(p.tdsAmount).gt(0)) {
+    // The TDS line goes with it: the bills it settled are open again in full.
+    const [tdsEntry] = await tx
+      .select({ id: schema.partyLedgerEntries.id })
+      .from(schema.partyLedgerEntries)
+      .where(and(eq(schema.partyLedgerEntries.docId, p.id), eq(schema.partyLedgerEntries.docType, "tds_in")));
+    await postPartyEntry(tx, {
+      businessId: ctx.businessId,
+      party: { type: partyType, id: partyId },
+      date: today,
+      docType: "tds_in_cancel",
+      docId: p.id,
+      docNumber: p.paymentNumber,
+      debit: p.tdsAmount,
+      narration: `${tdsLabel(p.tdsSection)} · ${bounced ? "cheque bounced" : `cancelled: ${reason}`}`,
+      reversesEntryId: tdsEntry?.id ?? null,
+      userId: ctx.userId,
+    });
+  }
   await tx.insert(schema.outboxEvents).values({
     businessId: ctx.businessId,
     eventType: bounced ? "payment.cheque_bounced" : "payment.cancelled",
@@ -138,6 +159,8 @@ export const paymentsModule: ApiModule = async (app, deps) => {
     if (body.direction === "out" && !body.supplierId) throw badRequest("PARTY_REQUIRED", {}, "supplierId");
     if (body.customerId && body.supplierId) throw badRequest("PARTY_REQUIRED", {}, "supplierId");
     if (body.method === "cheque" && !body.referenceNumber) throw badRequest("CHEQUE_NUMBER_REQUIRED", {}, "referenceNumber");
+    // Our own TDS is kept back on the supplier's bill itself; a payment out carries none.
+    if (body.direction === "out" && (body.tdsAmount || body.tdsSection || body.tdsCertificate)) throw badRequest("TDS_ON_RECEIPTS_ONLY", {}, "tdsAmount");
     const key = request.headers["idempotency-key"];
     const clientId = typeof key === "string" && z.uuid().safeParse(key).success ? key : null;
     if (key !== undefined && !clientId) throw badRequest("INVALID_IDEMPOTENCY_KEY", {}, "Idempotency-Key");
@@ -174,6 +197,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
         notes: body.notes ?? null,
         ...(allocations ? { allocations } : {}),
         clientId,
+        ...(body.tdsAmount && dec(body.tdsAmount).gt(0) ? { tds: { amount: body.tdsAmount, section: body.tdsSection ?? "goods", certificate: body.tdsCertificate ?? null } } : {}),
       });
       await tx.insert(schema.outboxEvents).values({
         businessId: ctx.businessId,
@@ -214,6 +238,7 @@ export const paymentsModule: ApiModule = async (app, deps) => {
           supplierId: p.supplierId,
           partyName: sql<string>`coalesce((select coalesce(c.business_name, c.name) from customers c where c.id = "payments"."customer_id"), (select name from suppliers s where s.id = "payments"."supplier_id"), (select name from employees e where e.id = "payments"."employee_id"), "payments"."other_party_name")`,
           amount: p.amount,
+          tdsAmount: p.tdsAmount,
           method: p.method,
           referenceNumber: p.referenceNumber,
           chequeStatus: p.chequeStatus,
@@ -251,6 +276,24 @@ export const paymentsModule: ApiModule = async (app, deps) => {
       return paymentDetail(tx, ctx, p.id);
     });
   });
+
+  /** The customer's TDS certificate (Form 16A) for a receipt they deducted TDS on, when it comes. */
+  r.patch(
+    "/payments/:id/tds-certificate",
+    { preHandler: guard(deps, "payment.collect"), schema: { tags: ["payments"], params: IdParams, body: TdsCertificateBody } },
+    async (request) => {
+      const ctx = request.ctx;
+      return tenant(ctx, async (tx) => {
+        const [p] = await tx.select().from(schema.payments).where(and(eq(schema.payments.id, request.params.id), eq(schema.payments.businessId, ctx.businessId))).for("update");
+        if (!p) throw notFound("payment");
+        if (!dec(p.tdsAmount).gt(0)) throw conflict("NO_TDS_ON_PAYMENT");
+        const certificate = request.body.certificate || null;
+        await tx.update(schema.payments).set({ tdsCertificate: certificate, updatedBy: ctx.userId, updatedAt: sql`now()` }).where(eq(schema.payments.id, p.id));
+        await audit(tx, ctx, { action: "payment.tds_certificate", entityType: "payment", entityId: p.id, entityLabel: p.paymentNumber ?? undefined, changes: { certificate: [p.tdsCertificate, certificate] } });
+        return paymentDetail(tx, ctx, p.id);
+      });
+    },
+  );
 
   /** Cheque life cycle; a bounce reverses the payment and re-opens the invoices it settled. */
   r.post("/payments/:id/cheque", { preHandler: guard(deps, "payment.collect"), schema: { tags: ["payments"], params: IdParams, body: ChequeBody } }, async (request) => {

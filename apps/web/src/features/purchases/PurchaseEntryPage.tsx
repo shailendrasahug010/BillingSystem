@@ -44,6 +44,7 @@ import { uuid } from "../../lib/uuid";
 import { findPriceRises, PriceRiseDialog, type PriceRise } from "./PriceRiseDialog";
 import type { PurchaseDetail } from "./PurchaseViewPage";
 import { leftOnOrderLine, type OpenPurchases } from "./buying";
+import { tdsEstimate, useSupplierTds } from "./tds";
 
 interface Line {
   key: string;
@@ -458,6 +459,10 @@ function PurchaseEntry({
       return { totals: null, error: e, taxes };
     }
   }, [lines, charges, paid.amount, head.billDate, head.reverseCharge, supplyType, chargesGst, t]);
+
+  // TDS the business keeps back on the bill (when it deducts TDS on purchases): the supplier is paid the rest.
+  const tdsRule = useSupplierTds(supplierId, head.billDate);
+  const tds = tdsEstimate(tdsRule, calc.totals?.taxableTotal);
 
   const headProblems = {
     supplierId: supplierId ? null : t("validation.required"),
@@ -1034,10 +1039,22 @@ function PurchaseEntry({
               <dt>{t("invoice.grandTotal")}</dt>
               <dd>{tot ? money(tot.grandTotal.toNumber()) : "—"}</dd>
             </div>
+            {tot && tds && (
+              <>
+                <div className="flex justify-between gap-3 text-[13px] text-ink-2" data-tds title={t("tds.purchase.hint")}>
+                  <dt>{t("tds.purchase.line", { rate: number(tds.rate.toNumber()), base: money(tds.base.toNumber()) })}</dt>
+                  <dd>−{money(tds.amount.toNumber())}</dd>
+                </div>
+                <div className="flex justify-between gap-3 text-[14px] font-medium text-ink">
+                  <dt>{t("tds.purchase.payable")}</dt>
+                  <dd>{money(tot.grandTotal.minus(tds.amount).toNumber())}</dd>
+                </div>
+              </>
+            )}
             {tot && Number(paid.amount) > 0 && (
               <div className="flex justify-between gap-3 text-[13px] text-ink-2">
                 <dt>{t("invoice.balance")}</dt>
-                <dd>{money(Math.max(0, tot.grandTotal.toNumber() - Number(paid.amount)))}</dd>
+                <dd>{money(Math.max(0, tot.grandTotal.toNumber() - (tds ? tds.amount.toNumber() : 0) - Number(paid.amount)))}</dd>
               </div>
             )}
             {head.reverseCharge && <p className="mt-1 text-[12px] text-warn">{t("purchase.reverseChargeHint")}</p>}

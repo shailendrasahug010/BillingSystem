@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDays, type PaymentMethod } from "@digitalbahi/core";
+import { addDays, TDS_SECTIONS, type PaymentMethod, type TdsSection } from "@digitalbahi/core";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
-import { Field, Input, Select } from "../../components/ui/Field";
+import { Checkbox, Field, Input, Select } from "../../components/ui/Field";
 import { Skeleton } from "../../components/ui/misc";
 import { ErrorNote, useFieldError } from "../../components/ui/Page";
 import { SearchSelect } from "../../components/ui/SearchSelect";
@@ -112,6 +112,8 @@ export function PaymentDialog({
   const qc = useQueryClient();
   const [party, setParty] = useState<string | null>(initialParty ?? null);
   const [form, setForm] = useState({ amount: "", method: "cash" as PaymentMethod, date: TODAY, reference: "", chequeDate: "", chequeBank: "", notes: "" });
+  // A receipt the customer kept TDS back on: the TDS settles their bills with the money.
+  const [tds, setTds] = useState({ on: false, amount: "", section: "goods" as TdsSection, certificate: "" });
   const [manual, setManual] = useState<Record<string, string> | null>(null);
   const [key, setKey] = useState(newIdempotencyKey);
   // Part payment: the day the customer says they will pay the rest (kept as a promise to pay).
@@ -130,6 +132,7 @@ export function PaymentDialog({
     if (!open) return;
     setParty(initialParty ?? null);
     setForm({ amount: initialAmount ?? "", method: "cash", date: TODAY, reference: "", chequeDate: "", chequeBank: "", notes: "" });
+    setTds({ on: false, amount: "", section: "goods", certificate: "" });
     setManual(null);
     setKey(newIdempotencyKey());
     setPromiseOn("");
@@ -141,14 +144,18 @@ export function PaymentDialog({
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const amount = MONEY.test(form.amount) ? Number(form.amount) : 0;
+  const tdsOn = direction === "in" && tds.on;
+  const tdsValue = tdsOn && MONEY.test(tds.amount) ? Number(tds.amount) : 0;
+  // What the receipt settles: the money and the TDS kept back.
+  const settles = Math.round((amount + tdsValue) * 100) / 100;
   const auto = useMemo(() => {
     const openDocs = docs.data ?? [];
     const first = documentId ? openDocs.filter((d) => d.id === documentId) : [];
-    return oldestFirst(amount, [...first, ...openDocs.filter((d) => d.id !== documentId)]);
-  }, [amount, docs.data, documentId]);
+    return oldestFirst(settles, [...first, ...openDocs.filter((d) => d.id !== documentId)]);
+  }, [settles, docs.data, documentId]);
   const applied = keepHere ? {} : manual ? Object.fromEntries(Object.entries(manual).map(([k, v]) => [k, Number(v) || 0])) : auto;
   const allocated = Object.values(applied).reduce((s, v) => s + v, 0);
-  const advance = Math.round((amount - allocated) * 100) / 100;
+  const advance = Math.round((settles - allocated) * 100) / 100;
 
   const partyInfo =
     direction === "in"
@@ -162,7 +169,7 @@ export function PaymentDialog({
         })();
 
   // What the customer still owes after this payment; a date for it can be noted as a promise.
-  const rest = direction === "in" && partyInfo ? Math.round((partyInfo.balance - amount) * 100) / 100 : 0;
+  const rest = direction === "in" && partyInfo ? Math.round((partyInfo.balance - settles) * 100) / 100 : 0;
   const askPromise = direction === "in" && amount > 0 && rest > 0.5;
 
   const problems = {
@@ -170,10 +177,12 @@ export function PaymentDialog({
     party: party ? null : t("validation.required"),
     amount: !form.amount ? t("validation.required") : !MONEY.test(form.amount) ? t("validation.amount") : amount <= 0 ? t("validation.positive") : null,
     reference: form.method === "cheque" && !form.reference.trim() ? t("validation.required") : null,
-    allocations: allocated - amount > 0.001 ? t("errors.ALLOCATION_EXCEEDS_PAYMENT") : manual && Object.values(manual).some((v) => v && !MONEY.test(v)) ? t("validation.amount") : null,
+    allocations: allocated - settles > 0.001 ? t("errors.ALLOCATION_EXCEEDS_PAYMENT") : manual && Object.values(manual).some((v) => v && !MONEY.test(v)) ? t("validation.amount") : null,
     date: form.date > TODAY ? t("errors.FUTURE_DATE_NOT_ALLOWED") : null,
+    tds: tdsOn && !tds.amount ? t("validation.required") : tdsOn && !MONEY.test(tds.amount) ? t("validation.amount") : null,
   };
-  const show = (k: keyof typeof problems) => (touched ? problems[k] : null) ?? fieldError(k === "party" ? (direction === "in" ? "customerId" : "supplierId") : k === "date" ? "paymentDate" : k === "reference" ? "referenceNumber" : k);
+  const show = (k: keyof typeof problems) =>
+    (touched ? problems[k] : null) ?? fieldError(k === "party" ? (direction === "in" ? "customerId" : "supplierId") : k === "date" ? "paymentDate" : k === "reference" ? "referenceNumber" : k === "tds" ? "tdsAmount" : k);
 
   const save = async () => {
     setTouched(true);
@@ -213,6 +222,7 @@ export function PaymentDialog({
       ...(form.method === "cheque" && form.chequeDate ? { chequeDate: form.chequeDate } : {}),
       ...(form.method === "cheque" && form.chequeBank.trim() ? { chequeBank: form.chequeBank.trim() } : {}),
       ...(notes ? { notes } : {}),
+      ...(tdsValue > 0 ? { tdsAmount: tdsValue.toFixed(2), tdsSection: tds.section, ...(tds.certificate.trim() ? { tdsCertificate: tds.certificate.trim() } : {}) } : {}),
     };
     /** Kept on this device with the same key, so an attempt that did reach the server is never counted twice. */
     const keep = async () => {
@@ -366,6 +376,41 @@ export function PaymentDialog({
             </>
           )}
         </div>
+
+        {direction === "in" && (
+          <div className="flex flex-col gap-3" data-tds>
+            <Checkbox checked={tds.on} onChange={(v) => (setTds((x) => ({ ...x, on: v })), setManual(null))} label={t("tds.receipt.toggle")} />
+            {tds.on && (
+              <div className="grid grid-cols-1 gap-4 rounded-2xl border border-line bg-surface-2/60 p-3 sm:grid-cols-3">
+                <Field label={t("tds.receipt.amount")} htmlFor="pay-tds" error={show("tds")}>
+                  <Input
+                    id="pay-tds"
+                    inputMode="decimal"
+                    leading={<span className="text-[13px]">₹</span>}
+                    value={tds.amount}
+                    onChange={(e) => (setTds((x) => ({ ...x, amount: e.target.value.replace(/[^\d.]/g, "") })), setManual(null))}
+                    invalid={Boolean(show("tds"))}
+                  />
+                </Field>
+                <Field label={t("tds.section")} htmlFor="pay-tds-section">
+                  <Select id="pay-tds-section" value={tds.section} onChange={(e) => setTds((x) => ({ ...x, section: e.target.value as TdsSection }))}>
+                    {TDS_SECTIONS.map((sec) => (
+                      <option key={sec} value={sec}>
+                        {t(`tds.sections.${sec}`)}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label={t("tds.receipt.certificate")} htmlFor="pay-tds-cert" hint={t("common.optional")}>
+                  <Input id="pay-tds-cert" maxLength={40} value={tds.certificate} onChange={(e) => setTds((x) => ({ ...x, certificate: e.target.value }))} />
+                </Field>
+                {tdsValue > 0 && amount > 0 && (
+                  <p className="num text-[13px] text-ink-2 sm:col-span-3">{t("tds.receipt.settles", { total: money(settles), received: money(amount), tds: money(tdsValue) })}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {askPromise && (
           <div className="flex flex-col gap-2 rounded-2xl border border-accent/25 bg-accent-soft/50 px-3.5 py-3">

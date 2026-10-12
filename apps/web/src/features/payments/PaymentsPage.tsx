@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PaymentMethod } from "@digitalbahi/core";
+import { tdsLabel, type PaymentMethod } from "@digitalbahi/core";
 import type { LocaleCode } from "@digitalbahi/i18n";
 import { ArrowDownLeft, ArrowUpRight, Download, Landmark, Printer, Search } from "lucide-react";
 import { Tabs } from "radix-ui";
@@ -46,9 +46,13 @@ interface PaymentRow {
   chequeStatus: "pending" | "deposited" | "cleared" | "bounced" | null;
   unallocatedAmount: string;
   status: "posted" | "cancelled";
+  /** TDS the customer deducted on a receipt (0.00 when none). */
+  tdsAmount?: string;
 }
 
 interface PaymentDetail extends PaymentRow {
+  tdsSection: string | null;
+  tdsCertificate: string | null;
   chequeDate: string | null;
   chequeBank: string | null;
   notes: string | null;
@@ -415,6 +419,8 @@ export function PaymentDetailDialog({ paymentId, onClose }: { paymentId: string 
             {p.chequeDate && <Stat label={t("payment.chequeDate")} value={dateMedium(p.chequeDate)} />}
             {p.chequeBank && <Stat label={t("payment.chequeBank")} value={p.chequeBank} />}
             {Number(p.unallocatedAmount) > 0 && <Stat label={t("payment.advanceShort")} value={money(p.unallocatedAmount)} tone="warn" />}
+            {Number(p.tdsAmount ?? 0) > 0 && <Stat label={t("tds.receipt.deducted", { section: tdsLabel(p.tdsSection) })} value={money(p.tdsAmount!)} />}
+            {Number(p.tdsAmount ?? 0) > 0 && <Stat label={t("tds.receipt.certificate")} value={p.tdsCertificate ?? "—"} />}
           </div>
           <div className="flex flex-wrap items-center gap-2 border-y border-line py-3">
             <Segmented

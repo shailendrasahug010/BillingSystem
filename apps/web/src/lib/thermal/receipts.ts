@@ -1,4 +1,4 @@
-import { amountInWords, findState, upiPayLink, UPI_ID } from "@digitalbahi/core";
+import { amountInWords, findState, tdsLabel, upiPayLink, UPI_ID } from "@digitalbahi/core";
 import { createTranslator, formatAmount, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { BUSINESS } from "../../data/db";
 import type { PrintableInvoice } from "../../features/invoice/printable";
@@ -95,6 +95,12 @@ export function paymentReceipt(p: PrintablePayment, locale: LocaleCode): Receipt
     { t: "rule" },
     { t: "pair", left: t("receipt.amount"), right: m(p.amount), bold: true, scale: 1.2 },
     { t: "text", text: amountInWords(p.amount, locale), scale: 0.8 },
+    ...(Number(p.tdsAmount ?? 0) > 0
+      ? [
+          { t: "pair" as const, left: t("receipt.tdsDeducted", { section: tdsLabel(p.tdsSection) }), right: m(p.tdsAmount!), scale: 0.9 },
+          { t: "pair" as const, left: t("receipt.settled"), right: m(Number(p.amount) + Number(p.tdsAmount)), scale: 0.9 },
+        ]
+      : []),
     { t: "pair", left: t("receipt.mode"), right: mode, scale: 0.9 },
     ...bills.map((a) => ({ t: "pair" as const, left: `${t("receipt.against")} ${a.documentNumber ?? "—"}`, right: m(a.amount), scale: 0.9 })),
     ...(Number(p.unallocatedAmount) > 0 ? [{ t: "pair" as const, left: t("receipt.onAccount"), right: m(p.unallocatedAmount), scale: 0.9 }] : []),

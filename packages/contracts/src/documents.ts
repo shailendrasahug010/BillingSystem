@@ -408,6 +408,12 @@ export const PaymentBody = z.strictObject({
   /** Explicit allocations; omit to allocate to the oldest due documents first. */
   allocations: z.array(AllocationInput).max(200).optional(),
   notes: z.string().trim().max(500).optional(),
+  /** A receipt: income tax the customer deducted at source (TDS); with the amount received it settles their bills. */
+  tdsAmount: Money.optional(),
+  /** What the TDS was deducted under (goods: 393(1), old 194Q). */
+  tdsSection: z.enum(["goods", "contract", "commission", "professional", "rent", "other"]).optional(),
+  /** The customer's TDS certificate (Form 16A) number, when it came with the payment. */
+  tdsCertificate: z.string().trim().max(40).optional(),
 });
 
 export const PaymentListQuery = PageQuery.extend({

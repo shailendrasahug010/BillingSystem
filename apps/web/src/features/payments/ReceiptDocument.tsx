@@ -1,4 +1,4 @@
-import { amountInWords, type PaymentMethod } from "@digitalbahi/core";
+import { amountInWords, tdsLabel, type PaymentMethod } from "@digitalbahi/core";
 import { createTranslator, formatCurrency, formatDate, type LocaleCode } from "@digitalbahi/i18n";
 import { FirmHeader, MadeWithDigitalBahi } from "../../components/brand/Brand";
 import { BUSINESS } from "../../data/db";
@@ -17,6 +17,9 @@ export interface PrintablePayment {
   notes: string | null;
   partyName: string;
   allocations: Array<{ id: string; documentNumber: string | null; amount: string; reversedAt: string | null }>;
+  /** TDS the customer deducted, when they did: with the amount it settled their bills. */
+  tdsAmount?: string;
+  tdsSection?: string | null;
 }
 
 /**
@@ -53,6 +56,18 @@ export function ReceiptDocument({ payment: p, locale }: { payment: PrintablePaym
           <span className="text-[#4a5570]">{t("invoice.amountInWords")}</span>
           <span className="text-right">{amountInWords(p.amount, locale)}</span>
         </div>
+        {Number(p.tdsAmount ?? 0) > 0 && (
+          <>
+            <div className={row}>
+              <span className="text-[#4a5570]">{t("receipt.tdsDeducted", { section: tdsLabel(p.tdsSection) })}</span>
+              <span className="text-right">{m(p.tdsAmount!)}</span>
+            </div>
+            <div className={row}>
+              <span className="text-[#4a5570]">{t("receipt.settled")}</span>
+              <span className="text-right font-semibold">{m(Number(p.amount) + Number(p.tdsAmount))}</span>
+            </div>
+          </>
+        )}
         <div className={row}>
           <span className="text-[#4a5570]">{t("receipt.mode")}</span>
           <span className="text-right">

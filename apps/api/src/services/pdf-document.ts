@@ -92,6 +92,8 @@ export interface ReceiptPdfInput {
   bills: Array<{ number: string | null; amount: string }>;
   onAccount: string;
   notes: string | null;
+  /** TDS the customer deducted ("TDS 194Q"), when they did. */
+  tds?: { amount: string; label: string } | null;
 }
 
 const num = (v: string | number) => Number(v);
@@ -429,6 +431,12 @@ export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> 
     [input.direction === "in" ? t("receipt.receivedFrom") : t("receipt.paidTo"), input.partyName, true],
     [t("receipt.amount"), m(input.amount), true],
     [t("invoice.amountInWords"), amountInWords(input.amount, locale)],
+    ...(input.tds && num(input.tds.amount) > 0
+      ? [
+          [t("receipt.tdsDeducted", { section: input.tds.label }), m(input.tds.amount)] as [string, string],
+          [t("receipt.settled"), m(String(num(input.amount) + num(input.tds.amount)))] as [string, string],
+        ]
+      : []),
     [t("receipt.mode"), [t(`paymentMethod.${input.method}` as "paymentMethod.cash"), input.reference, input.chequeDate ? formatDate(input.chequeDate) : null, input.chequeBank].filter(Boolean).join(" · ")],
     ...(input.bills.length ? [[t("receipt.against"), input.bills.map((b) => `${b.number ?? "—"}: ${m(b.amount)}`).join("\n")] as [string, string]] : []),
     ...(num(input.onAccount) > 0 ? [[t("receipt.onAccount"), m(input.onAccount)] as [string, string]] : []),

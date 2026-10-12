@@ -36,6 +36,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
     esi: { enabled: false, employerCode: null },
     pt: { enabled: false, stateCode: null, rule: null },
   },
+  // 393(1) [old 194Q]: 0.1% past ₹50 lakh a year from one seller, 5% without the seller's PAN; off until turned on.
+  "tds.purchases": { enabled: false, threshold: 5_000_000, rate: 0.1, noPanRate: 5 },
 };
 
 export const isSettingKey = (key: string): key is SettingKey => Object.hasOwn(SETTING_SCHEMAS, key);

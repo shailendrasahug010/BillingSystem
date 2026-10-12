@@ -331,6 +331,20 @@ export function RulesCard() {
           />,
         )}
         {row(
+          t("tds.settings.title"),
+          t("tds.settings.hint"),
+          <Segmented
+            size="sm"
+            label={t("tds.settings.title")}
+            value={s["tds.purchases"]?.enabled ? "on" : "off"}
+            onChange={(v) => canEdit && void put("tds.purchases", { ...(s["tds.purchases"] ?? { threshold: 5_000_000, rate: 0.1, noPanRate: 5 }), enabled: v === "on" })}
+            options={[
+              { value: "off", label: t("tds.settings.off") },
+              { value: "on", label: t("tds.settings.on") },
+            ]}
+          />,
+        )}
+        {row(
           t("settings.allocation"),
           t("settings.allocationHint"),
           <Segmented

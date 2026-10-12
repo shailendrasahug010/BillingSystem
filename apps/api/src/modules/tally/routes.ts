@@ -199,7 +199,7 @@ async function tallyExport(tx: Tx, ctx: RequestCtx, from: string, to: string) {
       party,
       reference: p.referenceNumber,
       narration: [p.method.replace(/_/g, " "), p.notes].filter(Boolean).join(" · "),
-      entries: paymentEntries(p.amount, party, p.method === "cash", p.direction),
+      entries: paymentEntries(p.amount, party, p.method === "cash", p.direction, p.tdsAmount),
     });
   }
 

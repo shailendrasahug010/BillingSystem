@@ -50,6 +50,11 @@ export interface PurchaseDetail {
   grandTotal: string;
   amountPaid: string;
   balanceDue: string;
+  /** TDS kept back on the bill (paid to the government, not the supplier), its base and rate; 0.00 when none. */
+  tdsAmount?: string;
+  tdsBase?: string;
+  tdsRate?: string | null;
+  tdsChallanId?: string | null;
   notes: string | null;
   cancelReason: string | null;
   items: Array<{
@@ -298,6 +303,21 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
               <dt>{t("invoice.grandTotal")}</dt>
               <dd>{money(p.grandTotal)}</dd>
             </div>
+            {Number(p.tdsAmount ?? 0) > 0 && (
+              <>
+                <div className="flex justify-between gap-3 text-[13px] text-ink-2" data-tds>
+                  <dt>
+                    {t("tds.purchase.line", { rate: number(Number(p.tdsRate ?? 0)), base: money(p.tdsBase ?? "0") })}
+                    {p.tdsChallanId ? ` · ${t("tds.purchase.paid")}` : ""}
+                  </dt>
+                  <dd>−{money(p.tdsAmount!)}</dd>
+                </div>
+                <div className="flex justify-between gap-3 text-[14px] font-medium text-ink">
+                  <dt>{t("tds.purchase.payable")}</dt>
+                  <dd>{money(Number(p.grandTotal) - Number(p.tdsAmount))}</dd>
+                </div>
+              </>
+            )}
             <p className="mt-1 text-[12px] text-ink-3">
               {p.supplyType === "inter_state" ? t("gst.interState") : t("gst.intraState")} · {t("purchase.itc")}: {t(`purchase.itcOptions.${p.itcEligibility as "eligible"}`)}
               {p.isReverseCharge && ` · ${t("purchase.reverseCharge")}`}

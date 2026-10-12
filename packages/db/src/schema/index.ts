@@ -8,6 +8,7 @@ export * from "./platform.js";
 export * from "./access.js";
 export * from "./hr.js";
 export * from "./parties.js";
+export * from "./tax.js";
 export * from "./beats.js";
 export * from "./catalog.js";
 export * from "./schemes.js";

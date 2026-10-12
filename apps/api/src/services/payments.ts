@@ -1,4 +1,4 @@
-import { allocatePayment, dec, paymentStatusFor, toAmountString, type OpenDocument, type PaymentMethod } from "@digitalbahi/core";
+import { allocatePayment, dec, paymentStatusFor, tdsLabel, toAmountString, type OpenDocument, type PaymentMethod, type TdsSection } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
@@ -24,7 +24,11 @@ export interface PaymentInput {
   /** Without explicit allocations: this bill first (a payment link for it), then the oldest due. */
   preferDocumentId?: string | null;
   clientId?: string | null;
+  /** A receipt: tax the customer deducted at source; with the amount it settles their bills. */
+  tds?: { amount: string; section: TdsSection; certificate?: string | null } | null;
 }
+
+export { tdsLabel };
 
 export interface PaymentResult {
   id: string;
@@ -92,7 +96,10 @@ export async function recordPayment(tx: Tx, ctx: RequestCtx, financialYearStartM
   const open = await lockOpenDocuments(tx, businessId, input.party);
   // The preferred bill sorts first (oldest due first is the order allocatePayment takes).
   const ordered = input.preferDocumentId ? open.map((d) => (d.id === input.preferDocumentId ? { ...d, dueDate: "0000-01-01" } : d)) : open;
-  const { allocations, unallocated } = allocatePayment(input.amount, ordered, input.allocations);
+  // TDS the customer kept settles their bills as much as the money they sent.
+  const tds = input.tds && dec(input.tds.amount).gt(0) ? input.tds : null;
+  const settles = dec(input.amount).plus(tds ? tds.amount : 0);
+  const { allocations, unallocated } = allocatePayment(settles, ordered, input.allocations);
   const docType = input.direction === "in" ? "payment_in" : "payment_out";
   const numbering = await nextDocumentNumber(tx, businessId, docType, input.date, financialYearStartMonth);
   const id = uuidv7();
@@ -116,6 +123,9 @@ export async function recordPayment(tx: Tx, ctx: RequestCtx, financialYearStartM
     chequeBank: input.chequeBank ?? null,
     chequeStatus: input.method === "cheque" ? "pending" : null,
     unallocatedAmount: toAmountString(unallocated),
+    tdsAmount: tds ? toAmountString(tds.amount) : "0",
+    tdsSection: tds?.section ?? null,
+    tdsCertificate: tds?.certificate ?? null,
     status: "posted",
     notes: input.notes ?? null,
     clientId: input.clientId ?? null,
@@ -148,13 +158,33 @@ export async function recordPayment(tx: Tx, ctx: RequestCtx, financialYearStartM
     narration: `${input.method.toUpperCase()}${input.referenceNumber ? ` ${input.referenceNumber}` : ""}`,
     userId: ctx.userId,
   });
+  if (tds) {
+    // A line of its own on the customer's account: what they deducted and pay the government for us.
+    await postPartyEntry(tx, {
+      businessId,
+      party: input.party,
+      date: input.date,
+      docType: "tds_in",
+      docId: id,
+      docNumber: numbering.number,
+      credit: toAmountString(tds.amount),
+      narration: `${tdsLabel(tds.section)}${tds.certificate ? ` · ${tds.certificate}` : ""}`,
+      userId: ctx.userId,
+    });
+  }
 
   await audit(tx, ctx, {
     action: input.direction === "in" ? "payment.received" : "payment.made",
     entityType: "payment",
     entityId: id,
     entityLabel: numbering.number,
-    changes: { party: input.party.name, amount: toAmountString(input.amount), method: input.method, allocations: allocations.map((a) => [a.documentNumber, a.amount.toFixed(2)]) },
+    changes: {
+      party: input.party.name,
+      amount: toAmountString(input.amount),
+      method: input.method,
+      ...(tds ? { tds: toAmountString(tds.amount), tdsSection: tds.section } : {}),
+      allocations: allocations.map((a) => [a.documentNumber, a.amount.toFixed(2)]),
+    },
   });
 
   return {
@@ -188,10 +218,11 @@ export async function applyToDocument(tx: Tx, partyType: "customer" | "supplier"
     .update(p)
     .set({ amountPaid: sql`${p.amountPaid} + ${paidDelta}`, balanceDue: newBalance })
     .where(eq(p.id, documentId))
-    .returning({ grandTotal: p.grandTotal, amountPaid: p.amountPaid });
+    .returning({ grandTotal: p.grandTotal, amountPaid: p.amountPaid, tdsAmount: p.tdsAmount });
+  // The TDS kept back is not owed to the supplier: the bill is paid when the rest is.
   await tx
     .update(p)
-    .set({ paymentStatus: paymentStatusFor(doc!.grandTotal, doc!.amountPaid) })
+    .set({ paymentStatus: paymentStatusFor(dec(doc!.grandTotal).minus(doc!.tdsAmount), doc!.amountPaid) })
     .where(eq(p.id, documentId));
 }
 
