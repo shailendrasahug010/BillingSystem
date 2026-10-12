@@ -176,4 +176,20 @@ CREATE INDEX "purchase_orders_status_idx" ON "purchase_orders" USING btree ("bus
 ALTER TABLE "purchase_items" ADD CONSTRAINT "purchase_items_goods_receipt_item_id_goods_receipt_items_id_fk" FOREIGN KEY ("goods_receipt_item_id") REFERENCES "public"."goods_receipt_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_items" ADD CONSTRAINT "purchase_items_purchase_order_item_id_purchase_order_items_id_fk" FOREIGN KEY ("purchase_order_item_id") REFERENCES "public"."purchase_order_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "purchase_items_receipt_idx" ON "purchase_items" USING btree ("goods_receipt_item_id") WHERE "purchase_items"."goods_receipt_item_id" is not null;--> statement-breakpoint
-CREATE INDEX "purchase_items_order_idx" ON "purchase_items" USING btree ("purchase_order_item_id") WHERE "purchase_items"."purchase_order_item_id" is not null;
+CREATE INDEX "purchase_items_order_idx" ON "purchase_items" USING btree ("purchase_order_item_id") WHERE "purchase_items"."purchase_order_item_id" is not null;--> statement-breakpoint
+-- Purchase orders, their lines, goods receipts and their lines, per business.
+ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON purchase_orders USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE purchase_order_items ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON purchase_order_items USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE goods_receipts ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON goods_receipts USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE goods_receipt_items ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON goods_receipt_items USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
