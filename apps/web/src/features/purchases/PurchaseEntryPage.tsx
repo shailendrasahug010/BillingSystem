@@ -12,7 +12,8 @@ import {
   type ResolvedTax,
 } from "@digitalbahi/core";
 import { translateError } from "@digitalbahi/i18n";
-import { FileSpreadsheet, PackagePlus, PencilLine, Plus, Save, Trash2, X } from "lucide-react";
+import type { GoodsReceiptView, PurchaseOrderView } from "@digitalbahi/contracts";
+import { ClipboardList, FileSpreadsheet, PackageCheck, PackagePlus, PencilLine, Plus, Save, Trash2, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { useRouter } from "../../app/router";
@@ -30,7 +31,8 @@ import { refreshCatalog, refreshSupplier } from "../../data/live";
 import { useStoreVersion } from "../../data/store";
 import { api, ApiError, newIdempotencyKey, QUICK_SAVE_MS } from "../../lib/api";
 import { useKeptForm } from "../../offline/keptForms";
-import { offlineScope, queueEntry, unreachable, workingOffline } from "../../offline/sync";
+import { offlineScope, queueEntry, unreachable, useOffline, workingOffline } from "../../offline/sync";
+import { LIVE } from "../../data/source";
 import { cn } from "../../lib/cn";
 import { invalidateMoney, METHODS } from "../payments/PaymentDialog";
 import { ProductEditor, type ProductPrefill } from "../products/ProductEditor";
@@ -41,6 +43,7 @@ import { NewProductsDialog } from "./NewProductsDialog";
 import { uuid } from "../../lib/uuid";
 import { findPriceRises, PriceRiseDialog, type PriceRise } from "./PriceRiseDialog";
 import type { PurchaseDetail } from "./PurchaseViewPage";
+import { leftOnOrderLine, type OpenPurchases } from "./buying";
 
 interface Line {
   key: string;
@@ -58,6 +61,13 @@ interface Line {
   /** From an imported bill: how the supplier names the item, and its row in their file. */
   supplierItem?: { code?: string; name?: string };
   fileRow?: number;
+  /** Goods received before the bill (a goods receipt): billed as they came, the receipt's quantities and batch. */
+  receiptItemId?: string;
+  receiptId?: string;
+  receiptNumber?: string;
+  /** Goods ordered that come with this bill: the order line. */
+  orderItemId?: string;
+  orderNumber?: string;
 }
 
 interface Charge {
@@ -101,10 +111,20 @@ function prefillFrom(item: ImportedItem): ProductPrefill {
  * recorded for ITC. Totals use the same calculator as the server, so what is
  * shown is what gets posted.
  */
-export function PurchaseEntryPage({ supplierId, draft, correctsId }: { supplierId?: string; draft?: PurchaseDraft; correctsId?: string }) {
+export function PurchaseEntryPage({ supplierId, draft, correctsId, receiptId, orderId }: { supplierId?: string; draft?: PurchaseDraft; correctsId?: string; receiptId?: string; orderId?: string }) {
   const { t } = useI18n();
   const { navigate } = useRouter();
   const old = useQuery({ queryKey: ["purchase", correctsId], queryFn: () => api.get<PurchaseDetail>(`/purchases/${correctsId}`), enabled: Boolean(correctsId) });
+  // The bill for goods received before it, or for what an order brings: the receipt or order to start from.
+  const receipt = useQuery({ queryKey: ["goods-receipt", receiptId], queryFn: () => api.get<GoodsReceiptView>(`/goods-receipts/${receiptId}`), enabled: Boolean(receiptId) });
+  const order = useQuery({ queryKey: ["purchase-order", orderId], queryFn: () => api.get<PurchaseOrderView>(`/purchase-orders/${orderId}`), enabled: Boolean(orderId) && !receiptId });
+  if (receiptId || orderId) {
+    const source = receiptId ? receipt : order;
+    if (source.isPending) return <Skeleton className="h-60 w-full" />;
+    if (source.error) return <ErrorNote error={source.error} onRetry={() => void source.refetch()} />;
+    if (receiptId && receipt.data) return <PurchaseEntry supplierId={receipt.data.supplierId} from={{ receipt: receipt.data }} />;
+    if (order.data) return <PurchaseEntry supplierId={order.data.supplierId} from={{ order: order.data }} />;
+  }
   if (!correctsId) return <PurchaseEntry {...(supplierId ? { supplierId } : {})} {...(draft ? { draft } : {})} />;
   if (old.isPending) return <Skeleton className="h-60 w-full" />;
   if (old.error) return <ErrorNote error={old.error} onRetry={() => void old.refetch()} />;
@@ -123,6 +143,8 @@ export function PurchaseEntryPage({ supplierId, draft, correctsId }: { supplierI
 interface Correction {
   id: string;
   purchaseNumber: string;
+  /** Receipts the bill was made from (its receipt lines are billed again with it). */
+  receiptIds: string[];
   billNumber: string;
   supplierId: string;
   head: { billNumber: string; billDate: string; receivedDate: string; itc: string; reverseCharge: boolean; notes: string };
@@ -140,6 +162,7 @@ function correctionFrom(p: PurchaseDetail): Correction {
   return {
     id: p.id,
     purchaseNumber: p.purchaseNumber,
+    receiptIds: (p.receipts ?? []).map((r) => r.id),
     billNumber: p.supplierInvoiceNumber,
     supplierId: p.supplierId,
     head: { billNumber: p.supplierInvoiceNumber, billDate: p.supplierInvoiceDate, receivedDate: p.receivedDate, itc: p.itcEligibility, reverseCharge: p.isReverseCharge, notes: p.notes ?? "" },
@@ -162,6 +185,10 @@ function correctionFrom(p: PurchaseDetail): Correction {
           expiryDate: i.expiryDate ?? "",
           mfgDate: i.mfgDate ?? "",
           mrp: plain(i.mrp),
+          ...(i.goodsReceiptItemId
+            ? { receiptItemId: i.goodsReceiptItemId, receiptId: p.receipts?.length === 1 ? p.receipts[0]!.id : "receipts", receiptNumber: (p.receipts ?? []).map((r) => r.receiptNumber).join(", ") }
+            : {}),
+          ...(i.purchaseOrderItemId ? { orderItemId: i.purchaseOrderItemId, orderNumber: (p.orders ?? []).map((o) => o.orderNumber).join(", ") } : {}),
         },
       ];
     }),
@@ -170,7 +197,71 @@ function correctionFrom(p: PurchaseDetail): Correction {
   };
 }
 
-function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { supplierId?: string; draft?: PurchaseDraft; correction?: Correction }) {
+/** A goods receipt's lines on the bill: as they came (quantities, unit, batch), at the rate expected until the bill's is typed. */
+function linesFromReceipt(g: GoodsReceiptView): Line[] {
+  return g.items.flatMap((i) =>
+    productById.has(i.productId)
+      ? [
+          {
+            key: uuid(),
+            productId: i.productId,
+            unitId: i.unitId,
+            qty: plain(i.qty) || "0",
+            freeQty: plain(i.freeQty),
+            rate: plain(i.rate),
+            discountPercent: plain(i.discountPercent),
+            gstRate: "",
+            batchNumber: i.batchNumber ?? "",
+            expiryDate: i.expiryDate ?? "",
+            mfgDate: i.mfgDate ?? "",
+            mrp: plain(i.mrp),
+            receiptItemId: i.id,
+            receiptId: g.id,
+            receiptNumber: g.receiptNumber,
+          },
+        ]
+      : [],
+  );
+}
+
+/** What an order still has to come, as bill lines at the order's rates (lines already on the bill left out). */
+function linesFromOrder(o: PurchaseOrderView, onBill: readonly Line[]): Line[] {
+  return o.items.flatMap((i) => {
+    const left = leftOnOrderLine(i);
+    if (left.qty <= 0 || !productById.has(i.productId) || onBill.some((l) => l.orderItemId === i.id)) return [];
+    return [
+      {
+        key: uuid(),
+        productId: i.productId,
+        unitId: i.unitId,
+        qty: String(left.qty),
+        freeQty: left.free > 0 ? String(left.free) : "",
+        rate: plain(i.rate),
+        discountPercent: plain(i.discountPercent),
+        gstRate: "",
+        batchNumber: "",
+        expiryDate: "",
+        mfgDate: "",
+        mrp: "",
+        orderItemId: i.id,
+        orderNumber: o.orderNumber,
+      },
+    ];
+  });
+}
+
+function PurchaseEntry({
+  supplierId: initialSupplier,
+  draft,
+  correction,
+  from,
+}: {
+  supplierId?: string;
+  draft?: PurchaseDraft;
+  correction?: Correction;
+  /** Made from a goods receipt or an order (its Make the bill). */
+  from?: { receipt?: GoodsReceiptView; order?: PurchaseOrderView };
+}) {
   const i18n = useI18n();
   const { t, money, number } = i18n;
   const { navigate } = useRouter();
@@ -190,7 +281,9 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
   const [rises, setRises] = useState<{ rises: PriceRise[]; purchaseId: string } | null>(null);
   // An imported bill: lines whose product was found go straight in; the rest wait to be matched.
   const [lines, setLines] = useState<Line[]>(() =>
-    correction?.lines ?? (draft?.items ?? []).flatMap((item) => {
+    correction?.lines ??
+    (from?.receipt ? linesFromReceipt(from.receipt) : from?.order ? linesFromOrder(from.order, []) : null) ??
+    (draft?.items ?? []).flatMap((item) => {
       const p = item.productId ? productById.get(item.productId) : undefined;
       return p ? [{ key: item.key, ...lineFromItem(item, p) }] : [];
     }),
@@ -204,7 +297,10 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
   const [addingAll, setAddingAll] = useState(false);
   const [charges, setCharges] = useState<Charge[]>(correction?.charges ?? []);
   const godowns = WORKSPACE.warehouses.filter((w) => w.isActive);
-  const [warehouseId, setWarehouseId] = useState(() => (correction?.warehouseId && godowns.some((w) => w.id === correction.warehouseId) ? correction.warehouseId : (godowns.find((w) => w.isDefault)?.id ?? "")));
+  const [warehouseId, setWarehouseId] = useState(() => {
+    const wanted = correction?.warehouseId ?? from?.receipt?.warehouseId ?? null;
+    return wanted && godowns.some((w) => w.id === wanted) ? wanted : (godowns.find((w) => w.isDefault)?.id ?? "");
+  });
   const [paid, setPaid] = useState({ amount: "", method: "cash" as PaymentMethod, reference: "" });
   const [key] = useState(newIdempotencyKey);
   const [busy, setBusy] = useState(false);
@@ -245,10 +341,33 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
         },
       });
     },
-    !correction && !draft,
+    !correction && !draft && !from,
   );
 
   const setLine = (k: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...patch } : l)));
+
+  // Goods received before this bill and orders still open, of the supplier chosen: lines can come from them.
+  const offline = useOffline();
+  const sources = useQuery({
+    queryKey: ["open-purchases", supplierId],
+    queryFn: () => api.get<OpenPurchases>(`/suppliers/${supplierId}/open-purchases`),
+    enabled: LIVE && Boolean(supplierId) && offline.online && !offline.offlineMode,
+  });
+  const receiptOnBill = lines.find((l) => l.receiptItemId);
+  // Lines from another supplier's receipt or order cannot stay when the supplier changes.
+  const chooseSupplier = (id: string | null) => {
+    if (id !== supplierId) setLines((ls) => ls.filter((l) => !l.receiptItemId && !l.orderItemId));
+    setSupplierId(id);
+  };
+  const addReceipt = (g: GoodsReceiptView) => {
+    if (lines.some((l) => l.receiptId === g.id)) return;
+    setLines((ls) => [...ls, ...linesFromReceipt(g)]);
+    if (godowns.some((w) => w.id === g.warehouseId)) setWarehouseId(g.warehouseId);
+  };
+  const addOrder = (o: PurchaseOrderView) => setLines((ls) => [...ls, ...linesFromOrder(o, ls)]);
+  const removeLine = (l: Line) => setLines((ls) => ls.filter((x) => (l.receiptId ? x.receiptId !== l.receiptId : x.key !== l.key)));
+  const openReceipts = (sources.data?.receipts ?? []).filter((g) => !lines.some((l) => l.receiptId === g.id) && !correction?.receiptIds.includes(g.id));
+  const openOrders = (sources.data?.orders ?? []).filter((o) => o.items.some((i) => leftOnOrderLine(i).qty > 0 && !lines.some((l) => l.orderItemId === i.id)));
   const addProduct = (productId: string) => {
     const p = productById.get(productId);
     if (!p) return;
@@ -297,8 +416,8 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
     if (!RATE.test(l.rate)) return t("validation.amount");
     if (l.discountPercent && (!PCT.test(l.discountPercent) || Number(l.discountPercent) > 100)) return t("errors.DISCOUNT_PERCENT_RANGE");
     if (l.gstRate && (!PCT.test(l.gstRate) || Number(l.gstRate) > 100)) return t("validation.amount");
-    if (p?.trackBatches && !l.batchNumber.trim()) return t("errors.BATCH_REQUIRED", { product: p.name });
-    if (p?.trackExpiry && !l.expiryDate) return t("errors.EXPIRY_REQUIRED", { product: p.name });
+    if (!l.receiptItemId && p?.trackBatches && !l.batchNumber.trim()) return t("errors.BATCH_REQUIRED", { product: p.name });
+    if (!l.receiptItemId && p?.trackExpiry && !l.expiryDate) return t("errors.EXPIRY_REQUIRED", { product: p.name });
     return null;
   };
 
@@ -374,11 +493,13 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
           rate: l.rate,
           ...(l.discountPercent ? { discountPercent: l.discountPercent } : {}),
           ...(l.gstRate ? { gstRate: l.gstRate } : {}),
-          ...(l.batchNumber.trim() ? { batchNumber: l.batchNumber.trim() } : {}),
-          ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
-          ...(l.mfgDate && l.batchNumber.trim() ? { mfgDate: l.mfgDate } : {}),
+          ...(l.batchNumber.trim() && !l.receiptItemId ? { batchNumber: l.batchNumber.trim() } : {}),
+          ...(l.expiryDate && !l.receiptItemId ? { expiryDate: l.expiryDate } : {}),
+          ...(l.mfgDate && l.batchNumber.trim() && !l.receiptItemId ? { mfgDate: l.mfgDate } : {}),
           ...(l.mrp && RATE.test(l.mrp) ? { mrp: l.mrp } : {}),
           ...(l.supplierItem ? { supplierItem: l.supplierItem } : {}),
+          ...(l.receiptItemId ? { goodsReceiptItemId: l.receiptItemId } : {}),
+          ...(l.orderItemId ? { purchaseOrderItemId: l.orderItemId } : {}),
         };
       }),
       charges: charges
@@ -441,6 +562,9 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
       await Promise.all([refreshCatalog(), refreshSupplier(supplierId!)]).catch(() => undefined);
       invalidateMoney(qc);
       void qc.invalidateQueries({ queryKey: ["stock"] });
+      if (lines.some((l) => l.receiptItemId || l.orderItemId)) {
+        for (const k of ["open-purchases", "goods-receipts", "goods-receipt", "purchase-orders", "purchase-order"]) void qc.invalidateQueries({ queryKey: [k] });
+      }
       toast({ tone: "success", title: correction ? t("purchase.corrected") : t("purchase.saved"), body: `${res.purchaseNumber} · ${money(res.grandTotal)}` });
       if (priceRises.length) setRises({ rises: priceRises, purchaseId: res.id });
       else navigate({ name: "purchase-view", purchaseId: res.id });
@@ -511,7 +635,7 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
                 id="pu-supplier"
                 autoFocus={!initialSupplier}
                 value={supplierId}
-                onChange={setSupplierId}
+                onChange={chooseSupplier}
                 invalid={Boolean(showHead("supplierId"))}
                 placeholder={t("supplier.search")}
                 clearLabel={t("common.clear")}
@@ -558,7 +682,7 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
           </Field>
           {godowns.length > 1 && (
             <Field label={t("godowns.godown")} htmlFor="pu-godown">
-              <Select id="pu-godown" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+              <Select id="pu-godown" value={warehouseId} disabled={Boolean(receiptOnBill)} title={receiptOnBill ? t("buying.fromSources.godownHint") : undefined} onChange={(e) => setWarehouseId(e.target.value)}>
                 {godowns.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
@@ -572,6 +696,49 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
           </div>
         </div>
       </Card>
+
+      {(openReceipts.length > 0 || openOrders.length > 0) && (
+        <Card data-bill-sources>
+          <CardHeader title={t("buying.fromSources.title")} subtitle={t("buying.fromSources.hint")} />
+          <ul className="flex flex-col divide-y divide-line">
+            {openReceipts.map((g) => (
+              <li key={g.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-5">
+                <span className="flex min-w-0 items-center gap-2 text-[13.5px]">
+                  <PackageCheck size={16} className="shrink-0 text-warn" />
+                  <span className="min-w-0">
+                    <span className="font-medium text-ink">{g.receiptNumber}</span>
+                    <span className="text-ink-3">
+                      {" · "}
+                      {i18n.dateMedium(g.receivedDate)} · {t("common.items", { count: g.items.length })} · {money(g.totalValue)}
+                      {g.challanNumber ? ` · ${g.challanNumber}` : ""}
+                    </span>
+                  </span>
+                </span>
+                <Button size="sm" variant="soft" icon={<Plus size={14} />} onClick={() => addReceipt(g)}>
+                  {t("buying.fromSources.add", { number: g.receiptNumber })}
+                </Button>
+              </li>
+            ))}
+            {openOrders.map((o) => (
+              <li key={o.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-5">
+                <span className="flex min-w-0 items-center gap-2 text-[13.5px]">
+                  <ClipboardList size={16} className="shrink-0 text-accent" />
+                  <span className="min-w-0">
+                    <span className="font-medium text-ink">{o.orderNumber}</span>
+                    <span className="text-ink-3">
+                      {" · "}
+                      {i18n.dateMedium(o.orderDate)} · {t("buying.order.pendingCount", { count: o.items.filter((i) => Number(i.remainingBase) > 0).length })}
+                    </span>
+                  </span>
+                </span>
+                <Button size="sm" variant="soft" icon={<Plus size={14} />} onClick={() => addOrder(o)}>
+                  {t("buying.fromSources.add", { number: o.orderNumber })}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {pending.length > 0 && (
         <Card className="border-warn/40">
@@ -714,6 +881,12 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
                           </p>
                         )}
                         {matchedBy && <Badge tone="neutral">{t(`billImport.matchedBy.${matchedBy}`)}</Badge>}
+                        {l.receiptNumber && (
+                          <span title={t("buying.fromSources.lockedHint")}>
+                            <Badge tone="warn">{t("buying.fromSources.fromReceipt", { number: l.receiptNumber })}</Badge>
+                          </span>
+                        )}
+                        {l.orderNumber && <Badge tone="accent">{t("buying.fromSources.fromOrder", { number: l.orderNumber })}</Badge>}
                         {problem && (
                           <p className="text-[12px] text-danger" role="alert">
                             {problem}
@@ -721,7 +894,7 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
                         )}
                       </td>
                       <td className="py-2 pl-2">
-                        <Select aria-label={t("invoice.unit")} className="h-8 w-auto min-w-24 px-2 text-[13px]" value={l.unitId} onChange={(e) => setLine(l.key, { unitId: e.target.value })}>
+                        <Select aria-label={t("invoice.unit")} className="h-8 w-auto min-w-24 px-2 text-[13px]" value={l.unitId} disabled={Boolean(l.receiptItemId)} onChange={(e) => setLine(l.key, { unitId: e.target.value })}>
                           {units.map((u) => (
                             <option key={u.unitId} value={u.unitId}>
                               {u.symbol}
@@ -731,10 +904,10 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
                         </Select>
                       </td>
                       <td className="py-2 pl-2">
-                        <Input inputSize="sm" inputMode="decimal" aria-label={t("invoice.qty")} className="ml-auto w-20 [&_input]:text-right" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value.trim() })} />
+                        <Input inputSize="sm" inputMode="decimal" aria-label={t("invoice.qty")} className="ml-auto w-20 [&_input]:text-right" value={l.qty} readOnly={Boolean(l.receiptItemId)} onChange={(e) => setLine(l.key, { qty: e.target.value.trim() })} />
                       </td>
                       <td className="py-2 pl-2">
-                        <Input inputSize="sm" inputMode="decimal" aria-label={t("invoice.free")} className="ml-auto w-16 [&_input]:text-right" value={l.freeQty} onChange={(e) => setLine(l.key, { freeQty: e.target.value.trim() })} />
+                        <Input inputSize="sm" inputMode="decimal" aria-label={t("invoice.free")} className="ml-auto w-16 [&_input]:text-right" value={l.freeQty} readOnly={Boolean(l.receiptItemId)} onChange={(e) => setLine(l.key, { freeQty: e.target.value.trim() })} />
                       </td>
                       <td className="py-2 pl-2">
                         <Input inputSize="sm" inputMode="decimal" aria-label={t("invoice.rate")} className="ml-auto w-24 [&_input]:text-right" value={l.rate} onChange={(e) => setLine(l.key, { rate: e.target.value.trim() })} />
@@ -755,7 +928,9 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
                         />
                       </td>
                       <td className="py-2 pl-2">
-                        {p.trackBatches || p.trackExpiry ? (
+                        {l.receiptItemId ? (
+                          <span className="text-[12px] text-ink-3">{[l.batchNumber, l.expiryDate].filter(Boolean).join(" · ") || "—"}</span>
+                        ) : p.trackBatches || p.trackExpiry ? (
                           <div className="flex flex-col gap-1">
                             {p.trackBatches && <Input inputSize="sm" aria-label={t("invoice.batch")} placeholder={t("invoice.batch")} className="w-28" value={l.batchNumber} onChange={(e) => setLine(l.key, { batchNumber: e.target.value })} />}
                             {p.trackExpiry && <Input inputSize="sm" type="date" aria-label={t("invoice.expiry")} className="w-36" value={l.expiryDate} onChange={(e) => setLine(l.key, { expiryDate: e.target.value })} />}
@@ -769,7 +944,7 @@ function PurchaseEntry({ supplierId: initialSupplier, draft, correction }: { sup
                         {r && <p className="text-[11.5px] text-ink-3">{money(r.taxable.toNumber())} + {money(r.taxTotal.toNumber())}</p>}
                       </td>
                       <td className="py-2 pr-4 pl-2 text-right">
-                        <IconButton label={t("invoice.remove")} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>
+                        <IconButton label={l.receiptNumber ? t("buying.fromSources.removeReceipt", { number: l.receiptNumber }) : t("invoice.remove")} onClick={() => removeLine(l)}>
                           <Trash2 size={16} />
                         </IconButton>
                       </td>

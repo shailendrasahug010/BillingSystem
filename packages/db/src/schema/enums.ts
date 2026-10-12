@@ -55,6 +55,10 @@ export const adjustmentReason = pgEnum("adjustment_reason", [
   "other",
 ]);
 export const transferStatus = pgEnum("transfer_status", ["draft", "in_transit", "received", "cancelled"]);
+/** Placed with the supplier; some goods came; all came; no more expected (closed by hand); cancelled before anything came. */
+export const purchaseOrderStatus = pgEnum("purchase_order_status", ["open", "partly_received", "received", "closed", "cancelled"]);
+/** Goods in, waiting for the supplier's bill; billed; cancelled (the goods went back out). */
+export const goodsReceiptStatus = pgEnum("goods_receipt_status", ["received", "billed", "cancelled"]);
 
 export const paymentMethod = pgEnum("payment_method", tuple(PAYMENT_METHODS));
 export const paymentDirection = pgEnum("payment_direction", ["in", "out"]);

@@ -20,6 +20,8 @@ export interface StockMovementInput {
   refNumber?: string | null;
   reason?: string | null;
   userId: string;
+  /** "keep": stock coming in does not move the average cost (a cost correction sets it itself). */
+  average?: "update" | "keep";
 }
 
 export interface StockMovementResult {
@@ -53,7 +55,7 @@ export async function postStockMovement(tx: Tx, m: StockMovementInput, policy: N
     )
     .for("update");
 
-  if (directionOf(m.type) === "in" && m.unitCost && dec(m.unitCost).gt(0)) {
+  if (directionOf(m.type) === "in" && m.average !== "keep" && m.unitCost && dec(m.unitCost).gt(0)) {
     await updateAverageCost(tx, m.businessId, m.productId, m.qty, m.unitCost);
   }
 
@@ -108,6 +110,39 @@ async function updateAverageCost(tx: Tx, businessId: string, productId: string, 
     .update(schema.products)
     .set({ avgCost: toRateString(roundRate(next)) })
     .where(eq(schema.products.id, productId));
+}
+
+/**
+ * Goods already in stock found to cost more or less than they came in at (a
+ * bill for goods received before it): the ledger's value moves by taking
+ * them out at the old cost and back in at the new one (the quantity stays),
+ * and the average cost takes the difference over the stock on hand, as far
+ * as those goods are still there (what was sold already kept its cost).
+ */
+export async function revalueStock(
+  tx: Tx,
+  m: Omit<StockMovementInput, "type" | "unitCost" | "average"> & { from: string; to: string },
+): Promise<void> {
+  if (dec(m.from).eq(m.to) || dec(m.qty).lte(0)) return;
+  const { from, to, ...common } = m;
+  await postStockMovement(tx, { ...common, type: "adjustment_out", unitCost: from }, "allow");
+  await postStockMovement(tx, { ...common, type: "adjustment_in", unitCost: to, average: "keep" }, "allow");
+  const [row] = await tx
+    .select({
+      avgCost: schema.products.avgCost,
+      onHand: sql<string>`coalesce((select sum(qty) from stock_balances sb where sb.business_id = ${m.businessId} and sb.product_id = ${m.productId}), 0)`,
+    })
+    .from(schema.products)
+    .where(and(eq(schema.products.id, m.productId), eq(schema.products.businessId, m.businessId)))
+    .for("no key update");
+  if (!row || dec(row.onHand).lte(0)) return;
+  const onHand = dec(row.onHand);
+  const still = dec(m.qty).gt(onHand) ? onHand : dec(m.qty);
+  const next = dec(row.avgCost).plus(still.times(dec(to).minus(from)).dividedBy(onHand));
+  await tx
+    .update(schema.products)
+    .set({ avgCost: toRateString(roundRate(next.gt(0) ? next : 0)) })
+    .where(eq(schema.products.id, m.productId));
 }
 
 /** Total stock of products across warehouses (base unit). */

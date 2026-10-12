@@ -25,8 +25,27 @@ export type Route =
   /** The signed-in person's own name, email and password. */
   | { name: "profile" }
   | { name: "design-system" }
-  | { name: "purchase-new"; supplierId?: string; draft?: PurchaseDraft; /** Entering a wrong bill again: the purchase it replaces. */ correctsId?: string }
+  | {
+      name: "purchase-new";
+      supplierId?: string;
+      draft?: PurchaseDraft;
+      /** Entering a wrong bill again: the purchase it replaces. */
+      correctsId?: string;
+      /** The bill for goods received before it (a goods receipt), or for what an order brings. */
+      receiptId?: string;
+      orderId?: string;
+    }
   | { name: "purchase-view"; purchaseId: string }
+  /** Purchase bills, orders to suppliers, goods received before their bill. */
+  | { name: "purchase-list"; tab: "orders" | "receipts" }
+  /** An order to a supplier; lines: what to order, chosen on What to order. */
+  | { name: "purchase-order-new"; supplierId?: string; lines?: Array<{ productId: string; unitId: string; qty: string; rate: string }> }
+  | { name: "purchase-order-view"; purchaseOrderId: string }
+  /** Goods received before their bill, against an order or by themselves. */
+  | { name: "goods-receipt-new"; supplierId?: string; orderId?: string }
+  | { name: "goods-receipt-view"; goodsReceiptId: string }
+  /** Products running short, to order from their suppliers. */
+  | { name: "purchase-reorder"; supplierId?: string }
   | { name: "supplier"; supplierId: string }
   | { name: "order-view"; orderId: string }
   /** Module screens; live mode renders the real screen, demo mode the plan. */
@@ -103,6 +122,11 @@ const SIMPLE_ROUTES: Record<string, Route> = {
   design: { name: "design-system" },
   login: { name: "login" },
   "purchase-new": { name: "purchase-new" },
+  "purchase-orders": { name: "purchase-list", tab: "orders" },
+  "goods-receipts": { name: "purchase-list", tab: "receipts" },
+  "purchase-order-new": { name: "purchase-order-new" },
+  receive: { name: "goods-receipt-new" },
+  reorder: { name: "purchase-reorder" },
 };
 
 /** Screens of one record: #<token>/<id>. */
@@ -112,6 +136,11 @@ const RECORD_ROUTES = {
   purchase: (id: string): Route => ({ name: "purchase-view", purchaseId: id }),
   supplier: (id: string): Route => ({ name: "supplier", supplierId: id }),
   order: (id: string): Route => ({ name: "order-view", orderId: id }),
+  "purchase-order": (id: string): Route => ({ name: "purchase-order-view", purchaseOrderId: id }),
+  "goods-receipt": (id: string): Route => ({ name: "goods-receipt-view", goodsReceiptId: id }),
+  "purchase-order-new": (id: string): Route => ({ name: "purchase-order-new", supplierId: id }),
+  receive: (id: string): Route => ({ name: "goods-receipt-new", orderId: id }),
+  reorder: (id: string): Route => ({ name: "purchase-reorder", supplierId: id }),
 } satisfies Record<string, (id: string) => Route>;
 
 /**
@@ -133,6 +162,8 @@ export function routeFromHash(hash: string): Route | null {
   if (token === "invoice" && a === "new") return b ? { name: "invoice-new", customerId: b } : { name: "invoice-new" };
   if (token === "purchase-new" && a) return { name: "purchase-new", supplierId: a };
   if (token === "purchase-correct" && a) return { name: "purchase-new", correctsId: a };
+  if (token === "purchase-from-receipt" && a) return { name: "purchase-new", receiptId: a };
+  if (token === "purchase-from-order" && a) return { name: "purchase-new", orderId: a };
   if (!a && token in SIMPLE_ROUTES) return SIMPLE_ROUTES[token]!;
   if (a && token in RECORD_ROUTES) return RECORD_ROUTES[token as keyof typeof RECORD_ROUTES](a);
   const module = PLANNED_MODULES.find((m) => m === token);
@@ -153,6 +184,8 @@ export function hashFor(route: Route): string {
       return `#customer/${id(route.customerId)}`;
     case "purchase-new":
       if (route.correctsId) return `#purchase-correct/${id(route.correctsId)}`;
+      if (route.receiptId) return `#purchase-from-receipt/${id(route.receiptId)}`;
+      if (route.orderId) return `#purchase-from-order/${id(route.orderId)}`;
       return route.supplierId ? `#purchase-new/${id(route.supplierId)}` : "#purchase-new";
     case "purchase-view":
       return `#purchase/${id(route.purchaseId)}`;
@@ -160,6 +193,18 @@ export function hashFor(route: Route): string {
       return `#supplier/${id(route.supplierId)}`;
     case "order-view":
       return `#order/${id(route.orderId)}`;
+    case "purchase-list":
+      return route.tab === "orders" ? "#purchase-orders" : "#goods-receipts";
+    case "purchase-order-new":
+      return route.supplierId ? `#purchase-order-new/${id(route.supplierId)}` : "#purchase-order-new";
+    case "purchase-order-view":
+      return `#purchase-order/${id(route.purchaseOrderId)}`;
+    case "goods-receipt-new":
+      return route.orderId ? `#receive/${id(route.orderId)}` : "#receive";
+    case "goods-receipt-view":
+      return `#goods-receipt/${id(route.goodsReceiptId)}`;
+    case "purchase-reorder":
+      return route.supplierId ? `#reorder/${id(route.supplierId)}` : "#reorder";
     case "planned":
       return `#${route.module}${route.action ? `/${route.action}` : ""}${route.partyId ? `/${id(route.partyId)}` : ""}`;
     default:

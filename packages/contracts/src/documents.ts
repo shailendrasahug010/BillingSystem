@@ -228,6 +228,10 @@ export const PurchaseLineInput = z.strictObject({
       name: z.string().trim().max(200).optional(),
     })
     .optional(),
+  /** The goods receipt line this bill line pays for: the goods are in stock already, the bill sets their cost. */
+  goodsReceiptItemId: Id.optional(),
+  /** The purchase order line of goods that come in with this bill. */
+  purchaseOrderItemId: Id.optional(),
 });
 
 export const PurchaseBody = z.strictObject({

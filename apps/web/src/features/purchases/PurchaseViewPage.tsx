@@ -71,7 +71,13 @@ export interface PurchaseDetail {
     expiryDate: string | null;
     mfgDate?: string | null;
     mrp?: string | null;
+    /** The goods receipt line it billed, or the order line its goods came for. */
+    goodsReceiptItemId?: string | null;
+    purchaseOrderItemId?: string | null;
   }>;
+  /** Goods received before the bill that it paid for, and the orders its goods came against. */
+  receipts?: Array<{ id: string; receiptNumber: string; receivedDate: string }>;
+  orders?: Array<{ id: string; orderNumber: string }>;
   returns: ReturnRow[];
   payments: Array<{ paymentId: string; paymentNumber: string; paymentDate: string; method: PaymentMethod; amount: string; reversedAt: string | null }>;
 }
@@ -161,9 +167,23 @@ export function PurchaseViewPage({ purchaseId }: { purchaseId: string }) {
         }
       />
       {error ? <ErrorNote error={error} /> : null}
+      {((p.receipts?.length ?? 0) > 0 || (p.orders?.length ?? 0) > 0) && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-2" data-bill-sources>
+          {(p.receipts ?? []).map((r) => (
+            <button key={r.id} type="button" className="text-accent hover:underline" onClick={() => navigate({ name: "goods-receipt-view", goodsReceiptId: r.id })}>
+              {t("buying.fromSources.fromReceipt", { number: r.receiptNumber })}
+            </button>
+          ))}
+          {(p.orders ?? []).map((o) => (
+            <button key={o.id} type="button" className="text-accent hover:underline" onClick={() => navigate({ name: "purchase-order-view", purchaseOrderId: o.id })}>
+              {t("buying.fromSources.fromOrder", { number: o.orderNumber })}
+            </button>
+          ))}
+        </p>
+      )}
       {cancelling && (
         <Card className="flex flex-col gap-3 border-danger/40 p-4">
-          <p className="text-[13.5px] text-ink-2">{t("purchase.cancelHint")}</p>
+          <p className="text-[13.5px] text-ink-2">{(p.receipts?.length ?? 0) > 0 ? t("buying.fromSources.cancelHint") : t("purchase.cancelHint")}</p>
           <Field label={t("common.reason")} htmlFor="pu-cancel">
             <Input id="pu-cancel" autoFocus maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>

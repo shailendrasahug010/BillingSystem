@@ -49,6 +49,11 @@ const PurchaseEntryPage = lazy(() => import("../features/purchases/PurchaseEntry
 const InvoicesPage = lazy(() => import("../features/invoice/InvoicesPage").then((m) => ({ default: m.InvoicesPage })));
 const PurchasesPage = lazy(() => import("../features/purchases/PurchasesPage").then((m) => ({ default: m.PurchasesPage })));
 const PurchaseViewPage = lazy(() => import("../features/purchases/PurchaseViewPage").then((m) => ({ default: m.PurchaseViewPage })));
+const PurchaseOrderEntryPage = lazy(() => import("../features/purchases/BuyEntryPage").then((m) => ({ default: m.PurchaseOrderEntryPage })));
+const GoodsReceiptEntryPage = lazy(() => import("../features/purchases/BuyEntryPage").then((m) => ({ default: m.GoodsReceiptEntryPage })));
+const PurchaseOrderViewPage = lazy(() => import("../features/purchases/BuyViewPages").then((m) => ({ default: m.PurchaseOrderViewPage })));
+const GoodsReceiptViewPage = lazy(() => import("../features/purchases/BuyViewPages").then((m) => ({ default: m.GoodsReceiptViewPage })));
+const ReorderPage = lazy(() => import("../features/purchases/ReorderPage").then((m) => ({ default: m.ReorderPage })));
 const ReportsPage = lazy(() => import("../features/reports/ReportsPage").then((m) => ({ default: m.ReportsPage })));
 const SchemesPage = lazy(() => import("../features/schemes/SchemesPage").then((m) => ({ default: m.SchemesPage })));
 const SupplierProfilePage = lazy(() => import("../features/suppliers/SupplierProfilePage").then((m) => ({ default: m.SupplierProfilePage })));
@@ -108,9 +113,30 @@ function Screen({ route }: { route: Route }) {
     case "design-system":
       return <DesignSystemPage />;
     case "purchase-new":
-      return <PurchaseEntryPage key={route.draft?.id ?? route.correctsId ?? route.supplierId ?? "new"} {...(route.supplierId ? { supplierId: route.supplierId } : {})} {...(route.correctsId ? { correctsId: route.correctsId } : {})} {...(route.draft ? { draft: route.draft } : {})} />;
+      return (
+        <PurchaseEntryPage
+          key={route.draft?.id ?? route.correctsId ?? route.receiptId ?? route.orderId ?? route.supplierId ?? "new"}
+          {...(route.supplierId ? { supplierId: route.supplierId } : {})}
+          {...(route.correctsId ? { correctsId: route.correctsId } : {})}
+          {...(route.draft ? { draft: route.draft } : {})}
+          {...(route.receiptId ? { receiptId: route.receiptId } : {})}
+          {...(route.orderId ? { orderId: route.orderId } : {})}
+        />
+      );
     case "purchase-view":
       return <PurchaseViewPage purchaseId={route.purchaseId} />;
+    case "purchase-list":
+      return <PurchasesPage key={route.tab} initialTab={route.tab} />;
+    case "purchase-order-new":
+      return <PurchaseOrderEntryPage key={route.supplierId ?? "new"} {...(route.supplierId ? { supplierId: route.supplierId } : {})} {...(route.lines ? { lines: route.lines } : {})} />;
+    case "purchase-order-view":
+      return <PurchaseOrderViewPage key={route.purchaseOrderId} purchaseOrderId={route.purchaseOrderId} />;
+    case "goods-receipt-new":
+      return <GoodsReceiptEntryPage key={route.orderId ?? route.supplierId ?? "new"} {...(route.supplierId ? { supplierId: route.supplierId } : {})} {...(route.orderId ? { orderId: route.orderId } : {})} />;
+    case "goods-receipt-view":
+      return <GoodsReceiptViewPage key={route.goodsReceiptId} goodsReceiptId={route.goodsReceiptId} />;
+    case "purchase-reorder":
+      return <ReorderPage key={route.supplierId ?? "all"} {...(route.supplierId ? { supplierId: route.supplierId } : {})} />;
     case "supplier":
       return <SupplierProfilePage supplierId={route.supplierId} />;
     case "order-view":

@@ -25,7 +25,8 @@ export const PERMISSION_CATALOG = {
     /** Bills made offline that were held because they broke a rule by the time they reached the server. */
     "review",
   ],
-  purchase: ["view", "create", "update", "cancel"],
+  /** order: purchase orders to suppliers; receive: goods received before their bill (a godown job). */
+  purchase: ["view", "create", "update", "cancel", "order", "receive"],
   packing: ["view", "pack"],
   dispatch: ["view", "dispatch", "deliver"],
   inventory: ["view", "adjust", "transfer", "view_value"],
@@ -176,6 +177,7 @@ export const DEFAULT_ROLES: readonly RoleTemplate[] = [
       "inventory.adjust",
       "inventory.transfer",
       "purchase.view",
+      "purchase.receive",
       "notification.view",
     ],
   },

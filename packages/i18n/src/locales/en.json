@@ -1328,7 +1328,21 @@
     "SCHEME_FREE_LINE": "{{product}}: goods given free under a scheme are a line of their own, at 100% off.",
     "RETURN_NEEDS_BILL": "Goods from an export or SEZ customer are returned against their bill.",
     "NOTE_NOT_ON_ACCOUNT": "Only a credit note for goods returned without their bill is applied to open bills.",
-    "DEBIT_NOTE_PAID": "This bill has been paid past the debit note (balance {{balance}}). Take that payment off the bill before cancelling the note."
+    "DEBIT_NOTE_PAID": "This bill has been paid past the debit note (balance {{balance}}). Take that payment off the bill before cancelling the note.",
+    "EXPECTED_BEFORE_ORDER": "The wanted-by date is before the order date.",
+    "PURCHASE_ORDER_NOT_OPEN": "Order {{number}} is no longer open for goods.",
+    "PURCHASE_ORDER_RECEIVED": "Goods came against order {{number}}: close it instead of cancelling it.",
+    "ORDER_OTHER_SUPPLIER": "Order {{number}} is with another supplier.",
+    "ORDER_LINE_OTHER_PRODUCT": "That order line is for another product.",
+    "GOODS_RECEIPT_BILLED": "Goods receipt {{number}} is billed already.",
+    "GOODS_RECEIPT_CANCELLED": "Goods receipt {{number}} is cancelled.",
+    "RECEIPT_OTHER_SUPPLIER": "Goods receipt {{number}} is from another supplier.",
+    "RECEIPT_NOT_WHOLE": "Bill every line of goods receipt {{number}} together.",
+    "RECEIPT_LINE_CHANGED": "{{product}}: bill it as it was received (the same unit and quantity).",
+    "RECEIPT_LINE_TWICE": "A line of goods received is on the bill twice.",
+    "RECEIPTS_TWO_GODOWNS": "These goods receipts are in different godowns: make a bill for each.",
+    "RECEIPT_OTHER_GODOWN": "The goods on this bill were received in another godown.",
+    "LINE_TWO_SOURCES": "A line cannot come from both a goods receipt and an order."
   },
   "validation": {
     "required": "This field is required",
@@ -1873,7 +1887,9 @@
       "manage_roles": "Manage roles",
       "download": "Download",
       "restore": "Restore",
-      "send": "Send"
+      "send": "Send",
+      "order": "Order from suppliers",
+      "receive": "Receive goods"
     }
   },
   "receipt": {
@@ -1929,7 +1945,9 @@
       "setting": "Setting",
       "business": "Business profile",
       "document_series": "Number series",
-      "scheme": "Scheme"
+      "scheme": "Scheme",
+      "purchase_order": "Purchase order",
+      "goods_receipt": "Goods receipt"
     }
   },
   "notes": {
@@ -4624,6 +4642,126 @@
       "lines": "Bill by bill",
       "billsCount_one": "{{count}} bill",
       "billsCount_other": "{{count}} bills"
+    }
+  },
+  "buying": {
+    "tabs": {
+      "bills": "Bills",
+      "orders": "Orders",
+      "receipts": "Goods received"
+    },
+    "inStock": "{{qty}} {{unit}} in stock",
+    "order": {
+      "new": "New purchase order",
+      "newHint": "What you want from the supplier, at the rates you expect. No stock moves until the goods come.",
+      "number": "Order no.",
+      "date": "Order date",
+      "expected": "Wanted by",
+      "deliverTo": "Deliver to",
+      "save": "Save order",
+      "saved": "Order saved",
+      "estimate": "At the order's rates",
+      "search": "Search by order number or supplier",
+      "empty": "No purchase orders yet",
+      "emptyHint": "Order from a supplier here, or start from What to order.",
+      "pending": "Still to come",
+      "pendingCount_one": "{{count}} item still to come",
+      "pendingCount_other": "{{count}} items still to come",
+      "ordered": "Ordered",
+      "received": "Received",
+      "left": "Still to come",
+      "receive": "Receive goods",
+      "makeBill": "Make the bill",
+      "share": "Send on WhatsApp",
+      "message": "Purchase order {{number}} from {{business}}:",
+      "deliverBy": "Please deliver by {{date}}.",
+      "close": "Close order",
+      "closeHint": "No more goods will come against this order. A reason is optional.",
+      "confirmClose": "Yes, close the order",
+      "closed": "Order closed",
+      "cancel": "Cancel order",
+      "cancelHint": "Nothing came against this order yet. A reason is optional.",
+      "confirmCancel": "Yes, cancel the order",
+      "cancelled": "Order cancelled",
+      "notOpen": "Order {{number}} is no longer open for goods",
+      "receipts": "Goods received",
+      "noReceipts": "Nothing received yet",
+      "bills": "Bills",
+      "noBills": "No bill has brought goods for this order yet",
+      "status": {
+        "open": "Open",
+        "partly_received": "Partly received",
+        "received": "Received",
+        "closed": "Closed",
+        "cancelled": "Cancelled"
+      }
+    },
+    "receipt": {
+      "new": "Receive goods",
+      "newHint": "Goods that came before their bill: the stock comes in now at the expected rate, and the bill sets their cost.",
+      "against": "Against order {{number}}",
+      "number": "GRN no.",
+      "date": "Received on",
+      "challan": "Supplier's challan no.",
+      "expectedRate": "Expected rate",
+      "value": "Value",
+      "valueHint": "At the expected rates, before GST.",
+      "save": "Save receipt",
+      "saved": "Goods received",
+      "search": "Search by GRN, supplier or challan",
+      "empty": "No goods waiting for a bill",
+      "emptyHint": "When goods come before the supplier's bill, receive them here and make the bill when it comes.",
+      "waitingHint": "These goods are in stock and wait for the supplier's bill. Make the bill when it comes: its rates set their cost.",
+      "order": "Order",
+      "bill": "Bill",
+      "makeBill": "Make the bill",
+      "cancel": "Cancel receipt",
+      "cancelHint": "The goods go back out of stock and off their order.",
+      "confirmCancel": "Yes, cancel the receipt",
+      "cancelled": "Receipt cancelled",
+      "status": {
+        "received": "Waiting for the bill",
+        "billed": "Billed",
+        "cancelled": "Cancelled"
+      }
+    },
+    "fromSources": {
+      "title": "Goods received and orders",
+      "hint": "Add what came before this bill, or what this bill brings from an order.",
+      "add": "Add {{number}}",
+      "fromReceipt": "Received on {{number}}",
+      "fromOrder": "Order {{number}}",
+      "removeReceipt": "Take {{number}} off the bill",
+      "lockedHint": "Billed as received: the quantity, unit and batch come from the receipt.",
+      "godownHint": "The goods on this bill are in the godown they were received in.",
+      "cancelHint": "Goods received before this bill stay in stock and wait for a bill again; the rest go back out. The supplier's payable is reduced."
+    },
+    "reorder": {
+      "title": "What to order",
+      "hint": "Products running short: stock on hand, the pace of sales, and what is already on order.",
+      "button": "What to order",
+      "supplier": "Supplier",
+      "allSuppliers": "All suppliers",
+      "days": "Pace of sales over",
+      "daysValue": "{{days}} days",
+      "lead": "Delivery takes (days)",
+      "cover": "Should last (days)",
+      "onHand": "In stock",
+      "onOrder": "On order",
+      "perDay": "Sells a day",
+      "daysLeft": "Lasts",
+      "daysLeftValue": "{{days}} days",
+      "suggest": "Order",
+      "reasons": {
+        "out": "None left",
+        "below_min": "Below minimum",
+        "runs_out": "Runs out"
+      },
+      "make_one": "Make order with {{count}} item",
+      "make_other": "Make order with {{count}} items",
+      "noSupplier": "No supplier",
+      "empty": "Nothing to order",
+      "emptyHint": "Stock and open orders cover the coming days."
     }
   }
 }
