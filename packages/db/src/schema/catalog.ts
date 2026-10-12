@@ -185,6 +185,11 @@ export const products = pgTable(
     trackExpiry: boolean().notNull().default(false),
     /** Reserved for serial-number tracking (not used yet). */
     trackSerials: boolean().notNull().default(false),
+    /**
+     * The seller collects TCS on it (394(1), old 206C(1) and (1F)) when the business turns TCS on: liquor,
+     * tendu, timber_lease, timber, forest, scrap, minerals, motor_vehicle or luxury; null for other goods.
+     */
+    tcsGoods: varchar({ length: 20 }),
     /** Variant support: variants share a parent and differ by attributes ({"size":"1kg"}). */
     parentProductId: uuid().references((): AnyPgColumn => products.id),
     /** What makes this variant different, e.g. {"size": "1kg"}. */
@@ -204,6 +209,10 @@ export const products = pgTable(
     check("products_prices_chk", sql`${t.purchasePrice} >= 0 and ${t.sellingPrice} >= 0 and ${t.avgCost} >= 0`),
     check("products_mrp_chk", sql`${t.mrp} is null or ${t.mrp} >= 0`),
     check("products_hsn_chk", sql`${t.hsnCode} is null or ${t.hsnCode} ~ '^([0-9]{4}|[0-9]{6}|[0-9]{8})$'`),
+    check(
+      "products_tcs_goods_chk",
+      sql`${t.tcsGoods} is null or ${t.tcsGoods} in ('liquor', 'tendu', 'timber_lease', 'timber', 'forest', 'scrap', 'minerals', 'motor_vehicle', 'luxury')`,
+    ),
   ],
 );
 

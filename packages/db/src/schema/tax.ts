@@ -1,18 +1,22 @@
-import { date, index, pgTable, text, unique, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, date, index, pgTable, text, unique, varchar } from "drizzle-orm/pg-core";
 import { auditColumns, money, pk } from "./columns.js";
 import { businessId } from "./platform.js";
 
 /**
- * Income tax the business deducted at source (TDS on purchase bills) paid
- * to the government: one challan per month's deductions, with the bank's
- * BSR code and the challan's serial number as the quarterly TDS return asks.
- * The bills it paid point to it (purchases.tds_challan_id).
+ * Income tax the business deducted at source (TDS on purchase bills) or
+ * collected at source (TCS on sales) paid to the government: one challan
+ * per month's deductions or collections, with the bank's BSR code and the
+ * challan's serial number as the quarterly return asks. The bills it paid
+ * point to it (purchases.tds_challan_id, invoices.tcs_challan_id).
  */
 export const tdsChallans = pgTable(
   "tds_challans",
   {
     id: pk(),
     businessId: businessId(),
+    /** TDS kept back on purchase bills, or TCS collected on sales. */
+    kind: varchar({ length: 3 }).notNull().default("tds"),
     /** Month whose deductions it pays ("2026-09"). */
     periodMonth: varchar({ length: 7 }).notNull(),
     /** Date the tax was paid. */
@@ -30,5 +34,9 @@ export const tdsChallans = pgTable(
     notes: text(),
     ...auditColumns,
   },
-  (t) => [unique("tds_challans_uq").on(t.businessId, t.depositDate, t.bsrCode, t.challanSerial), index("tds_challans_period_idx").on(t.businessId, t.periodMonth)],
+  (t) => [
+    unique("tds_challans_uq").on(t.businessId, t.depositDate, t.bsrCode, t.challanSerial),
+    index("tds_challans_period_idx").on(t.businessId, t.periodMonth),
+    check("tds_challans_kind_chk", sql`${t.kind} in ('tds', 'tcs')`),
+  ],
 );

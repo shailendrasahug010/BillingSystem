@@ -1,4 +1,4 @@
-import { findState, PAYMENT_METHODS, type PaymentMethod } from "@digitalbahi/core";
+import { findState, PAYMENT_METHODS, tcsLabel, type PaymentMethod } from "@digitalbahi/core";
 import { Loader2, Printer, Save, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../app/i18n";
@@ -195,6 +195,8 @@ export function SummaryPanel({
             <Row label={t("invoice.igst")} value={money(totals?.igstTotal.toNumber() ?? 0)} muted />
           )}
           {totals && totals.cessTotal.gt(0) && <Row label={t("invoice.cess")} value={money(totals.cessTotal.toNumber())} muted />}
+          {/* TCS collected on specified goods (scrap, liquor…): on top of the GST, outside its value. */}
+          {totals?.tcs?.parts.map((p) => <Row key={p.goods} label={tcsLabel(p)} value={money(p.amount.toNumber())} />)}
           <Row label={t("invoice.roundOff")} value={money(totals?.roundOff.toNumber() ?? 0)} muted />
         </dl>
 

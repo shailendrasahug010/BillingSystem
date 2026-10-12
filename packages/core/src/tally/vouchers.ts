@@ -90,6 +90,8 @@ export const TALLY_LEDGERS = {
   tdsReceivable: { name: "TDS Receivable", parent: "Current Assets" },
   /** TDS kept back on purchase bills, until paid to the government. */
   tdsPayable: { name: "TDS Payable", parent: "Duties & Taxes" },
+  /** TCS collected on sales bills, until paid to the government. */
+  tcsPayable: { name: "TCS Payable", parent: "Duties & Taxes" },
 } as const satisfies Record<string, TallyLedger>;
 
 /** The totals every GST document carries (strings as stored). */
@@ -103,6 +105,8 @@ export interface TallyDocumentTotals {
   isReverseCharge?: boolean;
   /** A purchase bill's TDS kept back: the supplier is owed the rest, TDS Payable takes it. */
   tdsAmount?: string;
+  /** A sales bill's TCS: part of what the customer owes, TCS Payable takes it. */
+  tcsAmount?: string;
 }
 
 const cents = (v: string | number) => Math.round(Number(v) * 100);
@@ -127,7 +131,8 @@ export function documentEntries(doc: TallyDocumentTotals, party: string, side: "
           [side === "sales" ? L.outputCess : L.inputCess, cents(doc.cessTotal)],
         ] as const);
   const round = cents(doc.roundOff);
-  const counter = total - taxes.reduce((s, [, v]) => s + v, 0) - round;
+  const tcs = side === "sales" && doc.tcsAmount ? cents(doc.tcsAmount) : 0;
+  const counter = total - taxes.reduce((s, [, v]) => s + v, 0) - round - tcs;
   const tds = side === "purchase" && doc.tdsAmount ? cents(doc.tdsAmount) : 0;
   const entries: Array<[string, number, boolean]> = [
     [party, sign * (total - tds), true],
@@ -135,6 +140,7 @@ export function documentEntries(doc: TallyDocumentTotals, party: string, side: "
     ...taxes.map(([l, v]) => [l.name, -sign * v, false] as [string, number, boolean]),
     [L.roundOff.name, -sign * round, false],
     [L.tdsPayable.name, sign * tds, false],
+    [L.tcsPayable.name, -sign * tcs, false],
   ];
   return entries.filter(([, v, isParty]) => isParty || v !== 0).map(([ledger, v, isParty]) => ({ ledger, amount: v / 100, ...(isParty ? { party: true } : {}) }));
 }

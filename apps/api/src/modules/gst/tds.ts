@@ -1,5 +1,5 @@
 import { IsoDate } from "@digitalbahi/contracts";
-import { dec, partyPan, taxQuarterOf, tdsDueDate, toAmountString } from "@digitalbahi/core";
+import { dec, partyPan, taxQuarterOf, tcsDueDate, tdsDueDate, toAmountString } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -18,7 +18,10 @@ const Month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 const MonthQuery = z.object({ month: Month });
 const RangeQuery = z.object({ from: IsoDate, to: IsoDate });
 const SupplierTdsQuery = z.object({ date: IsoDate.optional() });
+const Kind = z.enum(["tds", "tcs"]);
 const ChallanBody = z.strictObject({
+  /** TDS kept back on purchase bills (the default), or TCS collected on sales. */
+  kind: Kind.default("tds"),
   periodMonth: Month,
   depositDate: IsoDate,
   bsrCode: z.string().trim().regex(/^\d{7}$/),
@@ -34,14 +37,20 @@ const monthBounds = (month: string) => {
   return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, "0")}` };
 };
 
-/** A challan as the screens show it. */
+/** A challan as the screens show it: with the number of bills it paid (purchase bills for TDS, sales bills for TCS). */
 async function challanView(tx: Tx, businessId: string, id: string) {
   const [c] = await tx.select().from(schema.tdsChallans).where(and(eq(schema.tdsChallans.id, id), eq(schema.tdsChallans.businessId, businessId)));
   if (!c) throw notFound("tds_challan");
-  const [bills] = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(schema.purchases)
-    .where(and(eq(schema.purchases.businessId, businessId), eq(schema.purchases.tdsChallanId, id)));
+  const [bills] =
+    c.kind === "tcs"
+      ? await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(schema.invoices)
+          .where(and(eq(schema.invoices.businessId, businessId), eq(schema.invoices.tcsChallanId, id)))
+      : await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(schema.purchases)
+          .where(and(eq(schema.purchases.businessId, businessId), eq(schema.purchases.tdsChallanId, id)));
   const { businessId: _b, ...rest } = c;
   return { ...rest, bills: Number(bills?.n ?? 0) };
 }
@@ -134,14 +143,14 @@ export const tdsModule: ApiModule = async (app, deps) => {
     };
   });
 
-  r.get("/tds/challans", { preHandler: guard(deps, "gst.view"), schema: { tags: ["gst"], querystring: z.object({ month: Month.optional() }) } }, async (request) => {
+  r.get("/tds/challans", { preHandler: guard(deps, "gst.view"), schema: { tags: ["gst"], querystring: z.object({ month: Month.optional(), kind: Kind.default("tds") }) } }, async (request) => {
     const ctx = request.ctx;
     return tenant(ctx, async (tx) => {
       const c = schema.tdsChallans;
       const rows = await tx
         .select({ id: c.id })
         .from(c)
-        .where(and(eq(c.businessId, ctx.businessId), request.query.month ? eq(c.periodMonth, request.query.month) : sql`true`))
+        .where(and(eq(c.businessId, ctx.businessId), eq(c.kind, request.query.kind), request.query.month ? eq(c.periodMonth, request.query.month) : sql`true`))
         .orderBy(desc(c.depositDate), desc(c.id))
         .limit(200);
       const data = [];
@@ -150,7 +159,10 @@ export const tdsModule: ApiModule = async (app, deps) => {
     });
   });
 
-  /** The month's TDS paid to the government: every bill of the month not yet on a challan goes on this one. */
+  /**
+   * The month's TDS (or TCS) paid to the government: every purchase bill (or sales bill) of the month with
+   * some, not yet on a challan, goes on this one.
+   */
   r.post("/tds/challans", { preHandler: guard(deps, "gst.file"), schema: { tags: ["gst"], body: ChallanBody } }, async (request, reply) => {
     const ctx = request.ctx;
     const body = request.body;
@@ -160,17 +172,28 @@ export const tdsModule: ApiModule = async (app, deps) => {
     const view = await tenant(ctx, async (tx) => {
       const { from, to } = monthBounds(body.periodMonth);
       const p = schema.purchases;
-      const bills = await tx
-        .select({ id: p.id, tdsAmount: p.tdsAmount })
-        .from(p)
-        .where(and(eq(p.businessId, ctx.businessId), eq(p.status, "posted"), isNull(p.tdsChallanId), sql`${p.tdsAmount} > 0`, sql`${p.supplierInvoiceDate} between ${from}::date and ${to}::date`))
-        .for("update");
+      const i = schema.invoices;
+      const bills =
+        body.kind === "tcs"
+          ? (
+              await tx
+                .select({ id: i.id, amount: i.tcsAmount })
+                .from(i)
+                .where(and(eq(i.businessId, ctx.businessId), eq(i.status, "posted"), isNull(i.tcsChallanId), sql`${i.tcsAmount} > 0`, sql`${i.invoiceDate} between ${from}::date and ${to}::date`))
+                .for("update")
+            )
+          : await tx
+              .select({ id: p.id, amount: p.tdsAmount })
+              .from(p)
+              .where(and(eq(p.businessId, ctx.businessId), eq(p.status, "posted"), isNull(p.tdsChallanId), sql`${p.tdsAmount} > 0`, sql`${p.supplierInvoiceDate} between ${from}::date and ${to}::date`))
+              .for("update");
       if (!bills.length) throw conflict("NOTHING_TO_DEPOSIT", { month: body.periodMonth });
       const id = uuidv7();
-      const taxAmount = bills.reduce((acc, b) => acc.plus(b.tdsAmount), dec(0));
+      const taxAmount = bills.reduce((acc, b) => acc.plus(b.amount), dec(0));
       await tx.insert(schema.tdsChallans).values({
         id,
         businessId: ctx.businessId,
+        kind: body.kind,
         periodMonth: body.periodMonth,
         depositDate: body.depositDate,
         bsrCode: body.bsrCode,
@@ -182,12 +205,11 @@ export const tdsModule: ApiModule = async (app, deps) => {
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       });
-      await tx
-        .update(p)
-        .set({ tdsChallanId: id })
-        .where(and(eq(p.businessId, ctx.businessId), sql`${p.id} in (${sql.join(bills.map((b) => sql`${b.id}::uuid`), sql`, `)})`));
+      const ids = sql.join(bills.map((b) => sql`${b.id}::uuid`), sql`, `);
+      if (body.kind === "tcs") await tx.update(i).set({ tcsChallanId: id }).where(and(eq(i.businessId, ctx.businessId), sql`${i.id} in (${ids})`));
+      else await tx.update(p).set({ tdsChallanId: id }).where(and(eq(p.businessId, ctx.businessId), sql`${p.id} in (${ids})`));
       await audit(tx, ctx, {
-        action: "tds.challan_recorded",
+        action: body.kind === "tcs" ? "tcs.challan_recorded" : "tds.challan_recorded",
         entityType: "tds_challan",
         entityId: id,
         entityLabel: `${body.bsrCode}/${body.challanSerial}`,
@@ -198,19 +220,92 @@ export const tdsModule: ApiModule = async (app, deps) => {
     return reply.code(201).send(view);
   });
 
-  /** A challan recorded by mistake: its bills' TDS is unpaid again. */
+  /** A challan recorded by mistake: its bills' TDS (or TCS) is unpaid again. */
   r.delete("/tds/challans/:id", { preHandler: guard(deps, "gst.file"), schema: { tags: ["gst"], params: IdParams } }, async (request, reply) => {
     const ctx = request.ctx;
     await tenant(ctx, async (tx) => {
       const c = await challanView(tx, ctx.businessId, request.params.id);
-      await tx
-        .update(schema.purchases)
-        .set({ tdsChallanId: null })
-        .where(and(eq(schema.purchases.businessId, ctx.businessId), eq(schema.purchases.tdsChallanId, c.id)));
+      if (c.kind === "tcs") {
+        await tx
+          .update(schema.invoices)
+          .set({ tcsChallanId: null })
+          .where(and(eq(schema.invoices.businessId, ctx.businessId), eq(schema.invoices.tcsChallanId, c.id)));
+      } else {
+        await tx
+          .update(schema.purchases)
+          .set({ tdsChallanId: null })
+          .where(and(eq(schema.purchases.businessId, ctx.businessId), eq(schema.purchases.tdsChallanId, c.id)));
+      }
       await tx.delete(schema.tdsChallans).where(eq(schema.tdsChallans.id, c.id));
-      await audit(tx, ctx, { action: "tds.challan_removed", entityType: "tds_challan", entityId: c.id, entityLabel: `${c.bsrCode}/${c.challanSerial}`, changes: { month: c.periodMonth, tax: c.taxAmount } });
+      await audit(tx, ctx, {
+        action: c.kind === "tcs" ? "tcs.challan_removed" : "tds.challan_removed",
+        entityType: "tds_challan",
+        entityId: c.id,
+        entityLabel: `${c.bsrCode}/${c.challanSerial}`,
+        changes: { month: c.periodMonth, tax: c.taxAmount },
+      });
     });
     return reply.code(204).send();
+  });
+
+  /** TCS collected on the month's sales bills (by bill date): each bill, its goods and rate, the challan that paid it, and the due date. */
+  r.get("/tcs/collected", { preHandler: guard(deps, "gst.view"), schema: { tags: ["gst"], querystring: MonthQuery } }, async (request) => {
+    const ctx = request.ctx;
+    const { month } = request.query;
+    const { from, to } = monthBounds(month);
+    const rows = await tenant(ctx, async (tx) =>
+      (
+        await tx.execute<{
+          id: string;
+          invoice_number: string | null;
+          invoice_date: string;
+          customer_id: string;
+          party_name: string;
+          pan: string | null;
+          gstin: string | null;
+          grand_total: string;
+          tcs_amount: string;
+          tcs: Array<{ goods: string; rate: string; base: string; amount: string }> | null;
+          challan_id: string | null;
+          bsr_code: string | null;
+          challan_serial: string | null;
+          deposit_date: string | null;
+        }>(sql`
+          select i.id, i.invoice_number, i.invoice_date::text, i.customer_id, i.party_name, c.pan, c.gstin,
+                 i.grand_total::text, i.tcs_amount::text, i.tcs,
+                 ch.id as challan_id, ch.bsr_code, ch.challan_serial, ch.deposit_date::text
+          from invoices i
+          join customers c on c.id = i.customer_id
+          left join tds_challans ch on ch.id = i.tcs_challan_id
+          where i.business_id = ${ctx.businessId} and i.status = 'posted' and i.tcs_amount > 0
+            and i.invoice_date between ${from}::date and ${to}::date
+          order by i.invoice_date, i.invoice_number, i.id`)
+      ).rows,
+    );
+    const total = rows.reduce((acc, x) => acc.plus(x.tcs_amount), dec(0));
+    const paid = rows.filter((x) => x.challan_id).reduce((acc, x) => acc.plus(x.tcs_amount), dec(0));
+    const dueDate = tcsDueDate(month);
+    const today = deps.clock.today(ctx.timeZone);
+    return {
+      month,
+      dueDate,
+      total: toAmountString(total),
+      paid: toAmountString(paid),
+      pending: toAmountString(total.minus(paid)),
+      overdue: total.minus(paid).gt(0) && today > dueDate,
+      data: rows.map((x) => ({
+        invoiceId: x.id,
+        invoiceNumber: x.invoice_number,
+        date: x.invoice_date,
+        customerId: x.customer_id,
+        partyName: x.party_name,
+        pan: partyPan({ pan: x.pan, gstin: x.gstin }),
+        billValue: x.grand_total,
+        parts: x.tcs ?? [],
+        tcs: x.tcs_amount,
+        challan: x.challan_id ? { id: x.challan_id, bsrCode: x.bsr_code!, challanSerial: x.challan_serial!, depositDate: x.deposit_date! } : null,
+      })),
+    };
   });
 
   /** TDS customers deducted on their payments in a period, with their certificates: to match against Form 26AS. */

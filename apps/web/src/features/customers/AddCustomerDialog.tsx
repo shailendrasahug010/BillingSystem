@@ -52,10 +52,14 @@ export function AddCustomerDialog({
   const abroad = kind === "export";
   const offline = useOffline();
   const workingOffline = offline.offlineMode || !offline.online;
-  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "", address: "", city: "", messageLocale: "" });
+  const blank = () => ({ businessName: "", name: "", mobile: "", gstin: "", stateCode: BUSINESS.stateCode || "23", pincode: "", creditLimit: "", priceLevelId: WORKSPACE.defaultPriceLevelId ?? "", address: "", city: "", messageLocale: "", pan: "" });
   const [form, setForm] = useState(blank);
   /** No payment reminders to this customer (editing). */
   const [optOut, setOptOut] = useState(false);
+  /** No TCS on sales to them (a Form 27C declaration, a government body). */
+  const [tcsExempt, setTcsExempt] = useState(false);
+  /** PAN and TCS exemption are asked for when the business collects TCS (or the customer is exempt already). */
+  const tcsOn = LIVE && (Boolean(WORKSPACE.tcs?.enabled) || Boolean(customer?.tcsExempt));
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
   /** The customer's details as the form shows them (edit mode). */
@@ -71,6 +75,7 @@ export function AddCustomerDialog({
     address: c.address,
     city: c.city,
     messageLocale: c.messageLocale ?? "",
+    pan: c.pan ?? "",
   });
 
   // Editing: start from the customer as they are.
@@ -79,6 +84,7 @@ export function AddCustomerDialog({
     setKind(kindOf(customer));
     setForm(fromCustomer(customer));
     setOptOut(Boolean(customer.remindersOptOut));
+    setTcsExempt(Boolean(customer.tcsExempt));
     setTouched({});
     setServerError(null);
   }, [open, customer]);
@@ -111,6 +117,7 @@ export function AddCustomerDialog({
     mobile: issueText(validateMobile(form.mobile), "mobile"),
     pincode: form.pincode && !abroad ? issueText(validatePincode(form.pincode), "pincode") : null,
     gstin: type === "b2b" ? issueText(gstinIssues, "gstin") : null,
+    pan: form.pan && !/^[A-Z]{5}\d{4}[A-Z]$/.test(form.pan) ? t("tcs.customer.panInvalid") : null,
   };
   const valid = Object.values(errors).every((e) => !e);
   const serverFieldError = (k: string) => (serverError && serverError.field === k ? translateError(i18n, serverError) : null);
@@ -131,6 +138,8 @@ export function AddCustomerDialog({
     ...(form.address.trim() ? { addressLine1: form.address.trim() } : {}),
     ...(form.city.trim() ? { city: form.city.trim() } : {}),
     ...(form.messageLocale === "en" || form.messageLocale === "hi" ? { messageLocale: form.messageLocale } : {}),
+    ...(tcsOn && form.pan ? { pan: form.pan } : {}),
+    ...(tcsOn && tcsExempt ? { tcsExempt: true } : {}),
   });
   /** Only what changed (edit mode); a cleared credit limit means no limit. */
   const changes = (c: Customer): Partial<CustomerInput> => {
@@ -151,6 +160,8 @@ export function AddCustomerDialog({
     if (form.city.trim() !== was.city.trim()) patch.city = form.city.trim();
     if (form.messageLocale !== was.messageLocale) patch.messageLocale = form.messageLocale === "en" || form.messageLocale === "hi" ? form.messageLocale : null;
     if (optOut !== Boolean(c.remindersOptOut)) patch.remindersOptOut = optOut;
+    if (tcsOn && form.pan && form.pan !== was.pan) patch.pan = form.pan;
+    if (tcsOn && tcsExempt !== Boolean(c.tcsExempt)) patch.tcsExempt = tcsExempt;
     return patch;
   };
 
@@ -197,7 +208,7 @@ export function AddCustomerDialog({
             variant="primary"
             disabled={busy}
             onClick={() => {
-              setTouched({ businessName: true, mobile: true, pincode: true, gstin: true });
+              setTouched({ businessName: true, mobile: true, pincode: true, gstin: true, pan: true });
               if (!valid) return;
               if (LIVE) return void save();
               toast({ tone: "success", title: t("customer.saved"), body: form.businessName });
@@ -312,6 +323,25 @@ export function AddCustomerDialog({
               <option value="hi">हिन्दी</option>
             </Select>
           </Field>
+        )}
+        {tcsOn && !abroad && (
+          <>
+            <Field label={t("tcs.customer.pan")} htmlFor="c-pan" hint={t("tcs.customer.panHint")} error={show("pan")}>
+              <Input
+                id="c-pan"
+                className="[&_input]:font-mono [&_input]:uppercase"
+                maxLength={10}
+                value={form.pan}
+                onChange={(e) => set("pan", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                onBlur={() => setTouched((x) => ({ ...x, pan: true }))}
+                invalid={Boolean(show("pan"))}
+              />
+            </Field>
+            <div className="flex flex-col justify-end gap-1 pb-1">
+              <Checkbox label={t("tcs.customer.exempt")} checked={tcsExempt} onChange={setTcsExempt} />
+              <p className="text-[12px] text-ink-3">{t("tcs.customer.exemptHint")}</p>
+            </div>
+          </>
         )}
         {LIVE && customer && (
           <div className="flex flex-col justify-end gap-1 pb-1">

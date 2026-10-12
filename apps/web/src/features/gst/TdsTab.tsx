@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { taxQuarterOf, tdsLabel } from "@digitalbahi/core";
+import { taxQuarterOf, TCS_SECTION, tdsLabel, type TcsGoods } from "@digitalbahi/core";
 import { Download, Landmark, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -10,7 +10,7 @@ import { Field, Input } from "../../components/ui/Field";
 import { EmptyState } from "../../components/ui/misc";
 import { DataTable, ErrorNote, Tile, useFieldError } from "../../components/ui/Page";
 import { useToast } from "../../components/ui/Toast";
-import { allowed, TODAY } from "../../data/db";
+import { allowed, TODAY, WORKSPACE } from "../../data/db";
 import { api, ApiError } from "../../lib/api";
 import { downloadCsv } from "../../lib/download";
 
@@ -49,6 +49,27 @@ interface Challan {
   bills: number;
 }
 
+interface Collected {
+  month: string;
+  dueDate: string;
+  total: string;
+  paid: string;
+  pending: string;
+  overdue: boolean;
+  data: Array<{
+    invoiceId: string;
+    invoiceNumber: string | null;
+    date: string;
+    customerId: string;
+    partyName: string;
+    pan: string | null;
+    billValue: string;
+    parts: Array<{ goods: string; rate: string; base: string; amount: string }>;
+    tcs: string;
+    challan: { id: string; bsrCode: string; challanSerial: string; depositDate: string } | null;
+  }>;
+}
+
 interface Received {
   total: string;
   quarters: Array<{ quarter: string; tds: string; receipts: number; withCertificate: number }>;
@@ -67,6 +88,7 @@ export function TdsTab({ period }: { period: string }) {
   return (
     <div className="flex flex-col gap-5">
       <KeptBack month={period} />
+      {WORKSPACE.tcs?.enabled && <CollectedOnSales month={period} />}
       <DeductedByCustomers month={period} />
     </div>
   );
@@ -74,67 +96,9 @@ export function TdsTab({ period }: { period: string }) {
 
 function KeptBack({ month }: { month: string }) {
   const { t, money, number, dateMedium } = useI18n();
-  const toast = useToast();
-  const qc = useQueryClient();
   const valid = /^\d{4}-\d{2}$/.test(month);
   const q = useQuery({ queryKey: ["tds", "deducted", month], queryFn: () => api.get<Deducted>("/tds/deducted", { month }), enabled: valid, placeholderData: (prev) => prev });
-  const challans = useQuery({ queryKey: ["tds", "challans", month], queryFn: () => api.get<{ data: Challan[] }>("/tds/challans", { month }), enabled: valid });
-  const [recording, setRecording] = useState(false);
-  const [form, setForm] = useState({ date: TODAY, bsr: "", serial: "", interest: "", lateFee: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [touched, setTouched] = useState(false);
-  const fieldError = useFieldError(error);
   const d = q.data;
-  const canFile = allowed("gst.file");
-
-  const problems = {
-    depositDate: !form.date ? t("validation.required") : form.date > TODAY ? t("errors.FUTURE_DATE_NOT_ALLOWED") : null,
-    bsrCode: /^\d{7}$/.test(form.bsr) ? null : t("tds.challan.bsrHint"),
-    challanSerial: /^\d{5}$/.test(form.serial) ? null : t("tds.challan.serialHint"),
-    interest: form.interest && !MONEY.test(form.interest) ? t("validation.amount") : null,
-    lateFee: form.lateFee && !MONEY.test(form.lateFee) ? t("validation.amount") : null,
-  };
-  const show = (k: keyof typeof problems) => (touched ? problems[k] : null) ?? fieldError(k);
-
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["tds"] });
-  };
-  const save = async () => {
-    setTouched(true);
-    if (Object.values(problems).some(Boolean)) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api.post("/tds/challans", {
-        periodMonth: month,
-        depositDate: form.date,
-        bsrCode: form.bsr,
-        challanSerial: form.serial,
-        ...(form.interest ? { interest: form.interest } : {}),
-        ...(form.lateFee ? { lateFee: form.lateFee } : {}),
-      });
-      toast({ tone: "success", title: t("tds.challan.saved"), body: `${form.bsr}/${form.serial}` });
-      setRecording(false);
-      setTouched(false);
-      setForm({ date: TODAY, bsr: "", serial: "", interest: "", lateFee: "" });
-      refresh();
-    } catch (e) {
-      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const remove = async (c: Challan) => {
-    try {
-      await api.delete(`/tds/challans/${c.id}`);
-      toast({ tone: "success", title: t("tds.challan.removed"), body: `${c.bsrCode}/${c.challanSerial}` });
-      refresh();
-    } catch (e) {
-      toast({ tone: "danger", title: e instanceof ApiError && e.code ? t("tds.challan.notRemoved") : t("errors.generic") });
-    }
-  };
-
   const pending = d ? Number(d.pending) : 0;
   return (
     <Card data-tds-kept>
@@ -212,71 +176,237 @@ function KeptBack({ month }: { month: string }) {
             },
           ]}
         />
-        {canFile && pending > 0 && !recording && (
-          <div>
-            <Button variant="primary" icon={<Landmark size={16} />} onClick={() => setRecording(true)}>
-              {t("tds.challan.record")}
-            </Button>
-          </div>
-        )}
-        {recording && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-2/60 p-3 sm:p-4" data-tds-challan>
-            <p className="text-[13px] text-ink-2">{t("tds.challan.hint", { amount: money(pending) })}</p>
-            {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <Field label={t("tds.challan.date")} htmlFor="tds-date" error={show("depositDate")}>
-                <Input id="tds-date" type="date" max={TODAY} value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-              </Field>
-              <Field label={t("tds.challan.bsr")} htmlFor="tds-bsr" error={show("bsrCode")}>
-                <Input id="tds-bsr" inputMode="numeric" maxLength={7} value={form.bsr} onChange={(e) => setForm((f) => ({ ...f, bsr: e.target.value.replace(/\D/g, "") }))} />
-              </Field>
-              <Field label={t("tds.challan.serial")} htmlFor="tds-serial" error={show("challanSerial")}>
-                <Input id="tds-serial" inputMode="numeric" maxLength={5} value={form.serial} onChange={(e) => setForm((f) => ({ ...f, serial: e.target.value.replace(/\D/g, "") }))} />
-              </Field>
-              <Field label={t("tds.challan.interest")} htmlFor="tds-interest" hint={t("common.optional")} error={show("interest")}>
-                <Input id="tds-interest" inputMode="decimal" value={form.interest} onChange={(e) => setForm((f) => ({ ...f, interest: e.target.value.trim() }))} />
-              </Field>
-              <Field label={t("tds.challan.lateFee")} htmlFor="tds-fee" hint={t("common.optional")} error={show("lateFee")}>
-                <Input id="tds-fee" inputMode="decimal" value={form.lateFee} onChange={(e) => setForm((f) => ({ ...f, lateFee: e.target.value.trim() }))} />
-              </Field>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="primary" disabled={busy} onClick={() => void save()}>
-                {busy ? t("common.saving") : t("tds.challan.save")}
-              </Button>
-              <Button onClick={() => (setRecording(false), setError(null), setTouched(false))}>{t("common.cancel")}</Button>
-            </div>
-          </div>
-        )}
-        {(challans.data?.data.length ?? 0) > 0 && (
-          <div className="flex flex-col gap-2">
-            <h3 className="text-[13px] font-semibold tracking-wide text-ink-3 uppercase">{t("tds.challan.list")}</h3>
-            <ul className="num divide-y divide-line rounded-xl border border-line text-[13.5px]">
-              {challans.data!.data.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
-                  <span>
-                    <span className="font-mono font-medium text-ink">{`${c.bsrCode}/${c.challanSerial}`}</span>
-                    <span className="text-ink-3">
-                      {" · "}
-                      {dateMedium(c.depositDate)} · {t("tds.challan.bills", { count: c.bills })}
-                      {Number(c.interest) > 0 ? ` · ${t("tds.challan.interest")} ${money(c.interest)}` : ""}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-semibold text-ink">{money(c.taxAmount)}</span>
-                    {canFile && (
-                      <IconButton label={t("tds.challan.remove")} onClick={() => void remove(c)}>
-                        <Trash2 size={16} />
-                      </IconButton>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <Challans kind="tds" month={month} pending={pending} />
       </div>
     </Card>
+  );
+}
+
+/** TCS collected on the month's sales bills: each bill, its goods and rate, the challan that paid it, and the due date. */
+function CollectedOnSales({ month }: { month: string }) {
+  const { t, money, number, dateMedium } = useI18n();
+  const valid = /^\d{4}-\d{2}$/.test(month);
+  const q = useQuery({ queryKey: ["tds", "tcs", month], queryFn: () => api.get<Collected>("/tcs/collected", { month }), enabled: valid, placeholderData: (prev) => prev });
+  const d = q.data;
+  const pending = d ? Number(d.pending) : 0;
+  const goodsOf = (r: Collected["data"][number]) => r.parts.map((p) => `${t(`tcs.goods.${p.goods as TcsGoods}`)} ${number(Number(p.rate))}%`).join(", ");
+  return (
+    <Card data-tcs-collected>
+      <CardHeader
+        title={t("tcs.collected.title")}
+        subtitle={d ? t("tcs.collected.subtitle", { due: dateMedium(d.dueDate) }) : undefined}
+        action={
+          d && d.data.length > 0 && allowed("gst.export") ? (
+            <Button
+              size="sm"
+              icon={<Download size={14} />}
+              onClick={() =>
+                downloadCsv(
+                  `tcs-collected-${month}.csv`,
+                  [
+                    { label: "Bill date", value: (r) => r.date },
+                    { label: "Bill", value: (r) => r.invoiceNumber },
+                    { label: "Customer", value: (r) => r.partyName },
+                    { label: "PAN", value: (r) => r.pan },
+                    { label: "Section", value: (r) => `394(1) [${TCS_SECTION[r.part.goods as TcsGoods]?.section ?? ""}]` },
+                    { label: "Collection code", value: (r) => TCS_SECTION[r.part.goods as TcsGoods]?.code ?? "" },
+                    { label: "Amount", value: (r) => r.part.base },
+                    { label: "Rate %", value: (r) => r.part.rate },
+                    { label: "TCS", value: (r) => r.part.amount },
+                    { label: "BSR code", value: (r) => r.challan?.bsrCode },
+                    { label: "Challan no.", value: (r) => r.challan?.challanSerial },
+                    { label: "Paid on", value: (r) => r.challan?.depositDate },
+                  ],
+                  d.data.flatMap((r) => r.parts.map((part) => ({ ...r, part }))),
+                )
+              }
+            >
+              {t("tcs.collected.export")}
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="flex flex-col gap-4 p-4 sm:p-5">
+        {q.error ? <ErrorNote error={q.error} onRetry={() => void q.refetch()} /> : null}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Tile label={t("tcs.collected.total")} value={money(d?.total ?? "0")} />
+          <Tile label={t("tds.deducted.paid")} value={money(d?.paid ?? "0")} />
+          <Tile
+            label={t("tds.deducted.pending")}
+            value={money(d?.pending ?? "0")}
+            tone={d?.overdue ? "danger" : undefined}
+            sub={d && pending > 0 ? (d.overdue ? t("tds.deducted.overdue", { date: dateMedium(d.dueDate) }) : t("tds.deducted.by", { date: dateMedium(d.dueDate) })) : undefined}
+          />
+        </div>
+        <DataTable
+          rows={d?.data ?? []}
+          loading={q.isPending}
+          rowKey={(r) => r.invoiceId}
+          minWidth={820}
+          empty={<EmptyState title={t("tcs.collected.empty")} hint={t("tcs.collected.emptyHint")} />}
+          columns={[
+            { key: "date", header: t("common.date"), render: (r) => dateMedium(r.date) },
+            { key: "bill", header: t("invoice.number"), render: (r) => r.invoiceNumber ?? "—" },
+            {
+              key: "customer",
+              header: t("nav.customers"),
+              render: (r) => (
+                <span>
+                  <span className="font-medium text-ink">{r.partyName}</span>
+                  <span className="block text-[12px] text-ink-3">{r.pan ?? t("tds.noPan")}</span>
+                </span>
+              ),
+            },
+            { key: "goods", header: t("tcs.collected.goods"), render: (r) => goodsOf(r) },
+            { key: "base", header: t("tds.deducted.base"), align: "right", render: (r) => money(r.parts.reduce((a, p) => a + Number(p.base), 0)) },
+            { key: "tcs", header: "TCS", align: "right", render: (r) => <span className="font-semibold text-ink">{money(r.tcs)}</span> },
+            {
+              key: "challan",
+              header: t("tds.challan.one"),
+              render: (r) => (r.challan ? <span className="font-mono text-[12.5px]">{`${r.challan.bsrCode}/${r.challan.challanSerial}`}</span> : <Badge tone="warn">{t("tds.deducted.notPaid")}</Badge>),
+            },
+          ]}
+        />
+        <Challans kind="tcs" month={month} pending={pending} />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The month's challans of TDS (kept back on purchase bills) or TCS (collected on sales), and recording the
+ * next one: every bill of the month with some, not on a challan yet, goes on it.
+ */
+function Challans({ kind, month, pending }: { kind: "tds" | "tcs"; month: string; pending: number }) {
+  const { t, money, dateMedium } = useI18n();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const valid = /^\d{4}-\d{2}$/.test(month);
+  const challans = useQuery({ queryKey: ["tds", "challans", kind, month], queryFn: () => api.get<{ data: Challan[] }>("/tds/challans", { month, kind }), enabled: valid });
+  const [recording, setRecording] = useState(false);
+  const [form, setForm] = useState({ date: TODAY, bsr: "", serial: "", interest: "", lateFee: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [touched, setTouched] = useState(false);
+  const fieldError = useFieldError(error);
+  const canFile = allowed("gst.file");
+  // Field ids: tds-… for TDS (as before), tcs-… for TCS.
+  const id = (name: string) => `${kind}-${name}`;
+
+  const problems = {
+    depositDate: !form.date ? t("validation.required") : form.date > TODAY ? t("errors.FUTURE_DATE_NOT_ALLOWED") : null,
+    bsrCode: /^\d{7}$/.test(form.bsr) ? null : t("tds.challan.bsrHint"),
+    challanSerial: /^\d{5}$/.test(form.serial) ? null : t("tds.challan.serialHint"),
+    interest: form.interest && !MONEY.test(form.interest) ? t("validation.amount") : null,
+    lateFee: form.lateFee && !MONEY.test(form.lateFee) ? t("validation.amount") : null,
+  };
+  const show = (k: keyof typeof problems) => (touched ? problems[k] : null) ?? fieldError(k);
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["tds"] });
+  };
+  const save = async () => {
+    setTouched(true);
+    if (Object.values(problems).some(Boolean)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post("/tds/challans", {
+        kind,
+        periodMonth: month,
+        depositDate: form.date,
+        bsrCode: form.bsr,
+        challanSerial: form.serial,
+        ...(form.interest ? { interest: form.interest } : {}),
+        ...(form.lateFee ? { lateFee: form.lateFee } : {}),
+      });
+      toast({ tone: "success", title: t("tds.challan.saved"), body: `${form.bsr}/${form.serial}` });
+      setRecording(false);
+      setTouched(false);
+      setForm({ date: TODAY, bsr: "", serial: "", interest: "", lateFee: "" });
+      refresh();
+    } catch (e) {
+      setError(e instanceof ApiError ? e : new ApiError(0, "generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (c: Challan) => {
+    try {
+      await api.delete(`/tds/challans/${c.id}`);
+      toast({ tone: "success", title: t("tds.challan.removed"), body: `${c.bsrCode}/${c.challanSerial}` });
+      refresh();
+    } catch (e) {
+      toast({ tone: "danger", title: e instanceof ApiError && e.code ? t("tds.challan.notRemoved") : t("errors.generic") });
+    }
+  };
+
+  return (
+    <>
+      {canFile && pending > 0 && !recording && (
+        <div>
+          <Button variant="primary" icon={<Landmark size={16} />} onClick={() => setRecording(true)}>
+            {t("tds.challan.record")}
+          </Button>
+        </div>
+      )}
+      {recording && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-2/60 p-3 sm:p-4" data-tds-challan>
+          <p className="text-[13px] text-ink-2">{t(kind === "tcs" ? "tcs.challan.hint" : "tds.challan.hint", { amount: money(pending) })}</p>
+          {error instanceof ApiError && !error.field ? <ErrorNote error={error} /> : null}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <Field label={t("tds.challan.date")} htmlFor={id("date")} error={show("depositDate")}>
+              <Input id={id("date")} type="date" max={TODAY} value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+            </Field>
+            <Field label={t("tds.challan.bsr")} htmlFor={id("bsr")} error={show("bsrCode")}>
+              <Input id={id("bsr")} inputMode="numeric" maxLength={7} value={form.bsr} onChange={(e) => setForm((f) => ({ ...f, bsr: e.target.value.replace(/\D/g, "") }))} />
+            </Field>
+            <Field label={t("tds.challan.serial")} htmlFor={id("serial")} error={show("challanSerial")}>
+              <Input id={id("serial")} inputMode="numeric" maxLength={5} value={form.serial} onChange={(e) => setForm((f) => ({ ...f, serial: e.target.value.replace(/\D/g, "") }))} />
+            </Field>
+            <Field label={t("tds.challan.interest")} htmlFor={id("interest")} hint={t("common.optional")} error={show("interest")}>
+              <Input id={id("interest")} inputMode="decimal" value={form.interest} onChange={(e) => setForm((f) => ({ ...f, interest: e.target.value.trim() }))} />
+            </Field>
+            <Field label={t("tds.challan.lateFee")} htmlFor={id("fee")} hint={t("common.optional")} error={show("lateFee")}>
+              <Input id={id("fee")} inputMode="decimal" value={form.lateFee} onChange={(e) => setForm((f) => ({ ...f, lateFee: e.target.value.trim() }))} />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" disabled={busy} onClick={() => void save()}>
+              {busy ? t("common.saving") : t("tds.challan.save")}
+            </Button>
+            <Button onClick={() => (setRecording(false), setError(null), setTouched(false))}>{t("common.cancel")}</Button>
+          </div>
+        </div>
+      )}
+      {(challans.data?.data.length ?? 0) > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-[13px] font-semibold tracking-wide text-ink-3 uppercase">{t("tds.challan.list")}</h3>
+          <ul className="num divide-y divide-line rounded-xl border border-line text-[13.5px]">
+            {challans.data!.data.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                <span>
+                  <span className="font-mono font-medium text-ink">{`${c.bsrCode}/${c.challanSerial}`}</span>
+                  <span className="text-ink-3">
+                    {" · "}
+                    {dateMedium(c.depositDate)} · {t("tds.challan.bills", { count: c.bills })}
+                    {Number(c.interest) > 0 ? ` · ${t("tds.challan.interest")} ${money(c.interest)}` : ""}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold text-ink">{money(c.taxAmount)}</span>
+                  {canFile && (
+                    <IconButton label={t("tds.challan.remove")} onClick={() => void remove(c)}>
+                      <Trash2 size={16} />
+                    </IconButton>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -9,6 +9,7 @@ import {
   type SchemeRule,
   type TaxCategory,
   type TaxRateRule,
+  type TcsGoods,
 } from "@digitalbahi/core";
 import { api, ApiError, fetchAll } from "../lib/api";
 import { accessKey, applyPull, pageChanges, type FeedState, type PullPage } from "./feed";
@@ -57,6 +58,7 @@ export interface CatalogProduct {
   isActive: boolean;
   trackBatches: boolean;
   trackExpiry: boolean;
+  tcsGoods?: TcsGoods | null;
   barcodes: Array<{ barcode: string; unitId: string | null }>;
   units: Array<{ unitId: string; conversionFactor: string; isDefaultSale: boolean }>;
   prices: Array<{ priceLevelId: string; unitId: string; price: string; discountPercent: string }>;
@@ -102,6 +104,9 @@ export interface CustomerRow {
   remindersOptOut?: boolean;
   remindersOptOutAt?: string | null;
   remindersOptOutBy?: "staff" | "reply" | null;
+  /** For TCS on a bill: their PAN, and whether they are exempt from it. */
+  pan?: string | null;
+  tcsExempt?: boolean;
   /** Edits are checked against it (If-Match), so one made offline cannot silently undo a later one. */
   version?: number;
 }
@@ -143,6 +148,8 @@ function mapCustomer(c: CustomerRow, routeName: Map<string, string>): Customer {
     remindersOptOut: c.remindersOptOut ?? false,
     remindersOptOutAt: c.remindersOptOutAt ?? null,
     remindersOptOutBy: c.remindersOptOutBy ?? null,
+    pan: c.pan ?? null,
+    tcsExempt: c.tcsExempt ?? false,
     ...(c.version !== undefined ? { version: c.version } : {}),
   };
 }
@@ -202,6 +209,7 @@ function mapProduct(p: CatalogProduct, cat: Catalog, taxById: Map<string, TaxCat
     packUnits: p.units.map((u) => ({ unitId: u.unitId, symbol: cat.units.find((x) => x.id === u.unitId)?.symbol ?? "", factor: Number(u.conversionFactor) })),
     trackBatches: p.trackBatches,
     trackExpiry: p.trackExpiry,
+    tcsGoods: p.tcsGoods ?? null,
   };
 }
 
@@ -238,6 +246,7 @@ export function applyMe(me: MeResponse): void {
     ewayThreshold: typeof me.settings["ewaybill.threshold"] === "number" ? me.settings["ewaybill.threshold"] : 50000,
     suggestionWeights: (me.settings["suggestions.weights"] as typeof WORKSPACE.suggestionWeights | undefined) ?? null,
     unitLetters: (me.settings["invoice.unit_letters"] as typeof WORKSPACE.unitLetters | undefined) ?? null,
+    tcs: (me.settings["tcs.sales"] as typeof WORKSPACE.tcs | undefined) ?? null,
     defaultUnit: (me.settings["invoice.default_unit"] as string | undefined) ?? null,
     role: b.role,
     ...(roundOff ? { roundOff } : {}),

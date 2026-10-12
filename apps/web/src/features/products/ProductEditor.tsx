@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { TCS_GOODS, tcsRateFor, type TcsGoods } from "@digitalbahi/core";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../app/i18n";
@@ -32,6 +33,7 @@ interface ProductDetail {
   reorderQty: string | null;
   trackBatches: boolean;
   trackExpiry: boolean;
+  tcsGoods?: TcsGoods | null;
   isActive: boolean;
   version: number;
   units: Array<{ unitId: string; conversionFactor: string; isDefaultSale: boolean; isDefaultPurchase: boolean }>;
@@ -91,6 +93,8 @@ function emptyForm() {
     isActive: true,
     trackBatches: false,
     trackExpiry: false,
+    /** TCS goods ("" for none). */
+    tcsGoods: "" as TcsGoods | "",
   };
 }
 
@@ -212,6 +216,7 @@ function formFrom(p: ProductDetail): Form {
     isActive: p.isActive,
     trackBatches: p.trackBatches,
     trackExpiry: p.trackExpiry,
+    tcsGoods: (p.tcsGoods ?? "") as TcsGoods | "",
   };
 }
 
@@ -350,6 +355,7 @@ export function ProductEditor({
       reorderQty: form.reorderQty || null,
       trackBatches: form.trackBatches,
       trackExpiry: form.trackExpiry,
+      tcsGoods: form.tcsGoods || null,
       isActive: form.isActive,
       barcodes: list(form.barcodes),
       units,
@@ -390,6 +396,7 @@ export function ProductEditor({
           minStock: loaded.minStock === null ? null : num(loaded.minStock),
           reorderQty: loaded.reorderQty === null ? null : num(loaded.reorderQty),
           hsnCode: loaded.hsnCode ?? undefined,
+          tcsGoods: loaded.tcsGoods ?? null,
           purchasePrice: num(loaded.purchasePrice) || "0",
           sellingPrice: num(loaded.sellingPrice) || "0",
         };
@@ -613,6 +620,19 @@ export function ProductEditor({
                     <Input id="p-reorder" inputMode="decimal" value={form.reorderQty} onChange={(e) => set("reorderQty", e.target.value.trim())} />
                   </Field>
                 </div>
+                {/* TCS goods: shown when the business collects TCS (or the product is marked already). */}
+                {(WORKSPACE.tcs?.enabled || form.tcsGoods) && (
+                  <Field label={t("tcs.product.label")} htmlFor="p-tcs" hint={t("tcs.product.hint")}>
+                    <Select id="p-tcs" value={form.tcsGoods} onChange={(e) => set("tcsGoods", e.target.value as TcsGoods | "")}>
+                      <option value="">{t("tcs.product.none")}</option>
+                      {TCS_GOODS.map((g) => (
+                        <option key={g} value={g}>
+                          {t(`tcs.goods.${g}`)} · {tcsRateFor(g, true, { rates: WORKSPACE.tcs?.rates ?? {} }).toString()}%
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
                 <div className="flex flex-wrap gap-x-6 gap-y-2">
                   <Checkbox label={t("product.batchTracking")} checked={form.trackBatches} onChange={(v) => set("trackBatches", v)} />
                   <Checkbox label={t("product.expiryTracking")} checked={form.trackExpiry} onChange={(v) => set("trackExpiry", v)} />

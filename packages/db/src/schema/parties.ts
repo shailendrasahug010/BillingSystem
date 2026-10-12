@@ -131,6 +131,8 @@ export const customers = pgTable(
     remindersOptOutAt: tstz(),
     /** How: staff (on the customer's page) or reply (they wrote STOP on WhatsApp). */
     remindersOptOutBy: varchar({ length: 10 }),
+    /** No TCS on sales to this customer: they gave a declaration that the goods are for making things (Form 27C), or are a government body. */
+    tcsExempt: boolean().notNull().default(false),
     isActive: boolean().notNull().default(true),
     ...auditColumns,
     ...softDelete,

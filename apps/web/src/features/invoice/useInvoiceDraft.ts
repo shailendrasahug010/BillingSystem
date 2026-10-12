@@ -7,6 +7,7 @@ import {
   evaluateCredit,
   NO_TAX,
   dec,
+  partyPan,
   pct,
   resolveTax,
   roundAmount,
@@ -401,6 +402,20 @@ export function bodyLines(lines: readonly BillLine[]) {
   }));
 }
 
+/**
+ * TCS on the bill as the server works it out: when the business collects it, on the goods marked for it
+ * (scrap, liquor…), from a buyer in India (twice the rate, at least 5%, without their PAN; none when exempt).
+ */
+export function tcsInput(customer: Customer | null, lines: ReadonlyArray<{ key: string; productId: string }>, exportSale: boolean) {
+  const rule = WORKSPACE.tcs;
+  if (!rule?.enabled || !customer || exportSale) return null;
+  return {
+    goods: Object.fromEntries(lines.map((l) => [l.key, productById.get(l.productId)?.tcsGoods ?? null])),
+    buyer: { hasPan: partyPan({ pan: customer.pan ?? null, gstin: customer.gstin }) !== null, exempt: Boolean(customer.tcsExempt) },
+    rule: { rates: rule.rates, threshold: rule.threshold },
+  };
+}
+
 /** Under the LUT (no IGST) by default while it is valid on the invoice date, as the server decides. */
 /** The godown part of a bill's body: sent when the business has more than one. */
 export function godownBody(draft: Pick<Draft, "warehouseId">): { warehouseId?: string } {
@@ -519,12 +534,13 @@ export function useInvoiceDraft(initialCustomerId: string | null = null): DraftV
             uqc: p.uqc,
           };
         }),
+        tcs: tcsInput(customer, billed.lines, zeroRatedKind === "export"),
       });
       return { totals: t, error: null };
     } catch (e) {
       return { totals: null, error: e instanceof DomainError ? e : new DomainError("generic", String(e)) };
     }
-  }, [billed, draft.lines.length, draft.received, draft.date, supplyType, withoutPayment]);
+  }, [billed, draft.lines.length, draft.received, draft.date, supplyType, withoutPayment, customer, zeroRatedKind]);
 
   const suggestions = useMemo(() => {
     if (!insight) return [];

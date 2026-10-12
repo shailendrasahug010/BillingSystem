@@ -1,3 +1,4 @@
+import { tcsLabel } from "@digitalbahi/core";
 import { BUSINESS, productById, WORKSPACE } from "../../data/db";
 import { takeOfflineNumber } from "../../offline/device";
 import { getOfflineState, queueBill, refreshDevice, type OutboxEntry } from "../../offline/sync";
@@ -61,6 +62,7 @@ function printable(view: DraftView, id: string, number: string): PrintableInvoic
     sgstTotal: t.sgstTotal.toNumber(),
     igstTotal: t.igstTotal.toNumber(),
     cessTotal: t.cessTotal.toNumber(),
+    tcs: (t.tcs?.parts ?? []).map((p) => ({ label: tcsLabel(p), amount: p.amount.toNumber() })),
     roundOff: t.roundOff.toNumber(),
     grandTotal,
     paid,

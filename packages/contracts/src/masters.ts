@@ -81,6 +81,8 @@ export const ProductBody = z.strictObject({
   preferredSupplierId: Id.nullable().optional(),
   trackBatches: z.boolean().default(false),
   trackExpiry: z.boolean().default(false),
+  /** TCS goods (394(1), old 206C(1) and (1F)): the seller collects TCS on them when the business turns TCS on; null for other goods. */
+  tcsGoods: z.enum(["liquor", "tendu", "timber_lease", "timber", "forest", "scrap", "minerals", "motor_vehicle", "luxury"]).nullable().optional(),
   isActive: z.boolean().default(true),
   barcodes: z.array(z.string().trim().min(4).max(64)).max(10).default([]),
   units: z.array(ProductUnitInput).max(10).default([]),
@@ -136,6 +138,8 @@ export const CustomerBody = z.strictObject({
   messageLocale: z.enum(["en", "hi"]).nullable().optional(),
   /** No automatic or bulk payment reminders. */
   remindersOptOut: z.boolean().optional(),
+  /** No TCS on sales to them: a declaration that the goods are for making things (Form 27C), or a government body. */
+  tcsExempt: z.boolean().optional(),
 });
 
 /**

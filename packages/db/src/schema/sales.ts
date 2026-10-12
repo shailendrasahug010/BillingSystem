@@ -32,6 +32,7 @@ import { schemes } from "./schemes.js";
 import { employees } from "./hr.js";
 import { customers, priceLevels } from "./parties.js";
 import { businessId, devices, documentSeries, files, users, warehouses } from "./platform.js";
+import { tdsChallans } from "./tax.js";
 
 export const salesOrders = pgTable(
   "sales_orders",
@@ -190,6 +191,12 @@ export const invoices = pgTable(
     paymentStatus: paymentStatus().notNull().default("unpaid"),
     /** Cost of goods at posting (sum of qty_base x avg cost) for margin reports. */
     costTotal: money().notNull().default("0"),
+    /** TCS collected on the bill (specified goods, 394(1)): part of the grand total, outside the GST value. */
+    tcsAmount: money().notNull().default("0"),
+    /** How the TCS was worked out: [{goods, rate, base, amount}] per kind of goods; null without it. */
+    tcs: jsonb().$type<Array<{ goods: string; rate: string; base: string; amount: string }>>(),
+    /** The challan that paid the TCS to the government. */
+    tcsChallanId: uuid().references(() => tdsChallans.id),
     notes: text(),
     /** Terms and conditions printed at the foot of the invoice. */
     terms: text(),
@@ -273,6 +280,8 @@ export const invoices = pgTable(
     check("invoices_totals_chk", sql`${t.grandTotal} >= 0 and ${t.amountPaid} >= 0 and ${t.balanceDue} >= 0`),
     check("invoices_number_format_chk", sql`${t.invoiceNumber} is null or ${t.invoiceNumber} ~ '^[A-Za-z0-9/-]{1,16}$'`),
     check("invoices_zero_rated_chk", sql`${t.zeroRatedType} is null or ${t.zeroRatedType} in ('EXPWP', 'EXPWOP', 'SEZWP', 'SEZWOP')`),
+    check("invoices_tcs_chk", sql`${t.tcsAmount} >= 0 and ${t.tcsAmount} <= ${t.grandTotal}`),
+    index("invoices_tcs_idx").on(t.businessId, t.invoiceDate).where(sql`${t.tcsAmount} > 0`),
   ],
 );
 

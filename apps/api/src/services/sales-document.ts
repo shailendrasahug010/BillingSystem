@@ -15,6 +15,7 @@ import {
   todayIn,
   zeroRatedKindFor,
   zeroRatedTypeOf,
+  partyPan,
   pct,
   roundAmount,
   type BusinessGstRegistration,
@@ -25,6 +26,7 @@ import {
   type SchemeLine,
   type TaxCategory,
   type TaxRateRule,
+  type TcsGoods,
   type ZeroRatedType,
 } from "@digitalbahi/core";
 import { schema, type Tx } from "@digitalbahi/db";
@@ -95,7 +97,7 @@ export interface ReviewReason {
 }
 
 const loadSaleSettings = (tx: Tx, businessId: string) =>
-  getSettings(tx, businessId, ["invoice.round_off", "stock.negative_policy", "credit.policy", "invoice.default_print_locale", "gst.lut"] as const);
+  getSettings(tx, businessId, ["invoice.round_off", "stock.negative_policy", "credit.policy", "invoice.default_print_locale", "gst.lut", "tcs.sales"] as const);
 
 /** The business's tax categories with their dated rate rules, by id. */
 export async function taxCategoriesOf(tx: Tx, businessId: string): Promise<Map<string, TaxCategory>> {
@@ -376,6 +378,16 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
   const zeroRatedType = zeroRatedKind ? zeroRatedTypeOf(zeroRatedKind, withPayment) : null;
   // Without IGST and no valid LUT on that day: under a bond, which has no ARN to print.
   const lutArn = zeroRatedKind && !withPayment && lut && lut.validUntil >= invoiceDate ? lut.arn : null;
+  // TCS on specified goods, when the business collects it: on a bill (not an order), to a buyer in India.
+  const tcsRule = settings["tcs.sales"];
+  const tcs =
+    tcsRule.enabled && !options.order && zeroRatedKind !== "export"
+      ? {
+          goods: Object.fromEntries(prepared.map((p) => [p.key, (productById.get(p.productId)?.tcsGoods ?? null) as TcsGoods | null])),
+          buyer: { hasPan: partyPan(customer) !== null, exempt: customer.tcsExempt },
+          rule: { rates: tcsRule.rates, threshold: tcsRule.threshold },
+        }
+      : null;
   const totals = calculateDocument({
     lines: engineLines,
     supplyType,
@@ -383,6 +395,7 @@ export async function prepareSale(tx: Tx, ctx: RequestCtx, body: Body, today: st
     withoutPayment: zeroRatedKind !== null && !withPayment,
     documentDiscount: body.documentDiscount ?? null,
     charges: body.charges.map((c, i) => ({ key: `C${i + 1}`, label: c.label, amount: c.amount, tax: c.gstRate ? taxAt(c.gstRate) : null })),
+    tcs,
     roundOff: settings["invoice.round_off"],
     amountPaid: body.payment?.amount ?? "0",
   });

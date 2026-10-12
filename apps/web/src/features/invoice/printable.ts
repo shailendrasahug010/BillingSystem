@@ -1,4 +1,4 @@
-import { dec, type ZeroRatedType } from "@digitalbahi/core";
+import { dec, tcsLabel, type TcsGoods, type ZeroRatedType } from "@digitalbahi/core";
 import { BUSINESS, customerById, invoiceTotals, productById, WORKSPACE } from "../../data/db";
 import type { Invoice } from "../../data/types";
 import type { ReviewFields } from "./InvoiceReview";
@@ -46,6 +46,8 @@ export interface PrintableInvoice {
   sgstTotal: number;
   igstTotal: number;
   cessTotal: number;
+  /** TCS collected on the bill, a line per kind of goods ("TCS 206C(1) @ 2%"). */
+  tcs?: Array<{ label: string; amount: number }>;
   roundOff: number;
   grandTotal: number;
   paid: number;
@@ -154,6 +156,8 @@ export interface ApiInvoice extends Omit<ReviewFields, "id"> {
   sgstTotal: string;
   igstTotal: string;
   cessTotal: string;
+  /** TCS collected on the bill, per kind of goods. */
+  tcs?: Array<{ goods: string; rate: string; base: string; amount: string }> | null;
   roundOff: string;
   grandTotal: string;
   amountPaid: string;
@@ -256,6 +260,7 @@ export function printableFromApi(inv: ApiInvoice): PrintableInvoice {
     sgstTotal: num(inv.sgstTotal),
     igstTotal: num(inv.igstTotal),
     cessTotal: num(inv.cessTotal),
+    tcs: (inv.tcs ?? []).map((p) => ({ label: tcsLabel({ goods: p.goods as TcsGoods, rate: p.rate }), amount: num(p.amount) })),
     roundOff: num(inv.roundOff),
     grandTotal: num(inv.grandTotal),
     // The API's amount paid includes what returns settled; show them apart.

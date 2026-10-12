@@ -107,7 +107,9 @@ export async function invoiceDocs(tx: Tx, ctx: RequestCtx, ids: string[]): Promi
   const out = [];
   for (const r of rows) {
     const lines = await linesOf(tx, items.filter((i) => i.invoiceId === r.id));
-    const charges = (r.charges ?? []) as Array<{ label: string; taxable: string; gstRate: string; total: string }>;
+    // TCS collected on the bill is no part of the GST value: it goes in "other charges".
+    const tcs = dec(r.tcsAmount).gt(0) ? [{ label: "TCS", taxable: r.tcsAmount, gstRate: "0", total: r.tcsAmount }] : [];
+    const charges = [...((r.charges ?? []) as Array<{ label: string; taxable: string; gstRate: string; total: string }>), ...tcs];
     out.push({
       kind: "invoice" as const,
       row: r,

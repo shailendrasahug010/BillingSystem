@@ -33,6 +33,11 @@ interface Warning {
 
 const money = (d: { toFixed(n: number): string }) => d.toFixed(2);
 
+/** TCS on a bill as it is stored and shown: per kind of goods, the rate, what it is on and the tax. */
+export function tcsOut(t: Pick<DocumentTotals, "tcs">) {
+  return t.tcs ? t.tcs.parts.map((p) => ({ goods: p.goods, rate: p.rate.toString(), base: money(p.base), amount: money(p.amount) })) : null;
+}
+
 function totalsOut(t: DocumentTotals) {
   return {
     lineCount: t.lineCount,
@@ -45,6 +50,8 @@ function totalsOut(t: DocumentTotals) {
     cessTotal: money(t.cessTotal),
     taxTotal: money(t.taxTotal),
     chargesTotal: money(t.chargesTotal),
+    tcsAmount: money(t.tcsTotal),
+    tcs: tcsOut(t),
     roundOff: money(t.roundOff),
     grandTotal: money(t.grandTotal),
     amountPaid: money(t.amountPaid),
@@ -251,6 +258,8 @@ export async function postInvoice(
     balanceDue: toAmountString(t.grandTotal),
     paymentStatus: t.grandTotal.isZero() ? "paid" : "unpaid",
     costTotal: toAmountString(costTotal),
+    tcsAmount: toAmountString(t.tcsTotal),
+    tcs: tcsOut(t),
     notes: body.notes ?? null,
     printLocale: body.printLocale ?? sale.settings["invoice.default_print_locale"],
     zeroRatedType: sale.zeroRatedType,
@@ -719,6 +728,11 @@ export const invoicesModule: ApiModule = async (app, deps) => {
         if (!inv) throw notFound("invoice");
         if (inv.status !== "posted") throw conflict("INVOICE_NOT_POSTED", { status: inv.status });
         await assertNoPostedReturns(tx, { invoiceId: inv.id });
+        if (inv.tcsChallanId) {
+          // The TCS collected on it has been paid to the government: the challan has to let go of it first.
+          const [challan] = await tx.select().from(schema.tdsChallans).where(eq(schema.tdsChallans.id, inv.tcsChallanId));
+          throw conflict("TCS_PAID_ON_BILL", { challan: challan ? `${challan.bsrCode}/${challan.challanSerial}` : "", date: challan?.depositDate ?? "" });
+        }
         const windowHours = await getSetting(tx, ctx.businessId, "invoice.edit_window_hours");
         const ageHours = (deps.clock.now().getTime() - Date.parse(inv.postedAt ?? inv.createdAt)) / 3_600_000;
         if (windowHours > 0 && ageHours > windowHours && !ctx.isOwner) throw conflict("EDIT_WINDOW_CLOSED", { hours: windowHours });
