@@ -32,3 +32,8 @@ CREATE INDEX "purchases_tds_idx" ON "purchases" USING btree ("business_id","supp
 CREATE INDEX "payments_tds_idx" ON "payments" USING btree ("business_id","payment_date") WHERE "payments"."tds_amount" > 0;--> statement-breakpoint
 ALTER TABLE "purchases" ADD CONSTRAINT "purchases_tds_chk" CHECK ("purchases"."tds_amount" >= 0 and "purchases"."tds_amount" <= "purchases"."grand_total" and "purchases"."tds_base" >= 0);--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_amount_chk" CHECK ("payments"."amount" > 0 and "payments"."tds_amount" >= 0 and "payments"."unallocated_amount" >= 0 and "payments"."unallocated_amount" <= "payments"."amount" + "payments"."tds_amount");
+--> statement-breakpoint
+-- TDS challans, per business.
+ALTER TABLE tds_challans ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY tenant_isolation ON tds_challans USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
