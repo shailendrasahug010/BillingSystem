@@ -44,7 +44,7 @@ jobs:
             flows: team-access-flow outstanding-flow beat-flow report-views-flow error-log-flow bank-statement-flow daily-summary-flow setup-repeat-flow voice-flow empty-error-flow comfort-flow
           - group: money
             web: dev
-            flows: einvoice-flow export-sez-flow rcm-return-flow price-lists-flow payroll-statutory-flow backup-flow bill-company-invoice-flow photo-bill-flow online-payments-flow
+            flows: einvoice-flow export-sez-flow rcm-return-flow price-lists-flow payroll-statutory-flow backup-flow bill-company-invoice-flow photo-bill-flow online-payments-flow sales-returns-flow
           - group: more
             web: dev
             flows: auto-reminders-flow messaging-flow notifications-flow purchase-history-flow insights-flow branding-flow thermal-print-flow barcode-camera-flow two-step-flow

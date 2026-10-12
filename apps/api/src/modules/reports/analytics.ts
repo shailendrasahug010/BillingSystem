@@ -14,9 +14,10 @@ const Range = { from: z.iso.date(), to: z.iso.date(), format: z.enum(["json", "c
 const ProfitQuery = z.object({ ...Range, groupBy: z.enum(["product", "brand", "category", "customer", "salesperson", "month"]).default("product") });
 
 /**
- * Sale lines net of credit notes, with the cost of the goods at sale time:
- * returns take back quantity, value and cost; discounts and rate differences
- * take back value only.
+ * Sale lines net of notes, with the cost of the goods at sale time: returns
+ * take back quantity, value and cost (at the bill's cost, or the note's own
+ * for goods returned without their bill); discounts and rate differences take
+ * back value only; debit notes add value.
  */
 export function netSaleLines(businessId: string, from: string, to: string): SQL {
   return sql`
@@ -26,12 +27,12 @@ export function netSaleLines(businessId: string, from: string, to: string): SQL 
     from invoice_items ii join invoices i on i.id = ii.invoice_id
     where i.business_id = ${businessId} and i.status = 'posted' and i.invoice_date between ${from} and ${to}
     union all
-    select ii.product_id, i.customer_id, i.salesperson_id, n.note_date as day,
-           case when n.reason in ('discount', 'rate_difference') then 0 else -ni.qty_base end,
-           -ni.taxable_value,
-           case when n.reason in ('discount', 'rate_difference') then 0 else -ni.qty_base * ii.unit_cost end
+    select ni.product_id, n.customer_id, i.salesperson_id, n.note_date as day,
+           case when n.note_type = 'debit' or n.reason in ('discount', 'rate_difference') then 0 else -ni.qty_base end,
+           case when n.note_type = 'debit' then ni.taxable_value else -ni.taxable_value end,
+           case when n.note_type = 'debit' or n.reason in ('discount', 'rate_difference') then 0 else -ni.qty_base * coalesce(ii.unit_cost, ni.unit_cost) end
     from credit_debit_note_items ni join credit_debit_notes n on n.id = ni.note_id
-    join invoice_items ii on ii.id = ni.original_line_id join invoices i on i.id = ii.invoice_id
+    left join invoice_items ii on ii.id = ni.original_line_id left join invoices i on i.id = n.invoice_id
     where n.business_id = ${businessId} and n.status = 'posted' and n.party_type = 'customer' and n.note_date between ${from} and ${to}`;
 }
 

@@ -3,7 +3,7 @@ import { takeOfflineNumber } from "../../offline/device";
 import { getOfflineState, queueBill, refreshDevice, type OutboxEntry } from "../../offline/sync";
 import type { SavedInvoice } from "./postInvoice";
 import type { PrintableInvoice } from "./printable";
-import { bodyLines, factorOf, lutValidOn, unitSymbolOf, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
+import { bodyLines, factorOf, godownBody, lutValidOn, unitSymbolOf, zeroRatedBody, type DraftView } from "./useInvoiceDraft";
 
 export class OfflineNotReady extends Error {
   constructor() {
@@ -105,6 +105,7 @@ export async function saveOffline(view: DraftView, idempotencyKey: string): Prom
     body: {
       customerId: customer.id,
       invoiceDate: draft.date,
+      ...godownBody(draft),
       lines: bodyLines(view.billLines),
       ...(received > 0 ? { payment: { amount: received.toFixed(2), method: draft.method } } : {}),
       ...zeroRatedBody(view),

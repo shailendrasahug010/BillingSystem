@@ -95,7 +95,7 @@ async function linesOf(tx: Tx, rows: LineRow[]) {
 
 type InvoiceRow = typeof inv.$inferSelect;
 type NoteRow = typeof notes.$inferSelect;
-export type EDoc = { kind: "invoice"; row: InvoiceRow; doc: EDocument } | { kind: "credit_note"; row: NoteRow; doc: EDocument; zeroRatedType: ZeroRatedType | null };
+export type EDoc = { kind: "invoice"; row: InvoiceRow; doc: EDocument } | { kind: "credit_note" | "debit_note"; row: NoteRow; doc: EDocument; zeroRatedType: ZeroRatedType | null };
 
 /** Invoices as e-invoice / e-way bill documents. */
 export async function invoiceDocs(tx: Tx, ctx: RequestCtx, ids: string[]): Promise<Array<Extract<EDoc, { kind: "invoice" }>>> {
@@ -131,26 +131,27 @@ export async function invoiceDocs(tx: Tx, ctx: RequestCtx, ids: string[]): Promi
   return out;
 }
 
-/** Credit notes to customers as e-invoice documents (CRN, with the invoice they are against). */
-async function noteDocs(tx: Tx, ctx: RequestCtx, ids: string[]): Promise<Array<Extract<EDoc, { kind: "credit_note" }>>> {
+/** Credit and debit notes to customers as e-invoice documents (CRN / DBN, with the invoice they are against). */
+async function noteDocs(tx: Tx, ctx: RequestCtx, ids: string[]): Promise<Array<Extract<EDoc, { kind: "credit_note" | "debit_note" }>>> {
   if (!ids.length) return [];
   const seller = await sellerOf(tx, ctx.businessId);
   const rows = await tx
     .select({ n: notes, original: { number: inv.invoiceNumber, date: inv.invoiceDate, zeroRatedType: inv.zeroRatedType } })
     .from(notes)
     .leftJoin(inv, eq(inv.id, notes.invoiceId))
-    .where(and(eq(notes.businessId, ctx.businessId), inArray(notes.id, ids), eq(notes.partyType, "customer"), eq(notes.noteType, "credit")))
+    .where(and(eq(notes.businessId, ctx.businessId), inArray(notes.id, ids), eq(notes.partyType, "customer")))
     .orderBy(asc(notes.noteDate), asc(notes.noteNumber));
   const items = await tx.select().from(schema.creditDebitNoteItems).where(inArray(schema.creditDebitNoteItems.noteId, rows.map((r) => r.n.id))).orderBy(asc(schema.creditDebitNoteItems.lineNo));
   const out = [];
   for (const { n, original } of rows) {
     const zeroRatedType = (original?.zeroRatedType ?? null) as ZeroRatedType | null;
+    const kind = n.noteType === "credit" ? ("credit_note" as const) : ("debit_note" as const);
     out.push({
-      kind: "credit_note" as const,
+      kind,
       row: n,
       zeroRatedType,
       doc: {
-        kind: "credit_note" as const,
+        kind,
         number: n.noteNumber ?? "",
         date: n.noteDate,
         seller,
@@ -227,7 +228,7 @@ export const eInvoiceModule: ApiModule = async (app, deps) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const tenant = <T>(ctx: RequestCtx, fn: (tx: Tx) => Promise<T>) => withTenant(deps.db, ctx, fn);
 
-  /** The month's documents that need an IRN (B2B, SEZ and export invoices, and credit notes on them), with what stops each. */
+  /** The month's documents that need an IRN (B2B, SEZ and export invoices, and credit and debit notes on them), with what stops each. */
   r.get("/gst/einvoice", { preHandler: guard(deps, "gst.view"), schema: { tags: ["gst"], querystring: PeriodQuery } }, async (request) => {
     const ctx = request.ctx;
     const { start, end } = monthBounds(request.query.period);
@@ -249,7 +250,6 @@ export const eInvoiceModule: ApiModule = async (app, deps) => {
               eq(notes.businessId, ctx.businessId),
               eq(notes.status, "posted"),
               eq(notes.partyType, "customer"),
-              eq(notes.noteType, "credit"),
               sql`${notes.noteDate} between ${start} and ${end}`,
               or(isNotNull(notes.partyGstin), isNotNull(inv.zeroRatedType)),
             ),
@@ -276,7 +276,7 @@ export const eInvoiceModule: ApiModule = async (app, deps) => {
     });
   });
 
-  /** The IRP's bulk-upload file for the chosen invoices and credit notes (a JSON list of INV-01 documents). */
+  /** The IRP's bulk-upload file for the chosen invoices and notes (a JSON list of INV-01 documents). */
   r.get(
     "/einvoice/file",
     { preHandler: guard(deps, "invoice.view"), schema: { tags: ["gst"], querystring: z.object({ ids: EwayFileQuery.shape.ids }) } },
@@ -303,14 +303,15 @@ export const eInvoiceModule: ApiModule = async (app, deps) => {
     },
   );
 
-  const recordIrn = async (ctx: RequestCtx, kind: "invoice" | "credit_note", id: string, body: z.output<typeof IrnBody>) =>
+  const recordIrn = async (ctx: RequestCtx, kind: "invoice" | "note", id: string, body: z.output<typeof IrnBody>) =>
     tenant(ctx, async (tx) => {
       const table = kind === "invoice" ? inv : notes;
       const [row] = await tx.select().from(table).where(and(eq(table.id, id), eq(table.businessId, ctx.businessId))).for("update");
-      if (!row || (kind === "credit_note" && ((row as NoteRow).partyType !== "customer" || (row as NoteRow).noteType !== "credit"))) throw notFound(kind === "invoice" ? "invoice" : "note");
+      // A note to a customer (credit or debit); suppliers' notes are theirs to register.
+      if (!row || (kind === "note" && (row as NoteRow).partyType !== "customer")) throw notFound(kind === "invoice" ? "invoice" : "note");
       if (row.status !== "posted") throw conflict("INVOICE_NOT_POSTED", { status: row.status });
       const zeroRated = kind === "invoice" ? (row as InvoiceRow).zeroRatedType : null;
-      if (body.irn !== null && !needsEInvoice({ buyerGstin: row.partyGstin, zeroRatedType: zeroRated as ZeroRatedType | null }) && !(kind === "credit_note" && (row as NoteRow).invoiceId)) {
+      if (body.irn !== null && !needsEInvoice({ buyerGstin: row.partyGstin, zeroRatedType: zeroRated as ZeroRatedType | null }) && !(kind === "note" && (row as NoteRow).invoiceId)) {
         throw badRequest("EINVOICE_NOT_APPLICABLE", { number: ("invoiceNumber" in row ? row.invoiceNumber : row.noteNumber) ?? "" });
       }
       const next =
@@ -333,7 +334,7 @@ export const eInvoiceModule: ApiModule = async (app, deps) => {
     recordIrn(request.ctx, "invoice", request.params.id, request.body),
   );
   r.patch("/notes/:id/irn", { preHandler: guard(deps, "note.create"), schema: { tags: ["notes"], params: IdParams, body: IrnBody } }, async (request) =>
-    recordIrn(request.ctx, "credit_note", request.params.id, request.body),
+    recordIrn(request.ctx, "note", request.params.id, request.body),
   );
 
   /** The month's invoices above the e-way bill limit (or with an e-way bill), with their trip and what stops each. */

@@ -35,6 +35,7 @@ import { RepeatBillButton } from "./RepeatBill";
 import { PaymentDialog } from "../payments/PaymentDialog";
 import { PayLinkButton } from "../payments/PayLink";
 import { loadKeptDraft, type KeptDraft } from "./keptDraft";
+import { godowns, pickGodown } from "./godown";
 
 /** Bills already sent to the printer from Save & print (going back to one does not print it again). */
 const printed = new Set<string>();
@@ -167,6 +168,8 @@ export function InvoiceViewPage({ invoiceId, print = false }: { invoiceId: strin
             }}
           />
           {invoice.zeroRated && <Badge tone="accent">{t(`invoice.export.types.${invoice.zeroRated.type}`)}</Badge>}
+          {/* Where the goods left from, when the business has more than one godown. */}
+          {live.data?.warehouseId && pickGodown() && <Badge>{godowns().find((w) => w.id === live.data!.warehouseId)?.name ?? ""}</Badge>}
           {offlineKey && (
             <Badge tone="warn" icon={<CloudOff size={13} />}>
               {kept.entry?.status === "failed" ? t("offline.failed") : t("offline.notSynced")}

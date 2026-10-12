@@ -35,6 +35,7 @@ import { useCustomerInsight } from "../../data/hooks";
 import { storeAssociations, useStoreVersion, type CustomerInsight } from "../../data/store";
 import type { Customer, Product } from "../../data/types";
 import { useSuggestionFeedback, type SuggestionFeedback } from "./suggestionFeedback";
+import { godowns, lastGodownId, pickGodown } from "./godown";
 import { saleUnits, startUnit, unitByLetter } from "./units";
 import { unitForWord } from "../../lib/spoken";
 
@@ -62,6 +63,8 @@ export interface Draft {
   zeroRated: ZeroRatedChoice;
   /** Trade schemes left off this bill (the customer is not given them). */
   declinedSchemes: string[];
+  /** The godown the goods leave from (null: the business's default). */
+  warehouseId?: string | null;
 }
 
 export interface ZeroRatedChoice {
@@ -88,6 +91,8 @@ type Action =
   | { type: "zeroRated"; patch: Partial<ZeroRatedChoice> }
   /** A trade scheme given on this bill again (on) or left off it. */
   | { type: "scheme"; schemeId: string; on: boolean }
+  /** Another godown the goods leave from. */
+  | { type: "godown"; warehouseId: string | null }
   | { type: "reset"; customerId?: string | null }
   /** A bill left half made, brought back (see keptDraft). */
   | { type: "restore"; draft: Omit<Draft, "focusKey"> };
@@ -112,7 +117,8 @@ export function rateFor(product: Product, customer: Customer | null, unitId: str
   return factor === 1 ? base : roundRate(dec(base).times(factor)).toNumber();
 }
 
-function discountFor(product: Product, customer: Customer | null, unitId: string | null = null): number {
+/** The rate list's discount for the customer, as the server applies it. */
+export function discountFor(product: Product, customer: Customer | null, unitId: string | null = null): number {
   if (product.discounts) {
     const level = customer?.priceLevelId ?? WORKSPACE.defaultPriceLevelId;
     const own = unitId && level ? product.unitDiscounts?.[`${level}|${unitId}`] : undefined;
@@ -223,6 +229,8 @@ function reducer(state: Draft, action: Action): Draft {
       const others = state.declinedSchemes.filter((id) => id !== action.schemeId);
       return { ...state, declinedSchemes: action.on ? others : [...others, action.schemeId] };
     }
+    case "godown":
+      return { ...state, warehouseId: action.warehouseId };
     case "reset":
       return initialDraft(action.customerId ?? null);
     case "restore": {
@@ -242,13 +250,25 @@ function reducer(state: Draft, action: Action): Draft {
         zeroRated: kept.zeroRated,
         // Kept before schemes came: none left off.
         declinedSchemes: kept.declinedSchemes ?? [],
+        // The godown it was being made from, while it is still there.
+        warehouseId: kept.warehouseId && godowns().some((w) => w.id === kept.warehouseId) ? kept.warehouseId : lastGodownId(),
       };
     }
   }
 }
 
 function initialDraft(customerId: string | null): Draft {
-  return { customerId, date: TODAY, lines: [], received: "", method: "cash", focusKey: null, zeroRated: { withPayment: null, shippingBillNumber: "", shippingBillDate: "", portCode: "" }, declinedSchemes: [] };
+  return {
+    customerId,
+    date: TODAY,
+    lines: [],
+    received: "",
+    method: "cash",
+    focusKey: null,
+    zeroRated: { withPayment: null, shippingBillNumber: "", shippingBillDate: "", portCode: "" },
+    declinedSchemes: [],
+    warehouseId: lastGodownId(),
+  };
 }
 
 /**
@@ -382,6 +402,11 @@ export function bodyLines(lines: readonly BillLine[]) {
 }
 
 /** Under the LUT (no IGST) by default while it is valid on the invoice date, as the server decides. */
+/** The godown part of a bill's body: sent when the business has more than one. */
+export function godownBody(draft: Pick<Draft, "warehouseId">): { warehouseId?: string } {
+  return draft.warehouseId && pickGodown() ? { warehouseId: draft.warehouseId } : {};
+}
+
 export function lutValidOn(day: string): boolean {
   return WORKSPACE.lut !== null && WORKSPACE.lut.validUntil >= day;
 }

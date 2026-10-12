@@ -15,6 +15,7 @@ import { offlineInvoiceNumber } from "../../services/devices.js";
 import { notify } from "../../services/notifications.js";
 import { nextDocumentNumber } from "../../services/numbering.js";
 import { postPartyEntry } from "../../services/party-ledger.js";
+import { invoiceNoteCredits, releaseNoteAllocations } from "../../services/customer-notes.js";
 import { recordPayment, releaseAllocations } from "../../services/payments.js";
 import { prepareSale, type PreparedSale, type ReviewReason } from "../../services/sales-document.js";
 import { getSetting } from "../../services/settings.js";
@@ -135,6 +136,7 @@ export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
     .where(eq(schema.paymentAllocations.invoiceId, id));
   const [biz] = await tx.select().from(schema.businesses).where(eq(schema.businesses.id, ctx.businessId));
   const returns = await documentReturns(tx, { invoiceId: id });
+  const noteCredits = await invoiceNoteCredits(tx, id);
   const [reviewer] = inv.reviewedBy ? await tx.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, inv.reviewedBy)) : [];
   const showCost = can(ctx, "product.view_cost");
   const { businessId: _b, costTotal, ...rest } = inv;
@@ -142,6 +144,8 @@ export async function invoiceDetail(tx: Tx, ctx: RequestCtx, id: string) {
     ...rest,
     ...(showCost ? { costTotal } : {}),
     returns,
+    /** Credit notes without a bill (goods returned) that paid part of it. */
+    noteCredits,
     /** Who marked it reviewed, for a bill made offline that was held. */
     reviewerName: reviewer?.name ?? null,
     seller: {
@@ -747,6 +751,8 @@ export const invoicesModule: ApiModule = async (app, deps) => {
           );
         }
         const released = await releaseAllocations(tx, { invoiceId: inv.id }, now);
+        // What credit notes without a bill paid of it is theirs to use again.
+        const releasedNotes = await releaseNoteAllocations(tx, inv.id, now);
         await tx
           .update(schema.invoices)
           .set({
@@ -788,7 +794,7 @@ export const invoicesModule: ApiModule = async (app, deps) => {
           entityType: "invoice",
           entityId: inv.id,
           entityLabel: inv.invoiceNumber ?? undefined,
-          changes: { reason: request.body.reason, grandTotal: inv.grandTotal, releasedToAdvance: released },
+          changes: { reason: request.body.reason, grandTotal: inv.grandTotal, releasedToAdvance: released, ...(releasedNotes.gt(0) ? { releasedToNotes: releasedNotes.toFixed(2) } : {}) },
         });
         await tx.insert(schema.outboxEvents).values({
           businessId: ctx.businessId,

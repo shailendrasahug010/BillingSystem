@@ -114,6 +114,9 @@ export function useCustomerHistory(customerId: string) {
         if (docType === "opening") return narration ?? "Opening balance";
         if (docType === "credit_note") return `${t("notes.creditNote")} ${number ?? ""}`;
         if (docType === "credit_note_cancel") return `${t("ledger.credit_note_cancel")} ${number ?? ""}`;
+        // A debit note to a customer: a rate difference or charge after the bill.
+        if (docType === "debit_note") return `${t("notes.debitNote")} ${number ?? ""}`;
+        if (docType === "debit_note_cancel") return `${t("ledger.debit_note_cancel")} ${number ?? ""}`;
         return [number, narration].filter(Boolean).join(" · ") || docType;
       };
       return {

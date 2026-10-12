@@ -20,7 +20,7 @@ export interface PortalIssue {
 }
 
 interface EInvoiceDoc {
-  kind: "invoice" | "credit_note";
+  kind: "invoice" | "credit_note" | "debit_note";
   id: string;
   number: string;
   date: string;
@@ -164,7 +164,7 @@ export function EInvoiceTab({ period }: { period: string }) {
                       <div>
                         <p className="font-mono text-[13px] font-medium text-ink">{d.number}</p>
                         <p className="text-[12px] text-ink-3">
-                          {date(d.date)} · {d.kind === "invoice" ? t("einvoice.kinds.invoice") : t("einvoice.kinds.credit_note")} · {d.supplyType}
+                          {date(d.date)} · {t(`einvoice.kinds.${d.kind}`)} · {d.supplyType}
                         </p>
                       </div>
                     ),

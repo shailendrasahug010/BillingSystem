@@ -1,5 +1,5 @@
 import { addDays } from "@digitalbahi/core";
-import { CloudOff, Download, Plus, Repeat, Search } from "lucide-react";
+import { CloudOff, Download, Plus, Repeat, Search, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useI18n } from "../../app/i18n";
 import { hashFor, useRouter } from "../../app/router";
@@ -17,6 +17,7 @@ import { WaitingStrip } from "../../components/offline/OfflineBills";
 import { deviceDocuments, useDeviceDocuments } from "../../offline/documents";
 import { unreachable, useOffline } from "../../offline/sync";
 import { RepeatBillsDialog } from "./RepeatBill";
+import { LooseReturnDialog } from "../notes/LooseReturnDialog";
 
 /** One sales bill on the list, as `GET /invoices` gives it. */
 export interface InvoiceRow {
@@ -105,6 +106,7 @@ export function InvoicesPage() {
   const [to, setTo] = useState("");
   const [held, setHeld] = useState(false);
   const [repeats, setRepeats] = useState(false);
+  const [returning, setReturning] = useState(false);
   const filters = { q, payment, status, from, to, held };
 
   const list = usePaged<InvoiceRow>(
@@ -186,6 +188,11 @@ export function InvoicesPage() {
                 {t("repeat.listButton")}
               </Button>
             )}
+            {LIVE && allowed("note.create") && (
+              <Button icon={<Undo2 size={16} />} onClick={() => setReturning(true)}>
+                {t("notes.loose.button")}
+              </Button>
+            )}
             {allowed("invoice.export") && (
               <Button icon={<Download size={16} />} onClick={exportCsv} disabled={rows.length === 0}>
                 {t("common.export")}
@@ -238,7 +245,7 @@ export function InvoicesPage() {
           </button>
         )}
       </FilterBar>
-      {LIVE && <WaitingStrip kinds={["invoice", "invoice-cancel"]} />}
+      {LIVE && <WaitingStrip kinds={["invoice", "invoice-cancel", "loose-return", "debit-note"]} />}
       {noServer ? (
         <p className="flex items-start gap-2 rounded-xl bg-surface-2 px-3.5 py-2.5 text-[13px] text-ink-2">
           <CloudOff size={15} className="mt-0.5 shrink-0" />
@@ -283,6 +290,7 @@ export function InvoicesPage() {
       />
       {LIVE && !noServer && <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onClick={list.loadMore} />}
       {LIVE && <RepeatBillsDialog open={repeats} onOpenChange={setRepeats} />}
+      {LIVE && <LooseReturnDialog open={returning} onOpenChange={setReturning} />}
     </div>
   );
 }

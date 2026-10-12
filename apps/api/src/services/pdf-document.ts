@@ -53,6 +53,8 @@ export interface DocumentPdfInput {
   /** Invoices only. */
   paid: string | null;
   credited: string | null;
+  /** Invoices: raised since by debit notes. */
+  debited?: string | null;
   balance: string | null;
   reason: string | null;
   terms: string | null;
@@ -356,6 +358,7 @@ export async function renderDocumentPdf(input: DocumentPdfInput): Promise<Buffer
     ty = doc.y + 4;
   }
   if (!isNote && input.paid !== null) {
+    if (input.debited && num(input.debited) > 0) line(t("notes.addDebits"), m(input.debited));
     line(t("invoice.print.paid"), m(input.paid));
     if (input.credited && num(input.credited) > 0) line(t("notes.lessReturns"), m(input.credited));
     line(t("invoice.balance"), m(String(Math.max(0, num(input.balance ?? "0")))), { bold: true });

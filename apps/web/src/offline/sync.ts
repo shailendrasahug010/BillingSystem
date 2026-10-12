@@ -6,10 +6,47 @@ import { api, ApiError } from "../lib/api";
 import { loadDevice, type DeviceRecord } from "./device";
 import { idbAll, idbDelete, idbGet, idbPut } from "./idb";
 import { isSealed, seal, unseal, type Sealed } from "./vault";
-import { kindOf, type OutboxEntry, type PaymentEntry, type OrderEntry, type CustomerEntry, type CustomerEditEntry, type CollectionNoteEntry, type PurchaseEntry, type ExpenseEntry, type ReturnEntry, type PriceNoteEntry, type CancelEntry, type VisitEntry, type QueuedEntry, type QueuedKind, type SyncedEntry } from "./outbox";
+import {
+  kindOf,
+  type OutboxEntry,
+  type PaymentEntry,
+  type OrderEntry,
+  type CustomerEntry,
+  type CustomerEditEntry,
+  type CollectionNoteEntry,
+  type PurchaseEntry,
+  type ExpenseEntry,
+  type ReturnEntry,
+  type PriceNoteEntry,
+  type LooseReturnEntry,
+  type DebitNoteEntry,
+  type CancelEntry,
+  type VisitEntry,
+  type QueuedEntry,
+  type QueuedKind,
+  type SyncedEntry,
+} from "./outbox";
 
 export { kindOf };
-export type { OutboxEntry, PaymentEntry, OrderEntry, CustomerEntry, CustomerEditEntry, CollectionNoteEntry, PurchaseEntry, ExpenseEntry, ReturnEntry, PriceNoteEntry, CancelEntry, VisitEntry, QueuedEntry, QueuedKind, SyncedEntry };
+export type {
+  OutboxEntry,
+  PaymentEntry,
+  OrderEntry,
+  CustomerEntry,
+  CustomerEditEntry,
+  CollectionNoteEntry,
+  PurchaseEntry,
+  ExpenseEntry,
+  ReturnEntry,
+  PriceNoteEntry,
+  LooseReturnEntry,
+  DebitNoteEntry,
+  CancelEntry,
+  VisitEntry,
+  QueuedEntry,
+  QueuedKind,
+  SyncedEntry,
+};
 
 /**
  * Work done without a connection waits here (on the device, in IndexedDB)
@@ -189,6 +226,8 @@ function customerOf(e: QueuedEntry): string | null {
   if (kind === "payment") return (e as PaymentEntry).direction === "in" ? (e as PaymentEntry).partyId : null;
   if (kind === "purchase" || kind === "expense") return null;
   if (kind === "return" || kind === "price-note") return (e as ReturnEntry | PriceNoteEntry).side === "sale" ? (e as ReturnEntry | PriceNoteEntry).partyId : null;
+  if (kind === "loose-return") return (e as LooseReturnEntry).customerId;
+  if (kind === "debit-note") return (e as DebitNoteEntry).partyId;
   return (e as OutboxEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | CancelEntry | VisitEntry).customerId;
 }
 
@@ -248,6 +287,19 @@ function applyEffects(e: QueuedEntry, sign: 1 | -1): void {
       const n = e as PriceNoteEntry;
       const party = n.side === "sale" ? customerById.get(n.partyId) : supplierById.get(n.partyId);
       if (party) party.balance = (party.balance ?? 0) - sign * n.estimate;
+      return;
+    }
+    case "loose-return": {
+      const r = e as LooseReturnEntry;
+      for (const x of r.stock) adjustStock(x.productId, sign * x.qty);
+      const customer = customerById.get(r.customerId);
+      if (customer) customer.balance = (customer.balance ?? 0) - sign * r.estimate;
+      return;
+    }
+    case "debit-note": {
+      const n = e as DebitNoteEntry;
+      const customer = customerById.get(n.partyId);
+      if (customer) customer.balance = (customer.balance ?? 0) + sign * n.estimate;
       return;
     }
     case "invoice-cancel": {
@@ -383,6 +435,14 @@ function syncedFrom(e: QueuedEntry, res: Record<string, unknown>): Omit<SyncedEn
       const n = e as PriceNoteEntry;
       return { kind: "price-note", number: "", customerName: n.partyName, total: n.estimate, serverId: text("id"), serverNumber: text("noteNumber"), serverTotal: Number(res.grandTotal) };
     }
+    case "loose-return": {
+      const r = e as LooseReturnEntry;
+      return { kind: "loose-return", number: "", customerName: r.partyName, total: r.estimate, serverId: text("id"), serverNumber: text("noteNumber"), serverTotal: Number(res.grandTotal) };
+    }
+    case "debit-note": {
+      const n = e as DebitNoteEntry;
+      return { kind: "debit-note", number: "", customerName: n.partyName, total: n.estimate, serverId: text("id"), serverNumber: text("noteNumber"), serverTotal: Number(res.grandTotal) };
+    }
     case "invoice-cancel": {
       const c = e as CancelEntry;
       return { kind: "invoice-cancel", number: "", customerName: c.customerName, total: c.amount, serverId: text("id") || resolveTarget(c.documentId), serverNumber: text("invoiceNumber") || c.documentNumber, serverTotal: 0 };
@@ -449,6 +509,12 @@ async function send(e: QueuedEntry): Promise<Omit<SyncedEntry, "id" | "syncedAt"
       const n = e as PriceNoteEntry;
       return syncedFrom(e, await api.post(`/${n.side === "sale" ? "invoices" : "purchases"}/${resolveTarget(n.documentId)}/price-notes`, n.body, { idempotencyKey: n.id }));
     }
+    case "loose-return":
+      return syncedFrom(e, await api.post("/returns", (e as LooseReturnEntry).body, { idempotencyKey: e.id }));
+    case "debit-note": {
+      const n = e as DebitNoteEntry;
+      return syncedFrom(e, await api.post(`/invoices/${resolveTarget(n.documentId)}/debit-notes`, n.body, { idempotencyKey: n.id }));
+    }
     case "invoice-cancel": {
       const c = e as CancelEntry;
       try {
@@ -495,6 +561,12 @@ function pushItem(e: QueuedEntry, inBatch: ReadonlySet<string>): Record<string, 
     case "price-note": {
       const n = e as PriceNoteEntry;
       return { id: e.id, kind: n.side === "sale" ? "sale-price-note" : "purchase-price-note", ...target(n.documentId), body: n.body };
+    }
+    case "loose-return":
+      return { id: e.id, kind: "loose-return", ...after, body: (e as LooseReturnEntry).body };
+    case "debit-note": {
+      const n = e as DebitNoteEntry;
+      return { id: e.id, kind: "sale-debit-note", ...target(n.documentId), body: n.body };
     }
     case "invoice-cancel": {
       const c = e as CancelEntry;

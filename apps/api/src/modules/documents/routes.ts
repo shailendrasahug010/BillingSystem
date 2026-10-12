@@ -135,7 +135,10 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     return { inv, settings, locale, extras, party };
   });
   const { inv, locale } = data;
-  const credited = (inv.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + Number(r.amountSettled), 0);
+  // Returns against the bill, and goods returned without it whose credit went to it.
+  const credited =
+    (inv.returns ?? []).filter((r) => r.status === "posted").reduce((s, r) => s + Number(r.amountSettled), 0) +
+    (inv.noteCredits ?? []).filter((c) => !c.reversedAt).reduce((s, c) => s + Number(c.amount), 0);
   const pdf = await renderDocumentPdf({
     letterhead,
     locale,
@@ -155,6 +158,7 @@ export async function invoicePdfFile(deps: AppDeps, ctx: RequestCtx, id: string,
     // The amount paid includes what returns settled; the bill shows them apart.
     paid: (Number(inv.amountPaid) - credited).toFixed(2),
     credited: credited.toFixed(2),
+    debited: inv.debited,
     balance: inv.balanceDue,
     reason: null,
     terms: (data.settings["invoice.terms"] as string) || null,
@@ -395,6 +399,8 @@ export async function customerStatementPdf(deps: AppDeps, ctx: RequestCtx, id: s
   const locale: LocaleCode = isLocaleCode(q.locale) ? q.locale : isLocaleCode(data.printLocale) ? data.printLocale : "en";
   const { t } = createTranslator(locale);
   const label = (type: string) => {
+    // A debit note to a customer is a charge after the bill (a rate difference), not a return.
+    if (type === "debit_note") return t("notes.debitNote");
     const key = `ledger.${type}`;
     const text = t(key as "ledger.opening");
     return text === key ? type : text;

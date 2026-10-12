@@ -29,11 +29,13 @@ const KINDS = {
   "purchase-return": { method: "POST", path: (t: string) => `/purchases/${t}/returns` },
   "sale-price-note": { method: "POST", path: (t: string) => `/invoices/${t}/price-notes` },
   "purchase-price-note": { method: "POST", path: (t: string) => `/purchases/${t}/price-notes` },
+  "sale-debit-note": { method: "POST", path: (t: string) => `/invoices/${t}/debit-notes` },
+  "loose-return": { method: "POST", path: () => "/returns" },
   "invoice-cancel": { method: "POST", path: (t: string) => `/invoices/${t}/cancel` },
   visit: { method: "POST", path: () => "/visits" },
 } as const;
 type Kind = keyof typeof KINDS;
-const NEEDS_TARGET = new Set<Kind>(["customer-edit", "sale-return", "purchase-return", "sale-price-note", "purchase-price-note", "invoice-cancel"]);
+const NEEDS_TARGET = new Set<Kind>(["customer-edit", "sale-return", "purchase-return", "sale-price-note", "purchase-price-note", "sale-debit-note", "invoice-cancel"]);
 
 const Item = z.strictObject({
   /** The work's id on the device: its Idempotency-Key (and a new customer's id). */

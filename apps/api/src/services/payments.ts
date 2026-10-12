@@ -34,7 +34,7 @@ export interface PaymentResult {
 }
 
 /** Open (partly unpaid) invoices of a customer or purchases of a supplier, locked for update. */
-async function lockOpenDocuments(tx: Tx, businessId: string, party: PaymentInput["party"]): Promise<OpenDocument[]> {
+export async function lockOpenDocuments(tx: Tx, businessId: string, party: PaymentInput["party"]): Promise<OpenDocument[]> {
   if (party.type === "customer") {
     const i = schema.invoices;
     const rows = await tx
@@ -165,18 +165,34 @@ export async function recordPayment(tx: Tx, ctx: RequestCtx, financialYearStartM
   };
 }
 
-/** Moves amount_paid / balance_due / payment_status of an invoice or purchase by an allocation. */
+/**
+ * Moves amount_paid / balance_due / payment_status of an invoice or purchase
+ * by an allocation. An invoice's debit notes add to what it asks for.
+ */
 export async function applyToDocument(tx: Tx, partyType: "customer" | "supplier", documentId: string, paidDelta: string, newBalance: string): Promise<void> {
-  const table = partyType === "customer" ? schema.invoices : schema.purchases;
+  if (partyType === "customer") {
+    const i = schema.invoices;
+    const [doc] = await tx
+      .update(i)
+      .set({ amountPaid: sql`${i.amountPaid} + ${paidDelta}`, balanceDue: newBalance })
+      .where(eq(i.id, documentId))
+      .returning({ grandTotal: i.grandTotal, debited: i.debited, amountPaid: i.amountPaid });
+    await tx
+      .update(i)
+      .set({ paymentStatus: paymentStatusFor(dec(doc!.grandTotal).plus(doc!.debited), doc!.amountPaid) })
+      .where(eq(i.id, documentId));
+    return;
+  }
+  const p = schema.purchases;
   const [doc] = await tx
-    .update(table)
-    .set({ amountPaid: sql`${table.amountPaid} + ${paidDelta}`, balanceDue: newBalance })
-    .where(eq(table.id, documentId))
-    .returning({ grandTotal: table.grandTotal, amountPaid: table.amountPaid });
+    .update(p)
+    .set({ amountPaid: sql`${p.amountPaid} + ${paidDelta}`, balanceDue: newBalance })
+    .where(eq(p.id, documentId))
+    .returning({ grandTotal: p.grandTotal, amountPaid: p.amountPaid });
   await tx
-    .update(table)
+    .update(p)
     .set({ paymentStatus: paymentStatusFor(doc!.grandTotal, doc!.amountPaid) })
-    .where(eq(table.id, documentId));
+    .where(eq(p.id, documentId));
 }
 
 /**

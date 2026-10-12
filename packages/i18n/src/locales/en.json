@@ -1325,7 +1325,10 @@
     "SCHEME_IN_USE": "{{scheme}} was given on bills, so it stays: switch it off instead.",
     "SCHEME_NOT_EARNED": "This bill does not earn {{scheme}}, or earns less of it. The schemes are being brought up to date: try again.",
     "SCHEME_NOT_RUNNING": "{{scheme}} is not running on the bill's date.",
-    "SCHEME_FREE_LINE": "{{product}}: goods given free under a scheme are a line of their own, at 100% off."
+    "SCHEME_FREE_LINE": "{{product}}: goods given free under a scheme are a line of their own, at 100% off.",
+    "RETURN_NEEDS_BILL": "Goods from an export or SEZ customer are returned against their bill.",
+    "NOTE_NOT_ON_ACCOUNT": "Only a credit note for goods returned without their bill is applied to open bills.",
+    "DEBIT_NOTE_PAID": "This bill has been paid past the debit note (balance {{balance}}). Take that payment off the bill before cancelling the note."
   },
   "validation": {
     "required": "This field is required",
@@ -1934,7 +1937,7 @@
     "debitNote": "Debit note",
     "number": "Note no.",
     "against": "Against",
-    "returns": "Returns",
+    "returns": "Returns and notes",
     "none": "No returns recorded.",
     "salesReturn": "Record return",
     "purchaseReturn": "Return to supplier",
@@ -1971,7 +1974,25 @@
     "percentOfBill": "Percent of the bill",
     "amountBeforeGst": "Amount before GST",
     "priceSpread": "Spread over the bill's items by value; GST at each item's rate is added",
-    "rcmHint": "Reverse-charge bill: a return or credit note takes back the goods' value from the supplier; its GST lowers the reverse-charge tax you pay and its credit."
+    "rcmHint": "Reverse-charge bill: a return or credit note takes back the goods' value from the supplier; its GST lowers the reverse-charge tax you pay and its credit.",
+    "addDebits": "Add: debit notes",
+    "debitButton": "Debit note",
+    "debitTitle": "Debit note: charge more on this bill",
+    "debitHint": "the customer owes more; no goods move",
+    "charges": "Charges after the bill (freight, handling)",
+    "paidBills": "Paid bills:",
+    "onAccount": "{{amount}} kept on the customer's account",
+    "applyToBills": "Apply to open bills",
+    "applied": "Applied to open bills",
+    "loose": {
+      "button": "Goods returned",
+      "title": "Goods returned without a bill",
+      "hint": "A credit note with GST, each item at the rate it was last billed to this customer. It pays their open bills, oldest first; anything over stays on their account.",
+      "lastBilled": "Last billed on {{bill}}",
+      "rateTyped": "Rate typed in",
+      "rateList": "Rate list price",
+      "credit": "Credit note total"
+    }
   },
   "imports": {
     "import": "Import",
@@ -2721,7 +2742,9 @@
       "return": "Return",
       "price-note": "Discount note",
       "invoice-cancel": "Bill cancelled",
-      "visit": "Call on the beat"
+      "visit": "Call on the beat",
+      "loose-return": "Return without a bill",
+      "debit-note": "Debit note"
     },
     "removeEntryConfirm": "Remove this {{what}} ({{name}})? It will not reach the books.",
     "removeCustomerConfirm": "Remove the new customer {{name}}? Bills, payments and orders for them that are still waiting cannot be sent then.",
@@ -3199,7 +3222,8 @@
     "party": "Party",
     "kinds": {
       "invoice": "Invoice",
-      "credit_note": "Credit note"
+      "credit_note": "Credit note",
+      "debit_note": "Debit note"
     },
     "irnDone": "IRN received",
     "toUpload": "To upload",

@@ -145,6 +145,33 @@ export interface PriceNoteEntry extends EntryBase {
   body: Record<string, unknown>;
 }
 
+/** Goods back from a customer without their bill: a credit note that pays their open bills (the server works out how). */
+export interface LooseReturnEntry extends EntryBase {
+  kind: "loose-return";
+  customerId: string;
+  partyName: string;
+  date: string;
+  /** The device's estimate (GST included); the server works out the exact amounts. */
+  estimate: number;
+  /** Stock back in on this device (base units). */
+  stock: Array<{ productId: string; qty: number }>;
+  body: Record<string, unknown>;
+}
+
+/** A debit note on a bill (a rate difference or charge after the sale): the customer owes more. */
+export interface DebitNoteEntry extends EntryBase {
+  kind: "debit-note";
+  /** The bill: its server id, or the key of a bill made on this device and not sent yet. */
+  documentId: string;
+  documentNumber: string;
+  partyId: string;
+  partyName: string;
+  date: string;
+  /** The device's estimate (GST included); the server works out the exact amounts. */
+  estimate: number;
+  body: Record<string, unknown>;
+}
+
 /** A bill cancelled on this device: its goods go back on the shelf and the customer no longer owes it. */
 export interface CancelEntry extends EntryBase {
   kind: "invoice-cancel";
@@ -172,7 +199,21 @@ export interface VisitEntry extends EntryBase {
   body: Record<string, unknown>;
 }
 
-export type QueuedEntry = OutboxEntry | PaymentEntry | OrderEntry | CustomerEntry | CustomerEditEntry | CollectionNoteEntry | PurchaseEntry | ExpenseEntry | ReturnEntry | PriceNoteEntry | CancelEntry | VisitEntry;
+export type QueuedEntry =
+  | OutboxEntry
+  | PaymentEntry
+  | OrderEntry
+  | CustomerEntry
+  | CustomerEditEntry
+  | CollectionNoteEntry
+  | PurchaseEntry
+  | ExpenseEntry
+  | ReturnEntry
+  | PriceNoteEntry
+  | LooseReturnEntry
+  | DebitNoteEntry
+  | CancelEntry
+  | VisitEntry;
 export type QueuedKind = NonNullable<QueuedEntry["kind"]>;
 export const kindOf = (e: { kind?: QueuedKind }): QueuedKind => e.kind ?? "invoice";
 
